@@ -23,6 +23,12 @@ config MPC86XADS
 	  The MPC86xADS is meant to serve as a platform for s/w and h/w
 	  development around the MPC86X processor families.
 
+config MCR3000
+	bool "MCR3000"
+	select CPM1
+	help
+	  MCR3000 platform based on MPC866 CPU.
+
 config MPC885ADS
 	bool "MPC885ADS"
 	select CPM1
