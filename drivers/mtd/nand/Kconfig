@@ -72,6 +72,12 @@ config MTD_NAND_AMS_DELTA
 	help
 	  Support for NAND flash on Amstrad E3 (Delta).
 
+config MTD_NAND_MCR2G
+	bool "NAND Flash device on MCR2G board"
+	depends on MCR2G
+	help
+	  Support for NAND flash on MCR2G board.
+
 config MTD_NAND_MCR3000
 	bool "NAND Flash device on MCR3000 board"
 	depends on MCR3000
