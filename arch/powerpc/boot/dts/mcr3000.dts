@@ -48,24 +48,121 @@
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		// ORx and BRx register
 
-		ranges = <0x0 0x0 0x00000000 0x04000000
-			  0x4 0x0 0x10000000 0x04000000>;
 
-		flash@0,0 {
-			compatible = "cfi-flash";
-			reg = <0x0 0x00000000 0x2000000>;
-			bank-width = <2>;
-			device-width = <2>;
+/*		ranges = <0x0 0x04000000 0x04000000 // BOOT
+			  0x1 0x00000000 0x04000000 // SDRAM
+			  0x2 0x08000000 0x04000000 // RAMDP
+			  0x3 0x0C000000 0x04000000 // NAND
+			  0x4 0x10000000 0x04000000 // Periphs
+			  0x5 0x14000000 0x04000000 // FPGA
+			  0x6 0x18000000 0x04000000 // mezzanine
+			  0x7 0x1c000000 0x04000000>; // DSP */
+			  
+// MCR 2G
+/*		ranges = <0x0 0x00000000 0x02000000 // SDRAM
+			  0x1 0x40000000 0x00400000 // Boot Flash
+			  0x2 0xc0000000 0x00008000 // Nand Flash
+			  0x3 0xe0000000 0x00010000 // DPRAM
+			  0x4 0xd0000000 0x10000000 // Periphs
+			  0x5 0xc8000000 0x00008000 // CPLD
+			  0x6 0x80000000 0x00008000 // mezzanine
+			  0x7 0xf0000000 0x00008000>; // DSP */
+
+		mtsl@4,000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl,mcr3000-mtsl-mixing";
+			reg = <4 0x000 0x20>;
 		};
-
-//		flash@3,400 {
-//			compatible = "fsl,mcr3000-fcm-nand";
-//			reg = <3 0x0c000000 0x400>;
-//		};
-
-		board-control@4,1000 {
-			reg = <0x4 0x10000000 0x00001000>;
-			compatible = "fsl,mcr3000-bcsr";
+		
+		mtsl@4,200 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl,mcr3000-mtsl-switching";
+			reg = <4 0x200 0x20>;
+		};
+		
+		cpld@4,800 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl, mcr3000-cpld";
+			reg = <4 0x800 0x8>;
+			
+			rst1: gpio-controller@0 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x00 1>;
+				gpio-controller;
+			};
+			rst2: gpio-controller@1 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x01 1>;
+				gpio-controller;
+			};
+			cmd1: gpio-controller@2 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x02 1>;
+				gpio-controller;
+			};
+			cmd2: gpio-controller@3 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x03 1>;
+				gpio-controller;
+			};
+			evt1: gpio-controller@4 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x04 1>;
+/*				interrupts = <6 1>;
+				interrupt-parent = <&PIC>;*/
+				gpio-controller;
+			};
+			evt2: gpio-controller@5 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x05 1>;
+/*				interrupts = <6 1>;
+				interrupt-parent = <&PIC>;*/
+				gpio-controller;
+			};
+			stw1: gpio-controller@6 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x06 1>;
+				gpio-controller;
+			};
+			stw2: gpio-controller@7 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-gpio";
+				reg = <0x07 1>;
+				gpio-controller;
+			};
+			
+			csspi: gpio-controller@8 {
+				#gpio-cells = <2>;
+				compatible = "fsl,mcr3000-cpld-csspi";
+				reg = <0x02 2>;
+				gpio-controller;
+			};
+		};
+		dpram@2,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl, mcr3000-dpram";
+			reg = <2 0x0 0x4000>;
+			interrupts = <2 1>;
+			interrupt-parent = <&PIC>;
+		};
+		fpga@5,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl, mcr3000-fpga";
+			reg = <5 0x0 0x0200>;
+			interrupts = <3 1>;
+			interrupt-parent = <&PIC>;
 		};
 	};
 
@@ -144,6 +241,41 @@
 			};
 
 
+			CPM1_PIO_A: gpio-controller@950 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-a";
+				reg = <0x950 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_B: gpio-controller@ab8 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-b";
+				reg = <0xab8 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_C: gpio-controller@960 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-c";
+				reg = <0x960 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_D: gpio-controller@970 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-d";
+				reg = <0x970 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_E: gpio-controller@ac8 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-e";
+				reg = <0xac8 0x18>;
+				gpio-controller;
+			};
+			
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc866-smc-uart", "fsl,cpm1-smc-uart";
@@ -154,39 +286,61 @@
 				fsl,cpm-command = <0x90>;
 			};
 
-//			serial@a90 {
-//				device_type = "serial";
-//				compatible = "fsl,mpc866-smc-uart",
-//				             "fsl,cpm1-smc-uart";
-//				reg = <0xa90 0x10 0x3f80 0x40>;
-//				interrupts = <3>;
-//				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-brg = <2>;
-//				fsl,cpm-command = <0xd0>;
-//			};
-
-//			ethernet@a00 {
-//				device_type = "network";
-//				compatible = "fsl,mpc866-scc-enet",
-//				             "fsl,cpm1-scc-enet";
-//				reg = <0xa00 0x18 0x3c00 0x100>;
-//				local-mac-address = [ 00 00 00 00 00 00 ];
-//				interrupts = <30>;
-//				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-command = <0000>;
-//				linux,network-index = <1>;
-//			};
-
-//			i2c@860 {
-//				compatible = "fsl,mpc866-i2c",
-//					     "fsl,cpm1-i2c";
-//				reg = <0x860 0x20 0x3c80 0x30>;
-//				interrupts = <16>;
-//				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-command = <0x10>;
-//				#address-cells = <1>;
-//				#size-cells = <0>;
-//			};
+			spi: spi@aa0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				cell-index = <0>;
+				compatible = "fsl,spi", "fsl,cpm1-spi";
+				reg = <0xaa0 10 0x3d80 0x30>;
+				interrupts = <5>;
+				interrupt-parent = <&CPM_PIC>;
+				mode = "cpu";
+				gpios = <&csspi 1 1	// device reg=<0> /* POT1 */
+					 &csspi 2 1	// device reg=<1> /* TEMP */
+					 &csspi 3 1	// device reg=<2> /* ARCOFI */
+					 &csspi 4 1	// device reg=<3> /* EEPROM */
+					 &csspi 5 1	// device reg=<4> /* POT2 */
+					 &csspi 6 1	// device reg=<5> /* MEZZ */
+					 &csspi 7 1	// device reg=<6> /* SICOFI */
+					 &csspi 8 1>;	// device reg=<7> /*  */
+					 
+				pot1@0 {
+					compatible = "pot1";
+					spi-max-frequency = <1000000>;
+					reg = <0>;
+				};
+				lm70@1 {
+					compatible = "tpm121";
+					spi-max-frequency = <1000000>;
+					reg = <1>;
+				};
+				arcofi@2 {
+					compatible = "arcofi";
+					spi-max-frequency = <1000000>;
+					reg = <2>;
+				};
+				eeprom@3 {
+					compatible = "eeprom", "at25";
+					spi-max-frequency = <1000000>;
+					reg = <3>;
+				};
+				pot2@4 {
+					compatible = "pot2";
+					spi-max-frequency = <1000000>;
+					reg = <4>;
+				};
+				mezz@5 {
+					compatible = "mezz";
+					spi-max-frequency = <1000000>;
+					reg = <5>;
+				};
+				sicofi@6 {
+					compatible = "sicofi";
+					spi-max-frequency = <1000000>;
+					reg = <6>;
+				};
+			};
+			
 		};
 	};
 

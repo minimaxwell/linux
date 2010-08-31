@@ -15,6 +15,9 @@
 #include <asm/cpm1.h>
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+#include <sysdev/simple_gpio.h>
 
 #include "mcr3000.h"
 #include "mpc8xx.h"
@@ -58,7 +61,7 @@ static struct cpm_pin mcr3000_pins[] = {
 	{CPM_PORTB, 28, CPM_PIN_OUTPUT},					/* MISO			*/
 	{CPM_PORTB, 29, CPM_PIN_OUTPUT},					/* MOSI 		*/
 	{CPM_PORTB, 30, CPM_PIN_OUTPUT},					/* CLK			*/
-	{CPM_PORTB, 31, CPM_PIN_OUTPUT},					/* SEL			*/
+	{CPM_PORTB, 31, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* SEL			*/
 	
 	/* NAND */
 	{CPM_PORTD,  3, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* MISO			*/
@@ -67,8 +70,11 @@ static struct cpm_pin mcr3000_pins[] = {
 	
 	/* FPGA a verifier (faux) */
 	{CPM_PORTB, 14, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* PROGFPGA		*/
-	{CPM_PORTB, 16, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* INITFPGA 		*/
-	{CPM_PORTB, 17, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* DONEFPGA		*/
+	{CPM_PORTB, 16, CPM_PIN_INPUT | CPM_PIN_GPIO},				/* INITFPGA 		*/
+	{CPM_PORTB, 17, CPM_PIN_INPUT | CPM_PIN_GPIO},				/* DONEFPGA		*/
+
+	/* FPGA C4E1 a verifier (faux) */
+	{CPM_PORTA, 1, CPM_PIN_INPUT | CPM_PIN_GPIO},				/* DONEFPGA		*/
 
 	/* TDMA a verifier (faux) */
 	{CPM_PORTA,  8, CPM_PIN_OUTPUT},					/* PCM_OUT		*/
@@ -97,10 +103,71 @@ static void __init init_ioports(void)
 //	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
 }
 
+static unsigned short cpld_csspi_data;
+static spinlock_t cpld_csspi_lock;
+static struct of_mm_gpio_chip cpld_csspi_mm_gc;
+
+static int cpld_csspi_get(struct gpio_chip *gc, unsigned int gpio)
+{
+	return gpio == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
+}
+
+static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&cpld_csspi_lock, flags);
+
+	cpld_csspi_data &= ~(7<<5);
+	if (val) cpld_csspi_data |= (gpio&7) << 5;
+	out_be16(cpld_csspi_mm_gc.regs, cpld_csspi_data);
+
+	spin_unlock_irqrestore(&cpld_csspi_lock, flags);
+}
+
+static int cpld_csspi_dir_in(struct gpio_chip *gc, unsigned int gpio)
+{
+	return 0;
+}
+
+static int cpld_csspi_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
+{
+	cpld_csspi_set(gc, gpio, val);
+	return 0;
+}
+
+static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
+{
+	cpld_csspi_data = in_8(mm_gc->regs);
+}
+
+static int __init cpld_csspi_gpiochip_add(struct device_node *np)
+{
+	struct of_mm_gpio_chip *mm_gc;
+	struct of_gpio_chip *of_gc;
+	struct gpio_chip *gc;
+
+	spin_lock_init(&cpld_csspi_lock);
+
+	mm_gc = &cpld_csspi_mm_gc;
+	of_gc = &mm_gc->of_gc;
+	gc = &of_gc->gc;
+
+	mm_gc->save_regs = cpld_csspi_save_regs;
+	of_gc->gpio_cells = 2;
+	gc->ngpio = 8;
+	gc->direction_input = cpld_csspi_dir_in;
+	gc->direction_output = cpld_csspi_dir_out;
+	gc->get = cpld_csspi_get;
+	gc->set = cpld_csspi_set;
+
+	return of_mm_gpiochip_add(np, mm_gc);
+}
+
 static void __init mcr3000_setup_arch(void)
 {
-////	struct device_node *np;
-////	u32 __iomem *bcsr_io;
+	struct device_node *np;
+	u32 __iomem *cpld_io;
 //	__volatile__ unsigned char dummy;
 //	uint msr;
 
@@ -108,22 +175,32 @@ static void __init mcr3000_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-////	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-bcsr");
-////	if (!np) {
-////		printk(KERN_CRIT "Could not find fsl,mcr3000-bcsr node\n");
-////		return;
-////	}
-////
-////	bcsr_io = of_iomap(np, 0);
-////	of_node_put(np);
-////
-////	if (bcsr_io == NULL) {
-////		printk(KERN_CRIT "Could not remap BCSR\n");
-////		return;
-////	}
+	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld");
+	if (!np) {
+		printk(KERN_CRIT "Could not find fsl,mcr3000-cpld node\n");
+		return;
+	}
+
+	cpld_io = of_iomap(np, 0);
+	of_node_put(np);
+
+	if (cpld_io == NULL) {
+		printk(KERN_CRIT "Could not remap CPLD\n");
+		return;
+	}
+	
 ////
 ////	clrbits32(bcsr_io, BCSR1_RS232EN_1 | BCSR1_RS232EN_2 | BCSR1_ETHEN);
 ////	iounmap(bcsr_io);
+	
+	simple_gpiochip_init("fsl,mcr3000-cpld-gpio");
+	
+	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld-csspi");
+	if (!np) {
+		printk(KERN_CRIT "Could not find fsl,mcr3000-cpld-csspi node\n");
+		return;
+	}
+	cpld_csspi_gpiochip_add(np);
 
 //        /* ALBOP 16-05-2006 set internal clock to external freq */
 //	/* and setup checkstop handling to generate a HRESET    */

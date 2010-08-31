@@ -1,3 +1,5 @@
+ARCH = powerpc
+CROSS_COMPILE = ppc-linux-
 VERSION = 2
 PATCHLEVEL = 6
 SUBLEVEL = 34
