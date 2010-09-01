@@ -49,14 +49,14 @@
 		reg = <0xff000100 0x40>;		// ORx and BRx register
 
 
-/*		ranges = <0x0 0x04000000 0x04000000 // BOOT
-			  0x1 0x00000000 0x04000000 // SDRAM
-			  0x2 0x08000000 0x04000000 // RAMDP
-			  0x3 0x0C000000 0x04000000 // NAND
-			  0x4 0x10000000 0x04000000 // Periphs
-			  0x5 0x14000000 0x04000000 // FPGA
-			  0x6 0x18000000 0x04000000 // mezzanine
-			  0x7 0x1c000000 0x04000000>; // DSP */
+		ranges = <0x0 0 0x04000000 0x04000000 // BOOT
+			  0x1 0 0x00000000 0x04000000 // SDRAM
+			  0x2 0 0x08000000 0x04000000 // RAMDP
+			  0x3 0 0x0C000000 0x04000000 // NAND
+			  0x4 0 0x10000000 0x04000000 // Periphs
+			  0x5 0 0x14000000 0x04000000 // FPGA
+			  0x6 0 0x18000000 0x04000000 // mezzanine
+			  0x7 0 0x1c000000 0x04000000>; // DSP
 			  
 // MCR 2G
 /*		ranges = <0x0 0x00000000 0x02000000 // SDRAM
@@ -85,8 +85,9 @@
 		cpld@4,800 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl, mcr3000-cpld";
+			compatible = "fsl,mcr3000-cpld";
 			reg = <4 0x800 0x8>;
+			ranges = <0 4 0x800 0x8>;
 			
 			rst1: gpio-controller@0 {
 				#gpio-cells = <2>;
@@ -286,23 +287,23 @@
 				fsl,cpm-command = <0x90>;
 			};
 
-			spi: spi@aa0 {
+			spi: spi@a80 {
 				#address-cells = <1>;
 				#size-cells = <0>;
 				cell-index = <0>;
 				compatible = "fsl,spi", "fsl,cpm1-spi";
-				reg = <0xaa0 10 0x3d80 0x30>;
+				reg = <0xa80 0x30 0x3d80 0x30>;
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
-				gpios = <&csspi 1 1	// device reg=<0> /* POT1 */
-					 &csspi 2 1	// device reg=<1> /* TEMP */
-					 &csspi 3 1	// device reg=<2> /* ARCOFI */
-					 &csspi 4 1	// device reg=<3> /* EEPROM */
-					 &csspi 5 1	// device reg=<4> /* POT2 */
-					 &csspi 6 1	// device reg=<5> /* MEZZ */
-					 &csspi 7 1	// device reg=<6> /* SICOFI */
-					 &csspi 8 1>;	// device reg=<7> /*  */
+				gpios = <&csspi 0 1	// device reg=<0> /* POT1 */
+					 &csspi 1 1	// device reg=<1> /* TEMP */
+					 &csspi 2 1	// device reg=<2> /* ARCOFI */
+					 &csspi 3 1	// device reg=<3> /* EEPROM */
+					 &csspi 4 1	// device reg=<4> /* POT2 */
+					 &csspi 5 1	// device reg=<5> /* MEZZ */
+					 &csspi 6 1	// device reg=<6> /* SICOFI */
+					 &csspi 7 1>;	// device reg=<7> /*  */
 					 
 				pot1@0 {
 					compatible = "pot1";

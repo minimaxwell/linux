@@ -109,7 +109,7 @@ static struct of_mm_gpio_chip cpld_csspi_mm_gc;
 
 static int cpld_csspi_get(struct gpio_chip *gc, unsigned int gpio)
 {
-	return gpio == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
+	return (gpio+1) == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
 }
 
 static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
@@ -119,7 +119,7 @@ static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
 	spin_lock_irqsave(&cpld_csspi_lock, flags);
 
 	cpld_csspi_data &= ~(7<<5);
-	if (val) cpld_csspi_data |= (gpio&7) << 5;
+	if (val) cpld_csspi_data |= ((gpio+1)&7) << 5;
 	out_be16(cpld_csspi_mm_gc.regs, cpld_csspi_data);
 
 	spin_unlock_irqrestore(&cpld_csspi_lock, flags);
@@ -166,8 +166,8 @@ static int __init cpld_csspi_gpiochip_add(struct device_node *np)
 
 static void __init mcr3000_setup_arch(void)
 {
-	struct device_node *np;
-	u32 __iomem *cpld_io;
+//	struct device_node *np;
+//	u32 __iomem *cpld_io;
 //	__volatile__ unsigned char dummy;
 //	uint msr;
 
@@ -175,9 +175,9 @@ static void __init mcr3000_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld");
+/*	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld");
 	if (!np) {
-		printk(KERN_CRIT "Could not find fsl,mcr3000-cpld node\n");
+		pr_crit("Could not find fsl,mcr3000-cpld node\n");
 		return;
 	}
 
@@ -185,23 +185,14 @@ static void __init mcr3000_setup_arch(void)
 	of_node_put(np);
 
 	if (cpld_io == NULL) {
-		printk(KERN_CRIT "Could not remap CPLD\n");
+		pr_crit("Could not remap CPLD\n");
 		return;
 	}
-	
+*/	
 ////
 ////	clrbits32(bcsr_io, BCSR1_RS232EN_1 | BCSR1_RS232EN_2 | BCSR1_ETHEN);
 ////	iounmap(bcsr_io);
 	
-	simple_gpiochip_init("fsl,mcr3000-cpld-gpio");
-	
-	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld-csspi");
-	if (!np) {
-		printk(KERN_CRIT "Could not find fsl,mcr3000-cpld-csspi node\n");
-		return;
-	}
-	cpld_csspi_gpiochip_add(np);
-
 //        /* ALBOP 16-05-2006 set internal clock to external freq */
 //	/* and setup checkstop handling to generate a HRESET    */
 //	mpc8xx_immr->im_clkrst.car_plprcr = 0x00A64084;
@@ -230,6 +221,16 @@ static struct of_device_id __initdata of_bus_ids[] = {
 
 static int __init declare_of_platform_devices(void)
 {
+	struct device_node *np;
+	
+	simple_gpiochip_init("fsl,mcr3000-cpld-gpio");
+	
+	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld-csspi");
+	if (np) 
+		cpld_csspi_gpiochip_add(np);
+	else
+		pr_crit("Could not find fsl,mcr3000-cpld-csspi node\n");
+	
 	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 
 	return 0;
