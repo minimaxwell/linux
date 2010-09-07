@@ -103,7 +103,6 @@ static void __init init_ioports(void)
 //	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
 }
 
-static unsigned short cpld_csspi_data;
 static spinlock_t cpld_csspi_lock;
 static struct of_mm_gpio_chip cpld_csspi_mm_gc;
 
@@ -115,12 +114,14 @@ static int cpld_csspi_get(struct gpio_chip *gc, unsigned int gpio)
 static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
 {
 	unsigned long flags;
+	unsigned short reg;
 
 	spin_lock_irqsave(&cpld_csspi_lock, flags);
 
-	cpld_csspi_data &= ~(7<<5);
-	if (val) cpld_csspi_data |= ((gpio+1)&7) << 5;
-	out_be16(cpld_csspi_mm_gc.regs, cpld_csspi_data);
+	reg = in_be16(cpld_csspi_mm_gc.regs);
+	reg &= ~(7<<5);
+	if (val) reg |= ((gpio+1)&7) << 5;
+	out_be16(cpld_csspi_mm_gc.regs, reg);
 
 	spin_unlock_irqrestore(&cpld_csspi_lock, flags);
 }
@@ -138,7 +139,6 @@ static int cpld_csspi_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
 
 static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
-	cpld_csspi_data = in_8(mm_gc->regs);
 }
 
 static int __init cpld_csspi_gpiochip_add(struct device_node *np)
@@ -147,6 +147,8 @@ static int __init cpld_csspi_gpiochip_add(struct device_node *np)
 	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 
+	pr_info("Initialisation ChipSelects CPLD\n");
+	
 	spin_lock_init(&cpld_csspi_lock);
 
 	mm_gc = &cpld_csspi_mm_gc;
@@ -175,9 +177,9 @@ static void __init mcr3000_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-/*	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld");
+/*	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld");
 	if (!np) {
-		pr_crit("Could not find fsl,mcr3000-cpld node\n");
+		pr_crit("Could not find s3k,mcr3000-cpld node\n");
 		return;
 	}
 
@@ -219,20 +221,61 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{},
 };
 
-static int __init declare_of_platform_devices(void)
+ int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 	
-	simple_gpiochip_init("fsl,mcr3000-cpld-gpio");
+	simple_gpiochip_init("s3k,mcr3000-cpld-gpio");
 	
-	np = of_find_compatible_node(NULL, NULL, "fsl,mcr3000-cpld-csspi");
+	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld-csspi");
 	if (np) 
 		cpld_csspi_gpiochip_add(np);
 	else
-		pr_crit("Could not find fsl,mcr3000-cpld-csspi node\n");
+		pr_crit("Could not find s3k,mcr3000-cpld-csspi node\n");
 	
 	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 
+	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld");
+	if (np) {
+		int ngpios = of_gpio_count(np);
+		int i=0;
+		for (; i < ngpios; i++) {
+			int gpio;
+			int ret;
+			enum of_gpio_flags flags;
+
+			gpio = of_get_gpio_flags(np, i, &flags);
+			if (!gpio_is_valid(gpio)) {
+				pr_err("invalid gpio #%d: %d\n", i, gpio);
+				continue;
+			}
+
+			ret = gpio_request(gpio, __func__);
+			if (ret) {
+				pr_err("can't request gpio #%d: %d\n", i, ret);
+				continue;
+			}
+
+			ret = gpio_direction_output(gpio, flags & OF_GPIO_ACTIVE_LOW);
+			if (ret) {
+				pr_err("can't set output direction for gpio #%d: %d\n", i, ret);
+				continue;
+			}
+			switch (i) { // traitement specifique pour chaque GPIO
+			case 0: /* SPISEL */
+				/* activation SPISEL permanent */
+				gpio_set_value(gpio, !(flags & OF_GPIO_ACTIVE_LOW));
+				break;
+			}
+		}
+		if (!ngpios) {
+			pr_err("Pas de gpio defini dans mcr3000-cpld, impossible de positionner SPISEL\n");
+		}
+	}
+	else {
+		pr_crit("Could not find s3k,mcr3000-cpld node\n");
+	}
+	
 	return 0;
 }
 machine_device_initcall(mcr3000, declare_of_platform_devices);

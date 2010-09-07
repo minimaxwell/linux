@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.34s3k
-# Tue Aug 17 12:52:04 2010
+# Fri Sep  3 11:42:03 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -531,7 +531,7 @@ CONFIG_PREVENT_FIRMWARE_BUILD=y
 CONFIG_FW_LOADER=y
 # CONFIG_FIRMWARE_IN_KERNEL is not set
 CONFIG_EXTRA_FIRMWARE=""
-# CONFIG_DEBUG_DRIVER is not set
+CONFIG_DEBUG_DRIVER=y
 # CONFIG_DEBUG_DEVRES is not set
 # CONFIG_SYS_HYPERVISOR is not set
 # CONFIG_CONNECTOR is not set
@@ -783,7 +783,7 @@ CONFIG_GEN_RTC=y
 # CONFIG_TCG_TPM is not set
 # CONFIG_I2C is not set
 CONFIG_SPI=y
-# CONFIG_SPI_DEBUG is not set
+CONFIG_SPI_DEBUG=y
 CONFIG_SPI_MASTER=y
 
 #
@@ -808,8 +808,8 @@ CONFIG_SPI_MPC8xxx=y
 CONFIG_ARCH_WANT_OPTIONAL_GPIOLIB=y
 CONFIG_ARCH_REQUIRE_GPIOLIB=y
 CONFIG_GPIOLIB=y
-# CONFIG_DEBUG_GPIO is not set
-# CONFIG_GPIO_SYSFS is not set
+CONFIG_DEBUG_GPIO=y
+CONFIG_GPIO_SYSFS=y
 
 #
 # Memory mapped GPIO expanders:

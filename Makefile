@@ -1,3 +1,4 @@
+all: uImage mcr3000.dtb
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 2

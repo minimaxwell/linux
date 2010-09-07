@@ -43,7 +43,7 @@
 	};
 
 	localbus@ff000100 {
-		compatible = "fsl,mcr3000-localbus", "fsl,pq1-localbus";
+		compatible = "s3k,mcr3000-localbus", "fsl,pq1-localbus";
 		#address-cells = <2>;
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		// ORx and BRx register
@@ -71,51 +71,52 @@
 		mtsl@4,000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl,mcr3000-mtsl-mixing";
+			compatible = "s3k,mcr3000-mtsl-mixing";
 			reg = <4 0x000 0x20>;
 		};
 		
 		mtsl@4,200 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl,mcr3000-mtsl-switching";
+			compatible = "s3k,mcr3000-mtsl-switching";
 			reg = <4 0x200 0x20>;
 		};
 		
 		cpld@4,800 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl,mcr3000-cpld";
+			compatible = "s3k,mcr3000-cpld";
 			reg = <4 0x800 0x8>;
 			ranges = <0 4 0x800 0x8>;
+			gpios = <&CPM1_PIO_B 31 1>;	// SPISEL
 			
 			rst1: gpio-controller@0 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x00 1>;
 				gpio-controller;
 			};
 			rst2: gpio-controller@1 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x01 1>;
 				gpio-controller;
 			};
 			cmd1: gpio-controller@2 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x02 1>;
 				gpio-controller;
 			};
 			cmd2: gpio-controller@3 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x03 1>;
 				gpio-controller;
 			};
 			evt1: gpio-controller@4 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x04 1>;
 /*				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;*/
@@ -123,7 +124,7 @@
 			};
 			evt2: gpio-controller@5 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x05 1>;
 /*				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;*/
@@ -131,20 +132,20 @@
 			};
 			stw1: gpio-controller@6 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x06 1>;
 				gpio-controller;
 			};
 			stw2: gpio-controller@7 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-gpio";
+				compatible = "s3k,mcr3000-cpld-gpio";
 				reg = <0x07 1>;
 				gpio-controller;
 			};
 			
 			csspi: gpio-controller@8 {
 				#gpio-cells = <2>;
-				compatible = "fsl,mcr3000-cpld-csspi";
+				compatible = "s3k,mcr3000-cpld-csspi";
 				reg = <0x02 2>;
 				gpio-controller;
 			};
@@ -152,7 +153,7 @@
 		dpram@2,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl, mcr3000-dpram";
+			compatible = "s3k,mcr3000-dpram";
 			reg = <2 0x0 0x4000>;
 			interrupts = <2 1>;
 			interrupt-parent = <&PIC>;
@@ -160,7 +161,7 @@
 		fpga@5,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl, mcr3000-fpga";
+			compatible = "s3k,mcr3000-fpga";
 			reg = <5 0x0 0x0200>;
 			interrupts = <3 1>;
 			interrupt-parent = <&PIC>;
@@ -180,8 +181,12 @@
 			reg = <0xe00 0x188>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			PHY: ethernet-phy@0 {
+			PHY0: ethernet-phy@0 {
 				reg = <0x0>;
+				device_type = "ethernet-phy";
+			};
+			PHY1: ethernet-phy@1 {
+				reg = <0x1>;
 				device_type = "ethernet-phy";
 			};
 		};
@@ -193,7 +198,7 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <3 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY>;
+			phy-handle = <&PHY0>;
 			linux,network-index = <0>;
 		};
 
@@ -221,7 +226,7 @@
 
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x0 0x1c00>;
+					reg = <0x0 0x2000>; // pas correct, devrait etre 0x1c00 mais pb driver spi
 				};
 			};
 
@@ -276,7 +281,7 @@
 				reg = <0xac8 0x18>;
 				gpio-controller;
 			};
-			
+
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc866-smc-uart", "fsl,cpm1-smc-uart";
@@ -292,53 +297,59 @@
 				#size-cells = <0>;
 				cell-index = <0>;
 				compatible = "fsl,spi", "fsl,cpm1-spi";
-				reg = <0xa80 0x30 0x3d80 0x30>;
+				reg = <0xa80 0x30 0x1d80 0x30>;
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
-				gpios = <&csspi 0 1	// device reg=<0> /* POT1 */
-					 &csspi 1 1	// device reg=<1> /* TEMP */
-					 &csspi 2 1	// device reg=<2> /* ARCOFI */
-					 &csspi 3 1	// device reg=<3> /* EEPROM */
-					 &csspi 4 1	// device reg=<4> /* POT2 */
-					 &csspi 5 1	// device reg=<5> /* MEZZ */
-					 &csspi 6 1	// device reg=<6> /* SICOFI */
-					 &csspi 7 1>;	// device reg=<7> /*  */
+				gpios = <&csspi 0 0	// device reg=<0> /* POT1 */
+					 &csspi 1 0	// device reg=<1> /* TEMP */
+					 &csspi 2 0	// device reg=<2> /* ARCOFI */
+					 &csspi 3 0	// device reg=<3> /* EEPROM */
+					 &csspi 4 0	// device reg=<4> /* POT2 */
+					 &csspi 5 0	// device reg=<5> /* MEZZ */
+					 &csspi 6 0>;	// device reg=<6> /* SICOFI */
 					 
 				pot1@0 {
-					compatible = "pot1";
+					compatible = "cs,pot1";
 					spi-max-frequency = <1000000>;
 					reg = <0>;
+					spi-cs-high;
 				};
-				lm70@1 {
-					compatible = "tpm121";
+				lm74@1 {
+					compatible = "ti,tmp121", "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <1>;
+					spi-cs-high;
 				};
 				arcofi@2 {
-					compatible = "arcofi";
+					compatible = "infineon,arcofi";
 					spi-max-frequency = <1000000>;
 					reg = <2>;
+					spi-cs-high;
 				};
 				eeprom@3 {
-					compatible = "eeprom", "at25";
+					compatible = "cs,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <3>;
+					spi-cs-high;
 				};
 				pot2@4 {
-					compatible = "pot2";
+					compatible = "cs,pot2";
 					spi-max-frequency = <1000000>;
 					reg = <4>;
+					spi-cs-high;
 				};
 				mezz@5 {
-					compatible = "mezz";
+					compatible = "cs,mezz";
 					spi-max-frequency = <1000000>;
 					reg = <5>;
+					spi-cs-high;
 				};
 				sicofi@6 {
-					compatible = "sicofi";
+					compatible = "infineon,sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
+					spi-cs-high;
 				};
 			};
 			
