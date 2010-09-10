@@ -108,7 +108,7 @@ static struct of_mm_gpio_chip cpld_csspi_mm_gc;
 
 static int cpld_csspi_get(struct gpio_chip *gc, unsigned int gpio)
 {
-	return (gpio+1) == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
+	return gpio == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
 }
 
 static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
@@ -120,7 +120,7 @@ static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
 
 	reg = in_be16(cpld_csspi_mm_gc.regs);
 	reg &= ~(7<<5);
-	if (val) reg |= ((gpio+1)&7) << 5;
+	if (val) reg |= (gpio&7) << 5;
 	out_be16(cpld_csspi_mm_gc.regs, reg);
 
 	spin_unlock_irqrestore(&cpld_csspi_lock, flags);
@@ -172,6 +172,7 @@ static void __init mcr3000_setup_arch(void)
 //	u32 __iomem *cpld_io;
 //	__volatile__ unsigned char dummy;
 //	uint msr;
+	immap_t *immap;
 
 
 	cpm_reset();
@@ -205,6 +206,15 @@ static void __init mcr3000_setup_arch(void)
 //	   __asm__("mtmsr %0" : : "r" (msr) );
 //	   dummy = mpc8xx_immr->im_clkrst.res[0];
 //	}
+
+	/* En attendant que ce soit fait par UBOOT */
+	
+	immap = ioremap(get_immrbase(),sizeof(*immap));
+	
+	immap->im_memctl.memc_br5 = 0x14000801;
+	immap->im_memctl.memc_or5 = 0xFFFF8916;
+	
+	iounmap(immap);
 }
 
 static int __init mcr3000_probe(void)

@@ -393,11 +393,17 @@ static void mpc8xxx_spi_cpm_bufs_start(struct mpc8xxx_spi *mspi)
 
 	xfer_ofs = mspi->xfer_in_progress->len - mspi->count;
 
-	out_be32(&rx_bd->cbd_bufaddr, mspi->rx_dma + xfer_ofs);
+	if (mspi->rx_dma == mspi->dma_dummy_rx)
+		out_be32(&rx_bd->cbd_bufaddr, mspi->rx_dma);
+	else
+		out_be32(&rx_bd->cbd_bufaddr, mspi->rx_dma + xfer_ofs);
 	out_be16(&rx_bd->cbd_datlen, 0);
 	out_be16(&rx_bd->cbd_sc, BD_SC_EMPTY | BD_SC_INTRPT | BD_SC_WRAP);
 
-	out_be32(&tx_bd->cbd_bufaddr, mspi->tx_dma + xfer_ofs);
+	if (mspi->tx_dma == mspi->dma_dummy_tx)
+		out_be32(&tx_bd->cbd_bufaddr, mspi->tx_dma);
+	else
+		out_be32(&tx_bd->cbd_bufaddr, mspi->tx_dma + xfer_ofs);
 	out_be16(&tx_bd->cbd_datlen, xfer_len);
 	out_be16(&tx_bd->cbd_sc, BD_SC_READY | BD_SC_INTRPT | BD_SC_WRAP |
 				 BD_SC_LAST);
@@ -439,7 +445,7 @@ static int mpc8xxx_spi_cpm_bufs(struct mpc8xxx_spi *mspi,
 			return -ENOMEM;
 		}
 	} else {
-		mspi->tx_dma = t->tx_dma;
+/*		mspi->tx_dma = t->tx_dma;*/
 	}
 
 	if (mspi->map_rx_dma) {
@@ -450,7 +456,7 @@ static int mpc8xxx_spi_cpm_bufs(struct mpc8xxx_spi *mspi,
 			goto err_rx_dma;
 		}
 	} else {
-		mspi->rx_dma = t->rx_dma;
+/*		mspi->rx_dma = t->rx_dma;*/
 	}
 
 	/* enable rx ints */
@@ -822,7 +828,8 @@ static unsigned long mpc8xxx_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 	if (!iprop || size != sizeof(*iprop) * 4)
 		return -ENOMEM;
 
-	spi_base_ofs = cpm_muram_alloc_fixed(iprop[2], 2);
+/*	spi_base_ofs = cpm_muram_alloc_fixed(iprop[2], 2); */
+	spi_base_ofs = iprop[2];
 	if (IS_ERR_VALUE(spi_base_ofs))
 		return -ENOMEM;
 
@@ -844,7 +851,7 @@ static unsigned long mpc8xxx_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 			return spi_base_ofs;
 	}
 
-	cpm_muram_free(spi_base_ofs);
+/*	cpm_muram_free(spi_base_ofs);*/
 	return pram_ofs;
 }
 

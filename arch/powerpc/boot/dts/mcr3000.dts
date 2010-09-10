@@ -155,7 +155,7 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-dpram";
 			reg = <2 0x0 0x4000>;
-			interrupts = <2 1>;
+			interrupts = <4 1>;
 			interrupt-parent = <&PIC>;
 		};
 		fpga@5,0 {
@@ -163,8 +163,12 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga";
 			reg = <5 0x0 0x0200>;
-			interrupts = <3 1>;
+			interrupts = <6 1>;
 			interrupt-parent = <&PIC>;
+			gpios = <&CPM1_PIO_B 14 1	// PROGFPGA\
+				&CPM1_PIO_B 16 1	// INITFPGA\
+				&CPM1_PIO_B 17 1	// DONEFPGA\
+				&rst2 1 1 >;		// RST_FPGA\
 		};
 	};
 
@@ -226,7 +230,7 @@
 
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x0 0x2000>; // pas correct, devrait etre 0x1c00 mais pb driver spi
+					reg = <0x0 0x1c00>; // pas correct, devrait etre 0x1c00 mais pb driver spi
 				};
 			};
 
@@ -301,56 +305,64 @@
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
-				gpios = <&csspi 0 0	// device reg=<0> /* POT1 */
-					 &csspi 1 0	// device reg=<1> /* TEMP */
-					 &csspi 2 0	// device reg=<2> /* ARCOFI */
-					 &csspi 3 0	// device reg=<3> /* EEPROM */
-					 &csspi 4 0	// device reg=<4> /* POT2 */
-					 &csspi 5 0	// device reg=<5> /* MEZZ */
-					 &csspi 6 0>;	// device reg=<6> /* SICOFI */
+				gpios = <&csspi 0 0	// device reg=<0> /* FPGA */
+					 &csspi 1 0	// device reg=<1> /* POT1 */
+					 &csspi 2 0	// device reg=<2> /* TEMP */
+					 &csspi 3 0	// device reg=<3> /* ARCOFI */
+					 &csspi 4 0	// device reg=<4> /* EEPROM */
+					 &csspi 5 0	// device reg=<5> /* POT2 */
+					 &csspi 6 0	// device reg=<6> /* MEZZ */
+					 &csspi 7 0>;	// device reg=<7> /* SICOFI */
 					 
-				pot1@0 {
-					compatible = "cs,pot1";
-					spi-max-frequency = <1000000>;
+				fpga@0 {
+					compatible = "s3k,mcr3000-fpga";
+					spi-max-frequency = <10000000>;
 					reg = <0>;
 					spi-cs-high;
 				};
-				lm74@1 {
-					compatible = "ti,tmp121", "ns,lm74";
+				pot1@1 {
+					compatible = "cs,pot1";
 					spi-max-frequency = <1000000>;
 					reg = <1>;
 					spi-cs-high;
 				};
-				arcofi@2 {
-					compatible = "infineon,arcofi";
+				lm74@2 {
+					compatible = "ti,tmp121", "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
 				};
-				eeprom@3 {
-					compatible = "cs,at25", "cs,eeprom";
+				arcofi@3 {
+					compatible = "infineon,arcofi";
 					spi-max-frequency = <1000000>;
 					reg = <3>;
 					spi-cs-high;
 				};
-				pot2@4 {
-					compatible = "cs,pot2";
+				eeprom@4 {
+					compatible = "cs,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <4>;
 					spi-cs-high;
 				};
-				mezz@5 {
-					compatible = "cs,mezz";
+				pot2@5 {
+					compatible = "cs,pot2";
 					spi-max-frequency = <1000000>;
 					reg = <5>;
 					spi-cs-high;
 				};
-				sicofi@6 {
-					compatible = "infineon,sicofi";
+				mezz@6 {
+					compatible = "cs,mezz";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
 					spi-cs-high;
 				};
+				sicofi@7 {
+					compatible = "infineon,sicofi";
+					spi-max-frequency = <1000000>;
+					reg = <7>;
+					spi-cs-high;
+				};
+				
 			};
 			
 		};
