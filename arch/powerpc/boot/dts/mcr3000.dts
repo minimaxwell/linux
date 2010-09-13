@@ -170,6 +170,14 @@
 				&CPM1_PIO_B 17 1	// DONEFPGA\
 				&rst2 1 1 >;		// RST_FPGA\
 		};
+		alarmes {
+			compatible = "s3k,mcr3000-alarmes";
+			interrupts = <24>;
+			interrupt-parent = <&CPM_PIC>;
+			gpios = <&CPM1_PIO_C 13 1 	// ACQ_ALRM
+				&OPX 1 1		// ALRM_MAJ
+				&CPM1_PIO_D 15 1>;	// ALRM_MIN
+		};
 	};
 
 	soc@ff000000 {
@@ -211,6 +219,13 @@
 			#interrupt-cells = <2>;
 			reg = <0x0 0x24>;
 			compatible = "fsl,mpc866-pic", "fsl,pq1-pic";
+		};
+		
+		OPX: gpio-controller@0e0{
+			#gpio-cells = <2>;
+			compatible = "s3k,mcr3000-opx-gpio";
+			reg = <0x0e0 8>;
+			gpio-controller;
 		};
 
 		cpm@9c0 {

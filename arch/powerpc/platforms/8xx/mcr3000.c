@@ -57,7 +57,7 @@ static struct cpm_pin mcr3000_pins[] = {
 	{CPM_PORTC,  4, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* DCD			*/
 	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* CTS			*/
 	
-	/* SPI  a verifier (faux) */
+	/* SPI */
 	{CPM_PORTB, 28, CPM_PIN_OUTPUT},					/* MISO			*/
 	{CPM_PORTB, 29, CPM_PIN_OUTPUT},					/* MOSI 		*/
 	{CPM_PORTB, 30, CPM_PIN_OUTPUT},					/* CLK			*/
@@ -83,6 +83,11 @@ static struct cpm_pin mcr3000_pins[] = {
 	/* EEPROM */
 	{CPM_PORTB, 20, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* EE_HOLD		*/
 	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* EE_WP 		*/
+	
+	/* ALARMES */
+	{CPM_PORTC, 13, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_FALLEDGE},	/* ACQ_ALARM		*/
+	{CPM_PORTD, 15, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* Alarme Mineure	*/
+	
 };
 
 static void __init init_ioports(void)
@@ -166,6 +171,87 @@ static int __init cpld_csspi_gpiochip_add(struct device_node *np)
 	return of_mm_gpiochip_add(np, mm_gc);
 }
 
+static spinlock_t opx_gpio_lock;
+static struct of_mm_gpio_chip opx_gpio_mm_gc;
+
+#define M8XX_PGCRX_CXOE    0x00000080
+#define M8XX_PGCRX_CXRESET 0x00000040
+
+static int opx_gpio_get(struct gpio_chip *gc, unsigned int gpio)
+{
+	unsigned int *pgcrx=(unsigned int *)opx_gpio_mm_gc.regs;
+	unsigned int reg;
+	unsigned int mask;
+	unsigned int d31 = gpio&1;
+	unsigned int d30 = (gpio>>1)&1;
+
+	reg = in_be32(pgcrx + d30);
+	mask = d31^d30 ? M8XX_PGCRX_CXOE:M8XX_PGCRX_CXRESET;
+	return reg&mask ? 1:0;
+}
+
+static void opx_gpio_set(struct gpio_chip *gc, unsigned int gpio, int val)
+{
+	unsigned long flags;
+	unsigned int *pgcrx=(unsigned int *)opx_gpio_mm_gc.regs;
+	unsigned int reg;
+	unsigned int mask;
+	unsigned int d31 = gpio&1;
+	unsigned int d30 = (gpio>>1)&1;
+
+	spin_lock_irqsave(&opx_gpio_lock, flags);
+
+pr_err("pgcrx %x d30 %d d31 %d\n",(unsigned int)pgcrx,d30,d31);
+	reg = in_be32(pgcrx + d30);
+	mask = d31^d30 ? M8XX_PGCRX_CXOE:M8XX_PGCRX_CXRESET;
+pr_err("reg %x mask %x\n",reg,mask);
+	if (val) reg |= mask;
+	else reg &= ~mask;
+	out_be32(pgcrx + d30, reg);
+
+	spin_unlock_irqrestore(&opx_gpio_lock, flags);
+}
+
+static int opx_gpio_dir_in(struct gpio_chip *gc, unsigned int gpio)
+{
+	return -EINVAL;
+}
+
+static int opx_gpio_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
+{
+	opx_gpio_set(gc, gpio, val);
+	return 0;
+}
+
+static void opx_gpio_save_regs(struct of_mm_gpio_chip *mm_gc)
+{
+}
+
+static int __init opx_gpio_gpiochip_add(struct device_node *np)
+{
+	struct of_mm_gpio_chip *mm_gc;
+	struct of_gpio_chip *of_gc;
+	struct gpio_chip *gc;
+
+	pr_info("Initialisation GPIO OPx\n");
+	
+	spin_lock_init(&opx_gpio_lock);
+
+	mm_gc = &opx_gpio_mm_gc;
+	of_gc = &mm_gc->of_gc;
+	gc = &of_gc->gc;
+
+	mm_gc->save_regs = opx_gpio_save_regs;
+	of_gc->gpio_cells = 2;
+	gc->ngpio = 4;
+	gc->direction_input = opx_gpio_dir_in;
+	gc->direction_output = opx_gpio_dir_out;
+	gc->get = opx_gpio_get;
+	gc->set = opx_gpio_set;
+
+	return of_mm_gpiochip_add(np, mm_gc);
+}
+
 static void __init mcr3000_setup_arch(void)
 {
 //	struct device_node *np;
@@ -242,6 +328,12 @@ static struct of_device_id __initdata of_bus_ids[] = {
 		cpld_csspi_gpiochip_add(np);
 	else
 		pr_crit("Could not find s3k,mcr3000-cpld-csspi node\n");
+	
+	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-opx-gpio");
+	if (np) 
+		opx_gpio_gpiochip_add(np);
+	else
+		pr_crit("Could not find s3k,mcr3000-opx-gpio node\n");
 	
 	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 

@@ -376,6 +376,10 @@ static void cpm1_set_pin16(int port, int pin, int flags)
 			setbits16(&iop->odr_sor, pin);
 		else
 			clrbits16(&iop->odr_sor, pin);
+		if (flags & CPM_PIN_FALLEDGE)
+			setbits16(&iop->intr, pin);
+		else
+			clrbits16(&iop->intr, pin);
 	}
 }
 
