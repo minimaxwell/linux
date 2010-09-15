@@ -1,3 +1,5 @@
+#define DEBUG 1
+
 /*arch/powerpc/platforms/8xx/mcr3000.c
  *
  * Copyright 2010 CSSI Inc.
@@ -6,6 +8,10 @@
 
 #include <linux/init.h>
 #include <linux/of_platform.h>
+#include <linux/interrupt.h>
+#include <linux/irq.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>
@@ -15,8 +21,7 @@
 #include <asm/cpm1.h>
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
-#include <linux/of.h>
-#include <linux/of_gpio.h>
+
 #include <sysdev/simple_gpio.h>
 
 #include "mcr3000.h"
@@ -201,10 +206,8 @@ static void opx_gpio_set(struct gpio_chip *gc, unsigned int gpio, int val)
 
 	spin_lock_irqsave(&opx_gpio_lock, flags);
 
-pr_err("pgcrx %x d30 %d d31 %d\n",(unsigned int)pgcrx,d30,d31);
 	reg = in_be32(pgcrx + d30);
 	mask = d31^d30 ? M8XX_PGCRX_CXOE:M8XX_PGCRX_CXRESET;
-pr_err("reg %x mask %x\n",reg,mask);
 	if (val) reg |= mask;
 	else reg &= ~mask;
 	out_be32(pgcrx + d30, reg);
@@ -250,6 +253,100 @@ static int __init opx_gpio_gpiochip_add(struct device_node *np)
 	gc->set = opx_gpio_set;
 
 	return of_mm_gpiochip_add(np, mm_gc);
+}
+
+static u16 __iomem *cpld_pic_reg;
+static struct irq_host *cpld_pic_host;
+
+static void cpld_mask_irq(unsigned int irq)
+{
+}
+
+static void cpld_unmask_irq(unsigned int irq)
+{
+}
+
+static void cpld_end_irq(unsigned int irq)
+{
+	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+
+	clrbits16(cpld_pic_reg, 1<<(15-vec));
+}
+
+static struct irq_chip cpld_pic = {
+	.name = "CPLD PIC",
+	.mask = cpld_mask_irq,
+	.unmask = cpld_unmask_irq,
+	.eoi = cpld_end_irq,
+};
+
+int cpld_get_irq(void)
+{
+	int vec;
+	int ret;
+
+	vec = 16 - ffs(in_be16(cpld_pic_reg)&0x1fe0);
+	
+	clrbits16(cpld_pic_reg, 1<<(15-vec));
+	
+	ret=irq_linear_revmap(cpld_pic_host, vec);
+	return ret;
+}
+
+static int cpld_pic_host_map(struct irq_host *h, unsigned int virq,
+			  irq_hw_number_t hw)
+{
+	pr_debug("cpld_pic_host_map(%d, 0x%lx)\n", virq, hw);
+
+	irq_to_desc(virq)->status |= IRQ_LEVEL;
+	set_irq_chip_and_handler(virq, &cpld_pic, handle_fasteoi_irq);
+	return 0;
+}
+
+static struct irq_host_ops cpld_pic_host_ops = {
+	.map = cpld_pic_host_map,
+};
+
+static int cpld_pic_init(void)
+{
+	struct device_node *np = NULL;
+	struct resource res;
+	unsigned int irq = NO_IRQ, hwirq;
+	int ret;
+
+	pr_debug("cpld_pic_init\n");
+
+	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-pic");
+	if (np == NULL) {
+		printk(KERN_ERR "CPLD PIC init: can not find mcr3000-pic node\n");
+		return irq;
+	}
+
+	ret = of_address_to_resource(np, 0, &res);
+	if (ret)
+		goto end;
+
+	cpld_pic_reg = ioremap(res.start, res.end - res.start + 1);
+	if (cpld_pic_reg == NULL)
+		goto end;
+
+	irq = irq_of_parse_and_map(np, 0);
+	if (irq == NO_IRQ)
+		goto end;
+
+	/* Initialize the CPLD interrupt controller. */
+	hwirq = (unsigned int)irq_map[irq].hwirq;
+
+	cpld_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &cpld_pic_host_ops, 16);
+	if (cpld_pic_host == NULL) {
+		printk(KERN_ERR "CPLD PIC: failed to allocate irq host!\n");
+		irq = NO_IRQ;
+		goto end;
+	}
+
+end:
+	of_node_put(np);
+	return irq;
 }
 
 static void __init mcr3000_setup_arch(void)
@@ -317,7 +414,7 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{},
 };
 
- int __init declare_of_platform_devices(void)
+static int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 	
@@ -365,7 +462,9 @@ static struct of_device_id __initdata of_bus_ids[] = {
 			}
 			switch (i) { // traitement specifique pour chaque GPIO
 			case 0: /* SPISEL */
+			case 1: /* masque IRQ CPLD */
 				/* activation SPISEL permanent */
+				/* activation IRQ CPLD permanent */
 				gpio_set_value(gpio, !(flags & OF_GPIO_ACTIVE_LOW));
 				break;
 			}
@@ -382,11 +481,35 @@ static struct of_device_id __initdata of_bus_ids[] = {
 }
 machine_device_initcall(mcr3000, declare_of_platform_devices);
 
+static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
+{
+	int cascade_irq;
+
+	if ((cascade_irq = cpld_get_irq()) >= 0) {
+		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
+
+		generic_handle_irq(cascade_irq);
+		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+	}
+	if (desc->chip->eoi) desc->chip->eoi(irq);
+}
+
+void __init mcr3000_pics_init(void)
+{
+	int irq;
+
+	mpc8xx_pics_init();
+	
+	irq = cpld_pic_init();
+	if (irq != NO_IRQ)
+		set_irq_chained_handler(irq, cpld_cascade);
+}
+
 define_machine(mcr3000) {
 	.name			= "MCR3000",
 	.probe			= mcr3000_probe,
 	.setup_arch		= mcr3000_setup_arch,
-	.init_IRQ		= mpc8xx_pics_init,
+	.init_IRQ		= mcr3000_pics_init,
 	.get_irq		= mpc8xx_get_irq,
 	.restart		= mpc8xx_restart,
 	.calibrate_decr		= mpc8xx_calibrate_decr,

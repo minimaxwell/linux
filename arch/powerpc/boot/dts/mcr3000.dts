@@ -88,7 +88,8 @@
 			compatible = "s3k,mcr3000-cpld";
 			reg = <4 0x800 0x8>;
 			ranges = <0 4 0x800 0x8>;
-			gpios = <&CPM1_PIO_B 31 1>;	// SPISEL
+			gpios = <&CPM1_PIO_B 31 1	// SPISEL
+				&cmd2 7 1>;		// masque IRQ CPLD
 			
 			rst1: gpio-controller@0 {
 				#gpio-cells = <2>;
@@ -148,6 +149,16 @@
 				compatible = "s3k,mcr3000-cpld-csspi";
 				reg = <0x02 2>;
 				gpio-controller;
+			};
+			
+			CPLD_PIC: pic@4 {
+				interrupt-controller;
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+				interrupts = <12 1>;
+				interrupt-parent = <&PIC>;
+				reg = <0x4 2>;
+				compatible = "s3k,mcr3000-pic";
 			};
 		};
 		dpram@2,0 {
@@ -264,7 +275,6 @@
 				reg = <0x930 0x20>;
 				compatible = "fsl,mpc866-cpm-pic", "fsl,cpm1-pic";
 			};
-
 
 			CPM1_PIO_A: gpio-controller@950 {
 				#gpio-cells = <2>;
