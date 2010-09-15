@@ -444,8 +444,8 @@ static int mpc8xxx_spi_cpm_bufs(struct mpc8xxx_spi *mspi,
 			dev_err(dev, "unable to map tx dma\n");
 			return -ENOMEM;
 		}
-	} else {
-/*		mspi->tx_dma = t->tx_dma;*/
+	} else if (t->tx_buf) {
+		mspi->tx_dma = t->tx_dma;
 	}
 
 	if (mspi->map_rx_dma) {
@@ -455,8 +455,8 @@ static int mpc8xxx_spi_cpm_bufs(struct mpc8xxx_spi *mspi,
 			dev_err(dev, "unable to map rx dma\n");
 			goto err_rx_dma;
 		}
-	} else {
-/*		mspi->rx_dma = t->rx_dma;*/
+	} else if (t->rx_buf) {
+		mspi->rx_dma = t->rx_dma;
 	}
 
 	/* enable rx ints */
@@ -828,7 +828,6 @@ static unsigned long mpc8xxx_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 	if (!iprop || size != sizeof(*iprop) * 4)
 		return -ENOMEM;
 
-/*	spi_base_ofs = cpm_muram_alloc_fixed(iprop[2], 2); */
 	spi_base_ofs = iprop[2];
 	if (IS_ERR_VALUE(spi_base_ofs))
 		return -ENOMEM;
@@ -851,7 +850,6 @@ static unsigned long mpc8xxx_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 			return spi_base_ofs;
 	}
 
-/*	cpm_muram_free(spi_base_ofs);*/
 	return pram_ofs;
 }
 
