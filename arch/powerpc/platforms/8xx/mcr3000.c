@@ -1,8 +1,9 @@
 #define DEBUG 1
 
-/*arch/powerpc/platforms/8xx/mcr3000.c
+/* 
+ * arch/powerpc/platforms/8xx/mcr3000.c
  *
- * Copyright 2010 CSSI Inc.
+ * Copyright 2010 CSSI
  *
  */
 
@@ -26,6 +27,10 @@
 
 #include "mcr3000.h"
 #include "mpc8xx.h"
+
+/*
+ * INIT PORTS 
+ */
 
 struct cpm_pin {
 	int port, pin, flags;
@@ -113,6 +118,10 @@ static void __init init_ioports(void)
 //	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
 }
 
+/*
+ * Controlleur GPIO pour les ChipSelect SPI 
+ */
+
 static spinlock_t cpld_csspi_lock;
 static struct of_mm_gpio_chip cpld_csspi_mm_gc;
 
@@ -175,6 +184,10 @@ static int __init cpld_csspi_gpiochip_add(struct device_node *np)
 
 	return of_mm_gpiochip_add(np, mm_gc);
 }
+
+/*
+ * Controlleur GPIO pour les ports OP1 à OP4 du MPC
+ */
 
 static spinlock_t opx_gpio_lock;
 static struct of_mm_gpio_chip opx_gpio_mm_gc;
@@ -254,6 +267,10 @@ static int __init opx_gpio_gpiochip_add(struct device_node *np)
 
 	return of_mm_gpiochip_add(np, mm_gc);
 }
+
+/*
+ * Controlleur d'IRQ du CPLD 
+ */
 
 static u16 __iomem *cpld_pic_reg;
 static struct irq_host *cpld_pic_host;
@@ -349,10 +366,36 @@ end:
 	return irq;
 }
 
+static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
+{
+	int cascade_irq;
+
+	if ((cascade_irq = cpld_get_irq()) >= 0) {
+		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
+
+		generic_handle_irq(cascade_irq);
+		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+	}
+	if (desc->chip->eoi) desc->chip->eoi(irq);
+}
+
+/*
+ * Init Carte 
+ */
+
+void __init mcr3000_pics_init(void)
+{
+	int irq;
+
+	mpc8xx_pics_init();
+	
+	irq = cpld_pic_init();
+	if (irq != NO_IRQ)
+		set_irq_chained_handler(irq, cpld_cascade);
+}
+
 static void __init mcr3000_setup_arch(void)
 {
-//	struct device_node *np;
-//	u32 __iomem *cpld_io;
 //	__volatile__ unsigned char dummy;
 //	uint msr;
 	immap_t *immap;
@@ -361,24 +404,6 @@ static void __init mcr3000_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-/*	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld");
-	if (!np) {
-		pr_crit("Could not find s3k,mcr3000-cpld node\n");
-		return;
-	}
-
-	cpld_io = of_iomap(np, 0);
-	of_node_put(np);
-
-	if (cpld_io == NULL) {
-		pr_crit("Could not remap CPLD\n");
-		return;
-	}
-*/	
-////
-////	clrbits32(bcsr_io, BCSR1_RS232EN_1 | BCSR1_RS232EN_2 | BCSR1_ETHEN);
-////	iounmap(bcsr_io);
-	
 //        /* ALBOP 16-05-2006 set internal clock to external freq */
 //	/* and setup checkstop handling to generate a HRESET    */
 //	mpc8xx_immr->im_clkrst.car_plprcr = 0x00A64084;
@@ -404,7 +429,6 @@ static int __init mcr3000_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
 	return of_flat_dt_is_compatible(root, "fsl,mcr3000");
-	return 0;
 }
 
 static struct of_device_id __initdata of_bus_ids[] = {
@@ -460,7 +484,7 @@ static int __init declare_of_platform_devices(void)
 				pr_err("can't set output direction for gpio #%d: %d\n", i, ret);
 				continue;
 			}
-			switch (i) { // traitement specifique pour chaque GPIO
+			switch (i) { /* traitement specifique pour chaque GPIO */
 			case 0: /* SPISEL */
 			case 1: /* masque IRQ CPLD */
 				/* activation SPISEL permanent */
@@ -480,30 +504,6 @@ static int __init declare_of_platform_devices(void)
 	return 0;
 }
 machine_device_initcall(mcr3000, declare_of_platform_devices);
-
-static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
-{
-	int cascade_irq;
-
-	if ((cascade_irq = cpld_get_irq()) >= 0) {
-		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
-
-		generic_handle_irq(cascade_irq);
-		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
-	}
-	if (desc->chip->eoi) desc->chip->eoi(irq);
-}
-
-void __init mcr3000_pics_init(void)
-{
-	int irq;
-
-	mpc8xx_pics_init();
-	
-	irq = cpld_pic_init();
-	if (irq != NO_IRQ)
-		set_irq_chained_handler(irq, cpld_cascade);
-}
 
 define_machine(mcr3000) {
 	.name			= "MCR3000",
