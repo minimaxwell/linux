@@ -327,6 +327,46 @@
 				fsl,cpm-command = <0x90>;
 			};
 
+			scc1: serial@a00 {
+				device_type = "serial";
+				compatible = "fsl,mpc866-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa00 0x20 0x3c00 0x80>;
+				interrupts = <30>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x00>;
+			};
+
+			scc2: serial@a20 {
+				device_type = "serial";
+				compatible = "fsl,mpc866-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa20 0x20 0x3d00 0x80>;
+				interrupts = <29>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0x40>;
+			};
+
+			scc3: serial@a40 {
+				device_type = "serial";
+				compatible = "fsl,mpc866-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <4>;
+				fsl,cpm-command = <0x80>;
+			};
+
+			scc4: serial@a60 {
+				device_type = "serial";
+				compatible = "fsl,mpc866-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa60 0x20 0x3f00 0x80>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <4>;
+				fsl,cpm-command = <0xc0>;
+			};
+
 			spi: spi@a80 {
 				#address-cells = <1>;
 				#size-cells = <0>;
