@@ -189,6 +189,12 @@
 				&OPX 1 1		// ALRM_MAJ
 				&CPM1_PIO_D 15 1>;	// ALRM_MIN
 		};
+		DRVCpld {
+			compatible = "s3k,mcr3000-drvcpld";
+			interrupts = <4 5 6 7 8 9 10>;
+			interrupt-parent = <&CPLD_PIC>;
+		};
+			
 	};
 
 	soc@ff000000 {
