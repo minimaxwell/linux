@@ -238,6 +238,11 @@
 			compatible = "fsl,mpc866-pic", "fsl,pq1-pic";
 		};
 		
+		WDT: watchdog@0 {
+			compatible = "fsl,mpc823-wdt";
+			reg = <0x0 0x10>;
+		};
+		
 		OPX: gpio-controller@0e0{
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-opx-gpio";
