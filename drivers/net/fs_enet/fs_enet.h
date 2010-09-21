@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/phy.h>
 #include <linux/dma-mapping.h>
+#include <linux/workqueue.h>
 
 #include <linux/fs_enet_pd.h>
 #include <asm/fs_pd.h>
@@ -145,7 +146,11 @@ struct fs_enet_private {
 	int interrupt;
 
 	struct phy_device *phydev;
+	struct phy_device *phydevs[2];
+	struct delayed_work link_queue;
+
 	int oldduplex, oldspeed, oldlink;	/* current settings */
+	int change_time;
 
 	/* event masks */
 	u32 ev_napi_rx;		/* mask of NAPI rx events */

@@ -64,6 +64,8 @@ MODULE_PARM_DESC(fs_enet_debug,
 static void fs_enet_netpoll(struct net_device *dev);
 #endif
 
+#define LINK_MONITOR_RETRY (2*HZ)
+
 static void fs_set_multicast_list(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
@@ -758,7 +760,8 @@ static void generic_adjust_link(struct  net_device *dev)
 
 		if (new_state)
 			fep->ops->restart(dev);
-	} else if (fep->oldlink) {
+	}
+	else if (fep->oldlink) {
 		new_state = 1;
 		fep->oldlink = 0;
 		fep->oldspeed = 0;
@@ -781,10 +784,43 @@ static void fs_adjust_link(struct net_device *dev)
 		fep->ops->adjust_link(dev);
 	else
 		generic_adjust_link(dev);
+	
+	cancel_delayed_work_sync(&fep->link_queue);
+	schedule_delayed_work(&fep->link_queue, 0);
 
 	spin_unlock_irqrestore(&fep->lock, flags);
 }
 
+void fs_link_monitor(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct fs_enet_private *fep =
+			container_of(dwork, struct fs_enet_private, link_queue);
+	struct phy_device *phydev = fep->phydev;
+	unsigned long flags;
+	
+	if (!phydev->link && fep->phydevs[1] && (jiffies - fep->change_time >= LINK_MONITOR_RETRY)) {
+		if (phydev->drv->suspend) phydev->drv->suspend(phydev);
+			
+		if (phydev == fep->phydevs[0]) {
+			phydev = fep->phydevs[1];
+			dev_err(fep->dev, "Switch to PHYB\n");
+		}
+		else {
+			phydev = fep->phydevs[0];
+			dev_err(fep->dev, "Switch to PHYA\n");
+		}
+		
+		spin_lock_irqsave(&fep->lock, flags);
+		fep->change_time = jiffies;
+		fep->phydev = phydev;
+		spin_unlock_irqrestore(&fep->lock, flags);
+		
+		if (phydev->drv->resume) phydev->drv->resume(phydev);
+	}
+	if (!phydev->link) schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+}
+		
 static int fs_init_phy(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
@@ -793,6 +829,7 @@ static int fs_init_phy(struct net_device *dev)
 	fep->oldlink = 0;
 	fep->oldspeed = 0;
 	fep->oldduplex = -1;
+	fep->change_time = jiffies;
 
 	phydev = of_phy_connect(dev, fep->fpi->phy_node, &fs_adjust_link, 0,
 				PHY_INTERFACE_MODE_MII);
@@ -806,6 +843,10 @@ static int fs_init_phy(struct net_device *dev)
 	}
 
 	fep->phydev = phydev;
+	fep->phydevs[0] = phydev;
+	fep->phydevs[1] = of_phy_connect(dev, fep->fpi->phy_node2, &fs_adjust_link, 0,
+				PHY_INTERFACE_MODE_MII);
+	if (fep->phydevs[1]->drv->suspend) fep->phydevs[1]->drv->suspend(fep->phydevs[1]);
 
 	return 0;
 }
@@ -840,7 +881,10 @@ static int fs_enet_open(struct net_device *dev)
 			napi_disable(&fep->napi);
 		return err;
 	}
-	phy_start(fep->phydev);
+	phy_start(fep->phydevs[0]);
+	phy_start(fep->phydevs[1]);
+	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
+	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 
 	netif_start_queue(dev);
 
@@ -856,7 +900,8 @@ static int fs_enet_close(struct net_device *dev)
 	netif_carrier_off(dev);
 	if (fep->fpi->use_napi)
 		napi_disable(&fep->napi);
-	phy_stop(fep->phydev);
+	phy_stop(fep->phydevs[0]);
+	phy_stop(fep->phydevs[1]);
 
 	spin_lock_irqsave(&fep->lock, flags);
 	spin_lock(&fep->tx_lock);
@@ -865,7 +910,8 @@ static int fs_enet_close(struct net_device *dev)
 	spin_unlock_irqrestore(&fep->lock, flags);
 
 	/* release any irqs */
-	phy_disconnect(fep->phydev);
+	phy_disconnect(fep->phydevs[0]);
+	phy_disconnect(fep->phydevs[1]);
 	fep->phydev = NULL;
 	free_irq(fep->interrupt, dev);
 
@@ -1031,6 +1077,7 @@ static int __devinit fs_enet_probe(struct of_device *ofdev,
 	if ((!fpi->phy_node) && (!of_get_property(ofdev->node, "fixed-link",
 						  NULL)))
 		goto out_free_fpi;
+	fpi->phy_node2 = of_parse_phandle(ofdev->node, "phy-handle", 1);
 
 	privsize = sizeof(*fep) +
 	           sizeof(struct sk_buff **) *
@@ -1103,6 +1150,7 @@ out_free_dev:
 	free_netdev(ndev);
 	dev_set_drvdata(&ofdev->dev, NULL);
 	of_node_put(fpi->phy_node);
+	of_node_put(fpi->phy_node2);
 out_free_fpi:
 	kfree(fpi);
 	return ret;
@@ -1119,6 +1167,7 @@ static int fs_enet_remove(struct of_device *ofdev)
 	fep->ops->cleanup_data(ndev);
 	dev_set_drvdata(fep->dev, NULL);
 	of_node_put(fep->fpi->phy_node);
+	of_node_put(fep->fpi->phy_node2);
 	free_netdev(ndev);
 	return 0;
 }

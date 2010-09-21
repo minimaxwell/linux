@@ -89,7 +89,8 @@
 			reg = <4 0x800 0x8>;
 			ranges = <0 4 0x800 0x8>;
 			gpios = <&CPM1_PIO_B 31 1	// SPISEL
-				&cmd2 7 1>;		// masque IRQ CPLD
+				&cmd2 7 1		// masque IRQ CPLD
+				&cmd1 1 1>;		// validation ETH2
 			
 			rst1: gpio-controller@0 {
 				#gpio-cells = <2>;
@@ -227,7 +228,7 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <3 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY0>;
+			phy-handle = <&PHY0 &PHY1>;
 			linux,network-index = <0>;
 		};
 

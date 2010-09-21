@@ -488,6 +488,7 @@ static int __init declare_of_platform_devices(void)
 			switch (i) { /* traitement specifique pour chaque GPIO */
 			case 0: /* SPISEL */
 			case 1: /* masque IRQ CPLD */
+			case 2: /* valider ethernet 2 */
 				/* activation SPISEL permanent */
 				/* activation IRQ CPLD permanent */
 				gpio_set_value(gpio, !(flags & OF_GPIO_ACTIVE_LOW));

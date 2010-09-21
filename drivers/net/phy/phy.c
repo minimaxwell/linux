@@ -959,5 +959,5 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
-	schedule_delayed_work(&phydev->state_queue, PHY_STATE_TIME * HZ);
+	schedule_delayed_work(&phydev->state_queue, HZ * PHY_STATE_TIME);
 }
