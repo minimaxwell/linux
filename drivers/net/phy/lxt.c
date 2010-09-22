@@ -57,6 +57,7 @@
 
 #define MII_LXT971_ISR		19  /* Interrupt Status Register */
 
+#define MII_LXT973_SFR		27  /* Special Function Register */
 
 MODULE_DESCRIPTION("Intel LXT PHY driver");
 MODULE_AUTHOR("Andy Fleming");
@@ -135,6 +136,27 @@ static int lxt971_config_intr(struct phy_device *phydev)
  * Status: This erratum has been previously fixed (in rev A3)
  *
  */
+
+static int lxt973_config_init(struct phy_device *phydev)
+{
+	int err;
+	int val;
+
+	val = phy_read(phydev, MII_LXT973_SFR);
+	if (val < 0)
+		return val;
+	pr_err("LXT973 SFR %x\n",val);
+	
+	/* no auto MDI/MDIX ==> Fixed MDI */
+	err = phy_write(phydev, MII_LXT973_SFR, val & ~0x200 | 0x100);
+	
+	val = phy_read(phydev, MII_LXT973_SFR);
+	if (val < 0)
+		return val;
+	pr_err("LXT973 SFR %x\n",val);
+
+	return err;
+}
 
 int lxt973a2_update_link(struct phy_device *phydev)
 {
@@ -278,6 +300,7 @@ static struct phy_driver lxt973a2_driver = {
 	.phy_id_mask	= 0xffffffff,
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= 0,
+	.config_init	= lxt973_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= lxt973a2_read_status,
 	.suspend	= genphy_suspend,
@@ -291,6 +314,7 @@ static struct phy_driver lxt973a3_driver = {
 	.phy_id_mask	= 0xffffffff,
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= 0,
+	.config_init	= lxt973_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= genphy_read_status,
 	.suspend	= genphy_suspend,
