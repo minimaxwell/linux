@@ -462,6 +462,7 @@ void phy_stop_machine(struct phy_device *phydev)
  */
 static void phy_force_reduction(struct phy_device *phydev)
 {
+#if 0 /* Si j'ai decide une vitesse c'est par pour qu'il la baisse !!! */
 	int idx;
 
 	idx = phy_find_setting(phydev->speed, phydev->duplex);
@@ -476,6 +477,7 @@ static void phy_force_reduction(struct phy_device *phydev)
 	pr_info("Trying %d/%s\n", phydev->speed,
 			DUPLEX_FULL == phydev->duplex ?
 			"FULL" : "HALF");
+#endif
 }
 
 
