@@ -65,6 +65,8 @@ static void fs_enet_netpoll(struct net_device *dev);
 #endif
 
 #define LINK_MONITOR_RETRY (2*HZ)
+#define MODE_MANU 1
+#define MODE_AUTO 2
 
 static void fs_set_multicast_list(struct net_device *dev)
 {
@@ -786,9 +788,33 @@ static void fs_adjust_link(struct net_device *dev)
 		generic_adjust_link(dev);
 	
 	cancel_delayed_work_sync(&fep->link_queue);
-	schedule_delayed_work(&fep->link_queue, 0);
+	if (fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, 0);
 
 	spin_unlock_irqrestore(&fep->lock, flags);
+}
+
+void fs_link_switch(struct fs_enet_private *fep)
+{
+	struct phy_device *phydev = fep->phydev;
+	unsigned long flags;
+	
+	if (phydev->drv->suspend) phydev->drv->suspend(phydev);
+
+	if (phydev == fep->phydevs[0]) {
+		phydev = fep->phydevs[1];
+		dev_err(fep->dev, "Switch to PHYB\n");
+	}
+	else {
+		phydev = fep->phydevs[0];
+		dev_err(fep->dev, "Switch to PHYA\n");
+	}
+
+	spin_lock_irqsave(&fep->lock, flags);
+	fep->change_time = jiffies;
+	fep->phydev = phydev;
+	spin_unlock_irqrestore(&fep->lock, flags);
+
+	if (phydev->drv->resume) phydev->drv->resume(phydev);
 }
 
 void fs_link_monitor(struct work_struct *work)
@@ -797,28 +823,12 @@ void fs_link_monitor(struct work_struct *work)
 	struct fs_enet_private *fep =
 			container_of(dwork, struct fs_enet_private, link_queue);
 	struct phy_device *phydev = fep->phydev;
-	unsigned long flags;
 	
-	if (!phydev->link && fep->phydevs[1] && (jiffies - fep->change_time >= LINK_MONITOR_RETRY)) {
-		if (phydev->drv->suspend) phydev->drv->suspend(phydev);
-			
-		if (phydev == fep->phydevs[0]) {
-			phydev = fep->phydevs[1];
-			dev_err(fep->dev, "Switch to PHYB\n");
-		}
-		else {
-			phydev = fep->phydevs[0];
-			dev_err(fep->dev, "Switch to PHYA\n");
-		}
-		
-		spin_lock_irqsave(&fep->lock, flags);
-		fep->change_time = jiffies;
-		fep->phydev = phydev;
-		spin_unlock_irqrestore(&fep->lock, flags);
-		
-		if (phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!phydev->link && fep->mode == MODE_AUTO) {
+		if (fep->phydevs[1] && (jiffies - fep->change_time >= LINK_MONITOR_RETRY))
+			fs_link_switch(fep);
+		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 	}
-	if (!phydev->link) schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 }
 		
 static int fs_init_phy(struct net_device *dev)
@@ -830,6 +840,7 @@ static int fs_init_phy(struct net_device *dev)
 	fep->oldspeed = 0;
 	fep->oldduplex = -1;
 	fep->change_time = jiffies;
+	fep->mode = MODE_AUTO;
 
 	phydev = of_phy_connect(dev, fep->fpi->phy_node, &fs_adjust_link, 0,
 				PHY_INTERFACE_MODE_MII);
@@ -974,7 +985,10 @@ static int fs_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 	if (!fep->phydev)
 		return -ENODEV;
 
-	return phy_ethtool_sset(fep->phydev, cmd);
+	if (fep->phydevs[1] && cmd->phy_address == 1) 
+		return phy_ethtool_sset(fep->phydevs[1], cmd);
+	else
+		return phy_ethtool_sset(fep->phydevs[0], cmd);
 }
 
 static int fs_nway_reset(struct net_device *dev)
@@ -1021,6 +1035,114 @@ static int fs_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 extern int fs_mii_connect(struct net_device *dev);
 extern void fs_mii_disconnect(struct net_device *dev);
+
+/**************************************************************************************/
+/* sysfs hook function */
+static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->phydev == fep->phydevs[1]?1:0);
+}
+
+static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	int active = simple_strtol(buf, NULL, 10);
+	
+	if (active != 1) active = 0;
+	if (fep->phydevs[active] != fep->phydev) {
+		fs_link_switch(fep);
+		cancel_delayed_work_sync(&fep->link_queue);
+		if (!fep->phydev->link && fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_attr_active_link_store);
+
+static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->phydevs[0]->link ?1:0);
+}
+
+static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
+
+static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->phydevs[1]->link ?1:0);
+}
+
+static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
+
+static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = fep->phydevs[0];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
+	return count;
+}
+
+static DEVICE_ATTR(phy0_mode, S_IWUSR, NULL, fs_attr_phy0_mode_store);
+
+static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = fep->phydevs[1];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (phydev) {
+		if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
+		if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	}
+	return count;
+}
+
+static DEVICE_ATTR(phy1_mode, S_IWUSR, NULL, fs_attr_phy1_mode_store);
+
+static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->mode);
+}
+
+static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (fep->mode != mode) {
+		fep->mode = mode;
+		if (mode == MODE_AUTO) {
+			cancel_delayed_work_sync(&fep->link_queue);
+			schedule_delayed_work(&fep->link_queue, 0);
+		}
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
 
 /**************************************************************************************/
 
@@ -1140,8 +1262,25 @@ static int __devinit fs_enet_probe(struct of_device *ofdev,
 
 	pr_info("%s: fs_enet: %pM\n", ndev->name, ndev->dev_addr);
 
+	ret = 0;
+	ret |= device_create_file(fep->dev, &dev_attr_active_link);
+	ret |= device_create_file(fep->dev, &dev_attr_phy0_link);
+	ret |= device_create_file(fep->dev, &dev_attr_phy1_link);
+	ret |= device_create_file(fep->dev, &dev_attr_phy0_mode);
+	ret |= device_create_file(fep->dev, &dev_attr_phy1_mode);
+	ret |= device_create_file(fep->dev, &dev_attr_mode);
+	if (ret)
+		goto out_remove_file;
 	return 0;
 
+out_remove_file:
+	device_remove_file(fep->dev, &dev_attr_active_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_link);
+	device_remove_file(fep->dev, &dev_attr_phy1_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_mode);
+	device_remove_file(fep->dev, &dev_attr_phy1_mode);
+	device_remove_file(fep->dev, &dev_attr_mode);
+	unregister_netdev(ndev);
 out_free_bd:
 	fep->ops->free_bd(ndev);
 out_cleanup_data:
@@ -1161,6 +1300,13 @@ static int fs_enet_remove(struct of_device *ofdev)
 	struct net_device *ndev = dev_get_drvdata(&ofdev->dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 
+	device_remove_file(fep->dev, &dev_attr_active_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_link);
+	device_remove_file(fep->dev, &dev_attr_phy1_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_mode);
+	device_remove_file(fep->dev, &dev_attr_phy1_mode);
+	device_remove_file(fep->dev, &dev_attr_mode);
+	
 	unregister_netdev(ndev);
 
 	fep->ops->free_bd(ndev);

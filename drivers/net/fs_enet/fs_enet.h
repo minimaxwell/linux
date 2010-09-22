@@ -151,6 +151,7 @@ struct fs_enet_private {
 
 	int oldduplex, oldspeed, oldlink;	/* current settings */
 	int change_time;
+	int mode;
 
 	/* event masks */
 	u32 ev_napi_rx;		/* mask of NAPI rx events */
