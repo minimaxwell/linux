@@ -148,7 +148,7 @@ static int lxt973_config_init(struct phy_device *phydev)
 	pr_err("LXT973 SFR %x\n",val);
 	
 	/* no auto MDI/MDIX ==> Fixed MDI */
-	err = phy_write(phydev, MII_LXT973_SFR, val & ~0x200 | 0x100);
+	err = phy_write(phydev, MII_LXT973_SFR, (val & ~0x200) | 0x100);
 	
 	val = phy_read(phydev, MII_LXT973_SFR);
 	if (val < 0)
@@ -305,6 +305,7 @@ static struct phy_driver lxt973a2_driver = {
 	.read_status	= lxt973a2_read_status,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
+	.isolate	= genphy_isolate,
 	.driver 	= { .owner = THIS_MODULE,},
 };
 
@@ -319,6 +320,7 @@ static struct phy_driver lxt973a3_driver = {
 	.read_status	= genphy_read_status,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
+	.isolate	= genphy_isolate,
 	.driver 	= { .owner = THIS_MODULE,},
 };
 

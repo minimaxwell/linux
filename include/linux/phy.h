@@ -370,6 +370,7 @@ struct phy_driver {
 	/* PHY Power Management */
 	int (*suspend)(struct phy_device *phydev);
 	int (*resume)(struct phy_device *phydev);
+	int (*isolate)(struct phy_device *phydev);
 
 	/*
 	 * Configures the advertisement and resets
@@ -482,6 +483,7 @@ int genphy_update_link(struct phy_device *phydev);
 int genphy_read_status(struct phy_device *phydev);
 int genphy_suspend(struct phy_device *phydev);
 int genphy_resume(struct phy_device *phydev);
+int genphy_isolate(struct phy_device *phydev);
 void phy_driver_unregister(struct phy_driver *drv);
 int phy_driver_register(struct phy_driver *new_driver);
 void phy_prepare_link(struct phy_device *phydev,

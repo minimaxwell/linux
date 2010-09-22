@@ -602,8 +602,15 @@ EXPORT_SYMBOL(genphy_config_advert);
 int genphy_setup_forced(struct phy_device *phydev)
 {
 	int err;
-	int ctl = 0;
+	int ctl;
+	
+	ctl = phy_read(phydev, MII_BMCR);
 
+	if (ctl < 0)
+		return ctl;
+	
+	ctl &= BMCR_ISOLATE | BMCR_PDOWN;
+	
 	phydev->pause = phydev->asym_pause = 0;
 
 	if (SPEED_1000 == phydev->speed)
@@ -868,7 +875,7 @@ int genphy_suspend(struct phy_device *phydev)
 	mutex_lock(&phydev->lock);
 
 	value = phy_read(phydev, MII_BMCR);
-	phy_write(phydev, MII_BMCR, (value | BMCR_PDOWN));
+	phy_write(phydev, MII_BMCR, ((value | BMCR_PDOWN)) &~ BMCR_ISOLATE);
 
 	mutex_unlock(&phydev->lock);
 
@@ -883,13 +890,28 @@ int genphy_resume(struct phy_device *phydev)
 	mutex_lock(&phydev->lock);
 
 	value = phy_read(phydev, MII_BMCR);
-	phy_write(phydev, MII_BMCR, (value & ~BMCR_PDOWN));
+	phy_write(phydev, MII_BMCR, (value & ~BMCR_PDOWN & ~BMCR_ISOLATE));
 
 	mutex_unlock(&phydev->lock);
 
 	return 0;
 }
 EXPORT_SYMBOL(genphy_resume);
+
+int genphy_isolate(struct phy_device *phydev)
+{
+	int value;
+
+	mutex_lock(&phydev->lock);
+
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+
+	mutex_unlock(&phydev->lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(genphy_isolate);
 
 /**
  * phy_probe - probe and init a PHY device
