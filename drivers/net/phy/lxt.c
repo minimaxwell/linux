@@ -145,7 +145,6 @@ static int lxt973_config_init(struct phy_device *phydev)
 	val = phy_read(phydev, MII_LXT973_SFR);
 	if (val < 0)
 		return val;
-	pr_err("LXT973 SFR %x\n",val);
 	
 	/* no auto MDI/MDIX ==> Fixed MDI */
 	err = phy_write(phydev, MII_LXT973_SFR, (val & ~0x200) | 0x100);
@@ -153,7 +152,6 @@ static int lxt973_config_init(struct phy_device *phydev)
 	val = phy_read(phydev, MII_LXT973_SFR);
 	if (val < 0)
 		return val;
-	pr_err("LXT973 SFR %x\n",val);
 
 	return err;
 }
