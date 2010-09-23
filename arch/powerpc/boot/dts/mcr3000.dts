@@ -316,13 +316,6 @@
 				gpio-controller;
 			};
 		
-			CPM1_PIO_E: gpio-controller@ac8 {
-				#gpio-cells = <2>;
-				compatible = "fsl,cpm1-pario-bank-e";
-				reg = <0xac8 0x18>;
-				gpio-controller;
-			};
-
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc866-smc-uart", "fsl,cpm1-smc-uart";
