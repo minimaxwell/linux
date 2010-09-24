@@ -170,6 +170,12 @@
 			interrupts = <4 1>;
 			interrupt-parent = <&PIC>;
 		};
+		dsp@7,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-dsp";
+			reg = <7 0x0 0x0008>;
+		};
 		fpga@5,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
