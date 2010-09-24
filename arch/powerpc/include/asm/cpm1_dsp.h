@@ -33,8 +33,8 @@ typedef struct dsp_param {
 
 /* Opcodes
 */
-#define CPM_CR_INIT_DSP		((ushort)0x000c)
-#define CPM_CR_START_DSP	((ushort)0x000d)
+#define CPM_CR_INIT_DSP		((ushort)0x000d)
+#define CPM_CR_START_DSP	((ushort)0x000c)
 
 /* DSP Function descriptors */
 typedef struct cpm_dsp_buf_desc {
