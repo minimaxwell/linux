@@ -31,6 +31,7 @@ config MCR2G
 
 config MCR3000
 	bool "MCR3000"
+	select DEFAULT_UIMAGE
 	select CPM1
 	help
 	  MCR3000 platform based on MPC866 CPU.

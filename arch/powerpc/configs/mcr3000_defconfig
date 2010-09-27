@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.34s3k
-# Thu Sep 23 00:44:58 2010
+# Sat Sep 25 02:16:23 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -55,7 +55,7 @@ CONFIG_OF=y
 CONFIG_AUDIT_ARCH=y
 CONFIG_GENERIC_BUG=y
 CONFIG_DTC=y
-# CONFIG_DEFAULT_UIMAGE is not set
+CONFIG_DEFAULT_UIMAGE=y
 CONFIG_ARCH_HIBERNATION_POSSIBLE=y
 # CONFIG_PPC_DCR_NATIVE is not set
 # CONFIG_PPC_DCR_MMIO is not set
