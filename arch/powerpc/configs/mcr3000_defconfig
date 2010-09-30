@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux kernel version: 2.6.34s3k
-# Sat Sep 25 02:16:23 2010
+# Linux kernel version: 2.6.34
+# Wed Sep 29 04:24:48 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -70,8 +70,8 @@ CONFIG_EXPERIMENTAL=y
 CONFIG_BROKEN_ON_SMP=y
 CONFIG_LOCK_KERNEL=y
 CONFIG_INIT_ENV_ARG_LIMIT=32
-CONFIG_LOCALVERSION=""
-CONFIG_LOCALVERSION_AUTO=y
+CONFIG_LOCALVERSION="-s3k"
+# CONFIG_LOCALVERSION_AUTO is not set
 # CONFIG_SWAP is not set
 CONFIG_SYSVIPC=y
 CONFIG_SYSVIPC_SYSCTL=y
