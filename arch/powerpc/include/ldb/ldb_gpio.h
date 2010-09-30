@@ -12,37 +12,40 @@ typedef int ldb_gpio_t;
 #define _GPIO_MASK	0x3fffffff
 #define _GPIO_INV	0x40000000
 
-static inline int ldb_gpio_init(struct of_device *ofdev, int idx, int dir)
+#define ldb_gpio_err(dev, format, arg...)		do { \
+	if (dev) dev_err(dev , format , ## arg); \
+	else pr_err(format, ## arg); \
+	} while (0)
+	
+static inline int ldb_gpio_init(struct device_node *np, struct device *dev, int idx, int out_dir)
 {
-	struct device *dev = &ofdev->dev;
-	struct device_node *np = ofdev->node;
 	int _gpio, _result;
 	enum of_gpio_flags flags;
 
 	_gpio = of_get_gpio_flags(np, idx, &flags);
 
 	if (!gpio_is_valid(_gpio)) {
-		dev_err(dev, "invalid gpio #%d: %d\n", idx, _gpio);
+		ldb_gpio_err(dev, "invalid gpio #%d: %d\n", idx, _gpio);
 		goto erreur;
 	}
 	if (_gpio>_GPIO_MASK) {
-		dev_err(dev, "gpio trop grand #%d: %d\n", idx, _gpio);
+		ldb_gpio_err(dev, "gpio trop grand #%d: %d\n", idx, _gpio);
 		goto erreur;
 	}
 
-	_result = gpio_request(_gpio, dev_driver_string(dev));
+	_result = gpio_request(_gpio, dev?dev_driver_string(dev):"kernel");
 	if (_result) {
-		dev_err(dev, "can't request gpio #%d: %d\n", idx, _result);
+		ldb_gpio_err(dev, "can't request gpio #%d: %d\n", idx, _result);
 		goto erreur;
 	}
 
-	if (dir)
+	if (out_dir)
 		/* init a la valeur de repos */
 		_result = gpio_direction_output(_gpio, flags & OF_GPIO_ACTIVE_LOW?1:0);
 	else
 		_result = gpio_direction_input(_gpio);
 	if (_result) {
-		dev_err(dev, "can't set direction for gpio #%d: %d\n", idx, _result);
+		ldb_gpio_err(dev, "can't set direction for gpio #%d: %d\n", idx, _result);
 		goto erreur_gpio;
 	}
 	

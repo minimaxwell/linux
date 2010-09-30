@@ -23,6 +23,8 @@
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
 
+#include <ldb/ldb_gpio.h>
+
 #include <sysdev/simple_gpio.h>
 
 #include "mcr3000.h"
@@ -439,7 +441,7 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{},
 };
 
-static int __init declare_of_platform_devices(void)
+ int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 	
@@ -465,33 +467,17 @@ static int __init declare_of_platform_devices(void)
 		int i=0;
 		for (; i < ngpios; i++) {
 			int gpio;
-			int ret;
-			enum of_gpio_flags flags;
 
-			gpio = of_get_gpio_flags(np, i, &flags);
-			if (!gpio_is_valid(gpio)) {
-				pr_err("invalid gpio #%d: %d\n", i, gpio);
-				continue;
-			}
-
-			ret = gpio_request(gpio, __func__);
-			if (ret) {
-				pr_err("can't request gpio #%d: %d\n", i, ret);
-				continue;
-			}
-
-			ret = gpio_direction_output(gpio, flags & OF_GPIO_ACTIVE_LOW);
-			if (ret) {
-				pr_err("can't set output direction for gpio #%d: %d\n", i, ret);
-				continue;
-			}
+			gpio = ldb_gpio_init(np, NULL, i, 1);
+			if (gpio==-1) continue;
+			
 			switch (i) { /* traitement specifique pour chaque GPIO */
 			case 0: /* SPISEL */
 			case 1: /* masque IRQ CPLD */
 			case 2: /* valider ethernet 2 */
 				/* activation SPISEL permanent */
 				/* activation IRQ CPLD permanent */
-				gpio_set_value(gpio, !(flags & OF_GPIO_ACTIVE_LOW));
+				ldb_gpio_set_value(gpio, 1);
 				break;
 			}
 		}
