@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.34
-# Wed Sep 29 04:24:48 2010
+# Wed Sep 29 12:03:18 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -919,6 +919,8 @@ CONFIG_SSB_POSSIBLE=y
 # TI VLYNQ
 #
 # CONFIG_STAGING is not set
+CONFIG_MCR3000_PLATFORM_DEVICES=y
+CONFIG_FPGA_LOADER=y
 
 #
 # File systems

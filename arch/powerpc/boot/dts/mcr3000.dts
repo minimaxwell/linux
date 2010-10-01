@@ -189,6 +189,12 @@
 			reg = <5 0x0 0x0200>;
 			interrupts = <6 1>;
 			interrupt-parent = <&PIC>;
+		};
+		fpga-loader@5,9c {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-loader";
+			reg = <5 0x9c 2>; /* Register RIDENT */
 			gpios = <&CPM1_PIO_B 14 1	// PROGFPGA\
 				&CPM1_PIO_B 16 1	// INITFPGA\
 				&CPM1_PIO_B 17 1	// DONEFPGA\
@@ -407,8 +413,8 @@
 					 &csspi 6 0	// device reg=<6> /* MEZZ */
 					 &csspi 7 0>;	// device reg=<7> /* SICOFI */
 					 
-				fpga@0 {
-					compatible = "s3k,mcr3000-fpga";
+				fpga-loader@0 {
+					compatible = "s3k,mcr3000-fpga-loader";
 					spi-max-frequency = <10000000>;
 					reg = <0>;
 					spi-cs-high;
