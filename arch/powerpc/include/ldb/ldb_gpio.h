@@ -2,6 +2,7 @@
 #define __LDB_GPIO_H
 
 #include <linux/of_gpio.h>
+#include <linux/device.h>
 
 /*
  * Fonctions pour faciliter l'utilisation des gpio dans le LDB S3K
