@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.34
-# Wed Sep 29 12:03:18 2010
+# Wed Sep 29 13:45:19 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -1221,7 +1221,7 @@ CONFIG_PRINT_STACK_DEPTH=64
 # CONFIG_XMON is not set
 CONFIG_DEBUGGER=y
 # CONFIG_IRQSTACKS is not set
-# CONFIG_VIRQ_DEBUG is not set
+CONFIG_VIRQ_DEBUG=y
 CONFIG_BDI_SWITCH=y
 # CONFIG_PPC_EARLY_DEBUG is not set
 
