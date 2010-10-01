@@ -441,10 +441,12 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{},
 };
 
- int __init declare_of_platform_devices(void)
+static int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
-	
+
+	proc_mkdir("s3k",0);
+		
 	simple_gpiochip_init("s3k,mcr3000-cpld-gpio");
 	
 	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld-csspi");
