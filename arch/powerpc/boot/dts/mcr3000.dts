@@ -151,7 +151,7 @@
 				gpio-controller;
 			};
 			
-			csspi: gpio-controller@8 {
+			csspi: csspi@8 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-cpld-csspi";
 				reg = <0x02 2>;

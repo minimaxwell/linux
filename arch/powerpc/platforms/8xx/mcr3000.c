@@ -122,156 +122,6 @@ static void __init init_ioports(void)
 }
 
 /*
- * Controlleur GPIO pour les ChipSelect SPI 
- */
-
-static spinlock_t cpld_csspi_lock;
-static struct of_mm_gpio_chip cpld_csspi_mm_gc;
-
-static int cpld_csspi_get(struct gpio_chip *gc, unsigned int gpio)
-{
-	return gpio == ((in_be16(cpld_csspi_mm_gc.regs) >> 5) & 7) ? 1:0;
-}
-
-static void cpld_csspi_set(struct gpio_chip *gc, unsigned int gpio, int val)
-{
-	unsigned long flags;
-	unsigned short reg;
-
-	spin_lock_irqsave(&cpld_csspi_lock, flags);
-
-	reg = in_be16(cpld_csspi_mm_gc.regs);
-	reg &= ~(7<<5);
-	if (val) reg |= (gpio&7) << 5;
-	out_be16(cpld_csspi_mm_gc.regs, reg);
-
-	spin_unlock_irqrestore(&cpld_csspi_lock, flags);
-}
-
-static int cpld_csspi_dir_in(struct gpio_chip *gc, unsigned int gpio)
-{
-	return 0;
-}
-
-static int cpld_csspi_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
-{
-	cpld_csspi_set(gc, gpio, val);
-	return 0;
-}
-
-static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
-{
-}
-
-static int __init cpld_csspi_gpiochip_add(struct device_node *np)
-{
-	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
-	struct gpio_chip *gc;
-
-	pr_info("Initialisation ChipSelects CPLD\n");
-	
-	spin_lock_init(&cpld_csspi_lock);
-
-	mm_gc = &cpld_csspi_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
-
-	mm_gc->save_regs = cpld_csspi_save_regs;
-	of_gc->gpio_cells = 2;
-	gc->ngpio = 8;
-	gc->direction_input = cpld_csspi_dir_in;
-	gc->direction_output = cpld_csspi_dir_out;
-	gc->get = cpld_csspi_get;
-	gc->set = cpld_csspi_set;
-
-	return of_mm_gpiochip_add(np, mm_gc);
-}
-
-/*
- * Controlleur GPIO pour les ports OP1 à OP4 du MPC
- */
-
-static spinlock_t opx_gpio_lock;
-static struct of_mm_gpio_chip opx_gpio_mm_gc;
-
-#define M8XX_PGCRX_CXOE    0x00000080
-#define M8XX_PGCRX_CXRESET 0x00000040
-
-static int opx_gpio_get(struct gpio_chip *gc, unsigned int gpio)
-{
-	unsigned int *pgcrx=(unsigned int *)opx_gpio_mm_gc.regs;
-	unsigned int reg;
-	unsigned int mask;
-	unsigned int d31 = gpio&1;
-	unsigned int d30 = (gpio>>1)&1;
-
-	reg = in_be32(pgcrx + d30);
-	mask = d31^d30 ? M8XX_PGCRX_CXOE:M8XX_PGCRX_CXRESET;
-	return reg&mask ? 1:0;
-}
-
-static void opx_gpio_set(struct gpio_chip *gc, unsigned int gpio, int val)
-{
-	unsigned long flags;
-	unsigned int *pgcrx=(unsigned int *)opx_gpio_mm_gc.regs;
-	unsigned int reg;
-	unsigned int mask;
-	unsigned int d31 = gpio&1;
-	unsigned int d30 = (gpio>>1)&1;
-
-	spin_lock_irqsave(&opx_gpio_lock, flags);
-
-	reg = in_be32(pgcrx + d30);
-	mask = d31^d30 ? M8XX_PGCRX_CXOE:M8XX_PGCRX_CXRESET;
-	if (val) reg |= mask;
-	else reg &= ~mask;
-	out_be32(pgcrx + d30, reg);
-
-	spin_unlock_irqrestore(&opx_gpio_lock, flags);
-}
-
-static int opx_gpio_dir_in(struct gpio_chip *gc, unsigned int gpio)
-{
-	return -EINVAL;
-}
-
-static int opx_gpio_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
-{
-	opx_gpio_set(gc, gpio, val);
-	return 0;
-}
-
-static void opx_gpio_save_regs(struct of_mm_gpio_chip *mm_gc)
-{
-}
-
-static int __init opx_gpio_gpiochip_add(struct device_node *np)
-{
-	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
-	struct gpio_chip *gc;
-
-	pr_info("Initialisation GPIO OPx\n");
-	
-	spin_lock_init(&opx_gpio_lock);
-
-	mm_gc = &opx_gpio_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
-
-	mm_gc->save_regs = opx_gpio_save_regs;
-	of_gc->gpio_cells = 2;
-	gc->ngpio = 4;
-	gc->direction_input = opx_gpio_dir_in;
-	gc->direction_output = opx_gpio_dir_out;
-	gc->get = opx_gpio_get;
-	gc->set = opx_gpio_set;
-
-	return of_mm_gpiochip_add(np, mm_gc);
-}
-
-/*
  * Controlleur d'IRQ du CPLD 
  */
 
@@ -438,6 +288,7 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{ .name = "soc", },
 	{ .name = "cpm", },
 	{ .name = "localbus", },
+	{ .name = "cpld", },
 	{},
 };
 
@@ -445,29 +296,23 @@ static int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 
+	pr_info("MCR3000 declare_of_platform_devices()\n");
+	
 	proc_mkdir("s3k",0);
 		
 	simple_gpiochip_init("s3k,mcr3000-cpld-gpio");
-	
-	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld-csspi");
-	if (np) 
-		cpld_csspi_gpiochip_add(np);
-	else
-		pr_crit("Could not find s3k,mcr3000-cpld-csspi node\n");
-	
-	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-opx-gpio");
-	if (np) 
-		opx_gpio_gpiochip_add(np);
-	else
-		pr_crit("Could not find s3k,mcr3000-opx-gpio node\n");
 	
 	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 
 	np = of_find_compatible_node(NULL, NULL, "s3k,mcr3000-cpld");
 	if (np) {
 		int ngpios = of_gpio_count(np);
-		int i=0;
-		for (; i < ngpios; i++) {
+		int i;
+		
+		if (ngpios<3) {
+			pr_err("Gpio manquants dans mcr3000-cpld, impossible de les positionner\n");
+		}
+		for (i=0; i < ngpios; i++) {
 			int gpio;
 
 			gpio = ldb_gpio_init(np, NULL, i, 1);
@@ -482,9 +327,6 @@ static int __init declare_of_platform_devices(void)
 				ldb_gpio_set_value(gpio, 1);
 				break;
 			}
-		}
-		if (!ngpios) {
-			pr_err("Pas de gpio defini dans mcr3000-cpld, impossible de positionner SPISEL\n");
 		}
 	}
 	else {
