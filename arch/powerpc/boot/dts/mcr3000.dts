@@ -216,7 +216,9 @@
 		codec {
 			compatible = "s3k,mcr3000-codec";
 		};
-			
+		mcs {
+			compatible = "s3k,mcr3000-mcs";
+		};
 	};
 
 	soc@ff000000 {
