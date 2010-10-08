@@ -57,7 +57,13 @@
 
 #define MII_LXT971_ISR		19  /* Interrupt Status Register */
 
+/* register definitions for the 973 */
+#define MII_LXT973_PCR 16 /* Port Configuration Register */
+#define PCR_FIBER_SELECT 1
 #define MII_LXT973_SFR		27  /* Special Function Register */
+
+#define PHYDEV_PRIV_FIBER	1
+#define PHYDEV_PRIV_REVA2	2
 
 MODULE_DESCRIPTION("Intel LXT PHY driver");
 MODULE_AUTHOR("Andy Fleming");
@@ -124,6 +130,45 @@ static int lxt971_config_intr(struct phy_device *phydev)
 	return err;
 }
 
+static int lxt973_probe(struct phy_device *phydev)
+{
+	int val = phy_read(phydev, MII_LXT973_PCR);
+	int priv = 0;
+	
+	phydev->priv = NULL;
+	
+	if (val<0) return val;
+
+	if (val & PCR_FIBER_SELECT) {
+		/*
+		 * If fiber is selected, then the only correct setting
+		 * is 100Mbps, full duplex, and auto negotiation off.
+		 */
+		val = phy_read(phydev, MII_BMCR);
+		val |= (BMCR_SPEED100 | BMCR_FULLDPLX);
+		val &= ~BMCR_ANENABLE;
+		phy_write(phydev, MII_BMCR, val);
+		/* Remember that the port is in fiber mode. */
+		priv |= PHYDEV_PRIV_FIBER;
+	}
+	val = phy_read(phydev, MII_PHYSID2);
+	
+	if (val<0) return val;
+	
+	if ((val & 0xf) == 0) { /* rev A2 */
+		dev_info(&phydev->dev, " LXT973 revision A2 has bugs\n");
+		priv |= PHYDEV_PRIV_REVA2;
+	}
+	phydev->priv = (void*)priv;
+	return 0;
+}
+
+static int lxt973_config_aneg(struct phy_device *phydev)
+{
+	/* Do nothing if port is in fiber mode. */
+	return (int)phydev->priv&PHYDEV_PRIV_FIBER ? 0 : genphy_config_aneg(phydev);
+}
+
 /**
  * ERRATA on LXT973
  *
@@ -137,26 +182,7 @@ static int lxt971_config_intr(struct phy_device *phydev)
  *
  */
 
-static int lxt973_config_init(struct phy_device *phydev)
-{
-	int err;
-	int val;
-
-	val = phy_read(phydev, MII_LXT973_SFR);
-	if (val < 0)
-		return val;
-	
-	/* no auto MDI/MDIX ==> Fixed MDI */
-	err = phy_write(phydev, MII_LXT973_SFR, (val & ~0x200) | 0x100);
-	
-	val = phy_read(phydev, MII_LXT973_SFR);
-	if (val < 0)
-		return val;
-
-	return err;
-}
-
-int lxt973a2_update_link(struct phy_device *phydev)
+static int lxt973a2_update_link(struct phy_device *phydev)
 {
 	int status;
 	int control;
@@ -265,6 +291,11 @@ int lxt973a2_read_status(struct phy_device *phydev)
 	return 0;
 }
 
+static int lxt973_read_status(struct phy_device *phydev)
+{
+	return (int)phydev->priv&PHYDEV_PRIV_REVA2 ? lxt973a2_read_status(phydev) : genphy_read_status(phydev);
+}
+
 static struct phy_driver lxt970_driver = {
 	.phy_id		= 0x78100000,
 	.name		= "LXT970",
@@ -292,30 +323,15 @@ static struct phy_driver lxt971_driver = {
 	.driver 	= { .owner = THIS_MODULE,},
 };
 
-static struct phy_driver lxt973a2_driver = {
+static struct phy_driver lxt973_driver = {
 	.phy_id		= 0x00137a10,
-	.name		= "LXT973 rev A2",
-	.phy_id_mask	= 0xffffffff,
+	.name		= "LXT973",
+	.phy_id_mask	= 0xfffffff0,
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= 0,
-	.config_init	= lxt973_config_init,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= lxt973a2_read_status,
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
-	.isolate	= genphy_isolate,
-	.driver 	= { .owner = THIS_MODULE,},
-};
-
-static struct phy_driver lxt973a3_driver = {
-	.phy_id		= 0x00137a11,
-	.name		= "LXT973 rev A3",
-	.phy_id_mask	= 0xffffffff,
-	.features	= PHY_BASIC_FEATURES,
-	.flags		= 0,
-	.config_init	= lxt973_config_init,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
+	.probe		= lxt973_probe,
+	.config_aneg	= lxt973_config_aneg,
+	.read_status	= lxt973_read_status,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
 	.isolate	= genphy_isolate,
@@ -333,21 +349,15 @@ static int __init lxt_init(void)
 	ret = phy_driver_register(&lxt971_driver);
 	if (ret)
 		goto err2;
-	
-	ret = phy_driver_register(&lxt973a2_driver);
+
+	ret = phy_driver_register(&lxt973_driver);
 	if (ret)
 		goto err3;
-	
-	ret = phy_driver_register(&lxt973a3_driver);
-	if (ret)
-		goto err4;
 	return 0;
 
- err4:	
-	phy_driver_unregister(&lxt973a2_driver);
- err3:	
+ err3:
 	phy_driver_unregister(&lxt971_driver);
- err2:	
+ err2:
 	phy_driver_unregister(&lxt970_driver);
  err1:
 	return ret;
@@ -357,8 +367,7 @@ static void __exit lxt_exit(void)
 {
 	phy_driver_unregister(&lxt970_driver);
 	phy_driver_unregister(&lxt971_driver);
-	phy_driver_unregister(&lxt973a2_driver);
-	phy_driver_unregister(&lxt973a3_driver);
+	phy_driver_unregister(&lxt973_driver);
 }
 
 module_init(lxt_init);
