@@ -200,6 +200,14 @@
 				&CPM1_PIO_B 17 1	// DONEFPGA\
 				&rst2 1 1 >;		// RST_FPGA\
 		};
+		cag@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cag";
+			reg = <6 0x0 0x0020>;
+			interrupts = <10 1>;
+			interrupt-parent = <&PIC>;
+		};
 		alarmes {
 			compatible = "s3k,mcr3000-alarmes";
 			interrupts = <24>;
