@@ -88,7 +88,7 @@ static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_d
 	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
-	struct device_node *np = ofdev->node;
+	struct device_node *np = dev->of_node;
 
 	dev_info(dev,"driver for MCR3000 CPLD ChipSelects initialised\n");
 	
@@ -126,12 +126,12 @@ static const struct of_device_id cpld_csspi_match[] = {
 MODULE_DEVICE_TABLE(of, cpld_csspi_match);
 
 static struct of_platform_driver cpld_csspi_driver = {
-	.match_table	= cpld_csspi_match,
 	.probe		= cpld_csspi_probe,
 	.remove		= __devexit_p(cpld_csspi_remove),
 	.driver		= {
 		.name	= "cpld-csspi",
 		.owner	= THIS_MODULE,
+		.of_match_table	= cpld_csspi_match,
 	},
 };
 

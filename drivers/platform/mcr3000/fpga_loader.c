@@ -217,7 +217,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	int ret;
 	int idx;
 	struct device *dev = &ofdev->dev;
-	struct device_node *np = ofdev->node;
+	struct device_node *np = dev->of_node;
 	int ngpios = of_gpio_count(np);
 	struct fpga_data *data = &fpga_data;
 	int dir[NB_GPIO]=DIR_GPIO;
@@ -342,12 +342,12 @@ static const struct spi_device_id fpga_ids[] = {
 MODULE_DEVICE_TABLE(spi, fpga_ids);
 
 static struct of_platform_driver fpga_driver = {
-	.match_table	= fpga_match,
 	.probe		= fpga_probe,
 	.remove		= __devexit_p(fpga_remove),
 	.driver		= {
 		.name	= "fpga-loader",
 		.owner	= THIS_MODULE,
+		.of_match_table	= fpga_match,
 	},
 };
 

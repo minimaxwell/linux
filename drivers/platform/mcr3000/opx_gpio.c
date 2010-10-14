@@ -104,7 +104,7 @@ static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_dev
 	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
-	struct device_node *np = ofdev->node;
+	struct device_node *np = dev->of_node;
 
 	dev_info(dev,"Initialisation GPIO OPx\n");
 	
@@ -142,12 +142,12 @@ static const struct of_device_id opx_gpio_match[] = {
 MODULE_DEVICE_TABLE(of, opx_gpio_match);
 
 static struct of_platform_driver opx_gpio_driver = {
-	.match_table	= opx_gpio_match,
 	.probe		= opx_gpio_probe,
 	.remove		= __devexit_p(opx_gpio_remove),
 	.driver		= {
 		.name	= "opx-gpio",
 		.owner	= THIS_MODULE,
+		.of_match_table	= opx_gpio_match,
 	},
 };
 
