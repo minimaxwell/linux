@@ -784,11 +784,11 @@ static void fs_adjust_link(struct net_device *dev)
 		fep->ops->adjust_link(dev);
 	else
 		generic_adjust_link(dev);
+
+	spin_unlock_irqrestore(&fep->lock, flags);
 	
 	cancel_delayed_work_sync(&fep->link_queue);
 	if (fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, 0);
-
-	spin_unlock_irqrestore(&fep->lock, flags);
 }
 
 void fs_link_switch(struct fs_enet_private *fep)
