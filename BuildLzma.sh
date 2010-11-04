@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # si LZMA n'est pas présent
-if [ ! -f ./tools/p7zip_9.13/CPP/7zip/Compress/LZMA_Alone/lzma ] ; then
-	# generation de l'outil
-	pushd ./tools/p7zip_9.13/CPP/7zip/Compress/LZMA_Alone/
-	make -f makefile
-	popd
+WHEREIS_LZMA=`whereis lzma`
+LZMA==`echo ${WHEREIS_LZMA#*lzma:}`
+if [ ! $LZMA ] ; then
+	echo "l'outil [lzma] est introuvable. Impossible de générer l'image"
+	exit 2
 fi
 
 # supprime vmlinux.bin si présent
@@ -21,7 +21,7 @@ fi
 # verifie que le fichier uImage est présent
 if [ ! -f ./arch/powerpc/boot/uImage ] ; then
 	echo "Fichier uImage introuvable!"
-	exit 0
+	exit 2
 fi
 
 # récupére le nom du binaire
@@ -34,11 +34,14 @@ if [ -f ./vmlinux.bin.gz ] ; then
 	# decompresse le binaire
 	gzip -c -d ./vmlinux.bin.gz > ./vmlinux.bin
 	# compresse en LZMA
-	./tools/p7zip_9.13/CPP/7zip/Compress/LZMA_Alone/lzma e ./vmlinux.bin ./vmlinux.bin.lzma -d12
+	lzma e ./vmlinux.bin ./vmlinux.bin.lzma -d12
 	# creation de l'image U-BOOT
 	mkimage -C lzma -A PowerPC -O Linux -T Kernel -a 0 -e 0 -n $BINARY_NAME -d ./vmlinux.bin.lzma ./uImage.lzma
 else
 	echo "Fichier vmlinux.bin.gz introuvable!"
-	exit 0
+	exit 2
 fi
+
+# tout est bien qui finie bien
+exit 0
 
