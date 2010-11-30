@@ -1,5 +1,3 @@
-#define DEBUG 1
-
 /* 
  * arch/powerpc/platforms/8xx/mcr3000.c
  *
@@ -116,9 +114,6 @@ static void __init init_ioports(void)
 	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG3, CPM_CLK_RTX);
 	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG4, CPM_CLK_RTX);
 	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
-
-//	/* Set FEC1 and FEC2 to MII mode */
-//	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
 }
 
 /*
@@ -262,23 +257,10 @@ arch_initcall(mpc8xx_early_ping_watchdog);
 
 static void __init mcr3000_setup_arch(void)
 {
-//	__volatile__ unsigned char dummy;
-//	uint msr;
 	volatile immap_t *immap;
 
 	cpm_reset();
 	init_ioports();
-
-//        /* ALBOP 16-05-2006 set internal clock to external freq */
-//	/* and setup checkstop handling to generate a HRESET    */
-//	mpc8xx_immr->im_clkrst.car_plprcr = 0x00A64084;
-//	
-//	while(1){
-//	   __asm__("mfmsr %0" : "=r" (msr) );
-//	   msr &= ~0x1000;
-//	   __asm__("mtmsr %0" : : "r" (msr) );
-//	   dummy = mpc8xx_immr->im_clkrst.res[0];
-//	}
 
 	/* En attendant que ce soit fait par UBOOT */
 	
