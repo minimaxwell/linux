@@ -247,12 +247,24 @@ void __init mcr3000_pics_init(void)
 		set_irq_chained_handler(irq, cpld_cascade);
 }
 
+static int __init mpc8xx_early_ping_watchdog(void)
+{
+	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
+	
+	immap->im_siu_conf.sc_swsr=0x556C;
+	immap->im_siu_conf.sc_swsr=0xAA39;
+	
+	iounmap(immap);
+	
+	return 0;
+}
+arch_initcall(mpc8xx_early_ping_watchdog);
+
 static void __init mcr3000_setup_arch(void)
 {
 //	__volatile__ unsigned char dummy;
 //	uint msr;
-	immap_t *immap;
-
+	volatile immap_t *immap;
 
 	cpm_reset();
 	init_ioports();
@@ -282,6 +294,8 @@ static void __init mcr3000_setup_arch(void)
 	immap->im_memctl.memc_or7 = 0xFFFF810A;
 	
 	iounmap(immap);
+	
+	mpc8xx_early_ping_watchdog();
 }
 
 static int __init mcr3000_probe(void)
@@ -303,6 +317,8 @@ static int __init declare_of_platform_devices(void)
 	struct device_node *np;
 
 	pr_info("MCR3000 declare_of_platform_devices()\n");
+	
+	mpc8xx_early_ping_watchdog();
 	
 	proc_mkdir("s3k",0);
 		

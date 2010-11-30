@@ -207,6 +207,9 @@ static int __devinit mpc8xxx_wdt_probe(struct of_device *ofdev,
 		ret = -ENOSYS;
 		goto err_unmap;
 	}
+	if (enabled) {
+		timeout = in_be32(&wd_base->swcrr) >> 16;
+	}
 
 	/* Calculate the timeout in seconds */
 	if (prescale)
@@ -266,6 +269,7 @@ static const struct of_device_id mpc8xxx_wdt_match[] = {
 		.compatible = "fsl,mpc823-wdt",
 		.data = &(struct mpc8xxx_wdt_type) {
 			.prescaler = 0x800,
+			.hw_enabled = true,
 		},
 	},
 	{},

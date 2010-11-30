@@ -245,6 +245,11 @@
 		ranges = <0x0 0xff000000 0x4000>;
 		bus-frequency = <0>;
 
+		WDT: watchdog@0 {
+			compatible = "fsl,mpc823-wdt";
+			reg = <0x0 0x10>;
+		};
+		
 		phy1: mdio@e00 {
 			compatible = "fsl,mpc866-fec-mdio", "fsl,pq1-fec-mdio";
 			reg = <0xe00 0x188>;
@@ -276,11 +281,6 @@
 			#interrupt-cells = <2>;
 			reg = <0x0 0x24>;
 			compatible = "fsl,mpc866-pic", "fsl,pq1-pic";
-		};
-		
-		WDT: watchdog@0 {
-			compatible = "fsl,mpc823-wdt";
-			reg = <0x0 0x10>;
 		};
 		
 		OPX: gpio-controller@0e0{
