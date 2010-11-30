@@ -200,6 +200,17 @@
 				&CPM1_PIO_B 17 1	// DONEFPGA\
 				&rst2 1 1 >;		// RST_FPGA\
 		};
+		/* attention, definition incorrecte juste pour test. A completer avec les vrais parametres FPGA MEZZANINE */
+		fpga-loader@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-loader";
+			reg = <6 0x0 2>; /* Register RIDENT */
+			gpios = <&CPM1_PIO_B 13 1	// PROGFPGA\
+				&CPM1_PIO_B 18 1	// INITFPGA\
+				&CPM1_PIO_B 19 1	// DONEFPGA\
+				&rst2 2 1 >;		// RST_FPGA\
+		};
 		c4e1@6,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;

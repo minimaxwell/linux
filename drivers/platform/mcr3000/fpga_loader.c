@@ -54,13 +54,14 @@
 #define DONEFPGA 2
 #define RST_FPGA 3
 
-static struct fpga_data {
+static struct spi_device *fpga_spi=NULL;
+
+struct fpga_data {
 	u16 __iomem *rident;
 	struct device *dev;
-	struct spi_device *spi;
 	int gpio[NB_GPIO]; /* progfpga, initfpga, donefpga, rst_fpga */
 	int status;
-} fpga_data;
+};
 
 static void fpga_fw_load(const struct firmware *fw, void *context)
 {
@@ -70,7 +71,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	if (!fw) {
 		dev_err(dev," fw load failed\n");
 	}
-	else if (!data->spi) {
+	else if (!fpga_spi) {
 		dev_err(dev,"driver not attached to spi bus yet, loading impossible\n");
 		release_firmware(fw);
 	}
@@ -102,7 +103,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 			spi_message_init(&spim);
 			spi_message_add_tail(&spit, &spim);
 
-			ret = spi_sync(data->spi, &spim);
+			ret = spi_sync(fpga_spi, &spim);
 			if (ret != 0) dev_err(dev,"pb spi_sync\n");
 
 			kfree(spit.tx_buf);
@@ -219,16 +220,22 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	int ngpios = of_gpio_count(np);
-	struct fpga_data *data = &fpga_data;
+	struct fpga_data *data;
 	int dir[NB_GPIO]=DIR_GPIO;
 
+	data = kmalloc(GFP_KERNEL,sizeof(*data));
+	if (!data) {
+		ret = -ENOMEM;
+		goto err;
+	}
+	
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
 
 	if (ngpios<NB_GPIO) {
 		dev_err(dev,"missing GPIO definition in device tree\n");
 		ret = -EINVAL;
-		goto err;
+		goto err_free;
 	}
 
 	for (idx=0; idx<NB_GPIO ; idx++) {
@@ -280,8 +287,10 @@ err_gpios:
 		if (ldb_gpio_is_valid(gpio))
 			ldb_gpio_free(gpio);
 	}
-err:
+err_free:
 	dev_set_drvdata(dev, NULL);
+	kfree(data);
+err:
 	return ret;
 }
 
@@ -304,26 +313,21 @@ static int __devexit fpga_remove(struct of_device *ofdev)
 	}
 
 	dev_set_drvdata(dev, NULL);
+	kfree(data);
 	dev_info(dev,"driver for MCR3000 removed.\n");
 	return 0;
 }
 
 static int __devinit fpga_spi_probe(struct spi_device *spi)
 {
-	struct fpga_data *data = &fpga_data;
-	
-	spi_set_drvdata(spi, data);
-	data->spi = spi;
+	fpga_spi = spi;
 
 	return 0;
 }
 
 static int __devexit fpga_spi_remove(struct spi_device *spi)
 {
-	struct fpga_data *data = dev_get_drvdata(&spi->dev);
-
-	data->spi = NULL;
-	spi_set_drvdata(spi, NULL);
+	fpga_spi = NULL;
 
 	return 0;
 }
@@ -365,7 +369,10 @@ static int __init fpga_init(void)
 {
 	int ret;
 	ret = spi_register_driver(&fpga_spi_driver);
-	if (ret) goto err;
+	if (ret) {
+		pr_err("Pb spi_register_driver dans fpga_init: %d\n",ret);
+		goto err;
+	}
 	ret = of_register_platform_driver(&fpga_driver);
 err:
 	return ret;
