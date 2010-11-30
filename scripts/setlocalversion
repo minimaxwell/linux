@@ -1,4 +1,5 @@
 #!/bin/sh
+set -x
 #
 # This scripts adds local version information from the version
 # control systems git, mercurial (hg) and subversion (svn).
@@ -8,6 +9,8 @@
 # <nico-linuxsetlocalversion -at- schottelius.org>.
 #
 #
+
+unset LANG
 
 usage() {
 	echo "Usage: $0 [--save-scmversion] [srctree]" >&2
