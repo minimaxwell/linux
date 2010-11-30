@@ -262,21 +262,6 @@ static void __init mcr3000_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-	/* En attendant que ce soit fait par UBOOT */
-	
-	immap = ioremap(get_immrbase(),sizeof(*immap));
-	
-	immap->im_memctl.memc_br2 = 0x08000801;
-	immap->im_memctl.memc_or2 = 0xFFFF8F2A;
-	immap->im_memctl.memc_br5 = 0x14000801;
-	immap->im_memctl.memc_or5 = 0xFFFF8916;
-	immap->im_memctl.memc_br6 = 0x18000801;
-	immap->im_memctl.memc_or6 = 0xFFFF0908;
-	immap->im_memctl.memc_br7 = 0x1C000001;
-	immap->im_memctl.memc_or7 = 0xFFFF810A;
-	
-	iounmap(immap);
-	
 	mpc8xx_early_ping_watchdog();
 }
 
