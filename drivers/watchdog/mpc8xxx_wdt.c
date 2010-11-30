@@ -191,7 +191,7 @@ static int __devinit mpc8xxx_wdt_probe(struct of_device *ofdev,
 	int ret;
 	struct device_node *np = ofdev->dev.of_node;
 	struct mpc8xxx_wdt_type *wdt_type = match->data;
-	u32 freq = fsl_get_sys_freq();
+	u32 freq = fsl_get_sys_freq()*2;
 	bool enabled;
 
 	if (!freq || freq == -1)
