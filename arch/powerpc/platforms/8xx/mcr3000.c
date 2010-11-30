@@ -257,8 +257,6 @@ arch_initcall(mpc8xx_early_ping_watchdog);
 
 static void __init mcr3000_setup_arch(void)
 {
-	volatile immap_t *immap;
-
 	cpm_reset();
 	init_ioports();
 
