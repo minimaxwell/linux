@@ -55,12 +55,14 @@
 #define RST_FPGA 3
 
 static struct spi_device *fpga_spi=NULL;
+static struct spi_device *fpga_mezz_spi=NULL;
 
 struct fpga_data {
 	u16 __iomem *rident;
 	struct device *dev;
 	int gpio[NB_GPIO]; /* progfpga, initfpga, donefpga, rst_fpga */
 	int status;
+	struct spi_device **pspi;
 };
 
 static void fpga_fw_load(const struct firmware *fw, void *context)
@@ -71,7 +73,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	if (!fw) {
 		dev_err(dev," fw load failed\n");
 	}
-	else if (!fpga_spi) {
+	else if (!*data->pspi) {
 		dev_err(dev,"driver not attached to spi bus yet, loading impossible\n");
 		release_firmware(fw);
 	}
@@ -79,7 +81,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		static struct spi_transfer spit;
 		static struct spi_message spim;
 		
-		dev_info(dev,"received fw data %x size %d\n",(unsigned int)fw->data,fw->size);
+		dev_info(dev,"received fw data %x size %d spi %8.8x\n",(unsigned int)fw->data,fw->size,*data->pspi);
 		data->status = STATUS_LOADING;
 	
 		ldb_gpio_set_value(data->gpio[PROGFPGA], 1);
@@ -88,7 +90,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		ldb_gpio_set_value(data->gpio[PROGFPGA], 0);
 		while (ldb_gpio_get_value(data->gpio[INITFPGA]));
 
-		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
+//		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
 
 		memset(&spit, 0, sizeof(spit));
 
@@ -103,7 +105,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 			spi_message_init(&spim);
 			spi_message_add_tail(&spit, &spim);
 
-			ret = spi_sync(fpga_spi, &spim);
+			ret = spi_sync(*data->pspi, &spim);
 			if (ret != 0) dev_err(dev,"pb spi_sync\n");
 
 			kfree(spit.tx_buf);
@@ -117,7 +119,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 			else {
 				u16 rident;
 				dev_info(dev,"fw load ok\n");
-				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
+//				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
 				data->status = STATUS_LOADED;
 				rident = *data->rident;
 				dev_info(dev,"fw version %X.%X\n",(rident>>12)&0xf, (rident>>8)&0xf);
@@ -231,6 +233,9 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
+	data->pspi = match->data;
+	
+	pr_info("match data %8.8x\n",match->data);
 
 	if (ngpios<NB_GPIO) {
 		dev_err(dev,"missing GPIO definition in device tree\n");
@@ -269,7 +274,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 		goto err_unfile;
 	}
 
-	dev_info(dev,"driver for MCR3000 FPGA initialized, waiting for firmware.\n");
+	dev_info(dev,"driver for MCR3000 FPGA (%s) initialized, waiting for firmware.\n",match->compatible);
 	return 0;
 	
 err_unfile:
@@ -320,14 +325,22 @@ static int __devexit fpga_remove(struct of_device *ofdev)
 
 static int __devinit fpga_spi_probe(struct spi_device *spi)
 {
-	fpga_spi = spi;
+	int mezz = spi_get_device_id(spi)->driver_data;
+
+	pr_info("spi probe %d\n",mezz);
+	if (mezz) fpga_mezz_spi = spi;
+	else fpga_spi = spi;
+	pr_info("spi probe %d %8.8x %8.8x\n",mezz,fpga_spi,fpga_mezz_spi);
 
 	return 0;
 }
 
 static int __devexit fpga_spi_remove(struct spi_device *spi)
 {
-	fpga_spi = NULL;
+	int mezz = spi_get_device_id(spi)->driver_data;
+	
+	if (mezz) fpga_mezz_spi = NULL;
+	else fpga_spi = NULL;
 
 	return 0;
 }
@@ -335,12 +348,18 @@ static int __devexit fpga_spi_remove(struct spi_device *spi)
 static const struct of_device_id fpga_match[] = {
 	{
 		.compatible = "s3k,mcr3000-fpga-loader",
+		.data = &fpga_spi,
+	},
+	{
+		.compatible = "s3k,mcr3000-fpga-mezz-loader",
+		.data = &fpga_mezz_spi,
 	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, fpga_match);
 static const struct spi_device_id fpga_ids[] = {
 	{ "mcr3000-fpga-loader",   0 },
+	{ "mcr3000-fpga-mezz-loader",   1 },
 	{ },
 };
 MODULE_DEVICE_TABLE(spi, fpga_ids);
