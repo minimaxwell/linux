@@ -212,7 +212,6 @@ image-$(CONFIG_ISS4xx)			+= treeImage.iss4xx \
 
 # Board ports in arch/powerpc/platform/8xx/Kconfig
 image-$(CONFIG_MCR2G)			+= cuImage.mcr2g
-image-$(CONFIG_MCR3000)			+= cuImage.mcr3000
 image-$(CONFIG_MPC86XADS)		+= cuImage.mpc866ads
 image-$(CONFIG_MPC885ADS)		+= cuImage.mpc885ads
 image-$(CONFIG_PPC_EP88XC)		+= dtbImage.ep88xc
