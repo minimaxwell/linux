@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.7
-# Sun Dec  5 03:35:11 2010
+# Mon Dec  6 12:00:20 2010
 #
 # CONFIG_PPC64 is not set
 
@@ -817,7 +817,7 @@ CONFIG_GEN_RTC=y
 # CONFIG_RAMOOPS is not set
 # CONFIG_I2C is not set
 CONFIG_SPI=y
-CONFIG_SPI_DEBUG=y
+# CONFIG_SPI_DEBUG is not set
 CONFIG_SPI_MASTER=y
 
 #
