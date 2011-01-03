@@ -9,7 +9,7 @@
  *
  * Overview:
  *   This is a device driver for the NAND flash device found on the
- *   MCR2G board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
+ *   MOD885 board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
  *   part.
  */
 
@@ -24,17 +24,17 @@
 #include <asm/fs_pd.h>
 
 /*
- * MTD structure for MCR2G board
+ * MTD structure for MOD885 board
  */
-static struct mtd_info *mcr2g_mtd = NULL;
-void __iomem *mcr2g_fio_base;
-void __iomem *mcr2g_cpld_status;
+static struct mtd_info *mod885_mtd = NULL;
+void __iomem *mod885_fio_base;
+void __iomem *mod885_cpld_status;
 
 /*
- * Values specific to the MCR2G board (used with PPC8xx processor)
+ * Values specific to the MOD885 board (used with PPC8xx processor)
  */
-#define MCR2G_FIO_BASE		0x0c000000	/* Address where flash is mapped 			*/
-#define MCR2G_CPLD_STATUS	0x10000800	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
+#define MOD885_FIO_BASE		0x0c000000	/* Address where flash is mapped 			*/
+#define MOD885_CPLD_STATUS	0x10000800	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
 
 /*
  * Define partitions for flash device
@@ -59,7 +59,7 @@ static struct mtd_partition partition_info[] = {
 #define BIT_ALE			((unsigned short)0x0400)
 #define BIT_NCE			((unsigned short)0x1000)
 
-static void mcr2g_hwcontrol(struct mtd_info *mtdinfo, int cmd, unsigned int ctrl)
+static void mod885_hwcontrol(struct mtd_info *mtdinfo, int cmd, unsigned int ctrl)
 {
 	struct nand_chip *this 	= mtdinfo->priv;
 	unsigned short pddat 	= 0;
@@ -102,10 +102,10 @@ static void mcr2g_hwcontrol(struct mtd_info *mtdinfo, int cmd, unsigned int ctrl
 /*
  *	read device ready pin
  */
-static int mcr2g_device_ready(struct mtd_info *mtd)
+static int mod885_device_ready(struct mtd_info *mtd)
 {
 	/* The NAND FLASH is ready */
-	if (*((unsigned short *)(mcr2g_cpld_status + 0x00000006)) & 0x0002) {
+	if (*((unsigned short *)(mod885_cpld_status + 0x00000006)) & 0x0002) {
 		return (1);
 	}
 	/* The NAND FLASH is busy */
@@ -119,7 +119,7 @@ const char *part_probes[] = { "cmdlinepart", NULL };
 /*
  * Main initialization routine
  */
-int __init mcr2g_init (void)
+int __init mod885_init (void)
 {
 	int mtd_parts_nb = 0;
 	struct nand_chip *this;
@@ -127,36 +127,36 @@ int __init mcr2g_init (void)
 	struct mtd_partition *mtd_parts = 0;
 
 	/* Allocate memory for MTD device structure and private data */
-	mcr2g_mtd = kmalloc (sizeof(struct mtd_info) + sizeof (struct nand_chip), GFP_KERNEL);
-	if (!mcr2g_mtd) {
-		printk ("Unable to allocate MCR2G NAND MTD device structure.\n");
+	mod885_mtd = kmalloc (sizeof(struct mtd_info) + sizeof (struct nand_chip), GFP_KERNEL);
+	if (!mod885_mtd) {
+		printk ("Unable to allocate MOD885 NAND MTD device structure.\n");
 		return -ENOMEM;
 	}
 
 	/* map physical address */
-	mcr2g_fio_base = ioremap(MCR2G_FIO_BASE, 0x00000010);
-	if (!mcr2g_fio_base) {
-		printk("ioremap MCR2G NAND flash failed\n");
-		kfree(mcr2g_mtd);
+	mod885_fio_base = ioremap(MOD885_FIO_BASE, 0x00000010);
+	if (!mod885_fio_base) {
+		printk("ioremap MOD885 NAND flash failed\n");
+		kfree(mod885_mtd);
 		return -EIO;
 	}
-	mcr2g_cpld_status = ioremap(MCR2G_CPLD_STATUS, 0x00000010);
-	if (!mcr2g_cpld_status) {
-		printk("ioremap MCR2G CPLD status for NAND flash failed\n");
-		kfree(mcr2g_mtd);
+	mod885_cpld_status = ioremap(MOD885_CPLD_STATUS, 0x00000010);
+	if (!mod885_cpld_status) {
+		printk("ioremap MOD885 CPLD status for NAND flash failed\n");
+		kfree(mod885_mtd);
 		return -EIO;
 	}
 
 	/* Get pointer to private data */
-	this = (struct nand_chip *)(&mcr2g_mtd[1]);
+	this = (struct nand_chip *)(&mod885_mtd[1]);
 
 	/* Initialize structures */
-	memset((char *) mcr2g_mtd, 0, sizeof(struct mtd_info));
+	memset((char *) mod885_mtd, 0, sizeof(struct mtd_info));
 	memset((char *) this, 0, sizeof(struct nand_chip));
 
 	/* Link the private data with the MTD structure */
-	mcr2g_mtd->priv  = this;
-	mcr2g_mtd->owner = THIS_MODULE;
+	mod885_mtd->priv  = this;
+	mod885_mtd->owner = THIS_MODULE;
 	
 	/*
 	 * Set GPIO Port D control register so that the pins are configured
@@ -168,25 +168,25 @@ int __init mcr2g_init (void)
 	mpc8xx_immr->im_ioport.iop_pddat &= ~0x0c00; /* au repos ALE et CLE sont à 0 */
 	
 	/* insert Callback */
-	this->IO_ADDR_R  = mcr2g_fio_base;
-	this->IO_ADDR_W  = mcr2g_fio_base;
-	this->cmd_ctrl 	 = mcr2g_hwcontrol;
-	this->dev_ready  = mcr2g_device_ready;
+	this->IO_ADDR_R  = mod885_fio_base;
+	this->IO_ADDR_W  = mod885_fio_base;
+	this->cmd_ctrl 	 = mod885_hwcontrol;
+	this->dev_ready  = mod885_device_ready;
 	/* 20 us command delay time */
 	this->chip_delay = 20;
 	this->ecc.mode 	 = NAND_ECC_SOFT;
 
 	/* Scan to find existance of the device */
-	if (nand_scan (mcr2g_mtd, 1)) {
-		iounmap(mcr2g_fio_base);
-		iounmap(mcr2g_cpld_status);
-		kfree (mcr2g_mtd);
+	if (nand_scan (mod885_mtd, 1)) {
+		iounmap(mod885_fio_base);
+		iounmap(mod885_cpld_status);
+		kfree (mod885_mtd);
 		return -ENXIO;
 	}
 
 #ifdef CONFIG_MTD_PARTITIONS
-	mcr2g_mtd->name = "mcr2g-nand";
-	mtd_parts_nb = parse_mtd_partitions(mcr2g_mtd, part_probes, &mtd_parts, 0);
+	mod885_mtd->name = "mod885-nand";
+	mtd_parts_nb = parse_mtd_partitions(mod885_mtd, part_probes, &mtd_parts, 0);
 	if (mtd_parts_nb > 0) {
 		part_type = "command line";
 	} else {
@@ -201,31 +201,31 @@ int __init mcr2g_init (void)
 
 	/* Register the partitions */
 	printk(KERN_NOTICE "Using %s partition definition\n", part_type);
-	add_mtd_partitions(mcr2g_mtd, mtd_parts, mtd_parts_nb);
+	add_mtd_partitions(mod885_mtd, mtd_parts, mtd_parts_nb);
 
 	/* Return happy */
 	return 0;
 }
-module_init(mcr2g_init);
+module_init(mod885_init);
 
 /*
  * Clean up routine
  */
-static void __exit mcr2g_cleanup(void)
+static void __exit mod885_cleanup(void)
 {
 	/* Release resources, unregister device */
-	nand_release(mcr2g_mtd);
+	nand_release(mod885_mtd);
 
 	/* unmap physical address */
-	iounmap(mcr2g_fio_base);
-	iounmap(mcr2g_cpld_status);
+	iounmap(mod885_fio_base);
+	iounmap(mod885_cpld_status);
 
 	/* Free the MTD device structure */
-	kfree(mcr2g_mtd);
+	kfree(mod885_mtd);
 }
 
-module_exit(mcr2g_cleanup);
+module_exit(mod885_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Florent TRINH THAI");
-MODULE_DESCRIPTION("Board-specific glue layer for NAND flash on MCR2G board");
+MODULE_DESCRIPTION("Board-specific glue layer for NAND flash on MOD885 board");

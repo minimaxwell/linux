@@ -16,14 +16,14 @@
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
 
-#include "mcr2g.h"
+#include "mod885.h"
 #include "mpc8xx.h"
 
 struct cpm_pin {
 	int port, pin, flags;
 };
 
-static struct cpm_pin mcr2g_pins[] = {
+static struct cpm_pin mod885_pins[] = {
 	/* SMC1 */
 	{CPM_PORTA,  5, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CTS port DEBUG	*/
 	{CPM_PORTB, 24, CPM_PIN_INPUT}, 					/* RX  port DEBUG	*/
@@ -83,8 +83,8 @@ static void __init init_ioports(void)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(mcr2g_pins); i++) {
-		struct cpm_pin *pin = &mcr2g_pins[i];
+	for (i = 0; i < ARRAY_SIZE(mod885_pins); i++) {
+		struct cpm_pin *pin = &mod885_pins[i];
 		cpm1_set_pin(pin->port, pin->pin, pin->flags);
 	}
 
@@ -97,7 +97,7 @@ static void __init init_ioports(void)
 //	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
 }
 
-static void __init mcr2g_setup_arch(void)
+static void __init mod885_setup_arch(void)
 {
 ////	struct device_node *np;
 ////	u32 __iomem *bcsr_io;
@@ -108,9 +108,9 @@ static void __init mcr2g_setup_arch(void)
 	cpm_reset();
 	init_ioports();
 
-////	np = of_find_compatible_node(NULL, NULL, "fsl,mcr2g-bcsr");
+////	np = of_find_compatible_node(NULL, NULL, "fsl,mod885-bcsr");
 ////	if (!np) {
-////		printk(KERN_CRIT "Could not find fsl,mcr2g-bcsr node\n");
+////		printk(KERN_CRIT "Could not find fsl,mod885-bcsr node\n");
 ////		return;
 ////	}
 ////
@@ -137,10 +137,10 @@ static void __init mcr2g_setup_arch(void)
 //	}
 }
 
-static int __init mcr2g_probe(void)
+static int __init mod885_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
-	return of_flat_dt_is_compatible(root, "fsl,mcr2g");
+	return of_flat_dt_is_compatible(root, "fsl,mod885");
 	return 0;
 }
 
@@ -157,12 +157,12 @@ static int __init declare_of_platform_devices(void)
 
 	return 0;
 }
-machine_device_initcall(mcr2g, declare_of_platform_devices);
+machine_device_initcall(mod885, declare_of_platform_devices);
 
-define_machine(mcr2g) {
-	.name			= "MCR2G",
-	.probe			= mcr2g_probe,
-	.setup_arch		= mcr2g_setup_arch,
+define_machine(mod885) {
+	.name			= "MOD885",
+	.probe			= mod885_probe,
+	.setup_arch		= mod885_setup_arch,
 	.init_IRQ		= mpc8xx_pics_init,
 	.get_irq		= mpc8xx_get_irq,
 	.restart		= mpc8xx_restart,
