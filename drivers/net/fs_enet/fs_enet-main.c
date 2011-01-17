@@ -799,8 +799,10 @@ void fs_link_switch(struct fs_enet_private *fep)
 	if (phydev->drv->suspend) phydev->drv->suspend(phydev);
 
 	if (phydev == fep->phydevs[0]) {
-		phydev = fep->phydevs[1];
-		dev_err(fep->dev, "Switch to PHYB\n");
+		if (fep->phydevs[1]) {
+			phydev = fep->phydevs[1];
+			dev_err(fep->dev, "Switch to PHYB\n");
+		}
 	}
 	else {
 		phydev = fep->phydevs[0];
@@ -855,7 +857,9 @@ static int fs_init_phy(struct net_device *dev)
 	fep->phydevs[0] = phydev;
 	fep->phydevs[1] = of_phy_connect(dev, fep->fpi->phy_node2, &fs_adjust_link, 0,
 				PHY_INTERFACE_MODE_MII);
-	if (fep->phydevs[1]->drv->suspend) fep->phydevs[1]->drv->suspend(fep->phydevs[1]);
+	if (fep->phydevs[1]) {
+		if (fep->phydevs[1]->drv->suspend) fep->phydevs[1]->drv->suspend(fep->phydevs[1]);
+	}
 
 	return 0;
 }
@@ -891,7 +895,9 @@ static int fs_enet_open(struct net_device *dev)
 		return err;
 	}
 	phy_start(fep->phydevs[0]);
-	phy_start(fep->phydevs[1]);
+	if (fep->phydevs[1]) {
+		phy_start(fep->phydevs[1]);
+	}
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
 	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 
@@ -910,7 +916,9 @@ static int fs_enet_close(struct net_device *dev)
 	if (fep->fpi->use_napi)
 		napi_disable(&fep->napi);
 	phy_stop(fep->phydevs[0]);
-	phy_stop(fep->phydevs[1]);
+	if (fep->phydevs[1]) {
+		phy_stop(fep->phydevs[1]);
+	}
 
 	spin_lock_irqsave(&fep->lock, flags);
 	spin_lock(&fep->tx_lock);
@@ -920,8 +928,9 @@ static int fs_enet_close(struct net_device *dev)
 
 	/* release any irqs */
 	phy_disconnect(fep->phydevs[0]);
-	phy_disconnect(fep->phydevs[1]);
-	fep->phydev = NULL;
+	if (fep->phydevs[1]) {
+		phy_disconnect(fep->phydevs[1]);
+	}
 	free_irq(fep->interrupt, dev);
 
 	return 0;
@@ -1051,6 +1060,10 @@ static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attri
 	int active = simple_strtol(buf, NULL, 10);
 	
 	if (active != 1) active = 0;
+	if (!fep->phydevs[active]) {
+		dev_warn(dev, "PHY on address %d does not exist\n", active);
+		return count;
+	}
 	if (fep->phydevs[active] != fep->phydev) {
 		fs_link_switch(fep);
 		cancel_delayed_work_sync(&fep->link_queue);
@@ -1076,6 +1089,11 @@ static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribut
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
+	
+	if (!fep->phydevs[1]) {
+		dev_warn(dev, "PHY on address 1 does not exist\n");
+		return sprintf(buf, "0\n");
+	}
 
 	return sprintf(buf, "%d\n",fep->phydevs[1]->link ?1:0);
 }

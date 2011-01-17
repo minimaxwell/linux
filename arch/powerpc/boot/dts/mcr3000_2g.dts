@@ -1,0 +1,194 @@
+/*
+ * MCR300_2G Device Tree Source
+ *
+ * Copyright 2010 CSSI, Inc
+ */
+
+/dts-v1/;
+
+/ {
+	model = "MOD885";
+	compatible = "fsl,mod885";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	aliases {
+		ethernet0 = &eth0;
+		ethernet1 = &eth1;
+		mdio1 = &phy1;
+		mdio2 = &phy2;
+		serial0 = &smc1;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		PowerPC,885@0 {
+			device_type = "cpu";
+			reg = <0x0>;
+			d-cache-line-size = <16>;	// 16 bytes
+			i-cache-line-size = <16>;	// 16 bytes
+			d-cache-size = <8192>;
+			i-cache-size = <8192>;
+			timebase-frequency = <0>;
+			bus-frequency = <0>;
+			clock-frequency = <0>;
+			interrupts = <15 2>;		// decrementer interrupt
+			interrupt-parent = <&PIC>;
+		};
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x0>;			// defined by U-BOOT
+	};
+
+	localbus@ff000100 {
+		compatible = "fsl,mod885-localbus", "fsl,pq1-localbus";
+		#address-cells = <2>;
+		#size-cells = <1>;
+		reg = <0xff000100 0x40>;		// ORx and BRx register
+
+		ranges = <0x0 0x0 0x00000000 0x08000000 // SDRAM
+			  0x1 0x0 0x40000000 0x00400000 // Boot Flash
+			  0x2 0x0 0xc0000000 0x00008000 // Nand Flash
+			  0x3 0x0 0xe0000000 0x00010000 // DPRAM
+			  0x4 0x0 0xd0000000 0x10000000 // Periphs
+			  0x5 0x0 0xc8000000 0x00008000 // CPLD
+			  0x6 0x0 0x80000000 0x00008000 // mezzanine
+			  0x7 0x0 0xf0000000 0x00008000>; // DSP
+
+		flash@0,0 {
+			compatible = "cfi-flash";
+			reg = <0x0 0x00000000 0x400000>;
+			bank-width = <2>;
+			device-width = <2>;
+		};
+	};
+
+	soc@ff000000 {
+		compatible = "fsl,mpc885", "fsl,pq1-soc";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		device_type = "soc";
+		ranges = <0x0 0xff000000 0x4000>;
+		bus-frequency = <0>;
+
+		WDT: watchdog@0 {
+			compatible = "fsl,mpc823-wdt";
+			reg = <0x0 0x10>;
+		};
+
+		phy1: mdio@e00 {
+			compatible = "fsl,mpc885-fec-mdio", "fsl,pq1-fec-mdio";
+			reg = <0xe00 0x188>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			PHY1: ethernet-phy@1 {
+				reg = <0x1>;
+				device_type = "ethernet-phy";
+			};
+
+			PHY6: ethernet-phy@6 {
+				reg = <0x6>;
+				device_type = "ethernet-phy";
+			};
+		};
+
+		phy2: mdio@1e00 {
+			compatible = "fsl,mpc885-fec-mdio", "fsl,pq1-fec-mdio";
+			reg = <0x1e00 0x188>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			PHY2: ethernet-phy@2 {
+				reg = <0x2>;
+				device_type = "ethernet-phy";
+			};
+		};
+
+		eth0: ethernet@e00 {
+			device_type = "network";
+			compatible = "fsl,mpc885-fec-enet", "fsl,pq1-fec-enet";
+			reg = <0xe00 0x188>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
+			interrupts = <3 1>;
+			interrupt-parent = <&PIC>;
+			phy-handle = <&PHY1>;
+			linux,network-index = <0>;
+		};
+
+		eth1: ethernet@1e00 {
+			device_type = "network";
+			compatible = "fsl,mpc885-fec-enet", "fsl,pq1-fec-enet";
+			reg = <0x1e00 0x188>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
+			interrupts = <7 1>;
+			interrupt-parent = <&PIC>;
+			phy-handle = <&PHY2>;
+			linux,network-index = <1>;
+		};
+
+		PIC: pic@0 {
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x0 0x24>;
+			compatible = "fsl,mpc885-pic", "fsl,pq1-pic";
+		};
+
+		cpm@9c0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl,mpc885-cpm", "fsl,cpm1";
+			ranges;
+			reg = <0x9c0 0x40>;
+			brg-frequency = <0>;
+			interrupts = <0>;	// cpm error interrupt
+			interrupt-parent = <&CPM_PIC>;
+
+			muram@2000 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x2000 0x2000>;
+
+				data@0 {
+					compatible = "fsl,cpm-muram-data";
+					reg = <0x0 0x1c00>;
+				};
+			};
+
+			brg@9f0 {
+				compatible = "fsl,mpc885-brg", "fsl,cpm1-brg", "fsl,cpm-brg";
+				reg = <0x9f0 0x10>;
+				clock-frequency = <0>;
+			};
+
+			CPM_PIC: pic@930 {
+				interrupt-controller;
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+				interrupts = <5 2 0 2>;
+				interrupt-parent = <&PIC>;
+				reg = <0x930 0x20>;
+				compatible = "fsl,mpc885-cpm-pic", "fsl,cpm1-pic";
+			};
+
+
+			smc1: serial@a80 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+				reg = <0xa80 0x10 0x3e80 0x40>;
+				interrupts = <4>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <1>;
+				fsl,cpm-command = <0x90>;
+			};
+		};
+	};
+
+	chosen {
+		linux,stdout-path = &smc1;
+	};
+};

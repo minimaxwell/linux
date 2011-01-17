@@ -1,4 +1,4 @@
-/*arch/powerpc/platforms/8xx/mcr2g.c
+/*arch/powerpc/platforms/8xx/mod885.c
  *
  * Copyright 2010 CSSI Inc.
  *
@@ -54,29 +54,20 @@ static struct cpm_pin mod885_pins[] = {
 	{CPM_PORTC,  4, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* DCD			*/
 	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* CTS			*/
 	
-	/* SPI  a verifier (faux) */
+	/* SPI */
 	{CPM_PORTB, 28, CPM_PIN_OUTPUT},					/* MISO			*/
 	{CPM_PORTB, 29, CPM_PIN_OUTPUT},					/* MOSI 		*/
 	{CPM_PORTB, 30, CPM_PIN_OUTPUT},					/* CLK			*/
-	{CPM_PORTB, 31, CPM_PIN_OUTPUT},					/* SEL			*/
 	
 	/* NAND */
-	{CPM_PORTD,  3, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* MISO			*/
-	{CPM_PORTD,  4, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* MOSI 		*/
-	{CPM_PORTD,  5, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CLK			*/
+	{CPM_PORTD,  12, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* CLE_DISK		*/
+	{CPM_PORTD,  13, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* ALE_DISK 		*/
+	{CPM_PORTD,  15, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* CS_DISK		*/
 	
-	/* FPGA a verifier (faux) */
-	{CPM_PORTB, 14, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* PROGFPGA		*/
-	{CPM_PORTB, 16, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* INITFPGA 		*/
-	{CPM_PORTB, 17, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* DONEFPGA		*/
-
-	/* TDMA a verifier (faux) */
-	{CPM_PORTA,  8, CPM_PIN_OUTPUT},					/* PCM_OUT		*/
-	{CPM_PORTA,  9, CPM_PIN_OUTPUT},					/* PCM_IN 		*/
 
 	/* EEPROM */
-	{CPM_PORTB, 20, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* EE_HOLD		*/
-	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* EE_WP 		*/
+	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CS_EEPROM 		*/
+	
 };
 
 static void __init init_ioports(void)
@@ -89,52 +80,16 @@ static void __init init_ioports(void)
 	}
 
 	cpm1_clk_setup(CPM_CLK_SMC1, CPM_BRG1, CPM_CLK_RTX);
-//	cpm1_clk_setup(CPM_CLK_SMC2, CPM_BRG2, CPM_CLK_RTX);
-//	cpm1_clk_setup(CPM_CLK_SCC1, CPM_CLK1, CPM_CLK_TX);
-//	cpm1_clk_setup(CPM_CLK_SCC1, CPM_CLK2, CPM_CLK_RX);
-
-//	/* Set FEC1 and FEC2 to MII mode */
-//	clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);
+	cpm1_clk_setup(CPM_CLK_SCC1, CPM_BRG2, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG3, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG4, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
 }
 
 static void __init mod885_setup_arch(void)
 {
-////	struct device_node *np;
-////	u32 __iomem *bcsr_io;
-//	__volatile__ unsigned char dummy;
-//	uint msr;
-
-
 	cpm_reset();
 	init_ioports();
-
-////	np = of_find_compatible_node(NULL, NULL, "fsl,mod885-bcsr");
-////	if (!np) {
-////		printk(KERN_CRIT "Could not find fsl,mod885-bcsr node\n");
-////		return;
-////	}
-////
-////	bcsr_io = of_iomap(np, 0);
-////	of_node_put(np);
-////
-////	if (bcsr_io == NULL) {
-////		printk(KERN_CRIT "Could not remap BCSR\n");
-////		return;
-////	}
-////
-////	clrbits32(bcsr_io, BCSR1_RS232EN_1 | BCSR1_RS232EN_2 | BCSR1_ETHEN);
-////	iounmap(bcsr_io);
-
-//        /* ALBOP 16-05-2006 set internal clock to external freq */
-//	/* and setup checkstop handling to generate a HRESET    */
-//	mpc8xx_immr->im_clkrst.car_plprcr = 0x00A64084;
-//	
-//	while(1){
-//	   __asm__("mfmsr %0" : "=r" (msr) );
-//	   msr &= ~0x1000;
-//	   __asm__("mtmsr %0" : : "r" (msr) );
-//	   dummy = mpc8xx_immr->im_clkrst.res[0];
-//	}
 }
 
 static int __init mod885_probe(void)

@@ -23,11 +23,12 @@ config MPC86XADS
 	  The MPC86xADS is meant to serve as a platform for s/w and h/w
 	  development around the MPC86X processor families.
 
-config MCR2G
-	bool "MCR2G"
+config MOD885
+	bool "MOD885"
+	select DEFAULT_UIMAGE
 	select CPM1
 	help
-	  MCR2G platform based on MPC885 CPU.
+	  MOD885 platform based on MPC885 CPU.
 
 config MCR3000
 	bool "MCR3000"
