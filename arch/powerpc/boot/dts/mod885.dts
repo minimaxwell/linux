@@ -63,6 +63,16 @@
 			bank-width = <2>;
 			device-width = <2>;
 		};
+
+		nand@2,0 {
+			compatible = "s3k,mod885-nand";
+			reg = <2 0x0 0x01>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			gpios = <&CPM1_PIO_D 12 1 	// CLE
+				 &CPM1_PIO_D 13 1	// ALE
+				 &CPM1_PIO_D 15 1>;	// NCE
+		};
 	};
 
 	soc@ff000000 {
@@ -84,11 +94,6 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			PHY0: ethernet-phy@0 {
-				reg = <0x0>;
-				device_type = "ethernet-phy";
-			};
-
 			PHY1: ethernet-phy@1 {
 				reg = <0x1>;
 				device_type = "ethernet-phy";
@@ -102,7 +107,7 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <3 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY0>;
+			phy-handle = <&PHY1>;
 			linux,network-index = <0>;
 		};
 
@@ -150,6 +155,33 @@
 				compatible = "fsl,mpc885-cpm-pic", "fsl,cpm1-pic";
 			};
 
+			CPM1_PIO_A: gpio-controller@950 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-a";
+				reg = <0x950 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_B: gpio-controller@ab8 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-b";
+				reg = <0xab8 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_C: gpio-controller@960 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-c";
+				reg = <0x960 0x10>;
+				gpio-controller;
+			};
+		
+			CPM1_PIO_D: gpio-controller@970 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-d";
+				reg = <0x970 0x10>;
+				gpio-controller;
+			};
 
 			smc1: serial@a80 {
 				device_type = "serial";

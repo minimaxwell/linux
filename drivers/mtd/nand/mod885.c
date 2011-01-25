@@ -1,5 +1,5 @@
 /*
- * drivers/mtd/nand/mcr3000.c
+ * drivers/mtd/nand/mod885.c
  *
  * Copyright (C) 2010 CSSI
  *
@@ -9,8 +9,8 @@
  *
  * Overview:
  *   This is a device driver for the NAND flash device found on the
- *   MCR3000 board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
- *   part. This is a 256Mbit NAND flash device.
+ *   MOD885 board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
+ *   part.
  */
 
 #include <linux/init.h>
@@ -26,16 +26,17 @@
 #include <asm/cpm1.h>
 #include <asm/fs_pd.h>
 
+
 /*
  * Driver identification
  */
-#define DRV_NAME	"mcr3000-nand"
+#define DRV_NAME	"mod885-nand"
 #define DRV_VERSION	"1.0"
 #define DRV_AUTHOR	"Florent TRINH THAI"
-#define DRV_DESC	"MCR3000 on-chip NAND FLash Controller Driver"
+#define DRV_DESC	"MOD885 on-chip NAND FLash Controller Driver"
 
 /*
- * Structure for MTD MCR3000 NAND chip
+ * Structure for MTD MOD885 NAND chip
  */
 typedef enum
 {
@@ -45,7 +46,7 @@ typedef enum
 	NB_NAND_GPIO
 } e_nand_gpio;
 
-struct mcr3000_host
+struct mod885_host
 {
 	struct nand_chip	nand_chip;
 	struct mtd_info		mtd;
@@ -56,10 +57,10 @@ struct mcr3000_host
 };
 
 /*
- * Values specific to the MCR3000 board (used with PPC8xx processor)
+ * Values specific to the MOD885 board (used with PPC8xx processor)
  */
-#define MCR3000_FIO_BASE	0x0c000000	/* Address where flash is mapped 			*/
-#define MCR3000_CPLD_STATUS	0x10000800	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
+#define MOD885_FIO_BASE		0xC0000000	/* Address where flash is mapped 			*/
+#define MOD885_CPLD_STATUS	0xC8000000	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
 
 /*
  * Define partitions for flash device
@@ -75,14 +76,13 @@ static struct mtd_partition partition_info[] = {
 #define NUM_PARTITIONS 1
 
 
-
 /* 
  *	hardware specific access to control-lines
 */
-static void mcr3000_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
+static void mod885_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 {
 	struct nand_chip *nand_chip 	= mtd->priv;
-	struct mcr3000_host *host	= nand_chip->priv;
+	struct mod885_host *host	= nand_chip->priv;
 	
 	/* The hardware control change */
 	if (ctrl & NAND_CTRL_CHANGE) {
@@ -116,16 +116,17 @@ static void mcr3000_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 	}
 }
 
+
 /*
  *	read device ready pin
  */
-static int mcr3000_device_ready(struct mtd_info *mtd)
+static int mod885_device_ready(struct mtd_info *mtd)
 {
 	struct nand_chip *nand_chip 	= mtd->priv;
-	struct mcr3000_host *host	= nand_chip->priv;
+	struct mod885_host *host	= nand_chip->priv;
 	
 	/* The NAND FLASH is ready */
-	if (*((unsigned short *)(host->cpld_base + 0x00000006)) & 0x0002) {
+	if (*((unsigned short *)(host->cpld_base + 0x00000002)) & 0x0004) {
 		return (1);
 	}
 	/* The NAND FLASH is busy */
@@ -136,12 +137,13 @@ static int mcr3000_device_ready(struct mtd_info *mtd)
 const char *part_probes[] = { "cmdlinepart", NULL };
 #endif
 
+
 /*
- * mcr3000_remove
+ * mod885_remove
  */
-static int __devexit mcr3000_remove(struct of_device *ofdev)
+static int __devexit mod885_remove(struct of_device *ofdev)
 {
-	struct mcr3000_host *host = dev_get_drvdata(&ofdev->dev);
+	struct mod885_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
 	int i;
 
@@ -159,11 +161,11 @@ static int __devexit mcr3000_remove(struct of_device *ofdev)
 }
 
 /*
- * mcr3000_probe
+ * mod885_probe
  */
-static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_device_id *ofid)
+static int __devinit mod885_probe(struct of_device *ofdev, const struct of_device_id *ofid)
 {
-	struct mcr3000_host *host;
+	struct mod885_host *host;
 	struct mtd_info *mtd;
 	struct nand_chip *nand_chip;
 	struct mtd_partition *partitions = NULL;
@@ -172,7 +174,7 @@ static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_devi
 	int i;
 
 	/* Allocate memory for the device structure (and zero it) */
-	host = kzalloc(sizeof(struct mcr3000_host), GFP_KERNEL);
+	host = kzalloc(sizeof(struct mod885_host), GFP_KERNEL);
 	if (!host) {
 		dev_err(&ofdev->dev, "failed to allocate device structure.\n");
 		res = -ENOMEM;
@@ -186,7 +188,7 @@ static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_devi
 		goto IOREMAP_NAND_ERROR;
 	}
 	
-	host->cpld_base = ioremap(MCR3000_CPLD_STATUS, 0x00000010);
+	host->cpld_base = ioremap(MOD885_CPLD_STATUS, 0x00000010);
 	if (host->cpld_base == NULL) {
 		dev_err(&ofdev->dev, "ioremap for CPLD failed\n");
 		res = -EIO;
@@ -199,7 +201,7 @@ static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_devi
 
 	nand_chip->priv = host;		/* link the private data structures */
 	mtd->priv = nand_chip;
-	mtd->name = "mcr3000-nand";
+	mtd->name = "mod885-nand";
 	mtd->owner = THIS_MODULE;
 	mtd->dev.parent = &ofdev->dev;
 
@@ -207,8 +209,8 @@ static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_devi
 	nand_chip->IO_ADDR_R = (void *)host->io_base;
 	nand_chip->IO_ADDR_W = (void *)host->io_base;
 
-	nand_chip->cmd_ctrl 	= mcr3000_hwcontrol;
-	nand_chip->dev_ready 	= mcr3000_device_ready;
+	nand_chip->cmd_ctrl 	= mod885_hwcontrol;
+	nand_chip->dev_ready 	= mod885_device_ready;
 	nand_chip->ecc.mode 	= NAND_ECC_SOFT;	/* enable ECC */
 	nand_chip->chip_delay 	= 20;			/* 20us command delay time */
 
@@ -314,48 +316,49 @@ MEMALLOC_ERROR:
 	return res;
 }
 
-static const struct of_device_id mcr3000_match[] =
+
+static const struct of_device_id mod885_match[] =
 {
 	{
-		.compatible   = "s3k,mcr3000-nand",
+		.compatible   = "s3k,mod885-nand",
 	},
 	{},
 };
 
-MODULE_DEVICE_TABLE(of, mcr3000_match);
+MODULE_DEVICE_TABLE(of, mod885_match);
 
 /*
  * driver device registration
  */
-static struct of_platform_driver mcr3000_driver = {
-	.probe		= mcr3000_probe,
-	.remove		= __devexit_p(mcr3000_remove),
+static struct of_platform_driver mod885_driver = {
+	.probe		= mod885_probe,
+	.remove		= __devexit_p(mod885_remove),
 	.driver		=
 	{
 		.name		= DRV_NAME,
 		.owner		= THIS_MODULE,
-		.of_match_table	= mcr3000_match,
+		.of_match_table	= mod885_match,
 	},
 };
 
 /*
  * Main initialization routine
  */
-int __init mcr3000_init (void)
+int __init mod885_init (void)
 {
-	return of_register_platform_driver(&mcr3000_driver);
+	return of_register_platform_driver(&mod885_driver);
 }
 
 /*
  * Clean up routine
  */
-static void __exit mcr3000_cleanup(void)
+static void __exit mod885_cleanup(void)
 {
-	of_unregister_platform_driver(&mcr3000_driver);
+	of_unregister_platform_driver(&mod885_driver);
 }
 
-module_init(mcr3000_init);
-module_exit(mcr3000_cleanup);
+module_init(mod885_init);
+module_exit(mod885_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRV_AUTHOR);

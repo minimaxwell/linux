@@ -70,6 +70,9 @@
 			reg = <3 0x0 0x01>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			gpios = <&CPM1_PIO_D 4 1 	// CLE
+				 &CPM1_PIO_D 5 1	// ALE
+				 &CPM1_PIO_D 3 1>;	// NCE
 		};
 		
 		mtsl@4,000 {
