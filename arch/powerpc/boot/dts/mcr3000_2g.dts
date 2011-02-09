@@ -15,8 +15,7 @@
 	aliases {
 		ethernet0 = &eth0;
 		ethernet1 = &eth1;
-		mdio1 = &phy1;
-		mdio2 = &phy2;
+		mdio = &phy;
 		serial0 = &smc1;
 	};
 
@@ -90,7 +89,7 @@
 			reg = <0x0 0x10>;
 		};
 
-		phy1: mdio@e00 {
+		phy: mdio@e00 {
 			compatible = "fsl,mpc885-fec-mdio", "fsl,pq1-fec-mdio";
 			reg = <0xe00 0x188>;
 			#address-cells = <1>;
@@ -100,18 +99,6 @@
 				reg = <0x1>;
 				device_type = "ethernet-phy";
 			};
-
-			PHY6: ethernet-phy@6 {
-				reg = <0x6>;
-				device_type = "ethernet-phy";
-			};
-		};
-
-		phy2: mdio@1e00 {
-			compatible = "fsl,mpc885-fec-mdio", "fsl,pq1-fec-mdio";
-			reg = <0x1e00 0x188>;
-			#address-cells = <1>;
-			#size-cells = <0>;
 
 			PHY2: ethernet-phy@2 {
 				reg = <0x2>;

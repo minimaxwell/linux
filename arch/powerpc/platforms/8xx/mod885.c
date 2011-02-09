@@ -25,49 +25,72 @@ struct cpm_pin {
 
 static struct cpm_pin mod885_pins[] = {
 	/* SMC1 */
-	{CPM_PORTA,  5, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CTS port DEBUG	*/
 	{CPM_PORTB, 24, CPM_PIN_INPUT}, 					/* RX  port DEBUG	*/
 	{CPM_PORTB, 25, CPM_PIN_INPUT}, 					/* TX  port DEBUG	*/
 
-	/* SCC1 */
-	{CPM_PORTA, 14, CPM_PIN_INPUT},						/* TX 			*/
-	{CPM_PORTA, 15, CPM_PIN_INPUT},						/* RX 			*/
-	{CPM_PORTB, 19, CPM_PIN_OUTPUT},					/* RTS			*/
-	{CPM_PORTC, 11, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* CTS			*/
-
+	/* SMC2 */
+	{CPM_PORTE, 20, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* SMTXD2		*/
+	{CPM_PORTB, 20, CPM_PIN_INPUT}, 					/* SMRXD2		*/
+	
 	/* SCC2 */
-	{CPM_PORTA, 12, CPM_PIN_INPUT},						/* TX 			*/
-	{CPM_PORTA, 13, CPM_PIN_INPUT},						/* RX 			*/
-	{CPM_PORTB, 18, CPM_PIN_OUTPUT},					/* RTS			*/
-	{CPM_PORTC,  9, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* CTS			*/
+	{CPM_PORTA, 12, CPM_PIN_INPUT}, 					/* TXD2			*/
+	{CPM_PORTA, 13, CPM_PIN_INPUT}, 					/* RXD2			*/
+	{CPM_PORTB, 18, CPM_PIN_OUTPUT}, 					/* RTS2			*/
+	{CPM_PORTC,  9, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY}, 	/* CTS2			*/
+	{CPM_PORTC,  8, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY}, 	/* CD2			*/
 	
 	/* SCC3 */
-	{CPM_PORTD, 10, CPM_PIN_INPUT},						/* TX 			*/
-	{CPM_PORTD, 11, CPM_PIN_INPUT},						/* RX 			*/
-	{CPM_PORTD,  7, CPM_PIN_OUTPUT},					/* RTS			*/
-	{CPM_PORTC,  7, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* CTS			*/
+	{CPM_PORTD, 10, CPM_PIN_INPUT}, 					/* TXD3			*/
+	{CPM_PORTD, 11, CPM_PIN_INPUT}, 					/* RXD3			*/
+	{CPM_PORTD,  7, CPM_PIN_INPUT}, 					/* RTS3			*/
+	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY}, 	/* CTS3			*/
+	{CPM_PORTC,  4, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY}, 	/* CD3			*/
 	
 	/* SCC4 */
-	{CPM_PORTD,  8, CPM_PIN_INPUT},						/* TX 			*/
-	{CPM_PORTD,  9, CPM_PIN_INPUT},						/* RX 			*/
-	{CPM_PORTD,  6, CPM_PIN_OUTPUT},					/* RTS			*/
-	{CPM_PORTC,  4, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_SECONDARY},	/* DCD			*/
-	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* CTS			*/
+	{CPM_PORTD,  9, CPM_PIN_OUTPUT}, 					/* TXD4			*/
+	{CPM_PORTE, 25, CPM_PIN_INPUT}, 					/* RXD4			*/
 	
 	/* SPI */
 	{CPM_PORTB, 28, CPM_PIN_OUTPUT},					/* MISO			*/
 	{CPM_PORTB, 29, CPM_PIN_OUTPUT},					/* MOSI 		*/
 	{CPM_PORTB, 30, CPM_PIN_OUTPUT},					/* CLK			*/
+	{CPM_PORTB, 14, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CS_TEMP		*/
+	{CPM_PORTB, 19, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* WR_TEMP		*/
+	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CS_EEPROM		*/
 	
 	/* NAND */
-	{CPM_PORTD,  12, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* CLE_DISK		*/
-	{CPM_PORTD,  13, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* ALE_DISK 		*/
-	{CPM_PORTD,  15, CPM_PIN_OUTPUT | CPM_PIN_GPIO},			/* CS_DISK		*/
-	
+	{CPM_PORTD, 12, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CLE_DISK		*/
+	{CPM_PORTD, 13, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* ALE_DISK 		*/
+	{CPM_PORTD, 15, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CS_DISK		*/
 
-	/* EEPROM */
-	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* CS_EEPROM 		*/
+	/* USB */
+	{CPM_PORTC,  7, CPM_PIN_OUTPUT},					/* USB_TXN			*/ 
+	{CPM_PORTC,  6, CPM_PIN_OUTPUT},					/* USB_TXN			*/ 
+	{CPM_PORTA, 14, CPM_PIN_INPUT},						/* USB_TXN			*/ 
+	{CPM_PORTC, 11, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* USB_TXN			*/ 
+	{CPM_PORTC, 10, CPM_PIN_INPUT | CPM_PIN_SECONDARY},			/* USB_TXN			*/ 
+	{CPM_PORTA, 15, CPM_PIN_INPUT},						/* USB_TXN			*/ 
+		
+	/* MII1 */
+	{CPM_PORTA, 0, CPM_PIN_INPUT},						/* RMII-1_RXD1		*/
+	{CPM_PORTA, 1, CPM_PIN_INPUT},						/* RMII-1_RXD0		*/
+	{CPM_PORTA, 2, CPM_PIN_INPUT},						/* RMII-1_CRS_DV	*/
+	{CPM_PORTA, 3, CPM_PIN_INPUT},						/* RMII-1_RXER		*/
+	{CPM_PORTA, 4, CPM_PIN_OUTPUT},						/* RMII-1_TXD1		*/
+	{CPM_PORTA, 11, CPM_PIN_OUTPUT},					/* RMII-1_TXD0		*/
+	{CPM_PORTB, 31, CPM_PIN_INPUT},						/* RMII-1_REF_CLK	*/
 	
+	{CPM_PORTD, 8, CPM_PIN_INPUT},						/* R_MDC		*/
+
+	/* MII2 */
+	{CPM_PORTE, 14, CPM_PIN_OUTPUT | CPM_PIN_SECONDARY},			/* RMII-2_TXD0		*/
+	{CPM_PORTE, 15, CPM_PIN_OUTPUT | CPM_PIN_SECONDARY},			/* RMII-2_TXD1		*/
+	{CPM_PORTE, 16, CPM_PIN_OUTPUT},					/* RMII-2_REF_CLK	*/
+	{CPM_PORTE, 19, CPM_PIN_OUTPUT | CPM_PIN_SECONDARY},			/* RMII-2_TXEN		*/
+	{CPM_PORTE, 21, CPM_PIN_OUTPUT},					/* RMII-2_RXD0		*/
+	{CPM_PORTE, 22, CPM_PIN_OUTPUT},					/* RMII-2_RXD1		*/
+	{CPM_PORTE, 26, CPM_PIN_OUTPUT},					/* RMII-2_CRS_DV	*/
+	{CPM_PORTE, 27, CPM_PIN_OUTPUT},					/* RMII-2_RXER		*/
 };
 
 static void __init init_ioports(void)
@@ -84,6 +107,9 @@ static void __init init_ioports(void)
 	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG3, CPM_CLK_RTX);
 	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG4, CPM_CLK_RTX);
 	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
+	
+	/* Set FEC1 and FEC2 to MII mode */
+	/*clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);*/
 }
 
 static void __init mod885_setup_arch(void)
@@ -96,7 +122,6 @@ static int __init mod885_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
 	return of_flat_dt_is_compatible(root, "fsl,mod885");
-	return 0;
 }
 
 static struct of_device_id __initdata of_bus_ids[] = {
