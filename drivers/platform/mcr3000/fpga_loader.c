@@ -46,20 +46,19 @@
 #define STATUS_LOADED 2
 #define STATUS_NOTLOADED 3
 
-#define NB_GPIO 4
-#define DIR_GPIO {1,0,0,1}
+#define NB_GPIO 3
+#define DIR_GPIO {0,0,1}
 
-#define PROGFPGA 0
-#define INITFPGA 1
-#define DONEFPGA 2
-#define RST_FPGA 3
+#define INITFPGA 0
+#define DONEFPGA 1
+#define RST_FPGA 2
 
 static struct spi_device *fpga_spi=NULL;
 
 struct fpga_data {
 	u8 __iomem *version,*mcrid;
 	struct device *dev;
-	int gpio[NB_GPIO]; /* progfpga, initfpga, donefpga, rst_fpga */
+	int gpio[NB_GPIO]; /* initfpga, donefpga, rst_fpga */
 	int status;
 };
 
@@ -82,12 +81,6 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		dev_info(dev,"received fw data %x size %d\n",(unsigned int)fw->data,fw->size);
 		data->status = STATUS_LOADING;
 	
-		ldb_gpio_set_value(data->gpio[PROGFPGA], 1);
-		while (!ldb_gpio_get_value(data->gpio[INITFPGA]) && !ldb_gpio_get_value(data->gpio[DONEFPGA]));
-
-		ldb_gpio_set_value(data->gpio[PROGFPGA], 0);
-		while (ldb_gpio_get_value(data->gpio[INITFPGA]));
-
 		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
 
 		memset(&spit, 0, sizeof(spit));
