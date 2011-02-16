@@ -74,6 +74,17 @@
 				 &CPM1_PIO_D 13 1	// ALE
 				 &CPM1_PIO_D 15 1>;	// NCE
 		};
+		
+		mtsl@4,3000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-mtsl-2g";
+			reg = <4 0x3000000 0xFFFF>;
+		};
+
+		codec {
+			compatible = "s3k,mcr3000-codec-2g";
+		};
 	};
 
 	soc@ff000000 {
@@ -208,6 +219,78 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <1>;
 				fsl,cpm-command = <0x90>;
+			};
+			spi: spi@a80 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				cell-index = <0>;
+				compatible = "fsl,spi", "fsl,cpm1-spi";
+				reg = <0xa80 0x30 0x1d80 0x30>;
+				interrupts = <5>;
+				interrupt-parent = <&CPM_PIC>;
+				mode = "cpu";
+				gpios = <&CPM1_PIO_A 10 1	/* POT1 */
+					 &CPM1_PIO_B 23 1	/* TEMP MCR */
+					 &CPM1_PIO_C 8 1	/* ARCOFI */
+					 &CPM1_PIO_C 12 1	/* EEPROM */
+					 &CPM1_PIO_C 14 1	/* POT2 */
+					 &CPM1_PIO_C 4 1	/* SICOFI */
+					 &CPM1_PIO_B 14 1>;	/* TEMP MPC885 */
+					 
+				pot1@0 {
+					compatible = "cs,mcr3000-pot1";
+					spi-max-frequency = <1000000>;
+					reg = <0>;
+					spi-cs-high;
+				};
+				lm74@1 {
+					compatible = "ti,tmp121", "ns,lm74";
+					spi-max-frequency = <1000000>;
+					reg = <1>;
+					spi-cs-high;
+				};
+				arcofi@2 {
+					compatible = "infineon,mcr3000-arcofi";
+					spi-max-frequency = <1000000>;
+					reg = <2>;
+					spi-cs-high;
+				};
+				eeprom@3 {
+					compatible = "cs,at25", "cs,eeprom";
+					spi-max-frequency = <1000000>;
+					reg = <3>;
+					spi-cs-high;
+				};
+				pot2@4 {
+					compatible = "cs,mcr3000-pot2";
+					spi-max-frequency = <1000000>;
+					reg = <4>;
+					spi-cs-high;
+				};
+				sicofi@5 {
+					compatible = "infineon,mcr3000-sicofi";
+					spi-max-frequency = <1000000>;
+					reg = <5>;
+					spi-cs-high;
+					spi-cpha;
+				};
+				lm74@6 {
+					compatible = "ti,tmp121", "ns,lm74";
+					spi-max-frequency = <1000000>;
+					reg = <6>;
+					spi-cs-high;
+				};
+/*				fpga-loader@0 {
+					compatible = "s3k,mcr3000-fpga-loader";
+					spi-max-frequency = <10000000>;
+					spi-cs-high;
+				};
+				mezz@6 {
+					compatible = "s3k,mcr3000-fpga-mezz-loader";
+					spi-max-frequency = <1000000>;
+					spi-cs-high;
+				};
+*/				
 			};
 		};
 	};
