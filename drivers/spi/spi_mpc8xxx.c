@@ -621,6 +621,13 @@ static void mpc8xxx_spi_do_one_msg(struct spi_message *m)
 		mpc8xxx_spi_chipselect(spi, BITBANG_CS_INACTIVE);
 	}
 
+	if (spi->mode & SPI_TROLL) {
+		struct spi_transfer t= {.len=1,.tx_buf = "", .bits_per_word = 4};
+
+		status = mpc8xxx_spi_setup_transfer(spi, &t);
+		status = mpc8xxx_spi_bufs(spi, &t, 0);
+	}
+
 	mpc8xxx_spi_setup_transfer(spi, NULL);
 }
 
@@ -1009,7 +1016,7 @@ mpc8xxx_spi_probe(struct device *dev, struct resource *mem, unsigned int irq)
 
 	/* the spi->mode bits understood by this driver: */
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH
-			| SPI_LSB_FIRST | SPI_LOOP;
+			| SPI_LSB_FIRST | SPI_LOOP | SPI_TROLL;
 
 	master->setup = mpc8xxx_spi_setup;
 	master->transfer = mpc8xxx_spi_transfer;
