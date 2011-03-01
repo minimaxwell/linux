@@ -86,10 +86,24 @@ static void __init init_ioports(void)
 	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
 }
 
+static int __init mpc8xx_early_ping_watchdog(void)
+{
+	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
+	
+	immap->im_siu_conf.sc_swsr=0x556C;
+	immap->im_siu_conf.sc_swsr=0xAA39;
+	
+	iounmap(immap);
+	
+	return 0;
+}
+arch_initcall(mpc8xx_early_ping_watchdog);
+
 static void __init mod885_setup_arch(void)
 {
 	cpm_reset();
 	init_ioports();
+	mpc8xx_early_ping_watchdog();
 }
 
 static int __init mod885_probe(void)
@@ -108,6 +122,12 @@ static struct of_device_id __initdata of_bus_ids[] = {
 
 static int __init declare_of_platform_devices(void)
 {
+	pr_info("MOD885 declare_of_platform_devices()\n");
+	
+	mpc8xx_early_ping_watchdog();
+	
+	proc_mkdir("s3k",0);
+		
 	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 
 	return 0;

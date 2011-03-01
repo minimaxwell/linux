@@ -24,6 +24,7 @@ config FPGA_LOADER
 	  Module de chargement du code FPGA. Permet de charger le uCOR FPGA
 	  au demarrage
 
+if MCR3000
 config MCR3000_CPLD
 	bool "CPLD ChipSelect SPI"
 	depends on GPIOLIB
@@ -39,5 +40,5 @@ config OPX_GPIO
 	default y
 	---help---
 	  Driver GPIO pour les Outputs OPx du MPC8xx
-
+endif
 endif

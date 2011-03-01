@@ -1,6 +1,6 @@
 if X86
 source "drivers/platform/x86/Kconfig"
 endif
-if MCR3000
+if MCR3000 || MOD885
 source "drivers/platform/mcr3000/Kconfig"
 endif
