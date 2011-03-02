@@ -18,6 +18,7 @@
 
 #include "mod885.h"
 #include "mpc8xx.h"
+#include "mcr3000_2g.h"
 
 struct cpm_pin {
 	int port, pin, flags;
@@ -86,6 +87,35 @@ static void __init init_ioports(void)
 	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
 }
 
+
+/*
+ * Init Carte 
+ */
+void __init mod885_pics_init(void)
+{
+	struct device_node *np;
+	const char *model = "";
+	int irq;
+
+	mpc8xx_pics_init();
+	
+	np = of_find_node_by_path("/");
+	if (np) {
+
+		/* MCR3000_2G configuration */
+		if (!strcmp(model, "MCR3000_2G")) {
+			irq = fpgaf_pic_init();
+			if (irq != NO_IRQ)
+				set_irq_chained_handler(irq, fpgaf_cascade);
+		}
+
+		/* if MOD885 configuration there nothing to do */
+
+	} else {
+		printk(KERN_ERR "MODEL: failed to identify model\n");
+	}
+}
+
 static int __init mpc8xx_early_ping_watchdog(void)
 {
 	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
@@ -109,8 +139,8 @@ static void __init mod885_setup_arch(void)
 static int __init mod885_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
-	return of_flat_dt_is_compatible(root, "fsl,mod885");
-	return 0;
+	return (of_flat_dt_is_compatible(root, "fsl,mod885") ||
+		of_flat_dt_is_compatible(root, "fsl,mcr3000"));
 }
 
 static struct of_device_id __initdata of_bus_ids[] = {
@@ -122,13 +152,32 @@ static struct of_device_id __initdata of_bus_ids[] = {
 
 static int __init declare_of_platform_devices(void)
 {
-	pr_info("MOD885 declare_of_platform_devices()\n");
+	struct device_node *np;
+	const char *model = "";
+
+	np = of_find_node_by_path("/");
+	if (np) {
+
+		model = of_get_property(np, "model", NULL);
+
+		/* MCR3000_2G configuration */
+		if (!strcmp(model, "MCR3000")) {
+			pr_info("MCR3000 declare_of_platform_devices()\n");
+
+		/* MOD885 configuration by default */
+		} else {
+			pr_info("MOD885 declare_of_platform_devices()\n");
+		}
 	
-	mpc8xx_early_ping_watchdog();
+		mpc8xx_early_ping_watchdog();
 	
-	proc_mkdir("s3k",0);
+		proc_mkdir("s3k",0);
 		
-	of_platform_bus_probe(NULL, of_bus_ids, NULL);
+		of_platform_bus_probe(NULL, of_bus_ids, NULL);
+
+	} else {
+		printk(KERN_ERR "MODEL: failed to identify model\n");
+	}
 
 	return 0;
 }
@@ -138,7 +187,7 @@ define_machine(mod885) {
 	.name			= "MOD885",
 	.probe			= mod885_probe,
 	.setup_arch		= mod885_setup_arch,
-	.init_IRQ		= mpc8xx_pics_init,
+	.init_IRQ		= mod885_pics_init,
 	.get_irq		= mpc8xx_get_irq,
 	.restart		= mpc8xx_restart,
 	.calibrate_decr		= mpc8xx_calibrate_decr,

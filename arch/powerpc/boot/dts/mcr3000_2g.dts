@@ -7,7 +7,7 @@
 /dts-v1/;
 
 / {
-	model = "MOD885";
+	model = "MCR3000_2G";
 	compatible = "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;

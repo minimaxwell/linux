@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux kernel version: 2.6.35.7
-# Mon Jan 10 15:17:58 2011
+# Linux kernel version: 2.6.35.9
+# Tue Mar  1 16:08:41 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -983,6 +983,8 @@ CONFIG_MFD_SUPPORT=y
 # CONFIG_AUXDISPLAY is not set
 # CONFIG_UIO is not set
 # CONFIG_STAGING is not set
+CONFIG_MCR3000_PLATFORM_DEVICES=y
+CONFIG_FPGA_LOADER=y
 
 #
 # File systems
