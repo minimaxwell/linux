@@ -101,10 +101,10 @@ while (<>) {
 		$maxtime = $1;
 	}
 	if ($line =~ /Write protecting the/) {
-		$done = 0;
+		$done = 1;
 	}
 	if ($line =~ /Freeing unused kernel memory/) {
-		$done = 0;
+		$done = 1;
 	}
 }
 
