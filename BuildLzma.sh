@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # si LZMA n'est pas présent
-WHEREIS_LZMA=`whereis lzma`
-LZMA==`echo ${WHEREIS_LZMA#*lzma:}`
-if [ ! $LZMA ] ; then
+WHEREIS_LZMA=`whereis -b lzma`
+LZMA=`echo ${WHEREIS_LZMA#*lzma:}`
+if [ "${#LZMA}" = 0 ] ; then
 	echo "l'outil [lzma] est introuvable. Impossible de générer l'image"
 	exit 2
 fi
@@ -34,7 +34,10 @@ if [ -f ./vmlinux.bin.gz ] ; then
 	# decompresse le binaire
 	gzip -c -d ./vmlinux.bin.gz > ./vmlinux.bin
 	# compresse en LZMA
-	lzma e ./vmlinux.bin ./vmlinux.bin.lzma -d12
+	lzma -z ./vmlinux.bin -c > ./vmlinux.bin.lzma
+	if [ $? != 0 ] ; then
+		lzma e ./vmlinux.bin ./vmlinux.bin.lzma -d12
+	fi
 	# creation de l'image U-BOOT
 	mkimage -C lzma -A PowerPC -O Linux -T Kernel -a 0 -e 0 -n $BINARY_NAME -d ./vmlinux.bin.lzma ./uImage.lzma
 else
