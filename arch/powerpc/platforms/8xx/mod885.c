@@ -15,6 +15,9 @@
 #include <asm/cpm1.h>
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
+#include <asm-generic/gpio.h>
+
+#include <sysdev/simple_gpio.h>
 
 #include "mod885.h"
 #include "mpc8xx.h"
@@ -119,27 +122,27 @@ static void __init init_ioports(void)
  */
 void __init mod885_pics_init(void)
 {
-	struct device_node *np;
-	const char *model = "";
-	int irq;
+//	struct device_node *np;
+//	const char *model = "";
+//	int irq;
 
 	mpc8xx_pics_init();
 	
-	np = of_find_node_by_path("/");
-	if (np) {
-
-		/* MCR3000_2G configuration */
-		if (!strcmp(model, "MCR3000_2G")) {
-			irq = fpgaf_pic_init();
-			if (irq != NO_IRQ)
-				set_irq_chained_handler(irq, fpgaf_cascade);
-		}
-
-		/* if MOD885 configuration there nothing to do */
-
-	} else {
-		printk(KERN_ERR "MODEL: failed to identify model\n");
-	}
+//	np = of_find_node_by_path("/");
+//	if (np) {
+//
+//		/* MCR3000_2G configuration */
+//		if (!strcmp(model, "MCR3000_2G")) {
+//			irq = fpgaf_pic_init();
+//			if (irq != NO_IRQ)
+//				set_irq_chained_handler(irq, fpgaf_cascade);
+//		}
+//
+//		/* if MOD885 configuration there nothing to do */
+//
+//	} else {
+//		printk(KERN_ERR "MODEL: failed to identify model\n");
+//	}
 }
 
 static int __init mpc8xx_early_ping_watchdog(void)
@@ -173,6 +176,7 @@ static struct of_device_id __initdata of_bus_ids[] = {
 	{ .name = "soc", },
 	{ .name = "cpm", },
 	{ .name = "localbus", },
+	{ .name = "fpga-f", },
 	{},
 };
 
@@ -180,6 +184,7 @@ static int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 	const char *model = "";
+	int irq;
 
 	np = of_find_node_by_path("/");
 	if (np) {
@@ -187,20 +192,31 @@ static int __init declare_of_platform_devices(void)
 		model = of_get_property(np, "model", NULL);
 
 		/* MCR3000_2G configuration */
-		if (!strcmp(model, "MCR3000")) {
-			pr_info("MCR3000 declare_of_platform_devices()\n");
+		if (!strcmp(model, "MCR3000_2G")) {
+			pr_info("MCR3000_2G declare_of_platform_devices()\n");
+			irq = fpgaf_pic_init();
+			if (irq != NO_IRQ)
+				set_irq_chained_handler(irq, fpgaf_cascade);
+			mpc8xx_early_ping_watchdog();
+			proc_mkdir("s3k",0);
+			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
+			of_platform_bus_probe(NULL, of_bus_ids, NULL);
+			fpgaf_init_platform_devices();
 
 		/* MOD885 configuration by default */
 		} else {
 			pr_info("MOD885 declare_of_platform_devices()\n");
+			mpc8xx_early_ping_watchdog();
+			proc_mkdir("s3k",0);
+			of_platform_bus_probe(NULL, of_bus_ids, NULL);
 		}
 	
-		mpc8xx_early_ping_watchdog();
-	
-		proc_mkdir("s3k",0);
+		/* MCR3000_2G configuration */
+		if (!strcmp(model, "MCR3000_2G")) {
+			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
+			fpgaf_init_platform_devices();
+		}
 		
-		of_platform_bus_probe(NULL, of_bus_ids, NULL);
-
 	} else {
 		printk(KERN_ERR "MODEL: failed to identify model\n");
 	}

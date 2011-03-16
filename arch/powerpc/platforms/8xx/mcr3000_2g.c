@@ -109,7 +109,7 @@ int fpgaf_pic_init(void)
 	if (irq == NO_IRQ)
 		goto end;
 
-	/* Initialize the CPLD interrupt controller. */
+	/* Initialize the FPGAF interrupt controller. */
 	hwirq = (unsigned int)irq_map[irq].hwirq;
 
 	fpgaf_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &fpgaf_pic_host_ops, 16);

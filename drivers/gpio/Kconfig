@@ -23,7 +23,6 @@ config ARCH_REQUIRE_GPIOLIB
 	  code to always get built in.
 
 
-
 menuconfig GPIOLIB
 	bool "GPIO Support"
 	depends on ARCH_WANT_OPTIONAL_GPIOLIB || ARCH_REQUIRE_GPIOLIB
@@ -47,6 +46,15 @@ config DEBUG_GPIO
 	  non-sleeping contexts.  They can make bitbanged serial protocols
 	  slower.  The diagnostics help catch the type of setup errors
 	  that are most common when setting up new platforms or boards.
+
+config ARCH_NR_GPIOS
+	int "Maximum number of GPIOs"
+	range 256 2048
+	default "256"
+	---help---
+	  This allows you to specify the maximum number of GPIOS which this
+	  kernel will support.  The maximum supported value is 2048 and the
+	  minimum value which makes sense is 256.
 
 config GPIO_SYSFS
 	bool "/sys/class/gpio/... (sysfs interface)"
