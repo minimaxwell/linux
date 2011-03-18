@@ -53,13 +53,14 @@
 #define DONEFPGA 1
 #define RST_FPGA 2
 
-static struct spi_device *fpga_spi=NULL;
+
 
 struct fpga_data {
 	u8 __iomem *version,*mcrid;
 	struct device *dev;
 	int gpio[NB_GPIO]; /* initfpga, donefpga, rst_fpga */
 	int status;
+	struct spi_device *spi;
 };
 
 static void fpga_fw_load(const struct firmware *fw, void *context)
@@ -69,10 +70,6 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	
 	if (!fw) {
 		dev_err(dev," fw load failed\n");
-	}
-	else if (!fpga_spi) {
-		dev_err(dev,"driver not attached to spi bus yet, loading impossible\n");
-		release_firmware(fw);
 	}
 	else {
 		static struct spi_transfer spit;
@@ -96,7 +93,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 			spi_message_init(&spim);
 			spi_message_add_tail(&spit, &spim);
 
-			ret = spi_sync(fpga_spi, &spim);
+			ret = spi_sync(data->spi, &spim);
 			if (ret != 0) dev_err(dev,"pb spi_sync\n");
 
 			kfree(spit.tx_buf);
@@ -227,6 +224,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
+	data->spi = match->data;
 
 	if (ngpios<NB_GPIO) {
 		dev_err(dev,"missing GPIO definition in device tree\n");
@@ -300,7 +298,7 @@ err:
 	return ret;
 }
 
-static int __devexit fpga_remove(struct of_device *ofdev)
+static int fpga_remove(struct of_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);
@@ -329,43 +327,74 @@ static int __devexit fpga_remove(struct of_device *ofdev)
 
 static int __devinit fpga_spi_probe(struct spi_device *spi)
 {
-	fpga_spi = spi;
+	struct device *dev = &spi->dev;
+	struct device_node *np = dev->of_node;
+	struct of_device_id *pfpga_match;
+	struct of_platform_driver *pfpga_driver;
+	const void *prop;
+	int l;
+	int ret;
+	
+	prop = of_get_property(np,"loader",&l);
+	if (!prop) {
+		ret = -ENODEV;
+		goto err1;
+	}
+	pfpga_match = kmalloc(GFP_KERNEL, 2* sizeof(*pfpga_match));
+	if (!pfpga_match) {
+		ret = -ENOMEM;
+		goto err1;
+	}
+	memset(pfpga_match,0,2* sizeof(*pfpga_match));
+	pfpga_driver = kmalloc(GFP_KERNEL, sizeof(*pfpga_driver));
+	if (!pfpga_driver) {
+		ret = -ENOMEM;
+		goto err2;
+	}
+	memset(pfpga_driver,0,sizeof(*pfpga_driver));
+	
+	snprintf(pfpga_match[0].compatible,sizeof(pfpga_match[0].compatible),"s3k,mcr3000-fpga-%s-loader",(char*)prop);
+	pfpga_match[0].data = spi;
+
+	pfpga_driver->probe = fpga_probe;
+	pfpga_driver->remove = fpga_remove;
+	pfpga_driver->driver.name = pfpga_match[0].compatible+12; /* fpga-%s-loader */
+	pfpga_driver->driver.owner = THIS_MODULE;
+	pfpga_driver->driver.of_match_table	= pfpga_match;
+
+	ret = of_register_platform_driver(pfpga_driver);
+	
+	if (ret) {
+		goto err3;
+	}
+	
+	dev_set_drvdata(dev, pfpga_driver);
 
 	return 0;
+err3:
+	kfree(pfpga_driver);
+err2:
+	kfree(pfpga_match);
+err1:	
+	return ret;
 }
 
 static int __devexit fpga_spi_remove(struct spi_device *spi)
 {
-	fpga_spi = NULL;
+	struct device *dev = &spi->dev;
+	struct of_platform_driver *pfpga_driver = dev_get_drvdata(dev);
 
+	of_unregister_platform_driver(pfpga_driver);
+	kfree(pfpga_driver->driver.of_match_table);
+	kfree(pfpga_driver);
 	return 0;
 }
 
-static const struct of_device_id fpga_match[] = {
-	{
-		.compatible = "s3k,mcr3000-fpga-base-loader",
-	},
-	{
-		.compatible = "s3k,mcr3000-fpga-loader",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, fpga_match);
 static const struct spi_device_id fpga_ids[] = {
 	{ "mcr3000-fpga-loader",   0 },
 	{ },
 };
 MODULE_DEVICE_TABLE(spi, fpga_ids);
-
-static struct of_platform_driver fpga_driver = {
-	.probe		= fpga_probe,
-	.remove		= __devexit_p(fpga_remove),
-	.driver		= {
-		.name	= "fpga-loader",
-		.owner	= THIS_MODULE,
-		.of_match_table	= fpga_match,
-	},
-};
 
 static struct spi_driver fpga_spi_driver = {
 	.driver = {
@@ -385,7 +414,6 @@ static int __init fpga_init(void)
 		pr_err("Pb spi_register_driver dans fpga_init: %d\n",ret);
 		goto err;
 	}
-	ret = of_register_platform_driver(&fpga_driver);
 err:
 	return ret;
 }
@@ -393,7 +421,6 @@ module_init(fpga_init);
 
 static void __exit fpga_exit(void)
 {
-	of_unregister_platform_driver(&fpga_driver);
 	spi_unregister_driver(&fpga_spi_driver);
 }
 module_exit(fpga_exit);
@@ -402,4 +429,3 @@ MODULE_AUTHOR("Christophe LEROY CSSI");
 MODULE_DESCRIPTION("LOader for FPGA on MCR3000 ");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("spi:mcr3000-fpga-loader");
-MODULE_ALIAS("platform:mcr3000-fpga-loader");

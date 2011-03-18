@@ -72,10 +72,24 @@ static void fpga_cs_set(struct gpio_chip *gc, unsigned int gpio, int val)
 	if (gpio == 0) {
 		data->prog_state = val;
 		if (val == 0) {
+			int i;
+			
 			gpio_set_value(data->prog, 0);
-			while (gpio_get_value(data->init));
+			i=0;
+			while (gpio_get_value(data->init)) {
+				if (i++>100000) {; /* attente */
+					pr_err("timeout1 %s\n",__FUNCTION__);
+					break;
+				}
+			}
 			gpio_set_value(data->prog, 1);
-			while (!gpio_get_value(data->init));
+			i=0;
+			while (!gpio_get_value(data->init)) {
+				if (i++>100000) {; /* attente */
+					pr_err("timeout2 %s\n",__FUNCTION__);
+					break;
+				}
+			}
 		}
 	}
 	

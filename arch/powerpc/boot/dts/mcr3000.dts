@@ -212,7 +212,7 @@
 		fpga-loader@6,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-loader";
+			compatible = "s3k,mcr3000-fpga-mezz-loader";
 			reg = <6 0x501 1>; /* Version */
 			gpios = <&FPGA_CS1 1 1	// INIT\
 				&CPM1_PIO_A 1 1	// DONE\
@@ -471,6 +471,7 @@
 					spi-max-frequency = <10000000>;
 					reg = <0>;
 					spi-cs-high;
+					loader = "base";
 				};
 				pot1@1 {
 					compatible = "cs,mcr3000-pot1";
@@ -503,10 +504,11 @@
 					spi-cs-high;
 				};
 				mezz@6 {
-					compatible = "s3k,mcr3000-fpga-mezz-loader";
+					compatible = "s3k,mcr3000-fpga-loader";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
 					spi-cs-high;
+					loader = "mezz";
 				};
 				sicofi@7 {
 					compatible = "infineon,mcr3000-sicofi";
