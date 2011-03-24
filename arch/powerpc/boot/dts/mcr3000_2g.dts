@@ -75,6 +75,13 @@
 				 &CPM1_PIO_D 15 1>;	// NCE
 		};
 		
+		fpgaf-info@4,0000002 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpgaf-info";
+			reg = <4 0x0000002 1 4 0x0000042 1>;	// Version FPGA, Adresse carte/chassis
+		};
+
 		fpga-f@4,0000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -352,11 +359,12 @@
 			compatible = "s3k,mcr3000-dsp";
 			reg = <7 0x0 0x0008>;
 		};
-		fpga-loader@4,0000002 {
+
+		fpga-loader@4,100009c {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-base-loader";
-			reg = <4 0x0000002 1 4 0x0000042 1>;	// Version ; addresse carte
+			reg = <4 0x100009c 1>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst2 2 1 >;			// RST_FPGA
@@ -580,6 +588,7 @@
 					spi-max-frequency = <10000000>;
 					reg = <7>;
 					spi-cs-high;
+					loader = "base";
 				};
 /*				mezz@8 {
 					compatible = "s3k,mcr3000-fpga-mezz-loader";

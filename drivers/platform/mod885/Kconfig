@@ -1,0 +1,26 @@
+#
+# MOD885 Platform Specific Drivers
+#
+
+menuconfig MOD885_PLATFORM_DEVICES
+	bool "MOD885 Platform Specific Device Drivers"
+	default y
+	---help---
+	  Say Y here to get to see options for device drivers for MOD885
+	  platform.
+	  This option alone does not add any kernel code.
+
+	  If you say N, all options in this submenu will be skipped and disabled.
+
+if MOD885_PLATFORM_DEVICES
+
+config FPGA_LOADER
+	tristate "FPGA loader"
+	depends on GPIOLIB
+	depends on SPI
+	depends on OF_GPIO
+	default y
+	---help---
+	  Module de chargement du code FPGA. Permet de charger un FPGA
+	  au demarrage
+endif
