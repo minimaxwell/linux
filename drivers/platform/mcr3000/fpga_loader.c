@@ -160,7 +160,7 @@ static ssize_t fs_attr_status_store(struct device *dev, struct device_attribute 
 	
 	return count;
 }
-static DEVICE_ATTR(status, S_IRUGO | S_IWUSR, fs_attr_status_show, fs_attr_status_store);
+static DEVICE_ATTR(status, S_IRUGO | S_IWUSR | S_IWGRP, fs_attr_status_show, fs_attr_status_store);
 
 static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {

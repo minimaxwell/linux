@@ -322,7 +322,7 @@
 			gpio-controller;
 			reg = <0x1 0x1>; /* necessaire mais non utilise */
 			gpios = <&cmd1 4 1	// PROG\
-				&cmd1 5 1>;	// INIT\
+				&stw2 3 1>;	// INIT\
 		};
 
 		cpm@9c0 {
