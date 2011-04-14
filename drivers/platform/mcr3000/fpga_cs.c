@@ -124,7 +124,7 @@ static int __devinit fpga_cs_probe(struct of_device *ofdev, const struct of_devi
 
 	dev_info(dev,"driver for MCR3000 FPGA Programming ChipSelect initialised\n");
 
-	data = kmalloc(GFP_KERNEL,sizeof(*data));
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
 		goto err;

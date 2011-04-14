@@ -216,7 +216,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	struct fpga_data *data;
 	int dir[NB_GPIO]=DIR_GPIO;
 
-	data = kmalloc(GFP_KERNEL,sizeof(*data));
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
 		goto err;
@@ -340,18 +340,16 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 		ret = -ENODEV;
 		goto err1;
 	}
-	pfpga_match = kmalloc(GFP_KERNEL, 2* sizeof(*pfpga_match));
+	pfpga_match = kzalloc(2 * sizeof(*pfpga_match), GFP_KERNEL);
 	if (!pfpga_match) {
 		ret = -ENOMEM;
 		goto err1;
 	}
-	memset(pfpga_match,0,2* sizeof(*pfpga_match));
-	pfpga_driver = kmalloc(GFP_KERNEL, sizeof(*pfpga_driver));
+	pfpga_driver = kzalloc(sizeof(*pfpga_driver), GFP_KERNEL);
 	if (!pfpga_driver) {
 		ret = -ENOMEM;
 		goto err2;
 	}
-	memset(pfpga_driver,0,sizeof(*pfpga_driver));
 	
 	snprintf(pfpga_match[0].compatible,sizeof(pfpga_match[0].compatible),"s3k,mcr3000-fpga-%s-loader",(char*)prop);
 	pfpga_match[0].data = spi;
