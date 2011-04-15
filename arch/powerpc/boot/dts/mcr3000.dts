@@ -301,6 +301,13 @@
 			compatible = "fsl,mpc866-pic", "fsl,pq1-pic";
 		};
 		
+		PIT: pit@200 {
+			compatible = "fsl,mpc866-pit", "fsl,pq1-pit";
+			reg = <0x200 0x80>;
+			interrupts = <11 1>;
+			interrupt-parent = <&PIC>;
+		};
+
 		OPX: gpio-controller@0e0{
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-opx-gpio";
