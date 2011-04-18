@@ -84,7 +84,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 
 		/* on ne sait pas pourquoi, impossible d'utiliser directement fw->data, ca bloque le CPM. On verra plus tard pourquoi */	
 
-		spit.tx_buf=kmalloc(fw->size,GFP_KERNEL);
+		spit.tx_buf=kmalloc(fw->size, GFP_KERNEL);
 		if (spit.tx_buf) {
 			int ret;
 			memcpy((void*)spit.tx_buf, fw->data, fw->size);
@@ -216,7 +216,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	struct fpga_data *data;
 	int dir[NB_GPIO]=DIR_GPIO;
 
-	data = kmalloc(GFP_KERNEL,sizeof(*data));
+	data = kmalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
 		goto err;
@@ -340,13 +340,13 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 		ret = -ENODEV;
 		goto err1;
 	}
-	pfpga_match = kmalloc(GFP_KERNEL, 2* sizeof(*pfpga_match));
+	pfpga_match = kmalloc((2* sizeof(*pfpga_match)), GFP_KERNEL);
 	if (!pfpga_match) {
 		ret = -ENOMEM;
 		goto err1;
 	}
 	memset(pfpga_match,0,2* sizeof(*pfpga_match));
-	pfpga_driver = kmalloc(GFP_KERNEL, sizeof(*pfpga_driver));
+	pfpga_driver = kmalloc(sizeof(*pfpga_driver), GFP_KERNEL);
 	if (!pfpga_driver) {
 		ret = -ENOMEM;
 		goto err2;

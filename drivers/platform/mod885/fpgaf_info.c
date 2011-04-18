@@ -91,7 +91,7 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	struct fpgaf_info_data *data;
 	int ret;
 
-	data = kmalloc(GFP_KERNEL,sizeof(*data));
+	data = kmalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
 		goto err;

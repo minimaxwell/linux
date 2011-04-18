@@ -304,7 +304,7 @@
 				reg = <0x81 1>;
 				gpio-controller;
 			};
-			FPGAF_PIC: pic@22 {
+			/*FPGAF_PIC: pic@22 {
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
@@ -312,7 +312,7 @@
 				interrupt-parent = <&PIC>;
 				reg = <0x22 2>;
 				compatible = "s3k,mcr3000_2g-pic";
-			};
+			};*/
 		};
 		
 		fpga@4,1000000 {
