@@ -576,6 +576,12 @@ static int mpc8xxx_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 				in_be16(&mpc8xxx_spi->rx_bd->cbd_datlen), 
 				in_be32(&mpc8xxx_spi->rx_bd->cbd_bufaddr));
 		pr_err("Bug SPI ==> timeout 10s echu\n");
+
+		pr_err("MODE %x\nEVENT %x\nMASK %x\nCOMMAND %x\n",
+			in_be32(&mpc8xxx_spi->base->mode),
+			in_be32(&mpc8xxx_spi->base->event),
+			in_be32(&mpc8xxx_spi->base->mask),
+			in_be32(&mpc8xxx_spi->base->command));
 	
 		pr_err("TBASE %x\nRBASE %x \nTFCR %x\nRFCR %x\nMRBLR %x\n",
 			in_be16(&mpc8xxx_spi->pram->tbase),
