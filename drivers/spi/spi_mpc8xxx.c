@@ -46,6 +46,8 @@
 #include <asm/qe.h>
 #include <asm/irq.h>
 
+static int nb_inter;
+
 /* CPM1 and CPM2 are mutually exclusive. */
 #ifdef CONFIG_CPM1
 #include <asm/cpm1.h>
@@ -550,6 +552,7 @@ static int mpc8xxx_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	mpc8xxx_spi->rx = t->rx_buf;
 
 	INIT_COMPLETION(mpc8xxx_spi->done);
+	nb_inter = 0;
 
 	if (mpc8xxx_spi->flags & SPI_CPM_MODE)
 		ret = mpc8xxx_spi_cpm_bufs(mpc8xxx_spi, t, is_dma_mapped);
@@ -558,7 +561,42 @@ static int mpc8xxx_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	if (ret)
 		return ret;
 
-	wait_for_completion(&mpc8xxx_spi->done);
+	ret = wait_for_completion_timeout(&mpc8xxx_spi->done, 10*HZ);
+	
+	if (ret == 0) { /* timeout 10s echu ==> probleme */
+		pr_err("#### DEBUG PB SPI MCR3000 ####\n");
+		pr_err("Nb interruptions = %d\n", nb_inter);
+		pr_err("Nb octets transmis = %d\n", mpc8xxx_spi->count);
+		pr_err("Buffer Descripteur TX = %x %x %x\n",
+				in_be16(&mpc8xxx_spi->tx_bd->cbd_sc), 
+				in_be16(&mpc8xxx_spi->tx_bd->cbd_datlen), 
+				in_be32(&mpc8xxx_spi->tx_bd->cbd_bufaddr));
+		pr_err("Buffer Descripteur RX = %x %x %x\n",
+				in_be16(&mpc8xxx_spi->rx_bd->cbd_sc), 
+				in_be16(&mpc8xxx_spi->rx_bd->cbd_datlen), 
+				in_be32(&mpc8xxx_spi->rx_bd->cbd_bufaddr));
+		pr_err("Bug SPI ==> timeout 10s echu\n");
+	
+		pr_err("TBASE %x\nRBASE %x \nTFCR %x\nRFCR %x\nMRBLR %x\n",
+			in_be16(&mpc8xxx_spi->pram->tbase),
+			in_be16(&mpc8xxx_spi->pram->rbase),
+			in_8(&mpc8xxx_spi->pram->tfcr),
+			in_8(&mpc8xxx_spi->pram->rfcr),
+			in_be16(&mpc8xxx_spi->pram->mrblr));
+		pr_err("RSTATE %x\nRDP %x\nRBPTR %x\nRBC %x\nRXTMP %x\n",
+			in_be32(&mpc8xxx_spi->pram->rstate),
+			in_be32(&mpc8xxx_spi->pram->rdp),
+			in_be16(&mpc8xxx_spi->pram->rbptr),
+			in_be16(&mpc8xxx_spi->pram->rbc),
+			in_be32(&mpc8xxx_spi->pram->rxtmp));
+		pr_err("TSTATE %x\nTDP %x\nTBPTR %x\nTBC %x\nTXTMP %x\n",
+			in_be32(&mpc8xxx_spi->pram->tstate),
+			in_be32(&mpc8xxx_spi->pram->tdp),
+			in_be16(&mpc8xxx_spi->pram->tbptr),
+			in_be16(&mpc8xxx_spi->pram->tbc),
+			in_be32(&mpc8xxx_spi->pram->txtmp));
+		BUG();
+	}
 
 	/* disable rx ints */
 	mpc8xxx_spi_write_reg(&mpc8xxx_spi->base->mask, 0);
@@ -751,6 +789,7 @@ static irqreturn_t mpc8xxx_spi_irq(s32 irq, void *context_data)
 	irqreturn_t ret = IRQ_NONE;
 	u32 events;
 
+	nb_inter++;
 	/* Get interrupt events(tx/rx) */
 	events = mpc8xxx_spi_read_reg(&mspi->base->event);
 	if (events)
