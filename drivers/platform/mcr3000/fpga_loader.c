@@ -72,31 +72,24 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		dev_err(dev," fw load failed\n");
 	}
 	else {
-		static struct spi_transfer spit;
-		static struct spi_message spim;
+		char *buf;
 		
 		dev_info(dev,"received fw data %x size %d\n",(unsigned int)fw->data,fw->size);
 		data->status = STATUS_LOADING;
 	
 		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
 
-		memset(&spit, 0, sizeof(spit));
-
 		/* on ne sait pas pourquoi, impossible d'utiliser directement fw->data, ca bloque le CPM. On verra plus tard pourquoi */	
 
-		spit.tx_buf=kmalloc(fw->size,GFP_KERNEL);
-		if (spit.tx_buf) {
+		buf = kmalloc(fw->size,GFP_KERNEL);
+		if (buf) {
 			int ret;
-			memcpy((void*)spit.tx_buf, fw->data, fw->size);
-			spit.len=fw->size;
+			memcpy((void*)buf, fw->data, fw->size);
 
-			spi_message_init(&spim);
-			spi_message_add_tail(&spit, &spim);
-
-			ret = spi_sync(data->spi, &spim);
+			ret = spi_write(data->spi, buf, fw->size);
 			if (ret != 0) dev_err(dev,"pb spi_sync\n");
 
-			kfree(spit.tx_buf);
+			kfree(buf);
 
 			if (ldb_gpio_get_value(data->gpio[INITFPGA])) {
 				dev_err(dev,"fw load failed, data not correct\n");
