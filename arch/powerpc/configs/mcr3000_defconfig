@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.11
-# Tue Apr  5 09:50:10 2011
+# Thu May 19 21:07:49 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -493,7 +493,8 @@ CONFIG_STANDALONE=y
 CONFIG_PREVENT_FIRMWARE_BUILD=y
 CONFIG_FW_LOADER=y
 CONFIG_FIRMWARE_IN_KERNEL=y
-CONFIG_EXTRA_FIRMWARE=""
+CONFIG_EXTRA_FIRMWARE="mcr3000/uFPGA.bin"
+CONFIG_EXTRA_FIRMWARE_DIR="firmware"
 CONFIG_DEBUG_DRIVER=y
 # CONFIG_DEBUG_DEVRES is not set
 # CONFIG_SYS_HYPERVISOR is not set
