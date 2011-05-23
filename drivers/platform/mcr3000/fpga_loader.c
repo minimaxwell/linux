@@ -79,7 +79,10 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	
 		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
 
-		/* on ne sait pas pourquoi, impossible d'utiliser directement fw->data, ca bloque le CPM. On verra plus tard pourquoi */	
+		/* Impossible d'utiliser directement fw->data:
+		     - Pour le Firmware integre dans le noyau, on n'a pas le droit de mapper le noyau directement en DMA 
+		     - Pour le Firmware recu de l'espace user, il est dans de la memoire virtuelle
+		*/
 
 		buf = kmalloc(fw->size,GFP_KERNEL);
 		if (buf) {
