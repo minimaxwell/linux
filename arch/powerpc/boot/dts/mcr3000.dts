@@ -475,7 +475,7 @@
 					 
 				fpga-loader@0 {
 					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <10000000>;
+					spi-max-frequency = <5000000>;
 					reg = <0>;
 					spi-cs-high;
 					loader = "base";
@@ -512,7 +512,7 @@
 				};
 				mezz@6 {
 					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <1000000>;
+					spi-max-frequency = <5000000>;
 					reg = <6>;
 					spi-cs-high;
 					loader = "mezz";
