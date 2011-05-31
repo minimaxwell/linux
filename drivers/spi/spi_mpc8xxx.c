@@ -539,7 +539,7 @@ static int mpc8xxx_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 		/* invalid length? */
 		if (len & 1)
 			return -EINVAL;
-		len /= 2;
+/*		len /= 2;*/
 	}
 	if (bits_per_word > 16) {
 		/* invalid length? */
