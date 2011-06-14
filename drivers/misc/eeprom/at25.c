@@ -300,6 +300,9 @@ static int at25_probe(struct spi_device *spi)
 	/* Chip description */
 	chip = spi->dev.platform_data;
 	if (!chip) {
+		chip = (struct spi_eeprom*)spi_get_device_id(spi)->driver_data;
+	}
+	if (!chip) {
 		dev_dbg(&spi->dev, "no chip description\n");
 		err = -ENODEV;
 		goto fail;
@@ -396,6 +399,19 @@ static int __devexit at25_remove(struct spi_device *spi)
 
 /*-------------------------------------------------------------------------*/
 
+#define INFO(_byte_len, _name, _page_size, _flags)	\
+	((kernel_ulong_t)&(struct spi_eeprom) {				\
+		.byte_len = (_byte_len),				\
+		.name = _name,						\
+		.page_size = (_page_size),				\
+		.flags = (_flags),					\
+	})
+
+static struct spi_device_id at25_ids[] = {
+	{"at25" , 0},
+	{"at25080" , INFO(1024, "at25080", 32, EE_ADDR2)},
+};
+
 static struct spi_driver at25_driver = {
 	.driver = {
 		.name		= "at25",
@@ -403,6 +419,7 @@ static struct spi_driver at25_driver = {
 	},
 	.probe		= at25_probe,
 	.remove		= __devexit_p(at25_remove),
+	.id_table = at25_ids,
 };
 
 static int __init at25_init(void)
