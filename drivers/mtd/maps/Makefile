@@ -3,7 +3,10 @@
 #
 
 ifeq ($(CONFIG_MTD_COMPLEX_MAPPINGS),y)
+obj-$(CONFIG_MTD_MCR3000)	+= map_mcr3000.o
+ifndef CONFIG_MTD_MCR3000
 obj-$(CONFIG_MTD)		+= map_funcs.o
+endif
 endif
 
 # Chip mappings

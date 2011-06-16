@@ -48,26 +48,45 @@
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		// ORx and BRx register
 
-
-		ranges = <0x0 0 0x04000000 0x04000000 // BOOT
-			  0x1 0 0x00000000 0x04000000 // SDRAM
-			  0x2 0 0x08000000 0x04000000 // RAMDP
-			  0x3 0 0x0C000000 0x04000000 // NAND
-			  0x4 0 0x10000000 0x04000000 // Periphs
-			  0x5 0 0x14000000 0x04000000 // FPGA
-			  0x6 0 0x18000000 0x04000000 // mezzanine
-			  0x7 0 0x1c000000 0x04000000>; // DSP
+		ranges = <0 0 0x04000000 0x04000000 // BOOT
+			  1 0 0x00000000 0x04000000 // SDRAM
+			  2 0 0x08000000 0x04000000 // RAMDP
+			  3 0 0x0C000000 0x04000000 // NAND
+			  4 0 0x10000000 0x04000000 // Periphs
+			  5 0 0x14000000 0x04000000 // FPGA
+			  6 0 0x18000000 0x04000000 // mezzanine
+			  7 0 0x1c000000 0x04000000>; // DSP
 			  
 		flash@0,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "s3k,mcr3000-flash";
+			compatible = "cfi-flash";
 			reg = <0 0x0 0x200000>;
+			bank-width = <2>;
+			device-width = <2>;
+			partition@0 {
+				label = "boot";
+				reg = <0x0 0x40000>;
+			};
+			partition@40000 {
+				label = "env";
+				reg = <0x40000 0x10000>;
+			};
+			partition@50000 {
+				label = "blob";
+				reg = <0x50000 0x10000>;
+			};
+			partition@60000 {
+				label = "kernel";
+				reg = <0x60000 0x1a0000>;
+			};
 		};
 
 		nand@3,0 {
 			compatible = "s3k,mcr3000-nand";
 			reg = <3 0x0 0x01>;
+			bank-width = <1>;
+			device-width = <1>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			gpios = <&CPM1_PIO_D 4 1 	// CLE

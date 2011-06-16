@@ -72,31 +72,27 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		dev_err(dev," fw load failed\n");
 	}
 	else {
-		static struct spi_transfer spit;
-		static struct spi_message spim;
+		char *buf;
 		
 		dev_info(dev,"received fw data %x size %d\n",(unsigned int)fw->data,fw->size);
 		data->status = STATUS_LOADING;
 	
 		ldb_gpio_set_value(data->gpio[RST_FPGA], 1);
 
-		memset(&spit, 0, sizeof(spit));
+		/* Impossible d'utiliser directement fw->data:
+		     - Pour le Firmware integre dans le noyau, on n'a pas le droit de mapper le noyau directement en DMA 
+		     - Pour le Firmware recu de l'espace user, il est dans de la memoire virtuelle
+		*/
 
-		/* on ne sait pas pourquoi, impossible d'utiliser directement fw->data, ca bloque le CPM. On verra plus tard pourquoi */	
-
-		spit.tx_buf=kmalloc(fw->size, GFP_KERNEL);
-		if (spit.tx_buf) {
+		buf = kmalloc(fw->size, GFP_KERNEL);
+		if (buf) {
 			int ret;
-			memcpy((void*)spit.tx_buf, fw->data, fw->size);
-			spit.len=fw->size;
+			memcpy((void*)buf, fw->data, fw->size);
 
-			spi_message_init(&spim);
-			spi_message_add_tail(&spit, &spim);
+			ret = spi_write(data->spi, buf, fw->size);
+			if (ret != 0) dev_err(dev,"pb spi_write\n");
 
-			ret = spi_sync(data->spi, &spim);
-			if (ret != 0) dev_err(dev,"pb spi_sync\n");
-
-			kfree(spit.tx_buf);
+			kfree(buf);
 
 			if (ldb_gpio_get_value(data->gpio[INITFPGA])) {
 				dev_err(dev,"fw load failed, data not correct\n");
@@ -259,19 +255,8 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 			|| (ret=device_create_file(dev, &dev_attr_carte))))
 		goto err_unfile;
 
-	if (strstr(match->compatible,"base")) {
-		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
-			dev_err(dev,"fw async loading problem\n");
-			goto err_unfile;
-		}
-
-		dev_info(dev,"driver for MCR3000 FPGA initialized, waiting for firmware.\n");
-	}
-	else {
-		data->status = STATUS_NOTLOADED;
-		dev_info(dev,"driver for MCR3000 FPGA initialized, firmware can be loaded.\n");
-	}
+	data->status = STATUS_NOTLOADED;
+	dev_info(dev,"driver for MCR3000 FPGA initialized, firmware can be loaded.\n");
 	return 0;
 	
 err_unfile:

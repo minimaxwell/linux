@@ -90,7 +90,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 			memcpy((void*)buf, fw->data, fw->size);
 
 			ret = spi_write(data->spi, buf, fw->size);
-			if (ret != 0) dev_err(dev,"pb spi_sync\n");
+			if (ret != 0) dev_err(dev,"pb spi_write\n");
 
 			kfree(buf);
 

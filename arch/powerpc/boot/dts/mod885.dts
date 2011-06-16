@@ -48,20 +48,38 @@
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		  // ORx and BRx register
 
-		ranges = <0x0 0x0 0x00000000 0x08000000   // SRAM
-			  0x1 0x0 0x40000000 0x00400000   // Boot Flash
-			  0x2 0x0 0xc0000000 0x00008000   // Nand Flash
-			  0x3 0x0 0xe0000000 0x00010000   // DPRAM
-			  0x4 0x0 0xd0000000 0x10000000   // Periphs
-			  0x5 0x0 0xc8000000 0x00008000   // CPLD
-			  0x6 0x0 0x80000000 0x00008000   // mezzanine
-			  0x7 0x0 0xf0000000 0x00008000>; // DSP
+		ranges = <0 0x0 0x40000000 0x00400000   // Boot Flash
+			  1 0x0 0x00000000 0x08000000   // SRAM
+			  2 0x0 0xc0000000 0x00008000   // Nand Flash
+			  3 0x0 0xe0000000 0x00010000   // DPRAM
+			  4 0x0 0xd0000000 0x10000000   // Periphs
+			  5 0x0 0xc8000000 0x00008000   // CPLD
+			  6 0x0 0x80000000 0x00008000   // mezzanine
+			  7 0x0 0xf0000000 0x00008000>; // DSP
 
 		flash@0,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
 			compatible = "cfi-flash";
 			reg = <0x0 0x00000000 0x400000>;
 			bank-width = <2>;
 			device-width = <2>;
+			partition@0 {
+				label = "boot";
+				reg = <0x0 0x50000>;
+			};
+			partition@50000 {
+				label = "env";
+				reg = <0x50000 0x10000>;
+			};
+			partition@60000 {
+				label = "blob";
+				reg = <0x60000 0x30000>;
+			};
+			partition@90000 {
+				label = "kernel";
+				reg = <0x90000 0x370000>;
+			};
 		};
 
 		nand@2,0 {

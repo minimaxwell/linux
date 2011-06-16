@@ -49,20 +49,38 @@
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		// ORx and BRx register
 
-		ranges = <0x0 0x0 0x00000000 0x08000000 // SDRAM
-			  0x1 0x0 0x40000000 0x00400000 // Boot Flash
-			  0x2 0x0 0xc0000000 0x00008000 // Nand Flash
-			  0x3 0x0 0xe0000000 0x00010000 // DPRAM
-			  0x4 0x0 0xd0000000 0x10000000 // Periphs
-			  0x5 0x0 0xc8000000 0x00008000 // CPLD
-			  0x6 0x0 0x80000000 0x00008000 // mezzanine
-			  0x7 0x0 0xf0000000 0x00008000>; // DSP
+		ranges = <0 0x0 0x40000000 0x00400000 // Boot Flash
+			  1 0x0 0x00000000 0x08000000 // SDRAM
+			  2 0x0 0xc0000000 0x00008000 // Nand Flash
+			  3 0x0 0xe0000000 0x00010000 // DPRAM
+			  4 0x0 0xd0000000 0x10000000 // Periphs
+			  5 0x0 0xc8000000 0x00008000 // CPLD
+			  6 0x0 0x80000000 0x00008000 // mezzanine
+			  7 0x0 0xf0000000 0x00008000>; // DSP
 
 		flash@0,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
 			compatible = "cfi-flash";
 			reg = <0x0 0x00000000 0x400000>;
-			bank-width = <2>;
+			bank-width = <1>;
 			device-width = <2>;
+			partition@0 {
+				label = "boot";
+				reg = <0x0 0x50000>;
+			};
+			partition@50000 {
+				label = "env";
+				reg = <0x50000 0x10000>;
+			};
+			partition@60000 {
+				label = "blob";
+				reg = <0x60000 0x30000>;
+			};
+			partition@90000 {
+				label = "kernel";
+				reg = <0x90000 0x370000>;
+			};
 		};
 
 		nand@2,0 {
@@ -73,6 +91,13 @@
 			gpios = <&CPM1_PIO_D 12 1 	// CLE
 				 &CPM1_PIO_D 13 1	// ALE
 				 &CPM1_PIO_D 15 1>;	// NCE
+		};
+
+		cpld-mpc@5,0000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cpld-mpc";
+			reg = <5 0x0 0x10>;
 		};
 		
 		fpgaf-info@4,0000002 {
@@ -86,8 +111,10 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-f";
-			reg = <4 0x0000000 0x90>;
+			reg = <4 0x0000000 0x90 6 0x0 0x0002>;
 			ranges = <0 4 0x0000000 0x90>;
+			interrupts = <14 1>;
+			interrupt-parent = <&PIC>;
 			ident1: gpio-controller@00 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-f-gpio";
@@ -304,16 +331,16 @@
 				reg = <0x81 1>;
 				gpio-controller;
 			};
-			/*FPGAF_PIC: pic@22 {
+/*			FPGAF_PIC: pic@22 {
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <7 1>;
+				interrupts = <14 1>;
 				interrupt-parent = <&PIC>;
 				reg = <0x22 2>;
 				compatible = "s3k,mcr3000_2g-pic";
-			};*/
-		};
+			};
+*/		};
 		
 		fpga@4,1000000 {
 			#address-cells = <1>;
@@ -368,6 +395,33 @@
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst2 2 1 >;			// RST_FPGA
+		};
+		c4e1@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-c4e1";
+			reg = <6 0x100 0x00FF 6 0x200 0x00FF 6 0x300 0x00FF 6 0x400 0x00FF 6 0x500 0x00FF>;
+			interrupts = <12 1>;
+			interrupt-parent = <&PIC>;
+		};
+
+		fpga-loader@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-mezz-loader";
+			reg = <6 0x501 1>; 		// Version FPGA Mezz
+			gpios = <&FPGA_CS1 1 1		// INIT Mezz
+				&CPM1_PIO_B 17 1	// DONE Mezz
+				&rst2 6 1 >;		// RST Mezz
+		};
+
+		cag@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cag";
+			reg = <6 0x0 0x0020>;
+			interrupts = <12 1>;
+			interrupt-parent = <&PIC>;
 		};
 	};
 
@@ -437,6 +491,14 @@
 			reg = <0x0 0x1>;	// necessaire mais non utilise
 			gpios = <&CPM1_PIO_E 18 1	// PROGFPGA
 				 &CPM1_PIO_D 6 1>;	// INITFPGA
+		};
+		FPGA_CS1: gpio-controller@dummy1 {
+			#gpio-cells = <2>;
+			compatible = "s3k,mcr3000-fpga-cs";
+			gpio-controller;
+			reg = <0x1 0x1>; /* necessaire mais non utilise */
+			gpios = <&CPM1_PIO_B 16 1	// PROG
+				 &CPM1_PIO_B 22 1>;	// INIT
 		};
 
 		cpm@9c0 {
@@ -520,6 +582,57 @@
 				fsl,cpm-brg = <1>;
 				fsl,cpm-command = <0x90>;
 			};
+
+			smc2: serial@a90 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+				reg = <0xa90 0x10 0x3f80 0x40>;
+				interrupts = <3>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0xd0>;
+			};
+
+			scc1: serial@a00 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa00 0x20 0x3c00 0x80>;
+				interrupts = <30>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x00>;
+			};
+
+			scc2: serial@a20 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa20 0x20 0x3d00 0x80>;
+				interrupts = <29>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0x40>;
+			};
+
+			scc3: serial@a40 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <4>;
+				fsl,cpm-command = <0x80>;
+			};
+
+			scc4: serial@a60 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa60 0x20 0x3f00 0x80>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <4>;
+				fsl,cpm-command = <0xc0>;
+			};
+
 			spi: spi@a80 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -536,7 +649,8 @@
 					 &CPM1_PIO_C 14 1	/* POT2 */
 					 &CPM1_PIO_C 4 1	/* SICOFI */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
-					 &FPGA_CS0 0 1>;	/* FPGA Radio */					 
+					 &FPGA_CS0 0 1		/* FPGA Radio */					 
+					 &FPGA_CS1 0 1>;	/* FPGA Mezz */					 
 				pot1@0 {
 					compatible = "cs,mcr3000-pot1";
 					spi-max-frequency = <1000000>;
@@ -585,17 +699,19 @@
 				};
 				fpga-loader@7 {
 					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <10000000>;
+					spi-max-frequency = <2000000>;
 					reg = <7>;
 					spi-cs-high;
 					loader = "base";
 				};
-/*				mezz@8 {
-					compatible = "s3k,mcr3000-fpga-mezz-loader";
+				mezz@8 {
+					compatible = "s3k,mcr3000-fpga-loader";
 					spi-max-frequency = <1000000>;
+					reg = <8>;
 					spi-cs-high;
+					loader = "mezz";
 				};
-*/				
+				
 			};
 		};
 	};
