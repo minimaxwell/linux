@@ -210,6 +210,23 @@
 				fsl,cpm-brg = <1>;
 				fsl,cpm-command = <0x90>;
 			};
+			spi: spi@a80 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				cell-index = <0>;
+				compatible = "fsl,spi", "fsl,cpm1-spi";
+				reg = <0xa80 0x30 0x1d80 0x30>;
+				interrupts = <5>;
+				interrupt-parent = <&CPM_PIC>;
+				mode = "cpu";
+				gpios = <&CPM1_PIO_B 21 1>;	/* EEPROM */
+				eeprom@0 {
+					compatible = "atmel,at25080", "cs,eeprom";
+					spi-max-frequency = <1000000>;
+					reg = <0>;
+					spi-cs-high;
+				};
+			};
 		};
 	};
 

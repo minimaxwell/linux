@@ -593,16 +593,6 @@
 				fsl,cpm-command = <0xd0>;
 			};
 
-			scc1: serial@a00 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
-				reg = <0xa00 0x20 0x3c00 0x80>;
-				interrupts = <30>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <2>;
-				fsl,cpm-command = <0x00>;
-			};
-
 			scc2: serial@a20 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
@@ -645,12 +635,13 @@
 				gpios = <&CPM1_PIO_C 13 1	/* POT1 */
 					 &CPM1_PIO_B 23 1	/* TEMP MCR */
 					 &CPM1_PIO_C 8 1	/* ARCOFI */
-					 &CPM1_PIO_C 12 1	/* EEPROM */
+					 &CPM1_PIO_C 12 1	/* EEPROM MCR3000 2G*/
 					 &CPM1_PIO_C 14 1	/* POT2 */
 					 &CPM1_PIO_C 4 1	/* SICOFI */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
-					 &FPGA_CS0 0 1		/* FPGA Radio */					 
-					 &FPGA_CS1 0 1>;	/* FPGA Mezz */					 
+					 &FPGA_CS0 0 1		/* FPGA Radio */
+					 &FPGA_CS1 0 1		/* FPGA Mezz */
+					 &CPM1_PIO_B 21 1>;	/* EEPROM CMPC885 */
 				pot1@0 {
 					compatible = "cs,mcr3000-pot1";
 					spi-max-frequency = <1000000>;
@@ -672,7 +663,7 @@
 					spi-troll;
 				};
 				eeprom@3 {
-					compatible = "cs,at25", "cs,eeprom";
+					compatible = "atmel,at25080", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <3>;
 					spi-cs-high;
@@ -710,6 +701,12 @@
 					reg = <8>;
 					spi-cs-high;
 					loader = "mezz";
+				};
+				eeprom@9 {
+					compatible = "atmel,at25080", "cs,eeprom";
+					spi-max-frequency = <1000000>;
+					reg = <9>;
+					spi-cs-high;
 				};
 				
 			};
