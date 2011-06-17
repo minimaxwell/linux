@@ -49,6 +49,7 @@ struct fpga_cs_data {
 	spinlock_t fpga_cs_lock;
 	int prog, init;
 	int prog_state;
+	int start;
 };
 
 static int fpga_cs_get(struct gpio_chip *gc, unsigned int gpio)
@@ -74,6 +75,7 @@ static void fpga_cs_set(struct gpio_chip *gc, unsigned int gpio, int val)
 		if (val == 0) {
 			int i;
 			
+			data->start = 0;
 			gpio_set_value(data->prog, 0);
 			i=0;
 			while (gpio_get_value(data->init)) {
@@ -90,6 +92,9 @@ static void fpga_cs_set(struct gpio_chip *gc, unsigned int gpio, int val)
 					break;
 				}
 			}
+		}
+		else if (data->start) {
+			gpio_set_value(data->prog, 0);
 		}
 	}
 	
@@ -130,7 +135,8 @@ static int __devinit fpga_cs_probe(struct of_device *ofdev, const struct of_devi
 		goto err;
 	}
 	dev_set_drvdata(dev, data);
-	
+
+	data->start = 1;	
 	if (ngpios<2) {
 		dev_err(dev,"missing GPIO definition in device tree\n");
 		ret = -EINVAL;
