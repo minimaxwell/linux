@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux kernel version: 2.6.35.11
-# Mon Jun  6 12:13:51 2011
+# Linux kernel version: 2.6.35.13
+# Fri Jun 17 18:08:04 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -196,6 +196,7 @@ CONFIG_MODVERSIONS=y
 # CONFIG_PPC_CELL is not set
 # CONFIG_PPC_CELL_NATIVE is not set
 CONFIG_CPM1=y
+CONFIG_SAF3000=y
 # CONFIG_MPC8XXFADS is not set
 # CONFIG_MPC86XADS is not set
 # CONFIG_MOD885 is not set
@@ -825,7 +826,6 @@ CONFIG_SENSORS_LM70=y
 # CONFIG_SENSORS_VT1211 is not set
 # CONFIG_SENSORS_W83627HF is not set
 # CONFIG_SENSORS_W83627EHF is not set
-# CONFIG_SENSORS_LIS3_SPI is not set
 CONFIG_THERMAL=y
 # CONFIG_THERMAL_HWMON is not set
 CONFIG_WATCHDOG=y
@@ -867,7 +867,6 @@ CONFIG_MFD_SUPPORT=y
 #
 # CONFIG_DISPLAY_SUPPORT is not set
 # CONFIG_SOUND is not set
-# CONFIG_HID_SUPPORT is not set
 # CONFIG_USB_SUPPORT is not set
 # CONFIG_MMC is not set
 # CONFIG_MEMSTICK is not set
@@ -879,10 +878,10 @@ CONFIG_MFD_SUPPORT=y
 # CONFIG_AUXDISPLAY is not set
 # CONFIG_UIO is not set
 # CONFIG_STAGING is not set
-CONFIG_MCR3000_PLATFORM_DEVICES=y
+CONFIG_SAF3000_PLATFORM_DEVICES=y
 CONFIG_FPGA_LOADER=y
-CONFIG_MCR3000_CPLD=y
 CONFIG_OPX_GPIO=y
+CONFIG_MCR3000_CPLD=y
 
 #
 # File systems

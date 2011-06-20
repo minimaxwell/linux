@@ -5,6 +5,9 @@ config CPM1
 	bool
 	select CPM
 
+config SAF3000
+	bool
+
 choice
 	prompt "8xx Machine Type"
 	depends on PPC_8xx
@@ -27,6 +30,7 @@ config MOD885
 	bool "MOD885"
 	select DEFAULT_UIMAGE
 	select CPM1
+	select SAF3000
 	help
 	  MOD885 platform based on MPC885 CPU.
 
@@ -34,6 +38,7 @@ config MCR3000
 	bool "MCR3000"
 	select DEFAULT_UIMAGE
 	select CPM1
+	select SAF3000
 	help
 	  MCR3000 platform based on MPC866 CPU.
 

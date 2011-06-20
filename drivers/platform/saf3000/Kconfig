@@ -2,17 +2,17 @@
 # MCR3000 Platform Specific Drivers
 #
 
-menuconfig MCR3000_PLATFORM_DEVICES
-	bool "MCR3000 Platform Specific Device Drivers"
+menuconfig SAF3000_PLATFORM_DEVICES
+	bool "SAF3000 Platform Specific Device Drivers"
 	default y
 	---help---
-	  Say Y here to get to see options for device drivers for MCR3000
+	  Say Y here to get to see options for device drivers for SAF3000
 	  platform.
 	  This option alone does not add any kernel code.
 
 	  If you say N, all options in this submenu will be skipped and disabled.
 
-if MCR3000_PLATFORM_DEVICES
+if SAF3000_PLATFORM_DEVICES
 
 config FPGA_LOADER
 	tristate "FPGA loader"
@@ -24,6 +24,14 @@ config FPGA_LOADER
 	  Module de chargement du code FPGA. Permet de charger le uCOR FPGA
 	  au demarrage
 
+config OPX_GPIO
+	bool "GPIO driver for OPx PINs on MPC8xx"
+	depends on GPIOLIB
+	depends on OF_GPIO
+	default y
+	---help---
+	  Driver GPIO pour les Outputs OPx du MPC8xx
+
 if MCR3000
 config MCR3000_CPLD
 	bool "CPLD ChipSelect SPI"
@@ -32,13 +40,6 @@ config MCR3000_CPLD
 	default y
 	---help---
 	  Driver GPIO pour les ChipSelects SPI
-
-config OPX_GPIO
-	bool "GPIO driver for OPx PINs on MPC8xx"
-	depends on GPIOLIB
-	depends on OF_GPIO
-	default y
-	---help---
-	  Driver GPIO pour les Outputs OPx du MPC8xx
 endif
+
 endif

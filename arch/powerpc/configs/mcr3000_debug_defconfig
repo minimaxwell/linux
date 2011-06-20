@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux kernel version: 2.6.35.11
-# Mon Mar 14 03:14:43 2011
+# Linux kernel version: 2.6.35.13
+# Fri Jun 17 18:09:52 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -197,6 +197,7 @@ CONFIG_MODVERSIONS=y
 # CONFIG_PPC_CELL is not set
 # CONFIG_PPC_CELL_NATIVE is not set
 CONFIG_CPM1=y
+CONFIG_SAF3000=y
 # CONFIG_MPC8XXFADS is not set
 # CONFIG_MPC86XADS is not set
 # CONFIG_MOD885 is not set
@@ -878,10 +879,10 @@ CONFIG_MFD_SUPPORT=y
 # CONFIG_AUXDISPLAY is not set
 # CONFIG_UIO is not set
 # CONFIG_STAGING is not set
-CONFIG_MCR3000_PLATFORM_DEVICES=y
+CONFIG_SAF3000_PLATFORM_DEVICES=y
 CONFIG_FPGA_LOADER=y
-CONFIG_MCR3000_CPLD=y
 CONFIG_OPX_GPIO=y
+CONFIG_MCR3000_CPLD=y
 
 #
 # File systems
