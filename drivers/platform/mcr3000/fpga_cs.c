@@ -148,7 +148,7 @@ static int __devinit fpga_cs_probe(struct of_device *ofdev, const struct of_devi
 		dev_err(dev, "can't request gpio PROG: err %d\n", ret);
 		goto err_free;
 	}
-	ret = gpio_direction_output(data->prog, 1);
+	ret = gpio_direction_output(data->prog, 0);
 	if (ret) {
 		dev_err(dev, "can't set direction for PROG: %d\n", ret);
 		goto err_gpio;
