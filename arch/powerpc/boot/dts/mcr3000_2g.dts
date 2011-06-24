@@ -579,18 +579,8 @@
 				reg = <0xa80 0x10 0x3e80 0x40>;
 				interrupts = <4>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <1>;
+				fsl,cpm-brg = <4>;
 				fsl,cpm-command = <0x90>;
-			};
-
-			smc2: serial@a90 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
-				reg = <0xa90 0x10 0x3f80 0x40>;
-				interrupts = <3>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <2>;
-				fsl,cpm-command = <0xd0>;
 			};
 
 			scc2: serial@a20 {
@@ -599,7 +589,7 @@
 				reg = <0xa20 0x20 0x3d00 0x80>;
 				interrupts = <29>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>;
+				fsl,cpm-brg = <1>;
 				fsl,cpm-command = <0x40>;
 			};
 
@@ -609,7 +599,7 @@
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <4>;
+				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
 			};
 
@@ -619,8 +609,18 @@
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <4>;
+				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
+			};
+
+			smc2: serial@a90 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+				reg = <0xa90 0x10 0x3f80 0x40>;
+				interrupts = <3>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
+				fsl,cpm-command = <0xd0>;
 			};
 
 			spi: spi@a80 {
