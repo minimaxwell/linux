@@ -242,7 +242,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	if (!data->version) {
 		dev_err(dev,"of_iomap failed\n");
 		ret = -ENOMEM;
-		goto err;
+		goto err_gpios;
 	}
 	data->mcrid = of_iomap(np, 1);
 	
