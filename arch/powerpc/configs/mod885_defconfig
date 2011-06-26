@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.13
-# Fri Jun 17 18:11:53 2011
+# Wed Jun 22 10:14:56 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -1009,6 +1009,7 @@ CONFIG_MFD_SUPPORT=y
 CONFIG_SAF3000_PLATFORM_DEVICES=y
 CONFIG_FPGA_LOADER=y
 CONFIG_OPX_GPIO=y
+CONFIG_FPGAF_INFO=y
 
 #
 # File systems

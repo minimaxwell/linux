@@ -42,4 +42,12 @@ config MCR3000_CPLD
 	  Driver GPIO pour les ChipSelects SPI
 endif
 
+if MOD885
+config FPGAF_INFO
+	tristate "Infos FPGAF"
+	default y
+	---help---
+	  Driver pour recuperer dans /sys les infos FPGA Firmware
+endif
+
 endif
