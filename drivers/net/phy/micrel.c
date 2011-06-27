@@ -12,7 +12,8 @@
  * Free Software Foundation;  either version 2 of the  License, or (at your
  * option) any later version.
  *
- * Support : ksz9021 , vsc8201, ks8001
+ * Support : ksz9021 1000/100/10 phy from Micrel
+ *		ks8001, ks8737, ks8721, ks8041, ks8051 100/10 phy
  */
 
 #include <linux/kernel.h>
@@ -59,11 +60,14 @@ static struct phy_driver ksz9021_driver = {
 	.phy_id		= PHY_ID_KSZ9021,
 	.phy_id_mask	= 0x000fff10,
 	.name		= "Micrel KSZ9021 Gigabit PHY",
-	.features	= PHY_GBIT_FEATURES | SUPPORTED_Pause,
-	.flags		= PHY_POLL,
+	.features	= (PHY_GBIT_FEATURES | SUPPORTED_Pause
+				| SUPPORTED_Asym_Pause),
+	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
 	.config_init	= kszphy_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= genphy_read_status,
+	.ack_interrupt	= kszphy_ack_interrupt,
+	.config_intr	= ksz9021_config_intr,
 	.driver		= { .owner = THIS_MODULE, },
 };
 
