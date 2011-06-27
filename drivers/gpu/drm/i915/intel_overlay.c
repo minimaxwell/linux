@@ -958,7 +958,7 @@ static int check_overlay_src(struct drm_device *dev,
 	    || rec->src_width < N_HORIZ_Y_TAPS*4)
 		return -EINVAL;
 
-	/* check alignment constraints */
+	/* check alingment constrains */
 	switch (rec->flags & I915_OVERLAY_TYPE_MASK) {
 		case I915_OVERLAY_RGB:
 			/* not implemented */
@@ -990,10 +990,7 @@ static int check_overlay_src(struct drm_device *dev,
 		return -EINVAL;
 
 	/* stride checking */
-	if (IS_I830(dev) || IS_845G(dev))
-		stride_mask = 255;
-	else
-		stride_mask = 63;
+	stride_mask = 63;
 
 	if (rec->stride_Y & stride_mask || rec->stride_UV & stride_mask)
 		return -EINVAL;
@@ -1364,12 +1361,6 @@ void intel_setup_overlay(struct drm_device *dev)
                         goto out_free_bo;
                 }
 		overlay->flip_addr = overlay->reg_bo->gtt_offset;
-
-		ret = i915_gem_object_set_to_gtt_domain(reg_bo, true);
-		if (ret) {
-                        DRM_ERROR("failed to move overlay register bo into the GTT\n");
-                        goto out_unpin_bo;
-                }
 	} else {
 		ret = i915_gem_attach_phys_object(dev, reg_bo,
 				I915_GEM_PHYS_OVERLAY_REGS);
@@ -1401,8 +1392,6 @@ void intel_setup_overlay(struct drm_device *dev)
 	DRM_INFO("initialized overlay support\n");
 	return;
 
-out_unpin_bo:
-	i915_gem_object_unpin(reg_bo);
 out_free_bo:
 	drm_gem_object_unreference(reg_bo);
 out_free:

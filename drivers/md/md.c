@@ -441,9 +441,6 @@ static mddev_t * mddev_find(dev_t unit)
 {
 	mddev_t *mddev, *new = NULL;
 
-	if (unit && MAJOR(unit) != MD_MAJOR)
-		unit &= ~((1<<MdpMinorShift)-1);
-
  retry:
 	spin_lock(&all_mddevs_lock);
 
@@ -535,17 +532,13 @@ static void mddev_unlock(mddev_t * mddev)
 		 * an access to the files will try to take reconfig_mutex
 		 * while holding the file unremovable, which leads to
 		 * a deadlock.
-		 * So hold set sysfs_active while the remove in happeing,
-		 * and anything else which might set ->to_remove or my
-		 * otherwise change the sysfs namespace will fail with
-		 * -EBUSY if sysfs_active is still set.
-		 * We set sysfs_active under reconfig_mutex and elsewhere
-		 * test it under the same mutex to ensure its correct value
-		 * is seen.
+		 * So hold open_mutex instead - we are allowed to take
+		 * it while holding reconfig_mutex, and md_run can
+		 * use it to wait for the remove to complete.
 		 */
 		struct attribute_group *to_remove = mddev->to_remove;
 		mddev->to_remove = NULL;
-		mddev->sysfs_active = 1;
+		mutex_lock(&mddev->open_mutex);
 		mutex_unlock(&mddev->reconfig_mutex);
 
 		if (to_remove != &md_redundancy_group)
@@ -557,7 +550,7 @@ static void mddev_unlock(mddev_t * mddev)
 				sysfs_put(mddev->sysfs_action);
 			mddev->sysfs_action = NULL;
 		}
-		mddev->sysfs_active = 0;
+		mutex_unlock(&mddev->open_mutex);
 	} else
 		mutex_unlock(&mddev->reconfig_mutex);
 
@@ -1281,7 +1274,7 @@ super_90_rdev_size_change(mdk_rdev_t *rdev, sector_t num_sectors)
 	md_super_write(rdev->mddev, rdev, rdev->sb_start, rdev->sb_size,
 		       rdev->sb_page);
 	md_super_wait(rdev->mddev);
-	return num_sectors;
+	return num_sectors / 2; /* kB for sysfs */
 }
 
 
@@ -1647,7 +1640,7 @@ super_1_rdev_size_change(mdk_rdev_t *rdev, sector_t num_sectors)
 	md_super_write(rdev->mddev, rdev, rdev->sb_start, rdev->sb_size,
 		       rdev->sb_page);
 	md_super_wait(rdev->mddev);
-	return num_sectors;
+	return num_sectors / 2; /* kB for sysfs */
 }
 
 static struct super_type super_types[] = {
@@ -2967,9 +2960,7 @@ level_store(mddev_t *mddev, const char *buf, size_t len)
 	 *  - new personality will access other array.
 	 */
 
-	if (mddev->sync_thread ||
-	    mddev->reshape_position != MaxSector ||
-	    mddev->sysfs_active)
+	if (mddev->sync_thread || mddev->reshape_position != MaxSector)
 		return -EBUSY;
 
 	if (!mddev->pers->quiesce) {
@@ -4251,6 +4242,9 @@ static int md_alloc(dev_t dev, char *name)
 		goto abort;
 	mddev->queue->queuedata = mddev;
 
+	/* Can be unlocked because the queue is new: no concurrency */
+	queue_flag_set_unlocked(QUEUE_FLAG_CLUSTER, mddev->queue);
+
 	blk_queue_make_request(mddev->queue, md_make_request);
 
 	disk = alloc_disk(1 << shift);
@@ -4350,9 +4344,13 @@ static int md_run(mddev_t *mddev)
 
 	if (mddev->pers)
 		return -EBUSY;
-	/* Cannot run until previous stop completes properly */
-	if (mddev->sysfs_active)
-		return -EBUSY;
+
+	/* These two calls synchronise us with the
+	 * sysfs_remove_group calls in mddev_unlock,
+	 * so they must have completed.
+	 */
+	mutex_lock(&mddev->open_mutex);
+	mutex_unlock(&mddev->open_mutex);
 
 	/*
 	 * Analyze all RAID superblock(s)
@@ -4550,7 +4548,6 @@ static int do_md_run(mddev_t *mddev)
 
 	set_capacity(mddev->gendisk, mddev->array_sectors);
 	revalidate_disk(mddev->gendisk);
-	mddev->changed = 1;
 	kobject_uevent(&disk_to_dev(mddev->gendisk)->kobj, KOBJ_CHANGE);
 out:
 	return err;
@@ -4639,7 +4636,6 @@ static void md_clean(mddev_t *mddev)
 	mddev->sync_speed_min = mddev->sync_speed_max = 0;
 	mddev->recovery = 0;
 	mddev->in_sync = 0;
-	mddev->changed = 0;
 	mddev->degraded = 0;
 	mddev->barriers_work = 0;
 	mddev->safemode = 0;
@@ -4715,13 +4711,12 @@ out:
  */
 static int do_md_stop(mddev_t * mddev, int mode, int is_open)
 {
-	int err = 0, revalidate = 0;
+	int err = 0;
 	struct gendisk *disk = mddev->gendisk;
 	mdk_rdev_t *rdev;
 
 	mutex_lock(&mddev->open_mutex);
-	if (atomic_read(&mddev->openers) > is_open ||
-	    mddev->sysfs_active) {
+	if (atomic_read(&mddev->openers) > is_open) {
 		printk("md: %s still in use.\n",mdname(mddev));
 		err = -EBUSY;
 	} else if (mddev->pers) {
@@ -4745,8 +4740,7 @@ static int do_md_stop(mddev_t * mddev, int mode, int is_open)
 			}
 
 		set_capacity(disk, 0);
-		revalidate = 1;
-		mddev->changed = 1;
+		revalidate_disk(disk);
 
 		if (mddev->ro)
 			mddev->ro = 0;
@@ -4754,8 +4748,6 @@ static int do_md_stop(mddev_t * mddev, int mode, int is_open)
 		err = 0;
 	}
 	mutex_unlock(&mddev->open_mutex);
-	if (revalidate)
-		revalidate_disk(disk);
 	if (err)
 		return err;
 	/*
@@ -5112,21 +5104,17 @@ static int add_new_disk(mddev_t * mddev, mdu_disk_info_t *info)
 				PTR_ERR(rdev));
 			return PTR_ERR(rdev);
 		}
-		/* set saved_raid_disk if appropriate */
+		/* set save_raid_disk if appropriate */
 		if (!mddev->persistent) {
 			if (info->state & (1<<MD_DISK_SYNC)  &&
-			    info->raid_disk < mddev->raid_disks) {
+			    info->raid_disk < mddev->raid_disks)
 				rdev->raid_disk = info->raid_disk;
-				set_bit(In_sync, &rdev->flags);
-			} else
+			else
 				rdev->raid_disk = -1;
 		} else
 			super_types[mddev->major_version].
 				validate_super(mddev, rdev);
-		if (test_bit(In_sync, &rdev->flags))
-			rdev->saved_raid_disk = rdev->raid_disk;
-		else
-			rdev->saved_raid_disk = -1;
+		rdev->saved_raid_disk = rdev->raid_disk;
 
 		clear_bit(In_sync, &rdev->flags); /* just to be sure */
 		if (info->state & (1<<MD_DISK_WRITEMOSTLY))
@@ -5933,7 +5921,7 @@ static int md_open(struct block_device *bdev, fmode_t mode)
 	atomic_inc(&mddev->openers);
 	mutex_unlock(&mddev->open_mutex);
 
-	check_disk_change(bdev);
+	check_disk_size_change(mddev->gendisk, bdev);
  out:
 	return err;
 }
@@ -5948,21 +5936,6 @@ static int md_release(struct gendisk *disk, fmode_t mode)
 
 	return 0;
 }
-
-static int md_media_changed(struct gendisk *disk)
-{
-	mddev_t *mddev = disk->private_data;
-
-	return mddev->changed;
-}
-
-static int md_revalidate(struct gendisk *disk)
-{
-	mddev_t *mddev = disk->private_data;
-
-	mddev->changed = 0;
-	return 0;
-}
 static const struct block_device_operations md_fops =
 {
 	.owner		= THIS_MODULE,
@@ -5973,8 +5946,6 @@ static const struct block_device_operations md_fops =
 	.compat_ioctl	= md_compat_ioctl,
 #endif
 	.getgeo		= md_getgeo,
-	.media_changed  = md_media_changed,
-	.revalidate_disk= md_revalidate,
 };
 
 static int md_thread(void * arg)
@@ -6010,8 +5981,9 @@ static int md_thread(void * arg)
 			 || kthread_should_stop(),
 			 thread->timeout);
 
-		if (test_and_clear_bit(THREAD_WAKEUP, &thread->flags))
-			thread->run(thread->mddev);
+		clear_bit(THREAD_WAKEUP, &thread->flags);
+
+		thread->run(thread->mddev);
 	}
 
 	return 0;

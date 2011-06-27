@@ -3668,8 +3668,6 @@ static int ext4_end_io_nolock(ext4_io_end_t *io)
 		return ret;
 	}
 
-	if (io->iocb)
-		aio_complete(io->iocb, io->result, 0);
 	/* clear the DIO AIO unwritten flag */
 	io->flag = 0;
 	return ret;
@@ -3769,8 +3767,6 @@ static ext4_io_end_t *ext4_init_io_end (struct inode *inode, gfp_t flags)
 		io->offset = 0;
 		io->size = 0;
 		io->page = NULL;
-		io->iocb = NULL;
-		io->result = 0;
 		INIT_WORK(&io->work, ext4_end_io_work);
 		INIT_LIST_HEAD(&io->list);
 	}
@@ -3779,8 +3775,7 @@ static ext4_io_end_t *ext4_init_io_end (struct inode *inode, gfp_t flags)
 }
 
 static void ext4_end_io_dio(struct kiocb *iocb, loff_t offset,
-			    ssize_t size, void *private, int ret,
-			    bool is_async)
+			    ssize_t size, void *private)
 {
         ext4_io_end_t *io_end = iocb->private;
 	struct workqueue_struct *wq;
@@ -3789,7 +3784,7 @@ static void ext4_end_io_dio(struct kiocb *iocb, loff_t offset,
 
 	/* if not async direct IO or dio with 0 bytes write, just return */
 	if (!io_end || !size)
-		goto out;
+		return;
 
 	ext_debug("ext4_end_io_dio(): io_end 0x%p"
 		  "for inode %lu, iocb 0x%p, offset %llu, size %llu\n",
@@ -3800,18 +3795,12 @@ static void ext4_end_io_dio(struct kiocb *iocb, loff_t offset,
 	if (io_end->flag != EXT4_IO_UNWRITTEN){
 		ext4_free_io_end(io_end);
 		iocb->private = NULL;
-out:
-		if (is_async)
-			aio_complete(iocb, ret, 0);
 		return;
 	}
 
 	io_end->offset = offset;
 	io_end->size = size;
-	if (is_async) {
-		io_end->iocb = iocb;
-		io_end->result = ret;
-	}
+	io_end->flag = EXT4_IO_UNWRITTEN;
 	wq = EXT4_SB(io_end->inode->i_sb)->dio_unwritten_wq;
 
 	/* queue the work to convert unwritten extents to written */
@@ -5593,12 +5582,13 @@ static int ext4_indirect_trans_blocks(struct inode *inode, int nrblocks,
 	/* if nrblocks are contiguous */
 	if (chunk) {
 		/*
-		 * With N contiguous data blocks, we need at most
-		 * N/EXT4_ADDR_PER_BLOCK(inode->i_sb) + 1 indirect blocks,
-		 * 2 dindirect blocks, and 1 tindirect block
+		 * With N contiguous data blocks, it need at most
+		 * N/EXT4_ADDR_PER_BLOCK(inode->i_sb) indirect blocks
+		 * 2 dindirect blocks
+		 * 1 tindirect block
 		 */
-		return DIV_ROUND_UP(nrblocks,
-				    EXT4_ADDR_PER_BLOCK(inode->i_sb)) + 4;
+		indirects = nrblocks / EXT4_ADDR_PER_BLOCK(inode->i_sb);
+		return indirects + 3;
 	}
 	/*
 	 * if nrblocks are not contiguous, worse case, each block touch

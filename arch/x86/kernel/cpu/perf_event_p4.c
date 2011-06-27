@@ -457,8 +457,6 @@ static int p4_hw_config(struct perf_event *event)
 		event->hw.config |= event->attr.config &
 			(p4_config_pack_escr(P4_ESCR_MASK_HT) |
 			 p4_config_pack_cccr(P4_CCCR_MASK_HT));
-
-		event->hw.config &= ~P4_CCCR_FORCE_OVF;
 	}
 
 	rc = x86_setup_perfctr(event);
@@ -583,7 +581,6 @@ static int p4_pmu_handle_irq(struct pt_regs *regs)
 	cpuc = &__get_cpu_var(cpu_hw_events);
 
 	for (idx = 0; idx < x86_pmu.num_counters; idx++) {
-		int overflow;
 
 		if (!test_bit(idx, cpuc->active_mask))
 			continue;
@@ -594,13 +591,11 @@ static int p4_pmu_handle_irq(struct pt_regs *regs)
 		WARN_ON_ONCE(hwc->idx != idx);
 
 		/* it might be unflagged overflow */
-		overflow = p4_pmu_clear_cccr_ovf(hwc);
+		handled = p4_pmu_clear_cccr_ovf(hwc);
 
 		val = x86_perf_event_update(event);
-		if (!overflow && (val & (1ULL << (x86_pmu.cntval_bits - 1))))
+		if (!handled && (val & (1ULL << (x86_pmu.cntval_bits - 1))))
 			continue;
-
-		handled += overflow;
 
 		/* event overflow for sure */
 		data.period = event->hw.last_period;
@@ -617,7 +612,7 @@ static int p4_pmu_handle_irq(struct pt_regs *regs)
 		inc_irq_stat(apic_perf_irqs);
 	}
 
-	return handled > 0;
+	return handled;
 }
 
 /*

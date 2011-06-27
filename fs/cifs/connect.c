@@ -1647,6 +1647,9 @@ cifs_get_smb_ses(struct TCP_Server_Info *server, struct smb_vol *volume_info)
 	if (ses) {
 		cFYI(1, "Existing smb sess found (status=%d)", ses->status);
 
+		/* existing SMB ses has a server reference already */
+		cifs_put_tcp_session(server);
+
 		mutex_lock(&ses->session_mutex);
 		rc = cifs_negotiate_protocol(xid, ses);
 		if (rc) {
@@ -1669,9 +1672,6 @@ cifs_get_smb_ses(struct TCP_Server_Info *server, struct smb_vol *volume_info)
 			}
 		}
 		mutex_unlock(&ses->session_mutex);
-
-		/* existing SMB ses has a server reference already */
-		cifs_put_tcp_session(server);
 		FreeXid(xid);
 		return ses;
 	}
@@ -2606,7 +2606,7 @@ try_mount_again:
 
 remote_path_check:
 	/* check if a whole path (including prepath) is not remote */
-	if (!rc && tcon) {
+	if (!rc && cifs_sb->prepathlen && tcon) {
 		/* build_path_to_root works only when we have a valid tcon */
 		full_path = cifs_build_path_to_root(cifs_sb);
 		if (full_path == NULL) {

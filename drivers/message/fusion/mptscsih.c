@@ -1848,9 +1848,8 @@ mptscsih_abort(struct scsi_cmnd * SCpnt)
 	}
 
  out:
-	printk(MYIOC_s_INFO_FMT "task abort: %s (rv=%04x) (sc=%p) (sn=%ld)\n",
-	    ioc->name, ((retval == SUCCESS) ? "SUCCESS" : "FAILED"), retval,
-	    SCpnt, SCpnt->serial_number);
+	printk(MYIOC_s_INFO_FMT "task abort: %s (sc=%p)\n",
+	    ioc->name, ((retval == SUCCESS) ? "SUCCESS" : "FAILED"), SCpnt);
 
 	return retval;
 }
@@ -1887,7 +1886,7 @@ mptscsih_dev_reset(struct scsi_cmnd * SCpnt)
 
 	vdevice = SCpnt->device->hostdata;
 	if (!vdevice || !vdevice->vtarget) {
-		retval = 0;
+		retval = SUCCESS;
 		goto out;
 	}
 
@@ -2459,8 +2458,6 @@ mptscsih_slave_configure(struct scsi_device *sdev)
 		"tagged %d, simple %d, ordered %d\n",
 		ioc->name,sdev->tagged_supported, sdev->simple_tags,
 		sdev->ordered_tags));
-
-	blk_queue_dma_alignment (sdev->request_queue, 512 - 1);
 
 	return 0;
 }

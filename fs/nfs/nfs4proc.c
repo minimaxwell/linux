@@ -255,6 +255,9 @@ static int nfs4_handle_exception(const struct nfs_server *server, int errorcode,
 			nfs4_state_mark_reclaim_nograce(clp, state);
 			goto do_state_recovery;
 		case -NFS4ERR_STALE_STATEID:
+			if (state == NULL)
+				break;
+			nfs4_state_mark_reclaim_reboot(clp, state);
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_EXPIRED:
 			goto do_state_recovery;
@@ -1099,7 +1102,6 @@ static int nfs4_open_recover(struct nfs4_opendata *opendata, struct nfs4_state *
 	clear_bit(NFS_DELEGATED_STATE, &state->flags);
 	smp_rmb();
 	if (state->n_rdwr != 0) {
-		clear_bit(NFS_O_RDWR_STATE, &state->flags);
 		ret = nfs4_open_recover_helper(opendata, FMODE_READ|FMODE_WRITE, &newstate);
 		if (ret != 0)
 			return ret;
@@ -1107,7 +1109,6 @@ static int nfs4_open_recover(struct nfs4_opendata *opendata, struct nfs4_state *
 			return -ESTALE;
 	}
 	if (state->n_wronly != 0) {
-		clear_bit(NFS_O_WRONLY_STATE, &state->flags);
 		ret = nfs4_open_recover_helper(opendata, FMODE_WRITE, &newstate);
 		if (ret != 0)
 			return ret;
@@ -1115,7 +1116,6 @@ static int nfs4_open_recover(struct nfs4_opendata *opendata, struct nfs4_state *
 			return -ESTALE;
 	}
 	if (state->n_rdonly != 0) {
-		clear_bit(NFS_O_RDONLY_STATE, &state->flags);
 		ret = nfs4_open_recover_helper(opendata, FMODE_READ, &newstate);
 		if (ret != 0)
 			return ret;
@@ -2023,8 +2023,7 @@ nfs4_atomic_open(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 	struct rpc_cred *cred;
 	struct nfs4_state *state;
 	struct dentry *res;
-	int open_flags = nd->intent.open.flags;
-	fmode_t fmode = open_flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
+	fmode_t fmode = nd->intent.open.flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
 
 	if (nd->flags & LOOKUP_CREATE) {
 		attr.ia_mode = nd->intent.open.create_mode;
@@ -2032,9 +2031,8 @@ nfs4_atomic_open(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 		if (!IS_POSIXACL(dir))
 			attr.ia_mode &= ~current_umask();
 	} else {
-		open_flags &= ~O_EXCL;
 		attr.ia_valid = 0;
-		BUG_ON(open_flags & O_CREAT);
+		BUG_ON(nd->intent.open.flags & O_CREAT);
 	}
 
 	cred = rpc_lookup_cred();
@@ -2043,7 +2041,7 @@ nfs4_atomic_open(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 	parent = dentry->d_parent;
 	/* Protect against concurrent sillydeletes */
 	nfs_block_sillyrename(parent);
-	state = nfs4_do_open(dir, &path, fmode, open_flags, &attr, cred);
+	state = nfs4_do_open(dir, &path, fmode, nd->intent.open.flags, &attr, cred);
 	put_rpccred(cred);
 	if (IS_ERR(state)) {
 		if (PTR_ERR(state) == -ENOENT) {
@@ -3479,6 +3477,9 @@ _nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 			nfs4_state_mark_reclaim_nograce(clp, state);
 			goto do_state_recovery;
 		case -NFS4ERR_STALE_STATEID:
+			if (state == NULL)
+				break;
+			nfs4_state_mark_reclaim_reboot(clp, state);
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_EXPIRED:
 			goto do_state_recovery;

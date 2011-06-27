@@ -125,10 +125,6 @@ struct mddev_s
 	int				suspended;
 	atomic_t			active_io;
 	int				ro;
-	int				sysfs_active; /* set when sysfs deletes
-						       * are happening, so run/
-						       * takeover/stop are not safe
-						       */
 
 	struct gendisk			*gendisk;
 
@@ -250,8 +246,6 @@ struct mddev_s
 	atomic_t			active;		/* general refcount */
 	atomic_t			openers;	/* number of active opens */
 
-	int				changed;	/* True if we might need to
-							 * reread partition info */
 	int				degraded;	/* whether md should consider
 							 * adding a spare
 							 */

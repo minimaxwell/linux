@@ -1775,8 +1775,6 @@ extern void netif_carrier_on(struct net_device *dev);
 
 extern void netif_carrier_off(struct net_device *dev);
 
-extern void netif_notify_peers(struct net_device *dev);
-
 /**
  *	netif_dormant_on - mark device as dormant.
  *	@dev: network device
@@ -2343,10 +2341,6 @@ do {								\
 	0;							\
 })
 #endif
-
-#define MODULE_ALIAS_NETDEV(device) \
-	MODULE_ALIAS("netdev-" device)
-
 
 #endif /* __KERNEL__ */
 

@@ -825,28 +825,10 @@ static int make_request(mddev_t *mddev, struct bio * bio)
 		 */
 		bp = bio_split(bio,
 			       chunk_sects - (bio->bi_sector & (chunk_sects - 1)) );
-
-		/* Each of these 'make_request' calls will call 'wait_barrier'.
-		 * If the first succeeds but the second blocks due to the resync
-		 * thread raising the barrier, we will deadlock because the
-		 * IO to the underlying device will be queued in generic_make_request
-		 * and will never complete, so will never reduce nr_pending.
-		 * So increment nr_waiting here so no new raise_barriers will
-		 * succeed, and so the second wait_barrier cannot block.
-		 */
-		spin_lock_irq(&conf->resync_lock);
-		conf->nr_waiting++;
-		spin_unlock_irq(&conf->resync_lock);
-
 		if (make_request(mddev, &bp->bio1))
 			generic_make_request(&bp->bio1);
 		if (make_request(mddev, &bp->bio2))
 			generic_make_request(&bp->bio2);
-
-		spin_lock_irq(&conf->resync_lock);
-		conf->nr_waiting--;
-		wake_up(&conf->wait_barrier);
-		spin_unlock_irq(&conf->resync_lock);
 
 		bio_pair_release(bp);
 		return 0;
@@ -2393,13 +2375,13 @@ static int run(mddev_t *mddev)
 	return 0;
 
 out_free_conf:
-	md_unregister_thread(mddev->thread);
 	if (conf->r10bio_pool)
 		mempool_destroy(conf->r10bio_pool);
 	safe_put_page(conf->tmppage);
 	kfree(conf->mirrors);
 	kfree(conf);
 	mddev->private = NULL;
+	md_unregister_thread(mddev->thread);
 out:
 	return -EIO;
 }

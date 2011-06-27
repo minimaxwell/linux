@@ -3,8 +3,8 @@ CROSS_COMPILE = ppc-linux-
 VERSION = 2
 PATCHLEVEL = 6
 SUBLEVEL = 35
-EXTRAVERSION = .13
-NAME = Yokohama
+EXTRAVERSION =
+NAME = Sheep on Meth
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
