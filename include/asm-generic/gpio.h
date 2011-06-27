@@ -109,6 +109,17 @@ struct gpio_chip {
 	const char		*const *names;
 	unsigned		can_sleep:1;
 	unsigned		exported:1;
+
+#if defined(CONFIG_OF_GPIO)
+	/*
+	 * If CONFIG_OF is enabled, then all GPIO controllers described in the
+	 * device tree automatically may have an OF translation
+	 */
+	struct device_node *of_node;
+	int of_gpio_n_cells;
+	int (*of_xlate)(struct gpio_chip *gc, struct device_node *np,
+		        const void *gpio_spec, u32 *flags);
+#endif
 };
 
 extern const char *gpiochip_is_requested(struct gpio_chip *chip,
@@ -118,6 +129,9 @@ extern int __must_check gpiochip_reserve(int start, int ngpio);
 /* add/remove chips */
 extern int gpiochip_add(struct gpio_chip *chip);
 extern int __must_check gpiochip_remove(struct gpio_chip *chip);
+extern struct gpio_chip *gpiochip_find(void *data,
+					int (*match)(struct gpio_chip *chip,
+						     void *data));
 
 
 /* Always use the library code for GPIO management calls,
