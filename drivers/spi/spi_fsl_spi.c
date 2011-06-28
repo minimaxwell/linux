@@ -522,8 +522,8 @@ static void fsl_spi_do_one_msg(struct spi_message *m)
 	if (spi->mode & SPI_TROLL) {
 		struct spi_transfer t= {.len=1,.tx_buf = "", .bits_per_word = 4};
 
-		status = mpc8xxx_spi_setup_transfer(spi, &t);
-		status = mpc8xxx_spi_bufs(spi, &t, 0);
+		status = fsl_spi_setup_transfer(spi, &t);
+		status = fsl_spi_bufs(spi, &t, 0);
 	}
 
 	fsl_spi_setup_transfer(spi, NULL);
