@@ -129,7 +129,7 @@ int mpc8xxx_spi_probe(struct device *dev, struct resource *mem,
 
 	/* the spi->mode bits understood by this driver: */
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH
-			| SPI_LSB_FIRST | SPI_LOOP;
+			| SPI_LSB_FIRST | SPI_LOOP | SPI_TROLL;
 
 	master->transfer = mpc8xxx_spi_transfer;
 	master->cleanup = mpc8xxx_spi_cleanup;

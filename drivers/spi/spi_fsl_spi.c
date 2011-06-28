@@ -519,6 +519,13 @@ static void fsl_spi_do_one_msg(struct spi_message *m)
 		fsl_spi_chipselect(spi, BITBANG_CS_INACTIVE);
 	}
 
+	if (spi->mode & SPI_TROLL) {
+		struct spi_transfer t= {.len=1,.tx_buf = "", .bits_per_word = 4};
+
+		status = mpc8xxx_spi_setup_transfer(spi, &t);
+		status = mpc8xxx_spi_bufs(spi, &t, 0);
+	}
+
 	fsl_spi_setup_transfer(spi, NULL);
 }
 
@@ -706,7 +713,7 @@ static unsigned long fsl_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 	if (!iprop || size != sizeof(*iprop) * 4)
 		return -ENOMEM;
 
-	spi_base_ofs = cpm_muram_alloc_fixed(iprop[2], 2);
+	spi_base_ofs = iprop[2];
 	if (IS_ERR_VALUE(spi_base_ofs))
 		return -ENOMEM;
 
@@ -728,7 +735,6 @@ static unsigned long fsl_spi_cpm_get_pram(struct mpc8xxx_spi *mspi)
 			return spi_base_ofs;
 	}
 
-	cpm_muram_free(spi_base_ofs);
 	return pram_ofs;
 }
 
