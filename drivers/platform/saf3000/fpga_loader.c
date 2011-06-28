@@ -202,7 +202,7 @@ static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *a
 }
 static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
 
-static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit fpga_probe(struct platform_device *ofdev, const struct of_device_id *match)
 {
 	int ret;
 	int idx;
@@ -294,7 +294,7 @@ err:
 	return ret;
 }
 
-static int fpga_remove(struct of_device *ofdev)
+static int fpga_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);

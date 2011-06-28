@@ -11,6 +11,7 @@
 #include <linux/irq.h>
 #include <linux/of.h>
 #include <linux/of_gpio.h>
+#include <linux/proc_fs.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>

@@ -82,10 +82,9 @@ static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit cpld_csspi_probe(struct platform_device *ofdev, const struct of_device_id *match)
 {
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
@@ -95,11 +94,9 @@ static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_d
 	spin_lock_init(&cpld_csspi_lock);
 
 	mm_gc = &cpld_csspi_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = cpld_csspi_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 8;
 	gc->direction_input = cpld_csspi_dir_in;
 	gc->direction_output = cpld_csspi_dir_out;
@@ -109,7 +106,7 @@ static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_d
 	return of_mm_gpiochip_add(np, mm_gc);
 }
 
-static int __devexit cpld_csspi_remove(struct of_device *ofdev)
+static int __devexit cpld_csspi_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	

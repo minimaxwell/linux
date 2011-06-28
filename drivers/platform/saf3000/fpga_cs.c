@@ -111,10 +111,9 @@ static void fpga_cs_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit fpga_cs_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit fpga_cs_probe(struct platform_device *ofdev, const struct of_device_id *match)
 {
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
@@ -174,11 +173,9 @@ static int __devinit fpga_cs_probe(struct of_device *ofdev, const struct of_devi
 	spin_lock_init(&data->fpga_cs_lock);
 
 	mm_gc = &data->mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = fpga_cs_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 2;
 	gc->direction_input = fpga_cs_dir_in;
 	gc->direction_output = fpga_cs_dir_out;
@@ -198,7 +195,7 @@ err:
 	return ret;
 }
 
-static int __devexit fpga_cs_remove(struct of_device *ofdev)
+static int __devexit fpga_cs_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpga_cs_data *data = dev_get_drvdata(dev);

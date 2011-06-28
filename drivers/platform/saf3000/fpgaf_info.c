@@ -84,7 +84,7 @@ static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *a
 }
 static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
 
-static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit fpgaf_info_probe(struct platform_device *ofdev, const struct of_device_id *match)
 {
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
@@ -137,7 +137,7 @@ err:
 	return ret;
 }
 
-static int __devexit fpgaf_info_remove(struct of_device *ofdev)
+static int __devexit fpgaf_info_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);

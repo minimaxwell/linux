@@ -98,10 +98,9 @@ static void opx_gpio_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit opx_gpio_probe(struct platform_device *ofdev, const struct of_device_id *match)
 {
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
@@ -111,11 +110,9 @@ static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_dev
 	spin_lock_init(&opx_gpio_lock);
 
 	mm_gc = &opx_gpio_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = opx_gpio_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 4;
 	gc->direction_input = opx_gpio_dir_in;
 	gc->direction_output = opx_gpio_dir_out;
@@ -125,7 +122,7 @@ static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_dev
 	return of_mm_gpiochip_add(np, mm_gc);
 }
 
-static int __devexit opx_gpio_remove(struct of_device *ofdev)
+static int __devexit opx_gpio_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	

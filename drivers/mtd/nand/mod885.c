@@ -141,7 +141,7 @@ const char *part_probes[] = { "cmdlinepart", NULL };
 /*
  * mod885_remove
  */
-static int __devexit mod885_remove(struct of_device *ofdev)
+static int __devexit mod885_remove(struct platform_device *ofdev)
 {
 	struct mod885_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
@@ -163,7 +163,7 @@ static int __devexit mod885_remove(struct of_device *ofdev)
 /*
  * mod885_probe
  */
-static int __devinit mod885_probe(struct of_device *ofdev, const struct of_device_id *ofid)
+static int __devinit mod885_probe(struct platform_device *ofdev, const struct of_device_id *ofid)
 {
 	struct mod885_host *host;
 	struct mtd_info *mtd;

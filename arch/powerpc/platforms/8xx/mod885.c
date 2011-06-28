@@ -6,6 +6,7 @@
 
 #include <linux/init.h>
 #include <linux/of_platform.h>
+#include <linux/proc_fs.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>
