@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.13
-# Fri Jun 17 18:08:04 2011
+# Thu Jun 30 10:54:34 2011
 #
 # CONFIG_PPC64 is not set
 
@@ -629,7 +629,7 @@ CONFIG_SCSI_MOD=y
 # CONFIG_MACINTOSH_DRIVERS is not set
 CONFIG_NETDEVICES=y
 # CONFIG_DUMMY is not set
-# CONFIG_BONDING is not set
+CONFIG_BONDING=y
 # CONFIG_MACVLAN is not set
 # CONFIG_EQUALIZER is not set
 # CONFIG_TUN is not set
