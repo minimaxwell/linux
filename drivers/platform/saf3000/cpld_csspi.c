@@ -82,13 +82,19 @@ static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit cpld_csspi_probe(struct platform_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id cpld_csspi_match[];
+static int __devinit cpld_csspi_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct of_mm_gpio_chip *mm_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 
+	match = of_match_device(cpld_csspi_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	dev_info(dev,"driver for MCR3000 CPLD ChipSelects initialised\n");
 	
 	spin_lock_init(&cpld_csspi_lock);
@@ -122,7 +128,7 @@ static const struct of_device_id cpld_csspi_match[] = {
 };
 MODULE_DEVICE_TABLE(of, cpld_csspi_match);
 
-static struct of_platform_driver cpld_csspi_driver = {
+static struct platform_driver cpld_csspi_driver = {
 	.probe		= cpld_csspi_probe,
 	.remove		= __devexit_p(cpld_csspi_remove),
 	.driver		= {
@@ -134,7 +140,7 @@ static struct of_platform_driver cpld_csspi_driver = {
 
 static int __init cpld_csspi_init(void)
 {
-	return of_register_platform_driver(&cpld_csspi_driver);
+	return platform_driver_register(&cpld_csspi_driver);
 }
 subsys_initcall(cpld_csspi_init);
 

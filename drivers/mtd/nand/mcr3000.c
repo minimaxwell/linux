@@ -161,7 +161,7 @@ static int __devexit mcr3000_remove(struct platform_device *ofdev)
 /*
  * mcr3000_probe
  */
-static int __devinit mcr3000_probe(struct platform_device *ofdev, const struct of_device_id *ofid)
+static int __devinit mcr3000_probe(struct platform_device *ofdev)
 {
 	struct mcr3000_host *host;
 	struct mtd_info *mtd;
@@ -327,7 +327,7 @@ MODULE_DEVICE_TABLE(of, mcr3000_match);
 /*
  * driver device registration
  */
-static struct of_platform_driver mcr3000_driver = {
+static struct platform_driver mcr3000_driver = {
 	.probe		= mcr3000_probe,
 	.remove		= __devexit_p(mcr3000_remove),
 	.driver		=
@@ -343,7 +343,7 @@ static struct of_platform_driver mcr3000_driver = {
  */
 int __init mcr3000_init (void)
 {
-	return of_register_platform_driver(&mcr3000_driver);
+	return platform_driver_register(&mcr3000_driver);
 }
 
 /*
@@ -351,7 +351,7 @@ int __init mcr3000_init (void)
  */
 static void __exit mcr3000_cleanup(void)
 {
-	of_unregister_platform_driver(&mcr3000_driver);
+	platform_driver_unregister(&mcr3000_driver);
 }
 
 module_init(mcr3000_init);

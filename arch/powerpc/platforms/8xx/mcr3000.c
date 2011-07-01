@@ -124,26 +124,26 @@ static void __init init_ioports(void)
 static u16 __iomem *cpld_pic_reg;
 static struct irq_host *cpld_pic_host;
 
-static void cpld_mask_irq(unsigned int irq)
+static void cpld_mask_irq(struct irq_data *d)
 {
 }
 
-static void cpld_unmask_irq(unsigned int irq)
+static void cpld_unmask_irq(struct irq_data *d)
 {
 }
 
-static void cpld_end_irq(unsigned int irq)
+static void cpld_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irq_map[d->irq].hwirq;
 
 	clrbits16(cpld_pic_reg, 1<<(15-vec));
 }
 
 static struct irq_chip cpld_pic = {
 	.name = "CPLD PIC",
-	.mask = cpld_mask_irq,
-	.unmask = cpld_unmask_irq,
-	.eoi = cpld_end_irq,
+	.irq_mask = cpld_mask_irq,
+	.irq_unmask = cpld_unmask_irq,
+	.irq_eoi = cpld_end_irq,
 };
 
 int cpld_get_irq(void)
@@ -164,8 +164,8 @@ static int cpld_pic_host_map(struct irq_host *h, unsigned int virq,
 {
 	pr_debug("cpld_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
-	irq_to_desc(virq)->status |= IRQ_LEVEL;
-	set_irq_chip_and_handler(virq, &cpld_pic, handle_fasteoi_irq);
+	irq_set_status_flags(virq, IRQ_LEVEL);
+	irq_set_chip_and_handler(virq, &cpld_pic, handle_fasteoi_irq);
 	return 0;
 }
 
@@ -218,14 +218,17 @@ end:
 static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
 {
 	int cascade_irq;
+	struct irq_chip *chip;
 
 	if ((cascade_irq = cpld_get_irq()) >= 0) {
 		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
 
 		generic_handle_irq(cascade_irq);
-		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+		chip = irq_desc_get_chip(cdesc);
+		if (chip->irq_eoi) chip->irq_eoi(&cdesc->irq_data);
 	}
-	if (desc->chip->eoi) desc->chip->eoi(irq);
+	chip = irq_desc_get_chip(desc);
+	if (chip->irq_eoi) chip->irq_eoi(&desc->irq_data);
 }
 
 /*
@@ -240,7 +243,7 @@ void __init mcr3000_pics_init(void)
 	
 	irq = cpld_pic_init();
 	if (irq != NO_IRQ)
-		set_irq_chained_handler(irq, cpld_cascade);
+		irq_set_chained_handler(irq, cpld_cascade);
 }
 
 static int __init mpc8xx_early_ping_watchdog(void)

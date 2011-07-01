@@ -197,7 +197,7 @@ static int __init declare_of_platform_devices(void)
 			pr_info("MCR3000_2G declare_of_platform_devices()\n");
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
-				set_irq_chained_handler(irq, fpgaf_cascade);
+				irq_set_chained_handler(irq, fpgaf_cascade);
 			mpc8xx_early_ping_watchdog();
 			proc_mkdir("s3k",0);
 			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");

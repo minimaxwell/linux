@@ -34,26 +34,26 @@
 static u16 __iomem *fpgaf_pic_reg;
 static struct irq_host *fpgaf_pic_host;
 
-static void fpgaf_mask_irq(unsigned int irq)
+static void fpgaf_mask_irq(struct irq_data *d)
 {
 }
 
-static void fpgaf_unmask_irq(unsigned int irq)
+static void fpgaf_unmask_irq(struct irq_data *d)
 {
 }
 
-static void fpgaf_end_irq(unsigned int irq)
+static void fpgaf_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irq_map[d->irq].hwirq;
 
 	clrbits16(fpgaf_pic_reg, 1<<(15-vec));
 }
 
 static struct irq_chip fpgaf_pic = {
 	.name = "FPGAF PIC",
-	.mask = fpgaf_mask_irq,
-	.unmask = fpgaf_unmask_irq,
-	.eoi = fpgaf_end_irq,
+	.irq_mask = fpgaf_mask_irq,
+	.irq_unmask = fpgaf_unmask_irq,
+	.irq_eoi = fpgaf_end_irq,
 };
 
 int fpgaf_get_irq(void)
@@ -73,8 +73,8 @@ static int fpgaf_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_numb
 {
 	pr_debug("fpgaf_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
-	irq_to_desc(virq)->status |= IRQ_LEVEL;
-	set_irq_chip_and_handler(virq, &fpgaf_pic, handle_fasteoi_irq);
+	irq_set_status_flags(virq, IRQ_LEVEL);
+	irq_set_chip_and_handler(virq, &fpgaf_pic, handle_fasteoi_irq);
 	return 0;
 }
 
@@ -127,14 +127,17 @@ end:
 void fpgaf_cascade(unsigned int irq, struct irq_desc *desc)
 {
 	int cascade_irq;
+	struct irq_chip *chip;
 
 	if ((cascade_irq = fpgaf_get_irq()) >= 0) {
 		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
 
 		generic_handle_irq(cascade_irq);
-		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+		chip = irq_desc_get_chip(cdesc);
+		if (chip->irq_eoi) chip->irq_eoi(&cdesc->irq_data);
 	}
-	if (desc->chip->eoi) desc->chip->eoi(irq);
+	chip = irq_desc_get_chip(desc);
+	if (chip->irq_eoi) chip->irq_eoi(&desc->irq_data);
 }
 
 /*

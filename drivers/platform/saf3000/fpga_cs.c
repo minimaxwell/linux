@@ -228,7 +228,7 @@ static struct of_platform_driver fpga_cs_driver = {
 
 static int __init fpga_cs_init(void)
 {
-	return of_register_platform_driver(&fpga_cs_driver);
+	return platform_driver_register(&fpga_cs_driver);
 }
 subsys_initcall(fpga_cs_init);
 

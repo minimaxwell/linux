@@ -163,7 +163,7 @@ static int __devexit mod885_remove(struct platform_device *ofdev)
 /*
  * mod885_probe
  */
-static int __devinit mod885_probe(struct platform_device *ofdev, const struct of_device_id *ofid)
+static int __devinit mod885_probe(struct platform_device *ofdev)
 {
 	struct mod885_host *host;
 	struct mtd_info *mtd;
@@ -330,7 +330,7 @@ MODULE_DEVICE_TABLE(of, mod885_match);
 /*
  * driver device registration
  */
-static struct of_platform_driver mod885_driver = {
+static struct platform_driver mod885_driver = {
 	.probe		= mod885_probe,
 	.remove		= __devexit_p(mod885_remove),
 	.driver		=
@@ -346,7 +346,7 @@ static struct of_platform_driver mod885_driver = {
  */
 int __init mod885_init (void)
 {
-	return of_register_platform_driver(&mod885_driver);
+	return platform_driver_register(&mod885_driver);
 }
 
 /*
@@ -354,7 +354,7 @@ int __init mod885_init (void)
  */
 static void __exit mod885_cleanup(void)
 {
-	of_unregister_platform_driver(&mod885_driver);
+	platform_driver_unregister(&mod885_driver);
 }
 
 module_init(mod885_init);

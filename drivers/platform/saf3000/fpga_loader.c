@@ -202,16 +202,18 @@ static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *a
 }
 static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
 
-static int __devinit fpga_probe(struct platform_device *ofdev, const struct of_device_id *match)
+static int __devinit fpga_probe(struct platform_device *ofdev)
 {
 	int ret;
 	int idx;
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	int ngpios = of_gpio_count(np);
 	struct fpga_data *data;
 	int dir[NB_GPIO]=DIR_GPIO;
 
+	match = of_match_device(ofdev->dev.driver->of_match_table, &ofdev->dev);
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
@@ -326,7 +328,7 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 	struct device *dev = &spi->dev;
 	struct device_node *np = dev->of_node;
 	struct of_device_id *pfpga_match;
-	struct of_platform_driver *pfpga_driver;
+	struct platform_driver *pfpga_driver;
 	const void *prop;
 	int l;
 	int ret;
@@ -356,7 +358,7 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 	pfpga_driver->driver.owner = THIS_MODULE;
 	pfpga_driver->driver.of_match_table	= pfpga_match;
 
-	ret = of_register_platform_driver(pfpga_driver);
+	ret = platform_driver_register(pfpga_driver);
 	
 	if (ret) {
 		goto err3;
@@ -376,9 +378,9 @@ err1:
 static int __devexit fpga_spi_remove(struct spi_device *spi)
 {
 	struct device *dev = &spi->dev;
-	struct of_platform_driver *pfpga_driver = dev_get_drvdata(dev);
+	struct platform_driver *pfpga_driver = dev_get_drvdata(dev);
 
-	of_unregister_platform_driver(pfpga_driver);
+	platform_driver_unregister(pfpga_driver);
 	kfree(pfpga_driver->driver.of_match_table);
 	kfree(pfpga_driver);
 	return 0;
