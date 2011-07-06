@@ -106,11 +106,13 @@ static void __init init_ioports(void)
 		cpm1_set_pin(pin->port, pin->pin, pin->flags);
 	}
 
-	cpm1_clk_setup(CPM_CLK_SMC1, CPM_BRG1, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC1, CPM_BRG2, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG3, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG4, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG1, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG2, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG3, CPM_CLK_RTX);
+	/* cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX); */
+	cpm1_clk_setup(CPM_CLK_SMC2, CPM_BRG3, CPM_CLK_RTX); /* Normalement SMC2 est clocké par un BRG dans le FPGA via CLK5 */
+	
+	cpm1_clk_setup(CPM_CLK_SMC1, CPM_BRG4, CPM_CLK_RTX);
 	
 	/* Set FEC1 and FEC2 to MII mode */
 	/*clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);*/
