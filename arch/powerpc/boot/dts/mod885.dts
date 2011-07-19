@@ -113,6 +113,8 @@
 			#size-cells = <0>;
 
 			PHY1: ethernet-phy@1 {
+				interrupts = <2 1>;
+				interrupt-parent = <&PIC>;
 				reg = <0x1>;
 				device_type = "ethernet-phy";
 			};
