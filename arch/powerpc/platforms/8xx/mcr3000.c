@@ -134,7 +134,7 @@ static void cpld_unmask_irq(struct irq_data *d)
 
 static void cpld_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[d->irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	clrbits16(cpld_pic_reg, 1<<(15-vec));
 }
@@ -201,7 +201,7 @@ static int cpld_pic_init(void)
 		goto end;
 
 	/* Initialize the CPLD interrupt controller. */
-	hwirq = (unsigned int)irq_map[irq].hwirq;
+	hwirq = (unsigned int)virq_to_hw(irq);
 
 	cpld_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &cpld_pic_host_ops, 16);
 	if (cpld_pic_host == NULL) {

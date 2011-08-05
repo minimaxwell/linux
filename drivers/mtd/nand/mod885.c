@@ -65,13 +65,11 @@ struct mod885_host
 /*
  * Define partitions for flash device
  */
-#ifdef CONFIG_MTD_PARTITIONS
 static struct mtd_partition partition_info[] = {
 	{.name		= "System",
 	 .size		= (MTDPART_SIZ_FULL),
 	 .offset	= (MTDPART_OFS_APPEND)}
 };
-#endif		//#ifdef CONFIG_MTD_PARTITIONS
 
 #define NUM_PARTITIONS 1
 
@@ -133,9 +131,7 @@ static int mod885_device_ready(struct mtd_info *mtd)
 	return (0);
 }
 
-#ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
-#endif
 
 
 /*
@@ -270,21 +266,19 @@ static int __devinit mod885_probe(struct platform_device *ofdev)
 		goto GPIO_ERROR;
 	}
 
-#ifdef CONFIG_MTD_PARTITIONS
 	num_partitions = parse_mtd_partitions(mtd, part_probes, &partitions, 0);
 	if (num_partitions < 0) {
 		dev_err(&ofdev->dev, "partitions undeclared\n");
 		res = num_partitions;
 		goto PARTITION_ERROR;
 	}
-#endif
 	if (num_partitions == 0) {
 		partitions 	= partition_info;
 		num_partitions 	= NUM_PARTITIONS;
 		dev_notice(&ofdev->dev, "Using static partition definition\n");
 	}
 	
-	if (add_mtd_partitions(mtd, partitions, num_partitions)) {
+	if (mtd_device_register(mtd, partitions, num_partitions)) {
 		dev_err(&ofdev->dev, "unable to add mtd partition\n");
 		res = -EINVAL;
 		goto PARTITION_ERROR;

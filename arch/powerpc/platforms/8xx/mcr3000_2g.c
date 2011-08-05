@@ -44,7 +44,7 @@ static void fpgaf_unmask_irq(struct irq_data *d)
 
 static void fpgaf_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[d->irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	clrbits16(fpgaf_pic_reg, 1<<(15-vec));
 }
@@ -110,7 +110,7 @@ int fpgaf_pic_init(void)
 		goto end;
 
 	/* Initialize the FPGAF interrupt controller. */
-	hwirq = (unsigned int)irq_map[irq].hwirq;
+	hwirq = (unsigned int)virq_to_hw(irq);
 
 	fpgaf_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &fpgaf_pic_host_ops, 16);
 	if (fpgaf_pic_host == NULL) {
