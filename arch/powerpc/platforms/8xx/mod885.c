@@ -204,7 +204,9 @@ static int __init declare_of_platform_devices(void)
 			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			of_platform_bus_probe(NULL, of_bus_ids, NULL);
 			fpgaf_init_platform_devices();
-
+/*			fpga_clk_init();
+			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
+*/
 		/* MOD885 configuration by default */
 		} else {
 			pr_info("MOD885 declare_of_platform_devices()\n");
