@@ -18,6 +18,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/phy.h>
+#include <linux/mii.h>
 
 /* #define DEBUG_MICREL 1 */
 
@@ -29,59 +30,34 @@
 /*
  * Register declaration
  */
-#define MII_BC_ADDR 		0x00		/* Basic Control Register */
-#define MII_BC_RESET		0x8000		/* 1=software reset, 0=normal operation */
-#define MII_BC_LOOP		0x4000		/* 1=loop back mode, 0=normal operation */
-#define MII_BC_SPEED		0x2000		/* 1=100Mbps, 0=10Mbps (ignored if auto-nego is enabled) */
-#define MII_BC_ANEG		0x1000		/* 1=enable auto-nego, 0=disable auto-nego */
-#define MII_BC_PDOWN		0x0800		/* 1=power down mode, 0=normal operation */
-#define MII_BC_ISOLATE		0x0400		/* 1=electrical isolation, 0=normal operation */
-#define MII_BC_RE_ANEG		0x0200		/* 1=restart auto-nego, 0=normal operation */
-#define MII_BC_DUPLEX		0x0100		/* 1=full duplex, 0=half duplex */
-#define MII_BC_COLLISION	0x0080		/* 1=enable collision test, 0=disable collision test */
-#define MII_BC_TRANSMITTER	0x0001		/* 1=disable transmitter, 0=enable transmitter */
+#define MII_MICREL_ICS		0x1b		/* Interrupt Control/Status Register */
 
-#define MII_BS_ADDR		0x01		/* Basic Status Register */
-#define MII_BS_T4		0x8000		/* 1=T4 capable, 0=not T4 capable */
-#define MII_BS_100FD		0x4000		/* 1=100Mbps full duplex capable, 0=not 100Mbps full duplex capable */
-#define MII_BS_100HD		0x2000		/* 1=100Mbps half duplex capable, 0=not 100Mbps half duplex capable */
-#define MII_BS_10FD		0x1000		/* 1=10Mbps full duplex capable, 0=not 10Mbps full duplex capable */
-#define MII_BS_10HD		0x0800		/* 1=10Mbps half duplex capable, 0=not 10Mbps half duplex capable */
-#define MII_BS_PREAMBLE		0x0040		/* 1=preamble suppression, 0=normale preamble */
-#define MII_BS_ANEG_COMP	0x0020		/* 1=auto-nego process completed, 0=auto-nego process not completed */
-#define MII_BS_REMOTE		0x0010		/* 1=remote fault, 0=no remote fault */
-#define MII_BS_ANEG_ABLE	0x0008		/* 1=capable to perform auto-nego, 0=not capable to perform auto-nego */
-#define MII_BS_LINK_STAT	0x0004		/* 1=link is up, 0=link is down */
-#define MII_BS_JABBER_DET	0x0002		/* 1=jabber detected, 0=jabber not detected */
-#define MII_BS_EXT_CAPA		0x0001		/* 1=supports extended capabilities registers, 0=not supports */
-
-#define MII_ICS_ADDR		0x1b		/* Interrupt Control/Status Register */
-#define MII_ICS_JABBER_EN	0x8000		/* 1=enable jabber interrupt, 0=disable jabber interrupt */
-#define MII_ICS_RX_ERR_EN	0x4000		/* 1=enable receive error interrupt, 0=disable receive error interrupt */
-#define MII_ICS_PAGE_RX_EN	0x2000		/* 1=enable page receive interrupt, 0=disable page receive interrupt */
-#define MII_ICS_PA_FAULT_EN	0x1000		/* 1=enable parallel detect fault interrupt, 0=disable parallel detect fault interrupt */
-#define MII_ICS_LINK_ACK_EN	0x0800		/* 1=enable link partner ack interrupt, 0=disable link partner ack interrupt */
-#define MII_ICS_LINK_DOWN_EN	0x0400		/* 1=enable link down interrupt, 0=disable link down interrupt */
-#define MII_ICS_REMOTE_EN	0x0200		/* 1=enable remote fault interrupt, 0=disable remote fault interrupt */
-#define MII_ICS_LINK_UP_EN	0x0100		/* 1=enable link up interrupt, 0=disable link up interrupt */
-#define MII_ICS_JABBER		0x0080		/* 1=jabber occured, 0=jabber did not occured */
-#define MII_ICS_RX_ERR		0x0040		/* 1=receive error occured, 0=receive error did not occured */
-#define MII_ICS_PAGE_RX		0x0020		/* 1=page receive occured, 0=page receive did not occured */
-#define MII_ICS_PA_FAULT	0x0010		/* 1=parallel detect fault occured, 0=parallel detect fault did not occured */
-#define MII_ICS_LINK_ACK	0x0008		/* 1=link partner acknowledge occured, 0=link partner acknowledge did not occured */
-#define MII_ICS_LINK_DOWN	0x0004		/* 1=link down occured, 0=link down did not occured */
-#define MII_ICS_REMOTE		0x0002		/* 1=remote fault occured, 0=remote fault did not occured */
-#define MII_ICS_LINK_UP		0x0001		/* 1=link up occured, 0=link up did not occured */
+#define ICS_JABBER_EN	0x8000		/* 1=enable jabber interrupt, 0=disable jabber interrupt */
+#define ICS_RX_ERR_EN	0x4000		/* 1=enable receive error interrupt, 0=disable receive error interrupt */
+#define ICS_PAGE_RX_EN	0x2000		/* 1=enable page receive interrupt, 0=disable page receive interrupt */
+#define ICS_PA_FAULT_EN	0x1000		/* 1=enable parallel detect fault interrupt, 0=disable parallel detect fault interrupt */
+#define ICS_LINK_ACK_EN	0x0800		/* 1=enable link partner ack interrupt, 0=disable link partner ack interrupt */
+#define ICS_LINK_DOWN_EN	0x0400		/* 1=enable link down interrupt, 0=disable link down interrupt */
+#define ICS_REMOTE_EN	0x0200		/* 1=enable remote fault interrupt, 0=disable remote fault interrupt */
+#define ICS_LINK_UP_EN	0x0100		/* 1=enable link up interrupt, 0=disable link up interrupt */
+#define ICS_JABBER		0x0080		/* 1=jabber occured, 0=jabber did not occured */
+#define ICS_RX_ERR		0x0040		/* 1=receive error occured, 0=receive error did not occured */
+#define ICS_PAGE_RX		0x0020		/* 1=page receive occured, 0=page receive did not occured */
+#define ICS_PA_FAULT	0x0010		/* 1=parallel detect fault occured, 0=parallel detect fault did not occured */
+#define ICS_LINK_ACK	0x0008		/* 1=link partner acknowledge occured, 0=link partner acknowledge did not occured */
+#define ICS_LINK_DOWN	0x0004		/* 1=link down occured, 0=link down did not occured */
+#define ICS_REMOTE		0x0002		/* 1=remote fault occured, 0=remote fault did not occured */
+#define ICS_LINK_UP		0x0001		/* 1=link up occured, 0=link up did not occured */
 
 static int kszphy_config_init(struct phy_device *phydev)
 {
-	int rc = phy_read(phydev, MII_BC_ADDR);
+	int rc = phy_read(phydev, MII_BMCR);
 	if (rc < 0) return rc;
 	#ifdef DEBUG_MICREL
 	printk("PHY%d control reg read 0x%04x\n", phydev->addr, rc);
 	#endif
 	
-	rc = phy_read(phydev, MII_BS_ADDR);
+	rc = phy_read(phydev, MII_BMSR);
 	if (rc < 0) return rc;
 	#ifdef DEBUG_MICREL
 	printk("PHY%d status reg read 0x%04x\n", phydev->addr, rc);
@@ -92,14 +68,14 @@ static int kszphy_config_init(struct phy_device *phydev)
 
 static int kszphy_phy_ack_interrupt(struct phy_device *phydev)
 {
-	int rc = phy_read(phydev, MII_ICS_ADDR);
+	int rc = phy_read(phydev, MII_MICREL_ICS);
 	if (rc < 0) return rc;
 	#ifdef DEBUG_MICREL
 	printk("PHY%d ICS 0x%04x\n", phydev->addr, rc);
-	rc = phy_read(phydev, MII_BC_ADDR);
+	rc = phy_read(phydev, MII_BMCR);
 	if (rc < 0) return rc;
 	printk("PHY%d control reg read 0x%04x\n", phydev->addr, rc);
-	rc = phy_read(phydev, MII_BS_ADDR);
+	rc = phy_read(phydev, MII_BMSR);
 	if (rc < 0) return rc;
 	printk("PHY%d status reg read 0x%04x\n", phydev->addr, rc);
 	#endif
@@ -108,9 +84,9 @@ static int kszphy_phy_ack_interrupt(struct phy_device *phydev)
 
 static int kszphy_phy_config_intr(struct phy_device *phydev)
 {
-	int rc = phy_read(phydev, MII_ICS_ADDR);
+	int rc = phy_read(phydev, MII_MICREL_ICS);
 	if (rc < 0) return rc;
-	rc = phy_write(phydev, MII_ICS_ADDR, rc | MII_ICS_LINK_UP_EN | MII_ICS_LINK_DOWN_EN);
+	rc = phy_write(phydev, MII_MICREL_ICS, rc | ICS_LINK_UP_EN | ICS_LINK_DOWN_EN);
 	return 0;
 }
 
