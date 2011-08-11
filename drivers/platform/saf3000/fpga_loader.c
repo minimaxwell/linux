@@ -134,10 +134,10 @@ static ssize_t fs_attr_status_show(struct device *dev, struct device_attribute *
 	int ret=0;
 
 	switch (data->status) {
-	case STATUS_WAITING: ret=sprintf(buf, "waiting\n"); break;
-	case STATUS_LOADING: ret=sprintf(buf, "loading\n"); break;
-	case STATUS_LOADED: ret=sprintf(buf, "loaded\n"); break;
-	case STATUS_NOTLOADED: ret=sprintf(buf, "not loaded\n"); break;
+	case STATUS_WAITING: ret=snprintf(buf, PAGE_SIZE, "waiting\n"); break;
+	case STATUS_LOADING: ret=snprintf(buf, PAGE_SIZE, "loading\n"); break;
+	case STATUS_LOADED: ret=snprintf(buf, PAGE_SIZE, "loaded\n"); break;
+	case STATUS_NOTLOADED: ret=snprintf(buf, PAGE_SIZE, "not loaded\n"); break;
 	}
 	return ret;
 }
@@ -164,8 +164,8 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 	u8 version = *data->version;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%X.%X\n",(version>>4)&0xf, version&0xf):
-			sprintf(buf,"-.-\n");
+			snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf):
+			snprintf(buf, PAGE_SIZE, "-.-\n");
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
@@ -175,8 +175,8 @@ static ssize_t fs_attr_num_show(struct device *dev, struct device_attribute *att
 	u8 id = *data->mcrid;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",id):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",id):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(num, S_IRUGO, fs_attr_num_show, NULL);
 
@@ -186,8 +186,8 @@ static ssize_t fs_attr_chassis_show(struct device *dev, struct device_attribute 
 	u8 id = *data->mcrid;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",(id>>4)&0xf):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",(id>>4)&0xf):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(chassis, S_IRUGO, fs_attr_chassis_show, NULL);
 
@@ -197,8 +197,8 @@ static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *a
 	u8 id = *data->mcrid;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",(id>>0)&0xf):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",(id>>0)&0xf):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
 

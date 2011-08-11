@@ -53,7 +53,7 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	u8 version = *data->version;
 	
-	return sprintf(buf,"%X.%X\n",(version>>4)&0xf, version&0xf);
+	return snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf);
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
@@ -62,7 +62,7 @@ static ssize_t fs_attr_num_show(struct device *dev, struct device_attribute *att
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	u8 id = *data->mcrid;
 	
-	return sprintf(buf,"%d\n",id);
+	return snprintf(buf, PAGE_SIZE, "%d\n",id);
 }
 static DEVICE_ATTR(num, S_IRUGO, fs_attr_num_show, NULL);
 
@@ -71,7 +71,7 @@ static ssize_t fs_attr_chassis_show(struct device *dev, struct device_attribute 
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	u8 id = *data->mcrid;
 	
-	return sprintf(buf,"%d\n",(id>>4)&0xf);
+	return snprintf(buf, PAGE_SIZE, "%d\n",(id>>4)&0xf);
 }
 static DEVICE_ATTR(chassis, S_IRUGO, fs_attr_chassis_show, NULL);
 
@@ -80,7 +80,7 @@ static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *a
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	u8 id = *data->mcrid;
 	
-	return sprintf(buf,"%d\n",(id>>0)&0xf);
+	return snprintf(buf, PAGE_SIZE, "%d\n",(id>>0)&0xf);
 }
 static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
 
