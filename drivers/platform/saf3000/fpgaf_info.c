@@ -38,60 +38,101 @@
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <sysdev/fsl_soc.h>
+#include <saf3000/saf3000.h>
 
 /*
  * driver FPGAF INFO
  */
+ 
+struct fpgaf {
+	u16 ident;
+	u16 version;
+	u16 res1[6];
+	u16 reset;
+	u16 res2[7];
+	u16 it_mask;
+	u16 it_pend;
+	u16 it_ack;
+	u16 it_ctr;
+	u16 res3[4];
+	u16 alrm_in;
+	u16 alrm_out;
+	u16 res4[6];
+	u16 fonc_gen;
+	u16 addr;
+	u16 res5[6];
+	u16 pll_ctr;
+	u16 pll_status;
+	u16 pll_src;
+	u16 res6[5];
+	u16 net_ref;
+	u16 etat_ref;
+	u16 res7[6];
+	u16 syn_h110;
+	u16 res8[7];
+	u16 test;
+};
 
 struct fpgaf_info_data {
-	u8 __iomem *version,*mcrid;
+	struct fpgaf __iomem *fpgaf;
 	struct device *dev;
+	struct device *infos;
 };
+
+#define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
 
 static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
-	u8 version = *data->version;
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 version = in_be16(&fpgaf->version);
 	
-	return snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf);
+	return snprintf(buf, PAGE_SIZE, "%X.%X.%X.%X\n",EXTRACT(version,12,4), EXTRACT(version,8,4), 
+			EXTRACT(version,4,4), EXTRACT(version,0,4));
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
-static ssize_t fs_attr_num_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
-	
-	return snprintf(buf, PAGE_SIZE, "%d\n",id);
-}
-static DEVICE_ATTR(num, S_IRUGO, fs_attr_num_show, NULL);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
 
-static ssize_t fs_attr_chassis_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct fpgaf_info_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
-	
-	return snprintf(buf, PAGE_SIZE, "%d\n",(id>>4)&0xf);
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,8));
 }
-static DEVICE_ATTR(chassis, S_IRUGO, fs_attr_chassis_show, NULL);
+static DEVICE_ATTR(board, S_IRUGO, fs_attr_board_show, NULL);
 
-static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fs_attr_rack_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
 	
-	return snprintf(buf, PAGE_SIZE, "%d\n",(id>>0)&0xf);
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,4,4));
 }
-static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
+static DEVICE_ATTR(rack, S_IRUGO, fs_attr_rack_show, NULL);
+
+static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
+	
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,4));
+}
+static DEVICE_ATTR(slot, S_IRUGO, fs_attr_slot_show, NULL);
 
 static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_device_id *match)
 {
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct fpgaf_info_data *data;
+	struct class *class;
+	struct device *infos;
+	struct fpgaf *fpgaf;
 	int ret;
 
-	data = kmalloc(sizeof(*data), GFP_KERNEL);
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
 		goto err;
@@ -99,38 +140,39 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
 
-	data->version = of_iomap(np, 0);
-	if (!data->version) {
+	fpgaf = of_iomap(np, 0);
+	if (fpgaf == NULL) {
 		dev_err(dev,"of_iomap failed\n");
 		ret = -ENOMEM;
 		goto err;
 	}
-	data->mcrid = of_iomap(np, 1);
+	data->fpgaf = fpgaf;
 	
-	if ((ret=device_create_file(dev, &dev_attr_version))) {
-		goto err_unfile;
-	}
+	class = saf3000_class_get();
 		
-	if (data->mcrid && ((ret=device_create_file(dev, &dev_attr_num))
-			|| (ret=device_create_file(dev, &dev_attr_chassis))
-			|| (ret=device_create_file(dev, &dev_attr_carte)))) {
+	infos = device_create(class, dev, MKDEV(0, 0), NULL, "infos");
+	dev_set_drvdata(infos, data);
+	data->infos = infos;
+	
+	if ((ret=device_create_file(dev, &dev_attr_version))
+			|| (ret=device_create_file(infos, &dev_attr_board))
+			|| (ret=device_create_file(infos, &dev_attr_rack))
+			|| (ret=device_create_file(infos, &dev_attr_slot))) {
 		goto err_unfile;
 	}
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
+	
 	return 0;
 
 err_unfile:
 	device_remove_file(dev, &dev_attr_version);
-	device_remove_file(dev, &dev_attr_num);
-	device_remove_file(dev, &dev_attr_chassis);
-	device_remove_file(dev, &dev_attr_carte);
+	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_rack);
+	device_remove_file(infos, &dev_attr_slot);
 	
-	iounmap(data->version);
-	data->version = NULL;
-	if (data->mcrid) {
-		iounmap(data->mcrid);
-	}
-	data->mcrid = NULL;
+	dev_set_drvdata(infos, NULL);
+	device_unregister(infos), data->infos = NULL;
+	iounmap(data->fpgaf), data->fpgaf = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 err:
@@ -141,17 +183,16 @@ static int __devexit fpgaf_info_remove(struct of_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct device *infos = data->infos;
 	
 	device_remove_file(dev, &dev_attr_version);
-	device_remove_file(dev, &dev_attr_num);
-	device_remove_file(dev, &dev_attr_chassis);
-	device_remove_file(dev, &dev_attr_carte);
-	iounmap(data->version);
-	data->version = NULL;
-	if (data->mcrid) {
-		iounmap(data->mcrid);
-	}
-	data->mcrid = NULL;
+	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_rack);
+	device_remove_file(infos, &dev_attr_slot);
+	
+	dev_set_drvdata(infos, NULL);
+	device_unregister(infos), data->infos = NULL;
+	iounmap(data->fpgaf), data->fpgaf = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 	
