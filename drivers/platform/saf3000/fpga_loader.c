@@ -122,7 +122,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	
 	if (data->status != STATUS_LOADED) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			data->status = STATUS_NOTLOADED;
 		}
@@ -149,7 +149,7 @@ static ssize_t fs_attr_status_store(struct device *dev, struct device_attribute 
 
 	if (data->status != STATUS_WAITING && !strncmp("reload",buf,6)) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			data->status = STATUS_NOTLOADED;
 		}
@@ -256,8 +256,8 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	dev_set_drvdata(loader, data);
 	data->loader = loader;
 	
-	if ((ret=device_create_file(dev, &dev_attr_status))
-			|| (ret=device_create_file(dev, &dev_attr_version)))
+	if ((ret=device_create_file(loader, &dev_attr_status))
+			|| (ret=device_create_file(loader, &dev_attr_version)))
 		goto err_unfile;
 		
 	if (data->board) {
@@ -273,7 +273,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 
 	if (strstr(match->compatible,"base")) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			goto err_unfile;
 		}
@@ -287,10 +287,10 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	return 0;
 	
 err_unfile:
+	device_remove_file(loader, &dev_attr_status);
+	device_remove_file(loader, &dev_attr_version);
 	device_unregister(loader);
 	data->loader = NULL;
-	device_remove_file(dev, &dev_attr_status);
-	device_remove_file(dev, &dev_attr_version);
 	if (infos) {
 		device_remove_file(infos, &dev_attr_board);
 		device_remove_file(infos, &dev_attr_rack);
@@ -323,10 +323,10 @@ static int fpga_remove(struct of_device *ofdev)
 	struct device *infos = data->infos;
 	struct device *loader = data->loader;
 	
+	device_remove_file(loader, &dev_attr_status);
+	device_remove_file(loader, &dev_attr_version);
 	device_unregister(loader);
 	data->loader = NULL;
-	device_remove_file(dev, &dev_attr_status);
-	device_remove_file(dev, &dev_attr_version);
 	if (infos) {
 		device_remove_file(infos, &dev_attr_board);
 		device_remove_file(infos, &dev_attr_rack);
