@@ -55,6 +55,12 @@ config FPGAF_INFO
 	default y
 	---help---
 	  Driver pour recuperer dans /sys les infos FPGA Firmware
-endif
 
+config CMPC_CPLD
+	tristate "Pilotage CPLD Carte MPC"
+	select LEDS_CLASS
+	default y
+	---help---
+	  Driver pour piloter les leds de la MCR 2G
+endif
 endif

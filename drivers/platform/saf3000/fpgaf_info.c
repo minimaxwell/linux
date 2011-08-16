@@ -223,10 +223,9 @@ static enum led_brightness fpgaf_led_alrm1_get(struct led_classdev *cdev)
 }
 
 static struct led_classdev fpgaf_led_alrm1 = {
-	.name = "fpgaf:red:alrm1",
+	.name = "mcr:red:alrm1",
 	.brightness_set = fpgaf_led_alrm1_set,
 	.brightness_get = fpgaf_led_alrm1_get,
-	.default_trigger = "timer",
 };
 
 static void fpgaf_led_alrm2_set(struct led_classdev *cdev, enum led_brightness brightness)
@@ -253,10 +252,9 @@ static enum led_brightness fpgaf_led_alrm2_get(struct led_classdev *cdev)
 }
 
 static struct led_classdev fpgaf_led_alrm2 = {
-	.name = "fpgaf:yellow:alrm2",
+	.name = "mcr:yellow:alrm2",
 	.brightness_set = fpgaf_led_alrm2_set,
 	.brightness_get = fpgaf_led_alrm2_get,
-	.default_trigger = "timer",
 };
 
 static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_device_id *match)

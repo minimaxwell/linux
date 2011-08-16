@@ -93,21 +93,28 @@
 				 &CPM1_PIO_D 15 1>;	// NCE
 		};
 
-		cpld-mpc@5,0000000 {
+		cpld-cmpc@5,0000000 { // Driver KNL
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cpld-cmpc";
+			reg = <5 0x0 0x10>;
+		};
+		
+		cpld-mpc@5,0000000 { // Driver LDB (deviendra obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-cpld-mpc";
 			reg = <5 0x0 0x10>;
 		};
 		
-		fpgaf-info@4,0000002 {
+		fpgaf-info@4,0000002 { // Driver KNL
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpgaf-info";
 			reg = <4 0x0 0x90 6 0x0 0x0002>;	// Mappage registres FPGAF ; Ident carte Mezzanine
 		};
 
-		fpga-f@4,0000000 {
+		fpga-f@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-f";
