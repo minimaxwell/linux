@@ -51,6 +51,7 @@ if MOD885
 config FPGAF_INFO
 	tristate "Infos FPGAF"
 	select SAF3000_CLASS
+	select LEDS_CLASS
 	default y
 	---help---
 	  Driver pour recuperer dans /sys les infos FPGA Firmware

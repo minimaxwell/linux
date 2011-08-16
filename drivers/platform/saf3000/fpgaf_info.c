@@ -37,6 +37,7 @@
 #include <linux/of_spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
+#include <linux/leds.h>
 #include <sysdev/fsl_soc.h>
 #include <saf3000/saf3000.h>
 
@@ -167,6 +168,68 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 }
 static DEVICE_ATTR(mezz, S_IRUGO, fs_attr_mezz_show, NULL);
 
+static ssize_t fs_attr_alrm_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	char *mode;
+	
+	if (in_be16(&fpgaf->alrm_out) & 0x10) {
+		mode = "manual";
+	}
+	else {
+		mode = "auto";
+	}
+	return snprintf(buf, PAGE_SIZE, "%s\n",mode);
+}
+
+static ssize_t fs_attr_alrm_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	
+	if (strncasecmp(buf, "manu", 4) == 0) {
+		setbits16(&fpgaf->alrm_out, 0x10);
+	}
+	else if (strncasecmp(buf, "auto", 4) == 0) {
+		clrbits16(&fpgaf->alrm_out, 0x10);
+	}
+	return count;
+}
+	
+static DEVICE_ATTR(alrm, S_IRUGO | S_IWUSR, fs_attr_alrm_show, fs_attr_alrm_store);
+
+static void fpgaf_led_alrm1_set(struct led_classdev *cdev, enum led_brightness brightness)
+{
+	struct device *dev = cdev->dev->parent;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	
+	if (brightness) {
+		clrbits16(&fpgaf->alrm_out, 0x4);
+	}
+	else {
+		setbits16(&fpgaf->alrm_out, 0x4);
+	}
+	dev_err(dev, "ALRM SET F %x %x %x\n", fpgaf, &fpgaf->alrm_out, in_be16(&fpgaf->alrm_out));
+}
+
+static enum led_brightness fpgaf_led_alrm1_get(struct led_classdev *cdev)
+{
+	struct device *dev = cdev->dev->parent;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	
+	return in_be16(&fpgaf->alrm_out) & 0x4 ? LED_OFF : LED_FULL;
+}
+
+static struct led_classdev fpgaf_led_alrm1 = {
+	.name = "fpgaf:red:alrm1",
+	.brightness_set = fpgaf_led_alrm1_set,
+	.brightness_get = fpgaf_led_alrm1_get,
+	.default_trigger = "timer",
+};
+
 static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_device_id *match)
 {
 	struct device *dev = &ofdev->dev;
@@ -212,9 +275,11 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 			|| (ret=device_create_file(infos, &dev_attr_board))
 			|| (ret=device_create_file(infos, &dev_attr_rack))
 			|| (ret=device_create_file(infos, &dev_attr_slot))
-			|| (ret=device_create_file(infos, &dev_attr_mezz))) {
+			|| (ret=device_create_file(infos, &dev_attr_mezz))
+			|| (ret=device_create_file(infos, &dev_attr_alrm))) {
 		goto err_unfile;
 	}
+	led_classdev_register(dev, &fpgaf_led_alrm1);
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
 	
 	return 0;
@@ -225,6 +290,7 @@ err_unfile:
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);
+	device_remove_file(infos, &dev_attr_alrm);
 	
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
@@ -243,11 +309,14 @@ static int __devexit fpgaf_info_remove(struct of_device *ofdev)
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct device *infos = data->infos;
 	
+	led_classdev_unregister(&fpgaf_led_alrm1);
+	
 	device_remove_file(dev, &dev_attr_version);
 	device_remove_file(infos, &dev_attr_board);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);
+	device_remove_file(infos, &dev_attr_alrm);
 	
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
