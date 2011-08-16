@@ -211,7 +211,6 @@ static void fpgaf_led_alrm1_set(struct led_classdev *cdev, enum led_brightness b
 	else {
 		setbits16(&fpgaf->alrm_out, 0x4);
 	}
-	dev_err(dev, "ALRM SET F %x %x %x\n", fpgaf, &fpgaf->alrm_out, in_be16(&fpgaf->alrm_out));
 }
 
 static enum led_brightness fpgaf_led_alrm1_get(struct led_classdev *cdev)
@@ -227,6 +226,36 @@ static struct led_classdev fpgaf_led_alrm1 = {
 	.name = "fpgaf:red:alrm1",
 	.brightness_set = fpgaf_led_alrm1_set,
 	.brightness_get = fpgaf_led_alrm1_get,
+	.default_trigger = "timer",
+};
+
+static void fpgaf_led_alrm2_set(struct led_classdev *cdev, enum led_brightness brightness)
+{
+	struct device *dev = cdev->dev->parent;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	
+	if (brightness) {
+		clrbits16(&fpgaf->alrm_out, 0x8);
+	}
+	else {
+		setbits16(&fpgaf->alrm_out, 0x8);
+	}
+}
+
+static enum led_brightness fpgaf_led_alrm2_get(struct led_classdev *cdev)
+{
+	struct device *dev = cdev->dev->parent;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	
+	return in_be16(&fpgaf->alrm_out) & 0x8 ? LED_OFF : LED_FULL;
+}
+
+static struct led_classdev fpgaf_led_alrm2 = {
+	.name = "fpgaf:yellow:alrm2",
+	.brightness_set = fpgaf_led_alrm2_set,
+	.brightness_get = fpgaf_led_alrm2_get,
 	.default_trigger = "timer",
 };
 
@@ -280,6 +309,7 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 		goto err_unfile;
 	}
 	led_classdev_register(dev, &fpgaf_led_alrm1);
+	led_classdev_register(dev, &fpgaf_led_alrm2);
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
 	
 	return 0;
@@ -309,6 +339,7 @@ static int __devexit fpgaf_info_remove(struct of_device *ofdev)
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct device *infos = data->infos;
 	
+	led_classdev_unregister(&fpgaf_led_alrm2);
 	led_classdev_unregister(&fpgaf_led_alrm1);
 	
 	device_remove_file(dev, &dev_attr_version);
