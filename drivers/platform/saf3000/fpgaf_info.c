@@ -75,6 +75,7 @@ struct fpgaf {
 
 struct fpgaf_info_data {
 	struct fpgaf __iomem *fpgaf;
+	u16 *mezz;
 	struct device *dev;
 	struct device *infos;
 };
@@ -122,6 +123,50 @@ static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *at
 }
 static DEVICE_ATTR(slot, S_IRUGO, fs_attr_slot_show, NULL);
 
+static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 *mezz = data->mezz;
+	u16 fonc_gen = in_be16(&fpgaf->fonc_gen);
+	u16 ident;
+	char *carte;
+	
+	if (fonc_gen & 0x8) { /* Mezzanine presente */
+		DEFINE_SPINLOCK(lock);
+		unsigned long flags;
+		
+		/* La carte C4E1 n'a pas de bus de donnees donc on fait une bidouille en utilisant la 
+		remanence du bus de donnees pour discriminer la carte C4E1 */
+		spin_lock_irqsave(&lock, flags);
+		out_be16(mezz, 0xaa55);
+		ident = in_be16(mezz);
+		spin_unlock_irqrestore(&lock, flags);
+		if (ident == 0xaa55) { /* C4E1 */
+			ident = (1<<5) | 0;
+		}
+	}
+	else {
+		ident = 0;
+	}
+	switch (ident) {
+	case 0x0:
+		carte = "Absente";
+		break;
+	case 0x20:
+		carte = "C4E1";
+		break;
+	case 0x21:
+		carte = "CAG";
+		break;
+	default:
+		carte = "Inconnue";
+		break;
+	}
+	return snprintf(buf, PAGE_SIZE, "%d %s\n",ident, carte);
+}
+static DEVICE_ATTR(mezz, S_IRUGO, fs_attr_mezz_show, NULL);
+
 static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_device_id *match)
 {
 	struct device *dev = &ofdev->dev;
@@ -130,6 +175,7 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	struct class *class;
 	struct device *infos;
 	struct fpgaf *fpgaf;
+	u16 *mezz;
 	int ret;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
@@ -142,11 +188,19 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 
 	fpgaf = of_iomap(np, 0);
 	if (fpgaf == NULL) {
-		dev_err(dev,"of_iomap failed\n");
+		dev_err(dev,"of_iomap FPGAF failed\n");
 		ret = -ENOMEM;
 		goto err;
 	}
 	data->fpgaf = fpgaf;
+	
+	mezz = of_iomap(np, 1);
+	if (fpgaf == NULL) {
+		dev_err(dev,"of_iomap MEZZ failed\n");
+		ret = -ENOMEM;
+		goto err_unmap0;
+	}
+	data->mezz = mezz;
 	
 	class = saf3000_class_get();
 		
@@ -157,7 +211,8 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	if ((ret=device_create_file(dev, &dev_attr_version))
 			|| (ret=device_create_file(infos, &dev_attr_board))
 			|| (ret=device_create_file(infos, &dev_attr_rack))
-			|| (ret=device_create_file(infos, &dev_attr_slot))) {
+			|| (ret=device_create_file(infos, &dev_attr_slot))
+			|| (ret=device_create_file(infos, &dev_attr_mezz))) {
 		goto err_unfile;
 	}
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
@@ -169,9 +224,12 @@ err_unfile:
 	device_remove_file(infos, &dev_attr_board);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
+	device_remove_file(infos, &dev_attr_mezz);
 	
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
+	iounmap(data->mezz), data->mezz = NULL;
+err_unmap0:
 	iounmap(data->fpgaf), data->fpgaf = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
@@ -189,9 +247,11 @@ static int __devexit fpgaf_info_remove(struct of_device *ofdev)
 	device_remove_file(infos, &dev_attr_board);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
+	device_remove_file(infos, &dev_attr_mezz);
 	
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
+	iounmap(data->mezz), data->mezz = NULL;
 	iounmap(data->fpgaf), data->fpgaf = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);

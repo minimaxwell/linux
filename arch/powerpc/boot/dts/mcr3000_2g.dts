@@ -104,7 +104,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpgaf-info";
-			reg = <4 0x0 0x90>;	// Mappage registres FPGAF
+			reg = <4 0x0 0x90 6 0x0 0x0002>;	// Mappage registres FPGAF ; Ident carte Mezzanine
 		};
 
 		fpga-f@4,0000000 {
