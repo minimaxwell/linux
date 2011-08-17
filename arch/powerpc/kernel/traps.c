@@ -28,6 +28,7 @@
 #include <linux/module.h>
 #include <linux/prctl.h>
 #include <linux/delay.h>
+#include <linux/reboot.h>
 #include <linux/kprobes.h>
 #include <linux/kexec.h>
 #include <linux/backlight.h>
@@ -662,6 +663,14 @@ void SMIException(struct pt_regs *regs)
 {
 	die("System Management Interrupt", regs, SIGABRT);
 }
+
+#ifdef CONFIG_SAF3000
+void watchdog_exception(struct pt_regs *regs)
+{
+	printk("Watchdog exception: vector=%lx\n", regs->trap);
+	kernel_restart(NULL);
+}
+#endif
 
 void unknown_exception(struct pt_regs *regs)
 {
