@@ -667,7 +667,11 @@ void SMIException(struct pt_regs *regs)
 #ifdef CONFIG_SAF3000
 void watchdog_exception(struct pt_regs *regs)
 {
-	printk("Watchdog exception: vector=%lx\n", regs->trap);
+	printk("Watchdog Reset:\n");
+	sysfs_printk_last_file();
+	print_modules();
+	show_regs(regs);
+		
 	kernel_restart(NULL);
 }
 #endif
