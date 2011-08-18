@@ -271,7 +271,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 			goto err_unfile;
 	}
 
-	if (strstr(match->compatible,"base")) {
+	if (of_find_property(np,"autoload",NULL)) {
 		data->status = STATUS_WAITING;
 		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
