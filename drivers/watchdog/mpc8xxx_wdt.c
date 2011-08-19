@@ -50,13 +50,13 @@ struct mpc8xxx_wdt_type {
 static struct mpc8xxx_wdt __iomem *wd_base;
 static int mpc8xxx_wdt_init_late(void);
 
-#define WD_TIMO 60			/* Default heartbeat = 60 seconds */
+#define WD_TIMO 10			/* Default heartbeat = 10 seconds */
 
 static int heartbeat = WD_TIMO;
 module_param(heartbeat, int, 0);
 MODULE_PARM_DESC(heartbeat,
-	"Watchdog SW heartbeat in seconds. (0 < heartbeat < 65536, default="
-				__MODULE_STRING(WD_TIMO) ")");
+	"Watchdog SW heartbeat in seconds. (0 < heartbeat < 65536s, default="
+				__MODULE_STRING(WD_TIMO) "s)");
 static u16 timeout = 0xffff;
 module_param(timeout, ushort, 0);
 MODULE_PARM_DESC(timeout,
@@ -101,7 +101,7 @@ static void mpc8xxx_wdt_timer_ping(unsigned long arg)
 	if (wdt_auto)
 		wdt_last_ping = jiffies;
 	
-	if (jiffies - wdt_last_ping <= heartbeat) {
+	if (jiffies - wdt_last_ping <= heartbeat * HZ) {
 		mpc8xxx_wdt_keepalive();
 		/* We're pinging it twice faster than needed, just to be sure. */
 		mod_timer(&wdt_timer, jiffies + HZ * timeout_sec / 2);
