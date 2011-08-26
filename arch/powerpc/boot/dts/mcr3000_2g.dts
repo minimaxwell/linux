@@ -401,7 +401,7 @@
 			reg = <4 0x100009c 1>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
-				 &rst2 2 1 >;			// RST_FPGA
+				 &rst2 5 1 >;			// RST_FPGA
 		};
 		c4e1@6,0 {
 			#address-cells = <1>;
@@ -419,7 +419,7 @@
 			reg = <6 0x501 1>; 		// Version FPGA Mezz
 			gpios = <&FPGA_CS1 1 1		// INIT Mezz
 				&CPM1_PIO_B 17 1	// DONE Mezz
-				&rst2 6 1 >;		// RST Mezz
+				&rst2 1 1 >;		// RST Mezz
 		};
 
 		cag@6,0 {
