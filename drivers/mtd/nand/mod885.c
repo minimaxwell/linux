@@ -134,7 +134,12 @@ static int mod885_device_ready(struct mtd_info *mtd)
 }
 
 #ifdef CONFIG_MTD_PARTITIONS
+/* un peu tordu comme facon de faire, il faut trouver mieux */
+#ifndef CONFIG_MTD_NAND_MCR3000
 const char *part_probes[] = { "cmdlinepart", NULL };
+#else
+extern const char *part_probes[];
+#endif
 #endif
 
 
