@@ -188,10 +188,10 @@ static ssize_t fs_attr_alrm_store(struct device *dev, struct device_attribute *a
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
 	
-	if (strncasecmp(buf, "manu", 4) == 0) {
+	if (sysfs_streq(buf, "manual")) {
 		setbits16(&fpgaf->alrm_out, 0x10);
 	}
-	else if (strncasecmp(buf, "auto", 4) == 0) {
+	else if (sysfs_streq(buf, "auto")) {
 		clrbits16(&fpgaf->alrm_out, 0x10);
 	}
 	return count;

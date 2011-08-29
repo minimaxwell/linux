@@ -147,7 +147,7 @@ static ssize_t fs_attr_status_store(struct device *dev, struct device_attribute 
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
 
-	if (data->status != STATUS_WAITING && !strncmp("reload",buf,6)) {
+	if (data->status != STATUS_WAITING && sysfs_streq(buf,"reload")) {
 		data->status = STATUS_WAITING;
 		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
