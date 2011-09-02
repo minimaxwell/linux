@@ -170,8 +170,7 @@ static void __init mod885_setup_arch(void)
 static int __init mod885_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
-	return (of_flat_dt_is_compatible(root, "fsl,mod885") ||
-		of_flat_dt_is_compatible(root, "fsl,mcr3000"));
+	return of_flat_dt_is_compatible(root, "fsl,mod885");
 }
 
 static struct of_device_id __initdata of_bus_ids[] = {
