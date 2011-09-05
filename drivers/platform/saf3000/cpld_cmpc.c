@@ -63,6 +63,7 @@ struct cpld_cmpc_data {
 	struct device *dev;
 	unsigned short colour, colour_blink;
 	int blink;
+	struct device *infos;
 };
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
@@ -242,6 +243,8 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 	struct cpld_cmpc_data *data;
 	struct cpld *cpld;
 	int ret;
+	struct class *class;
+	struct device *infos = NULL;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -261,7 +264,12 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 	}
 	data->cpld = cpld;
 	
-	if ((ret=device_create_file(dev, &dev_attr_version))) {
+	class = saf3000_class_get();
+	infos = device_create(class, dev, MKDEV(0, 0), NULL, "cpld-cmpc");
+	dev_set_drvdata(infos, data);
+	data->infos = infos;
+	
+	if ((ret=device_create_file(infos, &dev_attr_version))) {
 		goto err_unfile;
 	}
 	led_classdev_register(dev, &cpld_led_pwr);
@@ -269,6 +277,7 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 			(ret=device_create_file(cpld_led_pwr.dev, &dev_attr_colour_blink))) {
 		goto err_unregister;
 	}
+	
 	dev_info(dev,"driver MCR3000_2G CPLD CMPC added.\n");
 	
 	return 0;
@@ -278,7 +287,8 @@ err_unregister:
 	device_remove_file(cpld_led_pwr.dev, &dev_attr_colour_blink);
 	led_classdev_unregister(&cpld_led_pwr);
 err_unfile:
-	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_version);
+	device_unregister(infos);
 	
 	iounmap(data->cpld), data->cpld = NULL;
 	dev_set_drvdata(dev, NULL);
@@ -291,13 +301,15 @@ static int __devexit cpld_cmpc_remove(struct of_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct cpld_cmpc_data *data = dev_get_drvdata(dev);
+	struct device *infos = data->infos;
 	
 	device_remove_file(cpld_led_pwr.dev, &dev_attr_colour);
 	device_remove_file(cpld_led_pwr.dev, &dev_attr_colour_blink);
 	
 	led_classdev_unregister(&cpld_led_pwr);
 	
-	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_version);
+	device_unregister(infos);
 	
 	iounmap(data->cpld), data->cpld = NULL;
 	dev_set_drvdata(dev, NULL);
