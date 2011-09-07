@@ -407,6 +407,8 @@
 				#gpio-cells = <2>;
 				compatible = "fsl,cpm1-pario-bank-c";
 				reg = <0x960 0x10>;
+				interrupts = <0 0 0 0 1 2 6 9 10 11 14 15 23 24 26 31>;
+				interrupt-parent = <&CPM_PIC>;
 				gpio-controller;
 			};
 		
