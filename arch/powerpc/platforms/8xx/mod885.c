@@ -124,27 +124,27 @@ static void __init init_ioports(void)
  */
 void __init mod885_pics_init(void)
 {
-//	struct device_node *np;
-//	const char *model = "";
-//	int irq;
+	struct device_node *np;
+	const char *model = "";
+	int irq;
 
 	mpc8xx_pics_init();
 	
-//	np = of_find_node_by_path("/");
-//	if (np) {
-//
-//		/* MCR3000_2G configuration */
-//		if (!strcmp(model, "MCR3000_2G")) {
-//			irq = fpgaf_pic_init();
-//			if (irq != NO_IRQ)
-//				set_irq_chained_handler(irq, fpgaf_cascade);
-//		}
-//
-//		/* if MOD885 configuration there nothing to do */
-//
-//	} else {
-//		printk(KERN_ERR "MODEL: failed to identify model\n");
-//	}
+	np = of_find_node_by_path("/");
+	if (np) {
+
+		/* MCR3000_2G configuration */
+		if (!strcmp(model, "MCR3000_2G")) {
+			irq = fpgaf_pic_init();
+			if (irq != NO_IRQ)
+				set_irq_chained_handler(irq, fpgaf_cascade);
+		}
+
+		/* if MOD885 configuration there nothing to do */
+
+	} else {
+		printk(KERN_ERR "MODEL: failed to identify model\n");
+	}
 }
 
 static int __init mpc8xx_early_ping_watchdog(void)

@@ -120,8 +120,6 @@
 			compatible = "s3k,mcr3000-fpga-f";
 			reg = <4 0x0000000 0x90 6 0x0 0x0002>;
 			ranges = <0 4 0x0000000 0x90>;
-			interrupts = <14 1>;
-			interrupt-parent = <&PIC>;
 			ident1: gpio-controller@00 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-f-gpio";
@@ -338,16 +336,16 @@
 				reg = <0x81 1>;
 				gpio-controller;
 			};
-/*			FPGAF_PIC: pic@22 {
+			FPGAF_PIC: pic@22 {
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
 				interrupts = <14 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x22 2>;
+				reg = <0x0 0x90>;	// Mappage registres FPGAF
 				compatible = "s3k,mcr3000_2g-pic";
 			};
-*/		};
+		};
 		
 		fpga@4,1000000 {
 			#address-cells = <1>;
@@ -392,6 +390,8 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-dsp";
 			reg = <7 0x0 0x0008>;
+			interrupts = <0 1>;
+			interrupt-parent = <&FPGAF_PIC>;
 		};
 
 		fpga-loader@4,100009c {

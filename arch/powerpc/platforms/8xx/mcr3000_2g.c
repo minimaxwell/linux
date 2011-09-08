@@ -28,25 +28,60 @@
 #include "mpc8xx.h"
 #include "mcr3000_2g.h"
 
+struct fpgaf {
+	u16 ident;
+	u16 version;
+	u16 res1[6];
+	u16 reset;
+	u16 res2[7];
+	u16 it_mask;
+	u16 it_pend;
+	u16 it_ack;
+	u16 it_ctr;
+	u16 res3[4];
+	u16 alrm_in;
+	u16 alrm_out;
+	u16 res4[6];
+	u16 fonc_gen;
+	u16 addr;
+	u16 res5[6];
+	u16 pll_ctr;
+	u16 pll_status;
+	u16 pll_src;
+	u16 res6[5];
+	u16 net_ref;
+	u16 etat_ref;
+	u16 res7[6];
+	u16 syn_h110;
+	u16 res8[7];
+	u16 test;
+};
+
 /*
  * Controlleur d'IRQ du FPGA Firmware 
  */
-static u16 __iomem *fpgaf_pic_reg;
+static struct fpgaf *fpgaf_regs;
 static struct irq_host *fpgaf_pic_host;
 
 static void fpgaf_mask_irq(unsigned int irq)
 {
+	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+
+	clrbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }
 
 static void fpgaf_unmask_irq(unsigned int irq)
 {
+	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+
+	setbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }
 
 static void fpgaf_end_irq(unsigned int irq)
 {
 	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
 
-	clrbits16(fpgaf_pic_reg, 1<<(15-vec));
+	clrbits16(&fpgaf_regs->it_ack, 1<<(15-vec));
 }
 
 static struct irq_chip fpgaf_pic = {
@@ -61,9 +96,7 @@ int fpgaf_get_irq(void)
 	int vec;
 	int ret;
 
-	vec = 16 - ffs(in_be16(fpgaf_pic_reg)&0x1fe0);
-	
-	clrbits16(fpgaf_pic_reg, 1<<(15-vec));
+	vec = 16 - ffs(in_be16(&fpgaf_regs->it_pend));
 	
 	ret=irq_linear_revmap(fpgaf_pic_host, vec);
 	return ret;
@@ -101,8 +134,8 @@ int fpgaf_pic_init(void)
 	if (ret)
 		goto end;
 
-	fpgaf_pic_reg = ioremap(res.start, res.end - res.start + 1);
-	if (fpgaf_pic_reg == NULL)
+	fpgaf_regs = ioremap(res.start, res.end - res.start + 1);
+	if (fpgaf_regs == NULL)
 		goto end;
 
 	irq = irq_of_parse_and_map(np, 0);
