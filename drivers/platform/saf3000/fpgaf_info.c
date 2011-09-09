@@ -136,14 +136,19 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 	if (fonc_gen & 0x8) { /* Mezzanine presente */
 		DEFINE_SPINLOCK(lock);
 		unsigned long flags;
+		int ident2;
 		
 		/* La carte C4E1 n'a pas de bus de donnees donc on fait une bidouille en utilisant la 
 		remanence du bus de donnees pour discriminer la carte C4E1 */
+		
 		spin_lock_irqsave(&lock, flags);
 		out_be16(mezz, 0xaa55);
 		ident = in_be16(mezz);
+		out_be16(mezz, 0x55aa);
+		ident2 = in_be16(mezz);
 		spin_unlock_irqrestore(&lock, flags);
-		if (ident == 0xaa55) { /* C4E1 */
+		
+		if (ident != ident2) { /* C4E1 */
 			ident = (1<<5) | 0;
 		}
 	}
@@ -152,7 +157,7 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 	}
 	switch (ident) {
 	case 0x0:
-		carte = "Absente";
+		carte = "None";
 		break;
 	case 0x20:
 		carte = "C4E1";
@@ -161,10 +166,10 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 		carte = "CAG";
 		break;
 	default:
-		carte = "Inconnue";
+		carte = "Unknown";
 		break;
 	}
-	return snprintf(buf, PAGE_SIZE, "%d %s\n",ident, carte);
+	return snprintf(buf, PAGE_SIZE, "%s\n", carte);
 }
 static DEVICE_ATTR(mezz, S_IRUGO, fs_attr_mezz_show, NULL);
 
