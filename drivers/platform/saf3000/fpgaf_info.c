@@ -104,6 +104,7 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 	u16 fonc_gen = in_be16(&fpgaf->fonc_gen);
 	u16 ident;
 	char *carte;
+	int l;
 	
 	if (fonc_gen & 0x8) { /* Mezzanine presente */
 		DEFINE_SPINLOCK(lock);
@@ -138,10 +139,16 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 		carte = "CAG";
 		break;
 	default:
-		carte = "Unknown";
+		carte = NULL;
 		break;
 	}
-	return snprintf(buf, PAGE_SIZE, "%s\n", carte);
+	if (carte) {
+		l = snprintf(buf, PAGE_SIZE, "%s\n", carte);
+	}
+	else {
+		l = snprintf(buf, PAGE_SIZE, "Unknown id %d\n", ident);
+	}
+	return l;
 }
 static DEVICE_ATTR(mezz, S_IRUGO, fs_attr_mezz_show, NULL);
 
