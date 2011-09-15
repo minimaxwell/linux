@@ -5,4 +5,6 @@
 
 extern struct class *saf3000_class_get(void);
 
+extern void __init u16_gpiochip_init(const char *);
+		
 #endif

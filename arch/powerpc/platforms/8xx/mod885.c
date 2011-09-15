@@ -17,7 +17,7 @@
 #include <asm/udbg.h>
 #include <asm-generic/gpio.h>
 
-#include <sysdev/simple_gpio.h>
+#include <saf3000/saf3000.h>
 
 #include "mod885.h"
 #include "mpc8xx.h"
@@ -203,7 +203,7 @@ static int __init declare_of_platform_devices(void)
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
 				set_irq_chained_handler(irq, fpgaf_cascade);
-			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
+			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			fpgaf_init_platform_devices();
 			
 /*			fpga_clk_init();
