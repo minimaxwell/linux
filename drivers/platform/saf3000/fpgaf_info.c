@@ -124,6 +124,9 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 		if (ident != ident2) { /* C4E1 */
 			ident = (1<<5) | 0;
 		}
+		else {
+			ident >>= 8;
+		}
 	}
 	else {
 		ident = 0;
@@ -269,7 +272,7 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	data->fpgaf = fpgaf;
 	
 	mezz = of_iomap(np, 1);
-	if (fpgaf == NULL) {
+	if (mezz == NULL) {
 		dev_err(dev,"of_iomap MEZZ failed\n");
 		ret = -ENOMEM;
 		goto err_unmap0;
