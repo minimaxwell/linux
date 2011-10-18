@@ -56,6 +56,7 @@ struct cpld {
 	u16 etat;
 	u16 cmde;
 	u16 idma;
+	u16 version;
 };
 
 struct cpld_cmpc_data {
@@ -74,7 +75,13 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 	struct cpld *cpld = data->cpld;
 	u16 etat = in_be16(&cpld->etat);
 	
-	return snprintf(buf, PAGE_SIZE, "%X.%X\n",EXTRACT(etat,12,4), EXTRACT(etat,8,4));
+	if ((etat >> 8) == 0xFF) {
+		etat = in_be16(&cpld->version);
+		return snprintf(buf, PAGE_SIZE, "%X.%X.%X.%X\n", EXTRACT(etat,12,4),
+				EXTRACT(etat,8,4), EXTRACT(etat,4,4), EXTRACT(etat,0,4));
+	}
+	else
+		return snprintf(buf, PAGE_SIZE, "%X.%X\n", EXTRACT(etat,12,4), EXTRACT(etat,8,4));
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
