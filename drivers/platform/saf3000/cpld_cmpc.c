@@ -85,6 +85,18 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
+static ssize_t fs_attr_registres_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct cpld_cmpc_data *data = dev_get_drvdata(dev);
+	struct cpld *cpld = data->cpld;
+
+	return snprintf(buf, PAGE_SIZE,
+			"Reset : 0x%04X; Etat : 0x%04X; Cmde : 0x%04X; Idma : 0x%04X; Version : 0x%04X\n",
+			in_be16(&cpld->reset), in_be16(&cpld->etat), in_be16(&cpld->cmde),
+			in_be16(&cpld->idma), in_be16(&cpld->version));
+}
+static DEVICE_ATTR(registres, S_IRUGO, fs_attr_registres_show, NULL);
+
 static inline int colour_val(const char *buf)
 {
 	int ret = -1;
@@ -276,12 +288,13 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 	dev_set_drvdata(infos, data);
 	data->infos = infos;
 	
-	if ((ret=device_create_file(infos, &dev_attr_version))) {
+	if ((ret=device_create_file(infos, &dev_attr_version))
+		|| (ret=device_create_file(infos, &dev_attr_registres))) {
 		goto err_unfile;
 	}
 	led_classdev_register(dev, &cpld_led_pwr);
-	if ((ret=device_create_file(cpld_led_pwr.dev, &dev_attr_colour)) ||
-			(ret=device_create_file(cpld_led_pwr.dev, &dev_attr_colour_blink))) {
+	if ((ret=device_create_file(cpld_led_pwr.dev, &dev_attr_colour))
+		|| (ret=device_create_file(cpld_led_pwr.dev, &dev_attr_colour_blink))) {
 		goto err_unregister;
 	}
 	
@@ -295,6 +308,7 @@ err_unregister:
 	led_classdev_unregister(&cpld_led_pwr);
 err_unfile:
 	device_remove_file(infos, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_registres);
 	device_unregister(infos);
 	
 	iounmap(data->cpld), data->cpld = NULL;
@@ -316,6 +330,7 @@ static int __devexit cpld_cmpc_remove(struct of_device *ofdev)
 	led_classdev_unregister(&cpld_led_pwr);
 	
 	device_remove_file(infos, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_registres);
 	device_unregister(infos);
 	
 	iounmap(data->cpld), data->cpld = NULL;

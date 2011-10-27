@@ -247,7 +247,18 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga";
-			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
+			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
+			// registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA
+			interrupts = <6 1>;
+			interrupt-parent = <&PIC>;
+		};
+		
+		uart-fpga@4,1000000 {
+			device_type = "serial";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-uart-fpga";
+			reg = <4 0x1000000 0x0200>;
 			interrupts = <6 1>;
 			interrupt-parent = <&PIC>;
 		};

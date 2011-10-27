@@ -293,6 +293,7 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 			|| (ret=device_create_file(infos, &dev_attr_alrm))) {
 		goto err_unfile;
 	}
+
 	led_classdev_register(dev, &fpgaf_led_alrm1);
 	led_classdev_register(dev, &fpgaf_led_alrm2);
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
