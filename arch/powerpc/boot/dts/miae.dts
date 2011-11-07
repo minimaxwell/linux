@@ -493,7 +493,7 @@
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440>;
-			}
+			};
 
 			smc1: serial@a80 {
 				device_type = "serial";
