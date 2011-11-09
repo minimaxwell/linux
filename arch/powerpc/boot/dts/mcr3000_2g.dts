@@ -312,7 +312,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 1>;			// Version FPGA
+			reg = <4 0x100009c 2>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst 13 1 >;			// RST_FPGA

@@ -55,7 +55,8 @@
 #define RST_FPGA 2
 
 struct fpga_data {
-	u8 __iomem *version,*board;
+	u16 __iomem *version;
+	u8 __iomem *board;
 	struct device *dev;
 	int gpio[NB_GPIO]; /* initfpga, donefpga, rst_fpga */
 	int status;
@@ -102,12 +103,13 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 				dev_err(dev,"fw load failed, data not complete\n");
 			}
 			else {
-				u8 version, board;
+				u16 version;
+				u8 board;
 				dev_info(dev,"fw load ok\n");
 				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
 				data->status = STATUS_LOADED;
 				version = *data->version;
-				dev_info(dev,"fw version %X.%X\n",(version>>4)&0xf, version&0xf);
+				dev_info(dev,"fw version %X.%X.%X.%X\n", (version>>12)&0xf, (version>>8)&0xf, (version>>4)&0xf, version&0xf);
 				if (data->board) {
 					board = *data->board;
 					dev_info(dev,"adresse carte %X.%X\n",(board>>4)&0xf, board&0xf);
@@ -162,11 +164,11 @@ static DEVICE_ATTR(status, S_IRUGO | S_IWUSR | S_IWGRP, fs_attr_status_show, fs_
 static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
-	u8 version = *data->version;
+	u16 version = *data->version;
 	
 	return data->status == STATUS_LOADED?
-			snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf):
-			snprintf(buf, PAGE_SIZE, "-.-\n");
+			snprintf(buf, PAGE_SIZE, "%X.%X.%X.%X\n", (version>>12)&0xf, (version>>8)&0xf, (version>>4)&0xf, version&0xf):
+			snprintf(buf, PAGE_SIZE, "-.-.-.-\n");
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
