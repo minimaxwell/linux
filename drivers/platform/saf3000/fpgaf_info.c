@@ -66,7 +66,8 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
-static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
+/* adresse lue sur fond panier 0..255 */
+static ssize_t fs_attr_addr_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
@@ -74,18 +75,42 @@ static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *a
 
 	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,8));
 }
+static DEVICE_ATTR(addr, S_IRUGO, fs_attr_addr_show, NULL);
+
+/* numero de carte 0..127 */
+static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,7));
+}
 static DEVICE_ATTR(board, S_IRUGO, fs_attr_board_show, NULL);
 
+/* type de chassis 0..1 */
+static ssize_t fs_attr_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
+	
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,7,1));
+}
+static DEVICE_ATTR(type, S_IRUGO, fs_attr_type_show, NULL);
+
+/* numero de chassis 0..7 */
 static ssize_t fs_attr_rack_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
 	u16 addr = in_be16(&fpgaf->addr);
 	
-	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,4,4));
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,4,3));
 }
 static DEVICE_ATTR(rack, S_IRUGO, fs_attr_rack_show, NULL);
 
+/* numero d'emplacement dans chassis 0..15 */
 static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
@@ -286,7 +311,9 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 	data->infos = infos;
 	
 	if ((ret=device_create_file(dev, &dev_attr_version))
+			|| (ret=device_create_file(infos, &dev_attr_addr))
 			|| (ret=device_create_file(infos, &dev_attr_board))
+			|| (ret=device_create_file(infos, &dev_attr_type))
 			|| (ret=device_create_file(infos, &dev_attr_rack))
 			|| (ret=device_create_file(infos, &dev_attr_slot))
 			|| (ret=device_create_file(infos, &dev_attr_mezz))
@@ -302,7 +329,9 @@ static int __devinit fpgaf_info_probe(struct of_device *ofdev, const struct of_d
 
 err_unfile:
 	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_addr);
 	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_type);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);
@@ -329,7 +358,9 @@ static int __devexit fpgaf_info_remove(struct of_device *ofdev)
 	led_classdev_unregister(&fpgaf_led_alrm1);
 	
 	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_addr);
 	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_type);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);
