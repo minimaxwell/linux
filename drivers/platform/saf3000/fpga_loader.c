@@ -109,6 +109,8 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
 				data->status = STATUS_LOADED;
 				version = *data->version;
+				if ((version >> 8) == 0xFF)
+					version <<= 8;
 				dev_info(dev,"fw version %X.%X.%X.%X\n", (version>>12)&0xf, (version>>8)&0xf, (version>>4)&0xf, version&0xf);
 				if (data->board) {
 					board = *data->board;
@@ -166,6 +168,8 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 	struct fpga_data *data = dev_get_drvdata(dev);
 	u16 version = *data->version;
 	
+	if ((version >> 8) == 0xFF)
+		version <<= 8;
 	return data->status == STATUS_LOADED?
 			snprintf(buf, PAGE_SIZE, "%X.%X.%X.%X\n", (version>>12)&0xf, (version>>8)&0xf, (version>>4)&0xf, version&0xf):
 			snprintf(buf, PAGE_SIZE, "-.-.-.-\n");

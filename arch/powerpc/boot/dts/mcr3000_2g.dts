@@ -330,7 +330,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mezz-loader";
-			reg = <6 0x501 1>; 		// Version FPGA Mezz
+			reg = <6 0x500 2>; 		// Version FPGA Mezz
 			gpios = <&FPGA_CS1 1 1		// INIT Mezz
 				&CPM1_PIO_B 17 1	// DONE Mezz
 				&rst 9 1 >;		// RST Mezz
