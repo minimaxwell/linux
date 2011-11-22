@@ -8,7 +8,7 @@
 
 / {
 	model = "MCR3000_2G";
-	compatible = "fsl,cmpc885";
+	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
