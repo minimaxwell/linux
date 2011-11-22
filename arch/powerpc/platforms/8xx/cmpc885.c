@@ -1,4 +1,4 @@
-/*arch/powerpc/platforms/8xx/mod885.c
+/*arch/powerpc/platforms/8xx/cmpc885.c
  *
  * Copyright 2010 CSSI Inc.
  *
@@ -19,7 +19,7 @@
 
 #include <saf3000/saf3000.h>
 
-#include "mod885.h"
+#include "cmpc885.h"
 #include "mpc8xx.h"
 #include "mcr3000_2g.h"
 
@@ -27,7 +27,7 @@ struct cpm_pin {
 	int port, pin, flags;
 };
 
-static struct cpm_pin mod885_pins[] = {
+static struct cpm_pin cmpc885_pins[] = {
 	/* SMC1 */
 	{CPM_PORTB, 24, CPM_PIN_INPUT}, 					/* RX  port DEBUG	*/
 	{CPM_PORTB, 25, CPM_PIN_INPUT}, 					/* TX  port DEBUG	*/
@@ -101,8 +101,8 @@ static void __init init_ioports(void)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(mod885_pins); i++) {
-		struct cpm_pin *pin = &mod885_pins[i];
+	for (i = 0; i < ARRAY_SIZE(cmpc885_pins); i++) {
+		struct cpm_pin *pin = &cmpc885_pins[i];
 		cpm1_set_pin(pin->port, pin->pin, pin->flags);
 	}
 
@@ -122,7 +122,7 @@ static void __init init_ioports(void)
 /*
  * Init Carte 
  */
-void __init mod885_pics_init(void)
+void __init cmpc885_pics_init(void)
 {
 	struct device_node *np;
 	const char *model = "";
@@ -140,7 +140,7 @@ void __init mod885_pics_init(void)
 				set_irq_chained_handler(irq, fpgaf_cascade);
 		}
 
-		/* if MOD885 configuration there nothing to do */
+		/* if CMPC885 configuration there nothing to do */
 
 	} else {
 		printk(KERN_ERR "MODEL: failed to identify model\n");
@@ -160,17 +160,17 @@ static int __init mpc8xx_early_ping_watchdog(void)
 }
 arch_initcall(mpc8xx_early_ping_watchdog);
 
-static void __init mod885_setup_arch(void)
+static void __init cmpc885_setup_arch(void)
 {
 	cpm_reset();
 	init_ioports();
 	mpc8xx_early_ping_watchdog();
 }
 
-static int __init mod885_probe(void)
+static int __init cmpc885_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
-	return of_flat_dt_is_compatible(root, "fsl,mod885");
+	return of_flat_dt_is_compatible(root, "fsl,cmpc885");
 }
 
 static struct of_device_id __initdata of_bus_ids[] = {
@@ -210,7 +210,7 @@ static int __init declare_of_platform_devices(void)
 			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
 */
 		} 
-		/* MOD885 configuration by default */
+		/* CMPC885 configuration by default */
 		else {
 		}
 	} else {
@@ -219,13 +219,13 @@ static int __init declare_of_platform_devices(void)
 
 	return 0;
 }
-machine_device_initcall(mod885, declare_of_platform_devices);
+machine_device_initcall(cmpc885, declare_of_platform_devices);
 
-define_machine(mod885) {
-	.name			= "MOD885",
-	.probe			= mod885_probe,
-	.setup_arch		= mod885_setup_arch,
-	.init_IRQ		= mod885_pics_init,
+define_machine(cmpc885) {
+	.name			= "CMPC885",
+	.probe			= cmpc885_probe,
+	.setup_arch		= cmpc885_setup_arch,
+	.init_IRQ		= cmpc885_pics_init,
 	.get_irq		= mpc8xx_get_irq,
 	.restart		= mpc8xx_restart,
 	.calibrate_decr		= mpc8xx_calibrate_decr,

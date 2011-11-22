@@ -9,7 +9,7 @@
 / {
 /*	model = "MIAE";*/
 	model = "MCR3000_2G";
-	compatible = "fsl,mod885";
+	compatible = "fsl,cmpc885";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -45,7 +45,7 @@
 	};
 
 	localbus@ff000100 {
-		compatible = "fsl,mod885-localbus", "fsl,pq1-localbus";
+		compatible = "fsl,cmpc885-localbus", "fsl,pq1-localbus";
 		#address-cells = <2>;
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		// ORx and BRx register
@@ -85,7 +85,7 @@
 		};
 
 		nand@2,0 {
-			compatible = "s3k,mod885-nand";
+			compatible = "s3k,cmpc885-nand";
 			reg = <2 0x0 0x01>;
 			#address-cells = <1>;
 			#size-cells = <1>;

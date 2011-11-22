@@ -55,7 +55,7 @@ config MCR3000_CPLD
 	  Driver GPIO pour les ChipSelects SPI
 endif
 
-if MOD885
+if CMPC885
 config FPGAF_INFO
 	tristate "Infos FPGAF"
 	select SAF3000_CLASS
