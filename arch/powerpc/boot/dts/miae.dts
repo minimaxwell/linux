@@ -399,6 +399,13 @@
 			compatible = "fsl,mpc885-pic", "fsl,pq1-pic";
 		};
 
+		SIT: sit@200 {
+			compatible = "fsl,mpc866-sit", "fsl,pq1-sit";
+			reg = <0x200 0x80>;
+			interrupts = <11 1>;
+			interrupt-parent = <&PIC>;
+		};
+
 		FPGA_CS0: gpio-controller@dummy0 {
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-fpga-cs";
@@ -633,7 +640,7 @@
 			};
 		};
 			
-		crypto@20000 {
+/*		crypto@20000 {
 			compatible = "fsl,sec2.0";
 			reg = <0x20000 0x8000>;
 			interrupts = <1 1>;
@@ -643,7 +650,7 @@
 			fsl,exec-units-mask = <0x4c>;
 			fsl,descriptor-types-mask = <0x301f>;
 		};
-	};
+*/	};
 
 	chosen {
 		linux,stdout-path = &smc1;

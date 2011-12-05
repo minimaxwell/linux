@@ -145,6 +145,13 @@
 			compatible = "fsl,mpc885-pic", "fsl,pq1-pic";
 		};
 
+		SIT: sit@200 {
+			compatible = "fsl,mpc866-sit", "fsl,pq1-sit";
+			reg = <0x200 0x80>;
+			interrupts = <11 1>;
+			interrupt-parent = <&PIC>;
+		};
+
 		cpm@9c0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
