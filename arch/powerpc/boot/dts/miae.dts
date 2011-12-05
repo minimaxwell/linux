@@ -334,6 +334,16 @@
 			interrupts = <12 1>;
 			interrupt-parent = <&PIC>;
 		};
+		
+		GPIO {
+			compatible = "s3k,miae-gpios";
+			gpios = <&alin 13 1 	// ACQ_ALRM
+				&alout 15 1	// ALRM_MAJ
+				&alout 14 1>;	// ALRM_MIN
+			names = "acq_alrm",
+				"alrm_majeure",
+				"alarme_mineure";
+		};
 	};
 
 	soc@ff000000 {
