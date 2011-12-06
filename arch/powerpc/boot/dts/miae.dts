@@ -336,7 +336,7 @@
 		};
 		
 		GPIO {
-			compatible = "s3k,miae-gpios";
+			compatible = "s3k,gpios-appli";
 			gpios = <&alin 13 1 	// ACQ_ALRM
 				&alout 15 1	// ALRM_MAJ
 				&alout 14 1>;	// ALRM_MIN
