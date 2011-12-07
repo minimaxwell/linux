@@ -56,7 +56,7 @@ static struct clk *fpga_clk_get(struct device *dev, const char *id)
 {
 	struct clk *clk = ERR_PTR(-ENOENT);
 
-	if (dev == NULL || id == NULL)
+	if (dev == NULL && id == NULL)
 		return NULL;
 
 	if (strcmp(id,"fpga") == 0 && try_module_get(fpga_clk.owner)) {

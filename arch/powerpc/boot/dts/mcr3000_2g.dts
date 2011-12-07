@@ -283,6 +283,10 @@
 			compatible = "s3k,mcr3000-codec";
 		};
 
+		mcs {
+			compatible = "s3k,mcr3000-mcs";
+		};
+
 		alarmes {
 			compatible = "s3k,mcr3000-alarmes";
 			gpios = <&alin 13 1 	// ACQ_ALRM
@@ -553,7 +557,8 @@
 				reg = <0xa90 0x10 0x3f80 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
+//				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
+				clock = "fpga";
 				fsl,cpm-command = <0xd0>;
 			};
 
