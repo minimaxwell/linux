@@ -117,6 +117,22 @@ static void __init init_ioports(void)
 	mpc8xx_immr->im_cpm.cp_cptr = 0x00000180;
 }
 
+static struct cpm_pin cmpc885_pins_fev170[] = { /* FEV 170, a supprimer une fois FEV 169 traitee */
+	{CPM_PORTC,  9, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS2			*/
+	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS3			*/
+};
+	
+static void __init init_ioports_fev170(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(cmpc885_pins_fev170); i++) {
+		struct cpm_pin *pin = &cmpc885_pins_fev170[i];
+		cpm1_set_pin(pin->port, pin->pin, pin->flags);
+	}
+	pr_info("CTS2 and CTS3 temporarily deactivated (FEV170)\n");
+}
+
 
 /*
  * Init Carte 
@@ -196,7 +212,8 @@ static int __init declare_of_platform_devices(void)
 		mpc8xx_early_ping_watchdog();
 		proc_mkdir("s3k",0);
 		of_platform_bus_probe(NULL, of_bus_ids, NULL);
-		
+
+		init_ioports_fev170();		
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
 			irq = fpgaf_pic_init();
