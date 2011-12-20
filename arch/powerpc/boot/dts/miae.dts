@@ -7,8 +7,7 @@
 /dts-v1/;
 
 / {
-/*	model = "MIAE";*/
-	model = "MCR3000_2G";
+	model = "MIAE";
 	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -108,13 +107,6 @@
 			reg = <5 0x0 0x10>;
 		};
 		
-		fpgaf-info@4,0000002 { // Driver KNL
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpgaf-info";
-			reg = <4 0x0 0x90 6 0x0 0x0002>;	// Mappage registres FPGAF ; Ident carte Mezzanine
-		};
-
 		fpga-f@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -244,14 +236,14 @@
 			};
 		};
 		
-		fpga@4,1000000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga";
-			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
-			interrupts = <6 1>;
-			interrupt-parent = <&PIC>;
-		};
+//		fpga@4,1000000 {
+//			#address-cells = <1>;
+//			#size-cells = <1>;
+//			compatible = "s3k,mcr3000-fpga";
+//			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
+//			interrupts = <6 1>;
+//			interrupt-parent = <&PIC>;
+//		};
 
 		e1@4,2000000 {
 			#address-cells = <1>;
@@ -262,23 +254,31 @@
 			interrupt-parent = <&PIC>;
 		};
 		
-		mtsl@4,3000000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-mtsl";
-			reg = <4 0x3000000 0xFFFF>;
-		};
+//		mtsl@4,3000000 {
+//			#address-cells = <1>;
+//			#size-cells = <1>;
+//			compatible = "s3k,mcr3000-mtsl";
+//			reg = <4 0x3000000 0xFFFF>;
+//		};
 
-		codec {
+		codec1 {
 			compatible = "s3k,mcr3000-codec";
 		};
 
-		alarmes {
-			compatible = "s3k,mcr3000-alarmes";
-			gpios = <&alin 13 1 	// ACQ_ALRM
-				&alout 15 1	// ALRM_MAJ
-				&alout 14 1>;	// ALRM_MIN
+		codec2 {
+			compatible = "s3k,mcr3000-codec";
 		};
+
+		codec3 {
+			compatible = "s3k,mcr3000-codec";
+		};
+
+//		alarmes {
+//			compatible = "s3k,mcr3000-alarmes";
+//			gpios = <&alin 13 1 	// ACQ_ALRM
+//				&alout 15 1	// ALRM_MAJ
+//				&alout 14 1>;	// ALRM_MIN
+//		};
 		
 		dpram@3,0 {
 			#address-cells = <1>;
@@ -298,47 +298,10 @@
 			interrupt-parent = <&FPGAF_PIC>;
 		};
 
-		fpga-loader@4,100009c {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 1>;			// Version FPGA
-			gpios = <&FPGA_CS0 1 1			// INITFPGA
-				 &CPM1_PIO_E 23 1		// DONEFPGA
-				 &rst 13 1 >;			// RST_FPGA
-		};
-		c4e1@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-c4e1";
-			reg = <6 0x100 0x00FF 6 0x200 0x00FF 6 0x300 0x00FF 6 0x400 0x00FF 6 0x500 0x00FF>;
-			interrupts = <12 1>;
-			interrupt-parent = <&PIC>;
-		};
-
-		fpga-loader@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-mezz-loader";
-			reg = <6 0x501 1>; 		// Version FPGA Mezz
-			gpios = <&FPGA_CS1 1 1		// INIT Mezz
-				&CPM1_PIO_B 17 1	// DONE Mezz
-				&rst 9 1 >;		// RST Mezz
-		};
-
-		cag@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-cag";
-			reg = <6 0x0 0x0020>;
-			interrupts = <12 1>;
-			interrupt-parent = <&PIC>;
-		};
-		
 		GPIO {
-				/* 0 = sortie initialisee active */
-				/* 1 = entree */
-				/* 2 = sortie initialisee inactive */
+			/* 0 = sortie initialisee active */
+			/* 1 = entree */
+			/* 2 = sortie initialisee inactive */
 			compatible = "s3k,gpios-appli";
 			gpios = <&alin 13 1 	// ACQ_ALRM
 				&dummy 0 1	// pedale
@@ -466,23 +429,6 @@
 			reg = <0x200 0x80>;
 			interrupts = <11 1>;
 			interrupt-parent = <&PIC>;
-		};
-
-		FPGA_CS0: gpio-controller@dummy0 {
-			#gpio-cells = <2>;
-			compatible = "s3k,mcr3000-fpga-cs";
-			gpio-controller;
-			reg = <0x0 0x1>;	// necessaire mais non utilise
-			gpios = <&CPM1_PIO_E 18 1	// PROGFPGA
-				 &CPM1_PIO_D 6 1>;	// INITFPGA
-		};
-		FPGA_CS1: gpio-controller@dummy1 {
-			#gpio-cells = <2>;
-			compatible = "s3k,mcr3000-fpga-cs";
-			gpio-controller;
-			reg = <0x1 0x1>; /* necessaire mais non utilise */
-			gpios = <&CPM1_PIO_B 16 1	// PROG
-				 &CPM1_PIO_B 22 1>;	// INIT
 		};
 
 		cpm@9c0 {
@@ -622,21 +568,20 @@
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
-				gpios = <&CPM1_PIO_C 13 1	/* POT1 */
+				gpios = <&CPM1_PIO_C 4 1	/* SICOFI 1 */
 					 &CPM1_PIO_B 23 1	/* TEMP MCR */
-					 &CPM1_PIO_C 8 1	/* ARCOFI */
+					 &CPM1_PIO_C 8 1	/* SICOFI 2 */
 					 &CPM1_PIO_C 12 1	/* EEPROM MCR3000 2G*/
-					 &CPM1_PIO_C 14 1	/* POT2 */
-					 &CPM1_PIO_C 4 1	/* SICOFI */
+					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
-					 &FPGA_CS0 0 1		/* FPGA Radio */
-					 &FPGA_CS1 0 1		/* FPGA Mezz */
 					 &CPM1_PIO_B 21 1>;	/* EEPROM CMPC885 */
-				pot1@0 {
-					compatible = "cs,mcr3000-pot1";
+				sicofi@0 {
+					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <0>;
 					spi-cs-high;
+					spi-cpha;
+					spi-troll;
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -644,8 +589,8 @@
 					reg = <1>;
 					spi-cs-high;
 				};
-				arcofi@2 {
-					compatible = "infineon,mcr3000-arcofi";
+				sicofi@2 {
+					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
@@ -658,44 +603,24 @@
 					reg = <3>;
 					spi-cs-high;
 				};
-				pot2@4 {
-					compatible = "cs,mcr3000-pot2";
-					spi-max-frequency = <1000000>;
-					reg = <4>;
-					spi-cs-high;
-				};
-				sicofi@5 {
+				sicofi@4 {
 					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
-					reg = <5>;
+					reg = <4>;
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
 				};
-				lm74@6 {
+				lm74@5 {
 					compatible = "ti,tmp121", "ns,lm74";
 					spi-max-frequency = <1000000>;
-					reg = <6>;
+					reg = <5>;
 					spi-cs-high;
 				};
-				fpga-loader@7 {
-					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <2000000>;
-					reg = <7>;
-					spi-cs-high;
-					loader = "mcr";
-				};
-				mezz@8 {
-					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <1000000>;
-					reg = <8>;
-					spi-cs-high;
-					loader = "mezz";
-				};
-				eeprom@9 {
+				eeprom@6 {
 					compatible = "atmel,at25080", "cs,eeprom";
 					spi-max-frequency = <1000000>;
-					reg = <9>;
+					reg = <6>;
 					spi-cs-high;
 				};
 				
