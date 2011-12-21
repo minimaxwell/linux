@@ -1,0 +1,15 @@
+#!/bin/sh
+
+echo "Verifying model..."
+verified=false
+model=`cat /proc/device-tree/model`
+for list in KNL_MODEL_SUPPORT ; do
+	if [ "${list}" == "${model}" ]; then
+		verified=true
+	fi
+done
+if [ "${verified}" == "false" ]; then
+	echo "Error: This package is only for KNL_MODEL_SUPPORT model board"
+	exit 1
+fi
+echo "LINUX_FILE_NAME installing..."
