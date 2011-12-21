@@ -261,15 +261,7 @@
 //			reg = <4 0x3000000 0xFFFF>;
 //		};
 
-		codec1 {
-			compatible = "s3k,mcr3000-codec";
-		};
-
-		codec2 {
-			compatible = "s3k,mcr3000-codec";
-		};
-
-		codec3 {
+		codec {
 			compatible = "s3k,mcr3000-codec";
 		};
 
