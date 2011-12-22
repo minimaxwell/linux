@@ -5,14 +5,15 @@
 #       dtb file is very important. It determine the schedulling for the storage
 #	in the FLASH BOOT
 #	 1 => Path and name for the KNL binary file
-#	 2 => Path and name for the 1st dtb file
-# opt	 3 => Path and name for the 2nd dtb file
+#	 2 => Board model (MCR3000_1G, MCR3000_2G, ...)
+#	 3 => Path and name for the 1st dtb file
+# opt	 4 => Path and name for the 2nd dtb file
 #	 etc....
 #===============================================================
 package_knl()
 {
 	#===== Check parameters
-	if [ "$#" -lt "2" ] ; then
+	if [ "$#" -lt "3" ] ; then
 		echo "pkg_knl: Error bad number of parameters"
 		return 2
 	fi
@@ -39,7 +40,7 @@ package_knl()
 	cp $PATH_LINUX $PATH_PKG/tmp
 
 	# verifying DTB files exist
-	for (( i = 2; i <= $#; i += 1)); do
+	for (( i = 3; i <= $#; i += 1)); do
 		echo "dtb: ${!i}"
 		if [ ! -f ${!i} ]; then
 			echo "pkg_knl: Error ${!i} do not exist"
@@ -48,7 +49,7 @@ package_knl()
 	done
 
 	# Board type
-	board=`basename ${PATH_LINUX} | cut -d"-" -f2`
+	board=$2
 
 	# Creating FLASH image for dtb
 	case ${board} in
@@ -84,7 +85,7 @@ package_knl()
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/control
 
 	# get KNL version
-	version=`basename ${PATH_LINUX} | sed "s/.lzma//" | cut -d"-" -f3`
+	version=`basename ${PATH_LINUX} | sed "s/.lzma//" | cut -d"-" -f2`
 	sed -i "s/^Version:/Version: ${version}/" $PATH_PKG/DEBIAN/control
 
 	# replace with the good model
