@@ -65,7 +65,7 @@ package_knl()
 
 	# concatenating DTB file
 	offset=0
-	for (( i = 2; i <= $#; i += 1)); do
+	for (( i = 3; i <= $#; i += 1)); do
 		dd if=${!i} of=$PATH_PKG/tmp/dtb.bin conv=notrunc bs=1 seek=${offset}K
 		offset=$(( offset + 16 ))
 	done
