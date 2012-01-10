@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.14
-# Sun Jan  8 05:07:15 2012
+# Tue Jan 10 16:32:17 2012
 #
 # CONFIG_PPC64 is not set
 
@@ -402,7 +402,7 @@ CONFIG_NF_CONNTRACK=y
 # CONFIG_NF_CT_PROTO_SCTP is not set
 # CONFIG_NF_CT_PROTO_UDPLITE is not set
 # CONFIG_NF_CONNTRACK_AMANDA is not set
-# CONFIG_NF_CONNTRACK_FTP is not set
+CONFIG_NF_CONNTRACK_FTP=y
 # CONFIG_NF_CONNTRACK_H323 is not set
 # CONFIG_NF_CONNTRACK_IRC is not set
 # CONFIG_NF_CONNTRACK_NETBIOS_NS is not set
@@ -494,7 +494,7 @@ CONFIG_IP_NF_TARGET_MASQUERADE=y
 # CONFIG_IP_NF_TARGET_NETMAP is not set
 # CONFIG_IP_NF_TARGET_REDIRECT is not set
 CONFIG_NF_NAT_SNMP_BASIC=y
-# CONFIG_NF_NAT_FTP is not set
+CONFIG_NF_NAT_FTP=y
 # CONFIG_NF_NAT_IRC is not set
 CONFIG_NF_NAT_TFTP=y
 # CONFIG_NF_NAT_AMANDA is not set
