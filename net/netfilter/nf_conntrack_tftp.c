@@ -10,6 +10,7 @@
 #include <linux/in.h>
 #include <linux/udp.h>
 #include <linux/netfilter.h>
+#include <saf3000/saf3000.h>
 
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_tuple.h>
@@ -114,8 +115,10 @@ static int __init nf_conntrack_tftp_init(void)
 	int i, j, ret;
 	char *tmpname;
 
-	if (ports_c == 0)
+	if (ports_c == 0) {
 		ports[ports_c++] = TFTP_PORT;
+		ports[ports_c++] = SAF3000_TFTP_PORT;
+	}
 
 	for (i = 0; i < ports_c; i++) {
 		memset(&tftp[i], 0, sizeof(tftp[i]));
