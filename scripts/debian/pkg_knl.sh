@@ -70,16 +70,16 @@ package_knl()
 		offset=$(( offset + 16 ))
 	done
 
+	linux_file=`basename ${PATH_LINUX}`
 	#===== Making package
 	mkdir -p $PATH_PKG/DEBIAN
 	cp ./pkg_knl.control 	$PATH_PKG/DEBIAN/control
 	cp ./pkg_knl.postinst 	$PATH_PKG/DEBIAN/postinst
 	cp ./pkg_knl.preinst 	$PATH_PKG/DEBIAN/preinst
-	echo /tmp/${linux_file} > $PATH_PKG/conffiles
-	echo /tmp/dtb.bin >> $PATH_PKG/conffiles
+	echo /tmp/${linux_file} > $PATH_PKG/DEBIAN/conffiles
+	echo /tmp/dtb.bin >> $PATH_PKG/DEBIAN/conffiles
 
 	# replace with the good file name
-	linux_file=`basename ${PATH_LINUX}`
 	sed -i "s#LINUX_FILE_NAME#/tmp/${linux_file}#g" $PATH_PKG/DEBIAN/postinst
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/preinst
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/control
