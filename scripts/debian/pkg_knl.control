@@ -3,6 +3,6 @@ Version:
 Section: base
 Priority: optional
 Architecture: mpc8xx
-Depends: btl(>=3.4.3)
+Depends: btl(>=3.5.0)
 Maintainer: F.TRINH THAI <florent.trinh-thai@c-s.fr>
 Description: install of LINUX_FILE_NAME
