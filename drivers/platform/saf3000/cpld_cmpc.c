@@ -50,6 +50,12 @@
 #define COLOUR_GREEN	0x8000
 #define COLOUR_ORANGE	(COLOUR_RED | COLOUR_GREEN)
 #define COLOUR_MASK	(COLOUR_RED | COLOUR_GREEN | COLOUR_ORANGE)
+
+#define DEPORT_NONE	0x0000
+#define DEPORT_RED	0x0100
+#define DEPORT_GREEN	0x0200
+#define DEPORT_ORANGE	(DEPORT_RED | DEPORT_GREEN)
+#define DEPORT_MASK	(DEPORT_RED | DEPORT_GREEN | DEPORT_ORANGE)
  
 struct cpld {
 	u16 reset;
@@ -65,6 +71,7 @@ struct cpld_cmpc_data {
 	unsigned short colour, colour_blink;
 	int blink;
 	struct device *infos;
+	u16 *led_fav;
 };
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
@@ -104,6 +111,16 @@ static inline int colour_val(const char *buf)
 	else if (sysfs_streq(buf,"red")) ret = COLOUR_RED;
 	else if (sysfs_streq(buf,"orange")) ret = COLOUR_ORANGE;
 	else if (sysfs_streq(buf,"green")) ret = COLOUR_GREEN;
+	return ret;
+}
+
+static inline int deport_val(int colour)
+{
+	int ret = -1;
+	if (colour == COLOUR_NONE) ret = DEPORT_NONE;
+	else if (colour == COLOUR_RED) ret = DEPORT_RED;
+	else if (colour == COLOUR_ORANGE) ret = DEPORT_ORANGE;
+	else if (colour == COLOUR_GREEN) ret = DEPORT_GREEN;
 	return ret;
 }
 
@@ -151,8 +168,13 @@ static ssize_t fs_attr_colour_store(struct device *dev, struct device_attribute 
 	
 	if (colour != -1 && colour != COLOUR_NONE) {
 		data->colour = colour;
-		if (in_be16(&cpld->cmde) & COLOUR_MASK) /* si led allumee on applique la nouvelle couleur */
+		if (in_be16(&cpld->cmde) & COLOUR_MASK) { /* si led allumee on applique la nouvelle couleur */
 			clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
+			if (data->led_fav) {
+				colour = deport_val(colour);
+				clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
+			}
+		}
 	}
 	return count;
 }
@@ -210,13 +232,23 @@ static void cpld_cmpc_led_pwr_set(struct led_classdev *cdev, enum led_brightness
 	if (brightness) {
 		int colour = data->colour;
 		clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
+		if (data->led_fav) {
+			colour = deport_val(colour);
+			clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
+		}
 	}
 	else if (data->blink) {
 		int colour = data->colour_blink;
 		clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
+		if (data->led_fav) {
+			colour = deport_val(colour);
+			clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
+		}
 	}
 	else {
 		clrbits16(&cpld->cmde, COLOUR_MASK);
+		if (data->led_fav)
+			clrbits16(data->led_fav, DEPORT_MASK);
 	}
 }
 
@@ -264,6 +296,7 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 	int ret;
 	struct class *class;
 	struct device *infos = NULL;
+	const char *model = "";
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -282,7 +315,23 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 		goto err;
 	}
 	data->cpld = cpld;
-	
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,cmpc885");
+	if (np) {
+		model = of_get_property(np, "model", NULL);
+		dev_info(dev,"driver MCR3000_2G CPLD CMPC model = %s\n", model);
+		if (!strcmp(model, "MIAE")) {
+			np = dev->of_node;
+			data->led_fav = of_iomap(np, 1);
+			if (data->led_fav == NULL) {
+				dev_err(dev,"of_iomap failed\n");
+				ret = -ENOMEM;
+				goto err_led;
+			}
+		}
+	}
+	np = dev->of_node;
+		
 	class = saf3000_class_get();
 	infos = device_create(class, dev, MKDEV(0, 0), NULL, "cpld-cmpc");
 	dev_set_drvdata(infos, data);
@@ -310,7 +359,9 @@ err_unfile:
 	device_remove_file(infos, &dev_attr_version);
 	device_remove_file(infos, &dev_attr_registres);
 	device_unregister(infos);
-	
+	if (data->led_fav) iounmap(data->led_fav);
+	data->led_fav = NULL;
+err_led:	
 	iounmap(data->cpld), data->cpld = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
@@ -332,6 +383,9 @@ static int __devexit cpld_cmpc_remove(struct of_device *ofdev)
 	device_remove_file(infos, &dev_attr_version);
 	device_remove_file(infos, &dev_attr_registres);
 	device_unregister(infos);
+
+	if (data->led_fav) iounmap(data->led_fav);
+	data->led_fav = NULL;
 	
 	iounmap(data->cpld), data->cpld = NULL;
 	dev_set_drvdata(dev, NULL);

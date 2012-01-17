@@ -22,6 +22,7 @@
 #include "cmpc885.h"
 #include "mpc8xx.h"
 #include "mcr3000_2g.h"
+#include "miae.h"
 
 struct cpm_pin {
 	int port, pin, flags;
@@ -64,6 +65,12 @@ void __init cmpc885_pics_init(void)
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
 				set_irq_chained_handler(irq, fpgaf_cascade);
+		}
+		/* MIAE configuration */
+		if (!strcmp(model, "MIAE")) {
+			irq = fpgam_pic_init();
+			if (irq != NO_IRQ)
+				set_irq_chained_handler(irq, fpgam_cascade);
 		}
 
 		/* if CMPC885 configuration there nothing to do */
@@ -136,7 +143,14 @@ static int __init declare_of_platform_devices(void)
 			
 			fpga_clk_init();
 			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
-
+		} 
+		/* MIAE configuration */
+		else if (!strcmp(model, "MIAE")) {
+			irq = fpgam_pic_init();
+			if (irq != NO_IRQ)
+				set_irq_chained_handler(irq, fpgam_cascade);
+			u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
+			fpgam_init_platform_devices();
 		} 
 		/* CMPC885 configuration by default */
 		else {
