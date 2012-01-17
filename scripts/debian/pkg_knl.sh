@@ -27,17 +27,15 @@ package_knl()
 		echo "pkg_knl: Error file not found [$PATH_LINUX]"
 		return 2
 	fi
-	if [ ! -d $PATH_PKG ] ; then
-		mkdir -p $PATH_PKG
-	else
-		rm -Rf $PATH_PKG/*
-	fi
+	
+	# on travaille sur un repertoire clean	
+	rm -rf $PATH_PKG
 
 	# copy LINUX
-	if [ ! -d $PATH_PKG/tmp ]; then
-		mkdir -p $PATH_PKG/tmp
-	fi
-	cp $PATH_LINUX $PATH_PKG/tmp
+	mkdir -p $PATH_PKG/tmp/root
+	chmod 1777 $PATH_PKG/tmp
+	chmod 700 $PATH_PKG/tmp/root
+	cp $PATH_LINUX $PATH_PKG/tmp/root
 
 	# verifying DTB files exist
 	for (( i = 3; i <= $#; i += 1)); do
@@ -54,10 +52,10 @@ package_knl()
 	# Creating FLASH image for dtb
 	case ${board} in
 	"MCR3000_1G")
-		dd if=/dev/zero of=$PATH_PKG/tmp/dtb.bin bs=1 count=64K;;
+		dd if=/dev/zero of=$PATH_PKG/tmp/root/dtb.bin bs=1 count=64K;;
 
 	"MCR3000_2G")
-		dd if=/dev/zero of=$PATH_PKG/tmp/dtb.bin bs=1 count=192K;;
+		dd if=/dev/zero of=$PATH_PKG/tmp/root/dtb.bin bs=1 count=192K;;
 	*)
 		echo "pkg_knl: Error board type unknown"
 		return 2;;
@@ -66,7 +64,7 @@ package_knl()
 	# concatenating DTB file
 	offset=0
 	for (( i = 3; i <= $#; i += 1)); do
-		dd if=${!i} of=$PATH_PKG/tmp/dtb.bin conv=notrunc bs=1 seek=${offset}K
+		dd if=${!i} of=$PATH_PKG/tmp/root/dtb.bin conv=notrunc bs=1 seek=${offset}K
 		offset=$(( offset + 16 ))
 	done
 
@@ -76,11 +74,11 @@ package_knl()
 	cp ./pkg_knl.control 	$PATH_PKG/DEBIAN/control
 	cp ./pkg_knl.postinst 	$PATH_PKG/DEBIAN/postinst
 	cp ./pkg_knl.preinst 	$PATH_PKG/DEBIAN/preinst
-	echo /tmp/${linux_file} > $PATH_PKG/DEBIAN/conffiles
-	echo /tmp/dtb.bin >> $PATH_PKG/DEBIAN/conffiles
+	echo /tmp/root/${linux_file} > $PATH_PKG/DEBIAN/conffiles
+	echo /tmp/root/dtb.bin >> $PATH_PKG/DEBIAN/conffiles
 
 	# replace with the good file name
-	sed -i "s#LINUX_FILE_NAME#/tmp/${linux_file}#g" $PATH_PKG/DEBIAN/postinst
+	sed -i "s#LINUX_FILE_NAME#/tmp/root/${linux_file}#g" $PATH_PKG/DEBIAN/postinst
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/preinst
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/control
 

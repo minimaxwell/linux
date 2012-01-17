@@ -1,12 +1,12 @@
 #!/bin/sh
 
 # copy dtb file
-dd if=/dev/mtd2 bs=`cat /tmp/dtb.bin | wc -c` count=1 2>/dev/null | cmp /tmp/dtb.bin 2>/dev/null
+dd if=/dev/mtd2 bs=`cat /tmp/root/dtb.bin | wc -c` count=1 2>/dev/null | cmp /tmp/root/dtb.bin 2>/dev/null
 if [ $? -eq 0 ]
 then
 	echo "DTB already in BOOT FLASH"
 else
-	/usr/sbin/flashcp -v /tmp/dtb.bin /dev/mtd2
+	/usr/sbin/flashcp -v /tmp/root/dtb.bin /dev/mtd2
 fi
 # copy KNL file
 dd if=/dev/mtd3 bs=`cat LINUX_FILE_NAME | wc -c` count=1 2>/dev/null | cmp LINUX_FILE_NAME 2>/dev/null
@@ -18,5 +18,5 @@ else
 fi
 # remove binary file
 rm -f LINUX_FILE_NAME 
-rm -f /tmp/dtb.bin
+rm -f /tmp/root/dtb.bin
 echo "KNL successfuly installed!"
