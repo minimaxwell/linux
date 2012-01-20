@@ -610,15 +610,22 @@
 				
 			};
 			
-			dummy_pio {
+			DUM_PIC: dummy_pio {
+				interrupt-controller;
 				compatible = "s3k,dummy_pio";
-				reg = <0xa980 0x40>;
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+				interrupts = <25>;
+				interrupt-parent = <&CPM_PIC>;
+				reg = <0x980 0x40>;
 			};
 
 			dummy: gpio-controller@dummygpio {
 				#gpio-cells = <2>;
 				compatible = "s3k,dummy-gpio";
 				reg = <0x2 0x1>; /* necessaire mais non utilise */
+				interrupts = <0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31>;
+				interrupt-parent = <&DUM_PIC>;
 				gpio-controller;
 			};
 		};
