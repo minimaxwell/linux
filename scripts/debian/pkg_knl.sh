@@ -92,7 +92,7 @@ package_knl()
 		sed -i "s/KNL_MODEL_SUPPORT/MCR3000/g" $PATH_PKG/DEBIAN/preinst;;
 
 	"MCR3000_2G")
-		sed -i "s/KNL_MODEL_SUPPORT/MCR3000_2G CMPC885/g" $PATH_PKG/DEBIAN/preinst;;
+		sed -i "s/KNL_MODEL_SUPPORT/MCR3000_2G MIAE CMPC885/g" $PATH_PKG/DEBIAN/preinst;;
 
 	*)
 		echo "pkg_knl: Error model of board unknown"
