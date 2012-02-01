@@ -168,12 +168,17 @@ static ssize_t fs_attr_colour_store(struct device *dev, struct device_attribute 
 	
 	if (colour != -1 && colour != COLOUR_NONE) {
 		data->colour = colour;
-		if (in_be16(&cpld->cmde) & COLOUR_MASK) { /* si led allumee on applique la nouvelle couleur */
-			clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
-			if (data->led_fav) {
+		if (data->led_fav) {
+			/* si led allumee on applique la nouvelle couleur */
+			if (*(data->led_fav) & DEPORT_MASK) {
 				colour = deport_val(colour);
 				clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
 			}
+		}
+		else {
+			/* si led allumee on applique la nouvelle couleur */
+			if (in_be16(&cpld->cmde) & COLOUR_MASK)
+				clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
 		}
 	}
 	return count;
@@ -231,24 +236,27 @@ static void cpld_cmpc_led_pwr_set(struct led_classdev *cdev, enum led_brightness
 	
 	if (brightness) {
 		int colour = data->colour;
-		clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
 		if (data->led_fav) {
 			colour = deport_val(colour);
 			clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
 		}
+		else
+			clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
 	}
 	else if (data->blink) {
 		int colour = data->colour_blink;
-		clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
 		if (data->led_fav) {
 			colour = deport_val(colour);
 			clrsetbits_be16(data->led_fav, colour ^ DEPORT_MASK, colour);
 		}
+		else
+			clrsetbits_be16(&cpld->cmde, colour ^ COLOUR_MASK, colour);
 	}
 	else {
-		clrbits16(&cpld->cmde, COLOUR_MASK);
 		if (data->led_fav)
 			clrbits16(data->led_fav, DEPORT_MASK);
+		else
+			clrbits16(&cpld->cmde, COLOUR_MASK);
 	}
 }
 
@@ -328,6 +336,7 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 				ret = -ENOMEM;
 				goto err_led;
 			}
+			clrbits16(&cpld->cmde, COLOUR_MASK);
 		}
 	}
 	np = dev->of_node;

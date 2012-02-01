@@ -84,10 +84,10 @@ int fpgam_get_irq(void)
 	int vec;
 	int ret;
 
-	if (in_be16(&fpgam_regs->it_pend1))
-		vec = 16 - ffs(in_be16(&fpgam_regs->it_pend1));
+	if (in_be16(&fpgam_regs->it_pend1) & 0x07FF)
+		vec = 16 - ffs(in_be16(&fpgam_regs->it_pend1) & 0x07FF);
 	else
-		vec = 32 - ffs(in_be16(&fpgam_regs->it_pend2));
+		vec = 32 - ffs(in_be16(&fpgam_regs->it_pend2) & 0x0FFF);
 	
 	ret=irq_linear_revmap(fpgam_pic_host, vec);
 	return ret;
@@ -133,10 +133,10 @@ int fpgam_pic_init(void)
 	if (irq == NO_IRQ)
 		goto end;
 
-	/* Initialize the FPGAF interrupt controller. */
+	/* Initialize the FPGAM interrupt controller. */
 	hwirq = (unsigned int)irq_map[irq].hwirq;
 
-	fpgam_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &fpgam_pic_host_ops, 16);
+	fpgam_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 32, &fpgam_pic_host_ops, 32);
 	if (fpgam_pic_host == NULL) {
 		printk(KERN_ERR "FPGAM PIC: failed to allocate irq host!\n");
 		irq = NO_IRQ;

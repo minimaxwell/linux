@@ -184,7 +184,7 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x30 2>;
-				interrupts = <255 255 2 3 4 5 6 7 8 9 10 11 12 13 14 15>;
+				interrupts = <255 255 255 255 255 5 6 7 8 9 10 11 12 13 14 15>;
 				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
@@ -204,12 +204,16 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x42 2>;
+				interrupts = <255 255 255 255 255 255 255 255 255 255 255 255 28 30 29 31>;
+				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
 			fav: gpio-controller@44 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x44 2>;
+				interrupts = <255 255 255 255 255 255 255 255 255 25 255 27 255 24 255 26>;
+				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
 			statpll: gpio-controller@50 {
@@ -228,8 +232,6 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x54 2>;
-//				interrupts = <255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255>;
-//				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
 			FPGAM_PIC: pic@22 {
@@ -240,7 +242,6 @@
 				interrupt-parent = <&PIC>;
 				reg = <0x00 0x60>;	// Mappage registres FPGAF
 				compatible = "s3k,miae-pic";
-//				compatible = "s3k,mcr3000_2g-pic";
 			};
 		};
 		
@@ -269,9 +270,9 @@
 //			reg = <4 0x3000000 0xFFFF>;
 //		};
 
-		codec {
-			compatible = "s3k,mcr3000-codec";
-		};
+//		codec {
+//			compatible = "s3k,mcr3000-codec";
+//		};
 
 //		alarmes {
 //			compatible = "s3k,mcr3000-alarmes";
@@ -294,8 +295,8 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-dsp";
 			reg = <7 0x0 0x0008>;
-			interrupts = <0 1>;
-			interrupt-parent = <&FPGAM_PIC>;
+//			interrupts = <0 1>;
+//			interrupt-parent = <&FPGAM_PIC>;
 		};
 
 		GPIO {
@@ -304,10 +305,8 @@
 			/* 2 = sortie initialisee inactive */
 			compatible = "s3k,gpios-appli";
 			gpios = <&torin  15 1	// TOR in 1
-//				&torin   14 1	// TOR in 2
-//				&torin   13 1	// TOR in 3
-				&rst   12 2	// TOR in 2
-				&rst   3 2	// TOR in 3
+				&torin   14 1	// TOR in 2
+				&torin   13 1	// TOR in 3
 				&torin   12 1	// TOR in 4
 				&torin   11 1	// TOR in 5
 				&torin   10 1	// TOR in 6
@@ -338,7 +337,7 @@
 				&etatref 10 1	// Alternat res
 				&etatref  9 1>;	// Alternat res
 			names = "tor_in_1",
-				"tor_in_2",
+				"tor_in_1",
 				"tor_in_3",
 				"tor_in_4",
 				"tor_in_5",
@@ -353,14 +352,14 @@
 				"it1_res_3",
 				"it1_res_4",
 				"it1_res_5",
-				"alt_poussoir",
-				"alt_interphone",
-				"alt_pedale",
-				"alt_combine",
-				"alt_main_1",
-				"alt_main_2",
-				"alt_casque_1",
-				"alt_casque_2",
+				"alt_1",
+				"alt_2",
+				"alt_3",
+				"alt_4",
+				"alt_5",
+				"alt_6",
+				"alt_7",
+				"alt_8",
 				"it2_res_1",
 				"it2_res_2",
 				"it2_res_3",
@@ -519,6 +518,8 @@
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440>;
+				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
+				param = "SCC4";
 			};
 
 			smc1: serial@a80 {
@@ -593,6 +594,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
+					name_codec = "codec 1";
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -607,6 +609,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
+					name_codec = "codec 2";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25080", "cs,eeprom";
@@ -621,6 +624,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
+					name_codec = "codec 3";
 				};
 				lm74@5 {
 					compatible = "ti,tmp121", "ns,lm74";
