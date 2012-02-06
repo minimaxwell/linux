@@ -36,7 +36,8 @@ if [ -f ./vmlinux.bin.gz ] ; then
 	# compresse en LZMA
 	lzma -z ./vmlinux.bin -c > ./vmlinux.bin.lzma
 	if [ $? != 0 ] ; then
-		lzma e ./vmlinux.bin ./vmlinux.bin.lzma -d12
+		echo "Version de LZMA introuvable ou incorrect. Utilisez <yum install lzma> pour son installation!"
+		exit 2
 	fi
 	# creation de l'image U-BOOT
 	mkimage -C lzma -A PowerPC -O Linux -T Kernel -a 0 -e 0 -n $BINARY_NAME -d ./vmlinux.bin.lzma ./uImage.lzma

@@ -1,5 +1,5 @@
 /*
- * drivers/mtd/nand/mod885.c
+ * drivers/mtd/nand/cmpc885.c
  *
  * Copyright (C) 2010 CSSI
  *
@@ -9,7 +9,7 @@
  *
  * Overview:
  *   This is a device driver for the NAND flash device found on the
- *   MOD885 board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
+ *   CMPC885 board which utilizes the Toshiba TC58256FT/DC or Sandisk SDTNE-256
  *   part.
  */
 
@@ -30,13 +30,13 @@
 /*
  * Driver identification
  */
-#define DRV_NAME	"mod885-nand"
+#define DRV_NAME	"cmpc885-nand"
 #define DRV_VERSION	"1.0"
 #define DRV_AUTHOR	"Florent TRINH THAI"
-#define DRV_DESC	"MOD885 on-chip NAND FLash Controller Driver"
+#define DRV_DESC	"CMPC885 on-chip NAND FLash Controller Driver"
 
 /*
- * Structure for MTD MOD885 NAND chip
+ * Structure for MTD CMPC885 NAND chip
  */
 typedef enum
 {
@@ -46,7 +46,7 @@ typedef enum
 	NB_NAND_GPIO
 } e_nand_gpio;
 
-struct mod885_host
+struct cmpc885_host
 {
 	struct nand_chip	nand_chip;
 	struct mtd_info		mtd;
@@ -57,10 +57,10 @@ struct mod885_host
 };
 
 /*
- * Values specific to the MOD885 board (used with PPC8xx processor)
+ * Values specific to the CMPC885 board (used with PPC8xx processor)
  */
-#define MOD885_FIO_BASE		0xC0000000	/* Address where flash is mapped 			*/
-#define MOD885_CPLD_STATUS	0xC8000000	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
+#define CMPC885_FIO_BASE		0xC0000000	/* Address where flash is mapped 			*/
+#define CMPC885_CPLD_STATUS	0xC8000000	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
 
 /*
  * Define partitions for flash device
@@ -77,10 +77,10 @@ static struct mtd_partition partition_info[] = {
 /* 
  *	hardware specific access to control-lines
 */
-static void mod885_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
+static void cmpc885_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 {
 	struct nand_chip *nand_chip 	= mtd->priv;
-	struct mod885_host *host	= nand_chip->priv;
+	struct cmpc885_host *host	= nand_chip->priv;
 	
 	/* The hardware control change */
 	if (ctrl & NAND_CTRL_CHANGE) {
@@ -118,10 +118,10 @@ static void mod885_hwcontrol(struct mtd_info *mtd, int cmd, unsigned int ctrl)
 /*
  *	read device ready pin
  */
-static int mod885_device_ready(struct mtd_info *mtd)
+static int cmpc885_device_ready(struct mtd_info *mtd)
 {
 	struct nand_chip *nand_chip 	= mtd->priv;
-	struct mod885_host *host	= nand_chip->priv;
+	struct cmpc885_host *host	= nand_chip->priv;
 	
 	/* The NAND FLASH is ready */
 	if (*((unsigned short *)(host->cpld_base + 0x00000002)) & 0x0004) {
@@ -131,15 +131,20 @@ static int mod885_device_ready(struct mtd_info *mtd)
 	return (0);
 }
 
+/* un peu tordu comme facon de faire, il faut trouver mieux */
+#ifndef CONFIG_MTD_NAND_MCR3000
 const char *part_probes[] = { "cmdlinepart", NULL };
+#else
+extern const char *part_probes[];
+#endif
 
 
 /*
- * mod885_remove
+ * cmpc885_remove
  */
-static int __devexit mod885_remove(struct platform_device *ofdev)
+static int __devexit cmpc885_remove(struct platform_device *ofdev)
 {
-	struct mod885_host *host = dev_get_drvdata(&ofdev->dev);
+	struct cmpc885_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
 	int i;
 
@@ -157,11 +162,11 @@ static int __devexit mod885_remove(struct platform_device *ofdev)
 }
 
 /*
- * mod885_probe
+ * cmpc885_probe
  */
-static int __devinit mod885_probe(struct platform_device *ofdev)
+static int __devinit cmpc885_probe(struct platform_device *ofdev)
 {
-	struct mod885_host *host;
+	struct cmpc885_host *host;
 	struct mtd_info *mtd;
 	struct nand_chip *nand_chip;
 	struct mtd_partition *partitions = NULL;
@@ -170,7 +175,7 @@ static int __devinit mod885_probe(struct platform_device *ofdev)
 	int i;
 
 	/* Allocate memory for the device structure (and zero it) */
-	host = kzalloc(sizeof(struct mod885_host), GFP_KERNEL);
+	host = kzalloc(sizeof(struct cmpc885_host), GFP_KERNEL);
 	if (!host) {
 		dev_err(&ofdev->dev, "failed to allocate device structure.\n");
 		res = -ENOMEM;
@@ -184,7 +189,7 @@ static int __devinit mod885_probe(struct platform_device *ofdev)
 		goto IOREMAP_NAND_ERROR;
 	}
 	
-	host->cpld_base = ioremap(MOD885_CPLD_STATUS, 0x00000010);
+	host->cpld_base = ioremap(CMPC885_CPLD_STATUS, 0x00000010);
 	if (host->cpld_base == NULL) {
 		dev_err(&ofdev->dev, "ioremap for CPLD failed\n");
 		res = -EIO;
@@ -197,7 +202,7 @@ static int __devinit mod885_probe(struct platform_device *ofdev)
 
 	nand_chip->priv = host;		/* link the private data structures */
 	mtd->priv = nand_chip;
-	mtd->name = "mod885-nand";
+	mtd->name = "cmpc885-nand";
 	mtd->owner = THIS_MODULE;
 	mtd->dev.parent = &ofdev->dev;
 
@@ -205,8 +210,8 @@ static int __devinit mod885_probe(struct platform_device *ofdev)
 	nand_chip->IO_ADDR_R = (void *)host->io_base;
 	nand_chip->IO_ADDR_W = (void *)host->io_base;
 
-	nand_chip->cmd_ctrl 	= mod885_hwcontrol;
-	nand_chip->dev_ready 	= mod885_device_ready;
+	nand_chip->cmd_ctrl 	= cmpc885_hwcontrol;
+	nand_chip->dev_ready 	= cmpc885_device_ready;
 	nand_chip->ecc.mode 	= NAND_ECC_SOFT;	/* enable ECC */
 	nand_chip->chip_delay 	= 20;			/* 20us command delay time */
 
@@ -311,48 +316,48 @@ MEMALLOC_ERROR:
 }
 
 
-static const struct of_device_id mod885_match[] =
+static const struct of_device_id cmpc885_match[] =
 {
 	{
-		.compatible   = "s3k,mod885-nand",
+		.compatible   = "s3k,cmpc885-nand",
 	},
 	{},
 };
 
-MODULE_DEVICE_TABLE(of, mod885_match);
+MODULE_DEVICE_TABLE(of, cmpc885_match);
 
 /*
  * driver device registration
  */
-static struct platform_driver mod885_driver = {
-	.probe		= mod885_probe,
-	.remove		= __devexit_p(mod885_remove),
+static struct platform_driver cmpc885_driver = {
+	.probe		= cmpc885_probe,
+	.remove		= __devexit_p(cmpc885_remove),
 	.driver		=
 	{
 		.name		= DRV_NAME,
 		.owner		= THIS_MODULE,
-		.of_match_table	= mod885_match,
+		.of_match_table	= cmpc885_match,
 	},
 };
 
 /*
  * Main initialization routine
  */
-int __init mod885_init (void)
+int __init cmpc885_init (void)
 {
-	return platform_driver_register(&mod885_driver);
+	return platform_driver_register(&cmpc885_driver);
 }
 
 /*
  * Clean up routine
  */
-static void __exit mod885_cleanup(void)
+static void __exit cmpc885_cleanup(void)
 {
-	platform_driver_unregister(&mod885_driver);
+	platform_driver_unregister(&cmpc885_driver);
 }
 
-module_init(mod885_init);
-module_exit(mod885_cleanup);
+module_init(cmpc885_init);
+module_exit(cmpc885_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRV_AUTHOR);

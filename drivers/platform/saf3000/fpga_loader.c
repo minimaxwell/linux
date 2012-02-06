@@ -54,8 +54,11 @@
 #define DONEFPGA 1
 #define RST_FPGA 2
 
+#define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
+
 struct fpga_data {
-	u8 __iomem *version,*board;
+	u16 __iomem *version;
+	u8 __iomem *board;
 	struct device *dev;
 	int gpio[NB_GPIO]; /* initfpga, donefpga, rst_fpga */
 	int status;
@@ -102,12 +105,15 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 				dev_err(dev,"fw load failed, data not complete\n");
 			}
 			else {
-				u8 version, board;
+				u16 version;
+				u8 board;
 				dev_info(dev,"fw load ok\n");
 				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
 				data->status = STATUS_LOADED;
 				version = *data->version;
-				dev_info(dev,"fw version %X.%X\n",(version>>4)&0xf, version&0xf);
+				if ((version >> 8) == 0xFF)
+					version <<= 8;
+				dev_info(dev,"fw version %X.%X.%X.%X\n", (version>>12)&0xf, (version>>8)&0xf, (version>>4)&0xf, version&0xf);
 				if (data->board) {
 					board = *data->board;
 					dev_info(dev,"adresse carte %X.%X\n",(board>>4)&0xf, board&0xf);
@@ -147,7 +153,7 @@ static ssize_t fs_attr_status_store(struct device *dev, struct device_attribute 
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
 
-	if (data->status != STATUS_WAITING && !strncmp("reload",buf,6)) {
+	if (data->status != STATUS_WAITING && sysfs_streq(buf,"reload")) {
 		data->status = STATUS_WAITING;
 		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
@@ -162,32 +168,60 @@ static DEVICE_ATTR(status, S_IRUGO | S_IWUSR | S_IWGRP, fs_attr_status_show, fs_
 static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
-	u8 version = *data->version;
+	u16 version = *data->version;
 	
+	if ((version >> 8) == 0xFF)
+		version <<= 8;
 	return data->status == STATUS_LOADED?
-			snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf):
-			snprintf(buf, PAGE_SIZE, "-.-\n");
+			snprintf(buf, PAGE_SIZE, "%X.%X.%X.%X\n", EXTRACT(version,12,4), EXTRACT(version,8,4), EXTRACT(version,4,4), EXTRACT(version,0,4)):
+			snprintf(buf, PAGE_SIZE, "-.-.-.-\n");
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
+/* adresse lue sur fond panier 0..255 */
+static ssize_t fs_attr_addr_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpga_data *data = dev_get_drvdata(dev);
+	u8 id = *data->board;
+	
+	return data->status == STATUS_LOADED?
+			snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(id,0,8)):
+			snprintf(buf, PAGE_SIZE, "-1\n");
+}
+static DEVICE_ATTR(addr, S_IRUGO, fs_attr_addr_show, NULL);
+
+/* numero de carte 0..127 */
 static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
 	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			snprintf(buf, PAGE_SIZE, "%d\n",id):
+			snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(id,0,7)):
 			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(board, S_IRUGO, fs_attr_board_show, NULL);
 
+/* type de chassis 0..1 */
+static ssize_t fs_attr_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpga_data *data = dev_get_drvdata(dev);
+	u8 id = *data->board;
+	
+	return data->status == STATUS_LOADED?
+			snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(id,7,1)):
+			snprintf(buf, PAGE_SIZE, "-1\n");
+}
+static DEVICE_ATTR(type, S_IRUGO, fs_attr_type_show, NULL);
+
+/* numero de chassis 0..7 */
 static ssize_t fs_attr_rack_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
 	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			snprintf(buf, PAGE_SIZE, "%d\n",(id>>4)&0xf):
+			snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(id,4,3)):
 			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(rack, S_IRUGO, fs_attr_rack_show, NULL);
@@ -198,7 +232,7 @@ static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *at
 	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			snprintf(buf, PAGE_SIZE, "%d\n",(id>>0)&0xf):
+			snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(id,0,4)):
 			snprintf(buf, PAGE_SIZE, "-1\n");
 }
 static DEVICE_ATTR(slot, S_IRUGO, fs_attr_slot_show, NULL);
@@ -267,7 +301,9 @@ static int __devinit fpga_probe(struct platform_device *ofdev)
 		dev_set_drvdata(infos, data);
 		data->infos = infos;
 	
-		if ((ret=device_create_file(infos, &dev_attr_board))
+		if ((ret=device_create_file(infos, &dev_attr_addr))
+				|| (ret=device_create_file(infos, &dev_attr_board))
+				|| (ret=device_create_file(infos, &dev_attr_type))
 				|| (ret=device_create_file(infos, &dev_attr_rack))
 				|| (ret=device_create_file(infos, &dev_attr_slot)))
 			goto err_unfile;
@@ -294,7 +330,9 @@ err_unfile:
 	device_unregister(loader);
 	data->loader = NULL;
 	if (infos) {
+		device_remove_file(infos, &dev_attr_addr);
 		device_remove_file(infos, &dev_attr_board);
+		device_remove_file(infos, &dev_attr_type);
 		device_remove_file(infos, &dev_attr_rack);
 		device_remove_file(infos, &dev_attr_slot);
 		device_unregister(infos);
@@ -330,7 +368,9 @@ static int fpga_remove(struct platform_device *ofdev)
 	device_unregister(loader);
 	data->loader = NULL;
 	if (infos) {
+		device_remove_file(infos, &dev_attr_addr);
 		device_remove_file(infos, &dev_attr_board);
+		device_remove_file(infos, &dev_attr_type);
 		device_remove_file(infos, &dev_attr_rack);
 		device_remove_file(infos, &dev_attr_slot);
 		device_unregister(infos);

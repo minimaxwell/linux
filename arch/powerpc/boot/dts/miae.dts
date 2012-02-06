@@ -1,13 +1,14 @@
 /*
- * MCR3000_2G Device Tree Source
+ * MIA ethernet Device Tree Source
  *
- * Copyright 2010 CSSI, Inc
+ * Copyright 2011 CSSI, Inc
  */
 
 /dts-v1/;
 
 / {
-	model = "MCR3000_2G";
+	model = "MIAE";
+//	model = "MCR3000_2G";
 	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -97,7 +98,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-cpld-cmpc";
-			reg = <5 0x0 0x10>;
+			reg = <5 0x0 0x10 4 0x44 0x2>;
 		};
 		
 		cpld-mpc@5,0000000 { // Driver LDB (deviendra obsolete)
@@ -107,161 +108,151 @@
 			reg = <5 0x0 0x10>;
 		};
 		
-		fpgaf-info@4,0000002 { // Driver KNL
+		fpga-m@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpgaf-info";
-			reg = <4 0x0 0x90 6 0x0 0x0002>;	// Mappage registres FPGAF ; Ident carte Mezzanine
-		};
-
-		fpga-f@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-f";
-			reg = <4 0x0000000 0x90 6 0x0 0x0002>;
-			ranges = <0 4 0x0000000 0x90>;
+			compatible = "s3k,mcr3000-fpga-m";
+			reg = <4 0x0000000 0x60>;
+			ranges = <0 4 0x0000000 0x60>;
 			ident: gpio-controller@00 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x00 2>;
 				gpio-controller;
 			};
 			ver: gpio-controller@02 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x02 2>;
+				gpio-controller;
+			};
+			tst: gpio-controller@04 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x04 2>;
 				gpio-controller;
 			};
 			rst: gpio-controller@10 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x10 2>;
 				gpio-controller;
 			};
-			mask: gpio-controller@20 {
+			mask1: gpio-controller@20 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x20 2>;
 				gpio-controller;
 			};
-			pend: gpio-controller@22 {
+			mask2: gpio-controller@22 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x22 2>;
 				gpio-controller;
 			};
-			acq: gpio-controller@24 {
+			pend1: gpio-controller@24 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x24 2>;
 				gpio-controller;
 			};
-			ctrl: gpio-controller@26 {
+			pend2: gpio-controller@26 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x26 2>;
 				gpio-controller;
 			};
-			alin: gpio-controller@30 {
+			acq1: gpio-controller@28 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
-				reg = <0x30 2>;
-				interrupts = <255 255 255 255 255 255 255 255 8 9 10 11 12 13 14 15>;
-				interrupt-parent = <&FPGAF_PIC>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x28 2>;
 				gpio-controller;
 			};
-			alout: gpio-controller@32 {
+			acq2: gpio-controller@2A {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x2A 2>;
+				gpio-controller;
+			};
+			ctrl: gpio-controller@2C {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x2C 2>;
+				gpio-controller;
+			};
+			torin: gpio-controller@30 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x30 2>;
+				interrupts = <255 255 255 255 255 5 6 7 8 9 10 11 12 13 14 15>;
+				interrupt-parent = <&FPGAM_PIC>;
+				gpio-controller;
+			};
+			torout: gpio-controller@32 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x32 2>;
 				gpio-controller;
 			};
 			gen: gpio-controller@40 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x40 2>;
 				gpio-controller;
 			};
-			adr: gpio-controller@42 {
+			far: gpio-controller@42 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x42 2>;
+				interrupts = <255 255 255 255 255 255 255 255 255 255 255 255 28 30 29 31>;
+				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
-			ctrpll: gpio-controller@50 {
+			fav: gpio-controller@44 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x44 2>;
+				interrupts = <255 255 255 255 255 255 255 255 255 25 255 27 255 24 255 26>;
+				interrupt-parent = <&FPGAM_PIC>;
+				gpio-controller;
+			};
+			statpll: gpio-controller@50 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x50 2>;
 				gpio-controller;
 			};
-			statpll: gpio-controller@52 {
+			srcpll: gpio-controller@52 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x52 2>;
 				gpio-controller;
 			};
-			srcpll: gpio-controller@54 {
+			etatref: gpio-controller@54 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
+				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x54 2>;
 				gpio-controller;
 			};
-			netref: gpio-controller@60 {
-				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
-				reg = <0x60 2>;
-				gpio-controller;
-			};
-			etaref: gpio-controller@62 {
-				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
-				reg = <0x62 2>;
-				interrupts = <255 255 255 255 255 255 255 255 255 255 2 4 3 5 6 7>;
-				interrupt-parent = <&FPGAF_PIC>;
-				gpio-controller;
-			};
-			h110syn: gpio-controller@70 {
-				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
-				reg = <0x70 2>;
-				gpio-controller;
-			};
-			test: gpio-controller@80 {
-				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-f-gpio";
-				reg = <0x80 2>;
-				gpio-controller;
-			};
-			FPGAF_PIC: pic@22 {
+			FPGAM_PIC: pic@22 {
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <14 1>;
+				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x0 0x90>;	// Mappage registres FPGAF
-				compatible = "s3k,mcr3000_2g-pic";
+				reg = <0x00 0x60>;	// Mappage registres FPGAF
+				compatible = "s3k,miae-pic";
 			};
 		};
 		
-		fpga@4,1000000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga";
-			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
-			// registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA
-			interrupts = <6 1>;
-			interrupt-parent = <&PIC>;
-		};
-		
-		uart-fpga@4,1000000 {
-			device_type = "serial";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-uart-fpga";
-			reg = <4 0x1000000 0x0200>;
-			interrupts = <6 1>;
-			interrupt-parent = <&PIC>;
-		};
+//		fpga@4,1000000 {
+//			#address-cells = <1>;
+//			#size-cells = <1>;
+//			compatible = "s3k,mcr3000-fpga";
+//			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
+//			interrupts = <6 1>;
+//			interrupt-parent = <&PIC>;
+//		};
 
 		e1@4,2000000 {
 			#address-cells = <1>;
@@ -272,27 +263,23 @@
 			interrupt-parent = <&PIC>;
 		};
 		
-		mtsl@4,3000000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-mtsl";
-			reg = <4 0x3000000 0xFFFF>;
-		};
+//		mtsl@4,3000000 {
+//			#address-cells = <1>;
+//			#size-cells = <1>;
+//			compatible = "s3k,mcr3000-mtsl";
+//			reg = <4 0x3000000 0xFFFF>;
+//		};
 
-		codec {
-			compatible = "s3k,mcr3000-codec";
-		};
+//		codec {
+//			compatible = "s3k,mcr3000-codec";
+//		};
 
-		mcs {
-			compatible = "s3k,mcr3000-mcs";
-		};
-
-		alarmes {
-			compatible = "s3k,mcr3000-alarmes";
-			gpios = <&alin 13 1 	// ACQ_ALRM
-				&alout 15 1	// ALRM_MAJ
-				&alout 14 1>;	// ALRM_MIN
-		};
+//		alarmes {
+//			compatible = "s3k,mcr3000-alarmes";
+//			gpios = <&alin 13 1 	// ACQ_ALRM
+//				&alout 15 1	// ALRM_MAJ
+//				&alout 14 1>;	// ALRM_MIN
+//		};
 		
 		dpram@3,0 {
 			#address-cells = <1>;
@@ -308,45 +295,79 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-dsp";
 			reg = <7 0x0 0x0008>;
-			interrupts = <0 1>;
-			interrupt-parent = <&FPGAF_PIC>;
+//			interrupts = <0 1>;
+//			interrupt-parent = <&FPGAM_PIC>;
 		};
 
-		fpga-loader@4,100009c {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 2>;			// Version FPGA
-			gpios = <&FPGA_CS0 1 1			// INITFPGA
-				 &CPM1_PIO_E 23 1		// DONEFPGA
-				 &rst 13 1 >;			// RST_FPGA
-		};
-		c4e1@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-c4e1";
-			reg = <6 0x100 0x00FF 6 0x200 0x00FF 6 0x300 0x00FF 6 0x400 0x00FF 6 0x500 0x00FF>;
-			interrupts = <12 1>;
-			interrupt-parent = <&PIC>;
-		};
-
-		fpga-loader@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-mezz-loader";
-			reg = <6 0x500 2>; 		// Version FPGA Mezz
-			gpios = <&FPGA_CS1 1 1		// INIT Mezz
-				&CPM1_PIO_B 17 1	// DONE Mezz
-				&rst 9 1 >;		// RST Mezz
-		};
-
-		cag@6,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-cag";
-			reg = <6 0x0 0x0020>;
-			interrupts = <12 1>;
-			interrupt-parent = <&PIC>;
+		GPIO {
+			/* 0 = sortie initialisee active */
+			/* 1 = entree */
+			/* 2 = sortie initialisee inactive */
+			compatible = "s3k,gpios-appli";
+			gpios = <&torin  15 1	// TOR in 1
+				&torin   14 1	// TOR in 2
+				&torin   13 1	// TOR in 3
+				&torin   12 1	// TOR in 4
+				&torin   11 1	// TOR in 5
+				&torin   10 1	// TOR in 6
+				&torin    9 1	// TOR in 7
+				&torin    8 1	// TOR in 8
+				&torin    7 1	// TOR in 9
+				&torin    6 1	// TOR in 10
+				&torin    5 1	// TOR in 11
+				&torin    4 1	// TOR res
+				&torin    3 1	// TOR res
+				&torin    2 1	// TOR res
+				&torin    1 1	// TOR res
+				&torin    0 1	// TOR res
+				&far     15 1	// Alternat BP
+				&far     13 1	// Alternat 1
+				&far     14 1	// Alternat 2
+				&far     12 1	// Alternat Combine
+				&fav     11 1	// Alternat µMain1
+				&fav     15 1	// Alternat µMain2
+				&fav      9 1	// Alternat µCasque1
+				&fav     13 1	// Alternat µCasque2
+				&gen     14 1	// Pres Alim 24V
+				&etatref 15 1	// Synchro E1
+				&etatref 14 1	// Synchro S0
+				&etatref 13 1	// Alternat res
+				&etatref 12 1	// Alternat res
+				&etatref 11 1	// Alternat res
+				&etatref 10 1	// Alternat res
+				&etatref  9 1>;	// Alternat res
+			names = "tor_in_1",
+				"tor_in_1",
+				"tor_in_3",
+				"tor_in_4",
+				"tor_in_5",
+				"tor_in_6",
+				"tor_in_7",
+				"tor_in_8",
+				"tor_in_9",
+				"tor_in_10",
+				"tor_in_11",
+				"it1_res_1",
+				"it1_res_2",
+				"it1_res_3",
+				"it1_res_4",
+				"it1_res_5",
+				"alt_1",
+				"alt_2",
+				"alt_3",
+				"alt_4",
+				"alt_5",
+				"alt_6",
+				"alt_7",
+				"alt_8",
+				"it2_res_1",
+				"it2_res_2",
+				"it2_res_3",
+				"it2_res_4",
+				"it2_res_5",
+				"it2_res_6",
+				"it2_res_7",
+				"it2_res_8";
 		};
 	};
 
@@ -382,6 +403,13 @@
 				reg = <0x2>;
 				device_type = "ethernet-phy";
 			};
+
+			PHY3: ethernet-phy@3 {
+				interrupts = <2 1>;
+				interrupt-parent = <&PIC>;
+				reg = <0x3>;
+				device_type = "ethernet-phy";
+			};
 		};
 
 		eth0: ethernet@e00 {
@@ -402,8 +430,9 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <7 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY2>;
+			phy-handle = <&PHY2 &PHY3>;
 			linux,network-index = <1>;
+			gpios = <&CPM1_PIO_E 18 1>;
 		};
 
 		PIC: pic@0 {
@@ -418,23 +447,6 @@
 			reg = <0x200 0x80>;
 			interrupts = <11 1>;
 			interrupt-parent = <&PIC>;
-		};
-
-		FPGA_CS0: gpio-controller@dummy0 {
-			#gpio-cells = <2>;
-			compatible = "s3k,mcr3000-fpga-cs";
-			gpio-controller;
-			reg = <0x0 0x1>;	// necessaire mais non utilise
-			gpios = <&CPM1_PIO_E 18 1	// PROGFPGA
-				 &CPM1_PIO_D 6 1>;	// INITFPGA
-		};
-		FPGA_CS1: gpio-controller@dummy1 {
-			#gpio-cells = <2>;
-			compatible = "s3k,mcr3000-fpga-cs";
-			gpio-controller;
-			reg = <0x1 0x1>; /* necessaire mais non utilise */
-			gpios = <&CPM1_PIO_B 16 1	// PROG
-				 &CPM1_PIO_B 22 1>;	// INIT
 		};
 
 		cpm@9c0 {
@@ -510,6 +522,13 @@
 				reg = <0xac8 0x18>;
 				gpio-controller;
 			};
+			
+			tsa: tsa@9c0 {
+				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
+				reg = <0x9c0 0x440>;
+				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
+				param = "SCC4";
+			};
 
 			smc1: serial@a80 {
 				device_type = "serial";
@@ -541,13 +560,12 @@
 				fsl,cpm-command = <0x80>;
 			};
 
-			scc4: serial@a60 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc4: tdm@a60 {
+				device_type = "tdm";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
 			};
 
@@ -557,8 +575,7 @@
 				reg = <0xa90 0x10 0x3f80 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
-				clock = "fpga";
+				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
 				fsl,cpm-command = <0xd0>;
 			};
 
@@ -571,21 +588,21 @@
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
-				gpios = <&CPM1_PIO_C 13 1	/* POT1 */
+				gpios = <&CPM1_PIO_C 4 1	/* SICOFI 1 */
 					 &CPM1_PIO_B 23 1	/* TEMP MCR */
-					 &CPM1_PIO_C 8 1	/* ARCOFI */
+					 &CPM1_PIO_C 8 1	/* SICOFI 2 */
 					 &CPM1_PIO_C 12 1	/* EEPROM MCR3000 2G*/
-					 &CPM1_PIO_C 14 1	/* POT2 */
-					 &CPM1_PIO_C 4 1	/* SICOFI */
+					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
-					 &FPGA_CS0 0 1		/* FPGA Radio */
-					 &FPGA_CS1 0 1		/* FPGA Mezz */
 					 &CPM1_PIO_B 21 1>;	/* EEPROM CMPC885 */
-				pot1@0 {
-					compatible = "cs,mcr3000-pot1";
+				sicofi@0 {
+					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <0>;
 					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec 1";
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -593,13 +610,14 @@
 					reg = <1>;
 					spi-cs-high;
 				};
-				arcofi@2 {
-					compatible = "infineon,mcr3000-arcofi";
+				sicofi@2 {
+					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
+					name_codec = "codec 2";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25080", "cs,eeprom";
@@ -607,47 +625,40 @@
 					reg = <3>;
 					spi-cs-high;
 				};
-				pot2@4 {
-					compatible = "cs,mcr3000-pot2";
+				sicofi@4 {
+					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <4>;
 					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec 3";
 				};
-				sicofi@5 {
-					compatible = "infineon,mcr3000-sicofi";
+				lm74@5 {
+					compatible = "ti,tmp121", "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <5>;
 					spi-cs-high;
-					spi-cpha;
-					spi-troll;
 				};
-				lm74@6 {
-					compatible = "ti,tmp121", "ns,lm74";
+				eeprom@6 {
+					compatible = "atmel,at25080", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
 					spi-cs-high;
 				};
-				fpga-loader@7 {
-					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <2000000>;
-					reg = <7>;
-					spi-cs-high;
-					loader = "mcr";
-				};
-				mezz@8 {
-					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <1000000>;
-					reg = <8>;
-					spi-cs-high;
-					loader = "mezz";
-				};
-				eeprom@9 {
-					compatible = "atmel,at25080", "cs,eeprom";
-					spi-max-frequency = <1000000>;
-					reg = <9>;
-					spi-cs-high;
-				};
 				
+			};
+			
+			dummy_pio {
+				compatible = "s3k,dummy_pio";
+				reg = <0xa980 0x40>;
+			};
+
+			dummy: gpio-controller@dummygpio {
+				#gpio-cells = <2>;
+				compatible = "s3k,dummy-gpio";
+				reg = <0x2 0x1>; /* necessaire mais non utilise */
+				gpio-controller;
 			};
 		};
 			

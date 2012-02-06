@@ -1,12 +1,13 @@
 /*
- * MCR3000_2G Device Tree Source
+ * MIA ethernet Device Tree Source
  *
- * Copyright 2010 CSSI, Inc
+ * Copyright 2011 CSSI, Inc
  */
 
 /dts-v1/;
 
 / {
+/*	model = "MIAE";*/
 	model = "MCR3000_2G";
 	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
@@ -247,18 +248,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga";
-			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
-			// registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA
-			interrupts = <6 1>;
-			interrupt-parent = <&PIC>;
-		};
-		
-		uart-fpga@4,1000000 {
-			device_type = "serial";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-uart-fpga";
-			reg = <4 0x1000000 0x0200>;
+			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
 			interrupts = <6 1>;
 			interrupt-parent = <&PIC>;
 		};
@@ -281,10 +271,6 @@
 
 		codec {
 			compatible = "s3k,mcr3000-codec";
-		};
-
-		mcs {
-			compatible = "s3k,mcr3000-mcs";
 		};
 
 		alarmes {
@@ -316,7 +302,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 2>;			// Version FPGA
+			reg = <4 0x100009c 1>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst 13 1 >;			// RST_FPGA
@@ -334,7 +320,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mezz-loader";
-			reg = <6 0x500 2>; 		// Version FPGA Mezz
+			reg = <6 0x501 1>; 		// Version FPGA Mezz
 			gpios = <&FPGA_CS1 1 1		// INIT Mezz
 				&CPM1_PIO_B 17 1	// DONE Mezz
 				&rst 9 1 >;		// RST Mezz
@@ -347,6 +333,68 @@
 			reg = <6 0x0 0x0020>;
 			interrupts = <12 1>;
 			interrupt-parent = <&PIC>;
+		};
+		
+		GPIO {
+				/* 0 = sortie initialisee active */
+				/* 1 = entree */
+				/* 2 = sortie initialisee inactive */
+			compatible = "s3k,gpios-appli";
+			gpios = <&alin 13 1 	// ACQ_ALRM
+				&dummy 0 1	// pedale
+				&dummy 1 1	// interphone
+				&dummy 2 1	// combine alt
+				&dummy 3 1	// combine dec
+				&dummy 4 1	// casque1 alt
+				&dummy 5 1	// casque2 alt
+				&dummy 6 1	// main1 alt
+				&dummy 7 1	// main2 alt
+				&dummy 8 1	// casque1 pres
+				&dummy 9 1	// casque2 pres
+				&dummy 10 1	// main1 pres
+				&dummy 11 1	// main2 pres
+				&dummy 12 1	// TOR in 1
+				&dummy 13 2	// TOR out 1
+				&dummy 14 1	// TOR in 2
+				&dummy 15 2	// TOR out 2
+				&dummy 16 1	// TOR in 3
+				&dummy 17 2	// TOR out 3
+				&dummy 18 1	// TOR in 4
+				&dummy 19 2	// TOR out 4
+				&dummy 20 1
+				&dummy 21 1
+				&dummy 22 1
+				&dummy 23 1
+				&dummy 24 1
+				&dummy 25 1
+				&dummy 26 1
+				&dummy 27 1
+				&dummy 28 1
+				&dummy 29 1
+				&dummy 30 1
+				&dummy 31 1>;
+			names = "acq_alrm",
+				"alt_pedale",
+				"alt_interphone",
+				"alt_combine",
+				"dec_combine",
+				"alt_casque_1",
+				"alt_casque_2",
+				"alt_main_1",
+				"alt_main_2",
+				"pres_casque_1",
+				"pres_casque_2",
+				"pres_main_1",
+				"pres_main_2",
+				"tor_in_1",
+				"tor_out_1",
+				"tor_in_2",
+				"tor_out_2",
+				"tor_in_3",
+				"tor_out_3",
+				"tor_in_4",
+				"tor_out_4";
+				
 		};
 	};
 
@@ -510,6 +558,11 @@
 				reg = <0xac8 0x18>;
 				gpio-controller;
 			};
+			
+			tsa: tsa@9c0 {
+				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
+				reg = <0x9c0 0x440>;
+			};
 
 			smc1: serial@a80 {
 				device_type = "serial";
@@ -541,13 +594,12 @@
 				fsl,cpm-command = <0x80>;
 			};
 
-			scc4: serial@a60 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc4: tdm@a60 {
+				device_type = "tdm";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
 			};
 
@@ -557,8 +609,7 @@
 				reg = <0xa90 0x10 0x3f80 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
-				clock = "fpga";
+				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
 				fsl,cpm-command = <0xd0>;
 			};
 
@@ -648,6 +699,25 @@
 					spi-cs-high;
 				};
 				
+			};
+			
+			DUM_PIC: dummy_pio {
+				interrupt-controller;
+				compatible = "s3k,dummy_pio";
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+				interrupts = <25>;
+				interrupt-parent = <&CPM_PIC>;
+				reg = <0x980 0x40>;
+			};
+
+			dummy: gpio-controller@dummygpio {
+				#gpio-cells = <2>;
+				compatible = "s3k,dummy-gpio";
+				reg = <0x2 0x1>; /* necessaire mais non utilise */
+				interrupts = <0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31>;
+				interrupt-parent = <&DUM_PIC>;
+				gpio-controller;
 			};
 		};
 			

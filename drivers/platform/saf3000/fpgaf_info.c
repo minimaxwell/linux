@@ -40,40 +40,12 @@
 #include <linux/leds.h>
 #include <sysdev/fsl_soc.h>
 #include <saf3000/saf3000.h>
+#include <saf3000/fpgaf.h>
 
 /*
  * driver FPGAF INFO
  */
  
-struct fpgaf {
-	u16 ident;
-	u16 version;
-	u16 res1[6];
-	u16 reset;
-	u16 res2[7];
-	u16 it_mask;
-	u16 it_pend;
-	u16 it_ack;
-	u16 it_ctr;
-	u16 res3[4];
-	u16 alrm_in;
-	u16 alrm_out;
-	u16 res4[6];
-	u16 fonc_gen;
-	u16 addr;
-	u16 res5[6];
-	u16 pll_ctr;
-	u16 pll_status;
-	u16 pll_src;
-	u16 res6[5];
-	u16 net_ref;
-	u16 etat_ref;
-	u16 res7[6];
-	u16 syn_h110;
-	u16 res8[7];
-	u16 test;
-};
-
 struct fpgaf_info_data {
 	struct fpgaf __iomem *fpgaf;
 	u16 *mezz;
@@ -94,7 +66,8 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
-static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
+/* adresse lue sur fond panier 0..255 */
+static ssize_t fs_attr_addr_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
@@ -102,18 +75,42 @@ static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *a
 
 	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,8));
 }
+static DEVICE_ATTR(addr, S_IRUGO, fs_attr_addr_show, NULL);
+
+/* numero de carte 0..127 */
+static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,0,7));
+}
 static DEVICE_ATTR(board, S_IRUGO, fs_attr_board_show, NULL);
 
+/* type de chassis 0..1 */
+static ssize_t fs_attr_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpgaf = data->fpgaf;
+	u16 addr = in_be16(&fpgaf->addr);
+	
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,7,1));
+}
+static DEVICE_ATTR(type, S_IRUGO, fs_attr_type_show, NULL);
+
+/* numero de chassis 0..7 */
 static ssize_t fs_attr_rack_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
 	u16 addr = in_be16(&fpgaf->addr);
 	
-	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,4,4));
+	return snprintf(buf, PAGE_SIZE, "%d\n",EXTRACT(addr,4,3));
 }
 static DEVICE_ATTR(rack, S_IRUGO, fs_attr_rack_show, NULL);
 
+/* numero d'emplacement dans chassis 0..15 */
 static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
@@ -132,19 +129,28 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 	u16 fonc_gen = in_be16(&fpgaf->fonc_gen);
 	u16 ident;
 	char *carte;
+	int l;
 	
 	if (fonc_gen & 0x8) { /* Mezzanine presente */
 		DEFINE_SPINLOCK(lock);
 		unsigned long flags;
+		int ident2;
 		
 		/* La carte C4E1 n'a pas de bus de donnees donc on fait une bidouille en utilisant la 
 		remanence du bus de donnees pour discriminer la carte C4E1 */
+		
 		spin_lock_irqsave(&lock, flags);
 		out_be16(mezz, 0xaa55);
 		ident = in_be16(mezz);
+		out_be16(mezz, 0x55aa);
+		ident2 = in_be16(mezz);
 		spin_unlock_irqrestore(&lock, flags);
-		if (ident == 0xaa55) { /* C4E1 */
+		
+		if (ident != ident2) { /* C4E1 */
 			ident = (1<<5) | 0;
+		}
+		else {
+			ident >>= 8;
 		}
 	}
 	else {
@@ -152,7 +158,7 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 	}
 	switch (ident) {
 	case 0x0:
-		carte = "Absente";
+		carte = "None";
 		break;
 	case 0x20:
 		carte = "C4E1";
@@ -161,10 +167,16 @@ static ssize_t fs_attr_mezz_show(struct device *dev, struct device_attribute *at
 		carte = "CAG";
 		break;
 	default:
-		carte = "Inconnue";
+		carte = NULL;
 		break;
 	}
-	return snprintf(buf, PAGE_SIZE, "%d %s\n",ident, carte);
+	if (carte) {
+		l = snprintf(buf, PAGE_SIZE, "%s\n", carte);
+	}
+	else {
+		l = snprintf(buf, PAGE_SIZE, "Unknown id %d\n", ident);
+	}
+	return l;
 }
 static DEVICE_ATTR(mezz, S_IRUGO, fs_attr_mezz_show, NULL);
 
@@ -188,10 +200,10 @@ static ssize_t fs_attr_alrm_store(struct device *dev, struct device_attribute *a
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct fpgaf *fpgaf = data->fpgaf;
 	
-	if (strncasecmp(buf, "manu", 4) == 0) {
+	if (sysfs_streq(buf, "manual")) {
 		setbits16(&fpgaf->alrm_out, 0x10);
 	}
-	else if (strncasecmp(buf, "auto", 4) == 0) {
+	else if (sysfs_streq(buf, "auto")) {
 		clrbits16(&fpgaf->alrm_out, 0x10);
 	}
 	return count;
@@ -291,7 +303,7 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 	data->fpgaf = fpgaf;
 	
 	mezz = of_iomap(np, 1);
-	if (fpgaf == NULL) {
+	if (mezz == NULL) {
 		dev_err(dev,"of_iomap MEZZ failed\n");
 		ret = -ENOMEM;
 		goto err_unmap0;
@@ -305,13 +317,16 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 	data->infos = infos;
 	
 	if ((ret=device_create_file(dev, &dev_attr_version))
+			|| (ret=device_create_file(infos, &dev_attr_addr))
 			|| (ret=device_create_file(infos, &dev_attr_board))
+			|| (ret=device_create_file(infos, &dev_attr_type))
 			|| (ret=device_create_file(infos, &dev_attr_rack))
 			|| (ret=device_create_file(infos, &dev_attr_slot))
 			|| (ret=device_create_file(infos, &dev_attr_mezz))
 			|| (ret=device_create_file(infos, &dev_attr_alrm))) {
 		goto err_unfile;
 	}
+
 	led_classdev_register(dev, &fpgaf_led_alrm1);
 	led_classdev_register(dev, &fpgaf_led_alrm2);
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
@@ -320,7 +335,9 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 
 err_unfile:
 	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_addr);
 	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_type);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);
@@ -347,7 +364,9 @@ static int __devexit fpgaf_info_remove(struct platform_device *ofdev)
 	led_classdev_unregister(&fpgaf_led_alrm1);
 	
 	device_remove_file(dev, &dev_attr_version);
+	device_remove_file(infos, &dev_attr_addr);
 	device_remove_file(infos, &dev_attr_board);
+	device_remove_file(infos, &dev_attr_type);
 	device_remove_file(infos, &dev_attr_rack);
 	device_remove_file(infos, &dev_attr_slot);
 	device_remove_file(infos, &dev_attr_mezz);

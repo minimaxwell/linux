@@ -1,0 +1,29 @@
+#!/bin/sh
+export PATH=$PATH:/sbin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+
+# copy dtb file
+dd if=/dev/mtd2 bs=`cat /tmp/root/dtb.bin | wc -c` count=1 2>/dev/null | cmp /tmp/root/dtb.bin 2>/dev/null
+if [ $? -eq 0 ]
+then
+	echo "DTB already in BOOT FLASH"
+else
+	flashcp -v /tmp/root/dtb.bin /dev/mtd2
+fi
+# copy KNL file
+dd if=/dev/mtd3 bs=`cat LINUX_FILE_NAME | wc -c` count=1 2>/dev/null | cmp LINUX_FILE_NAME 2>/dev/null
+if [ $? -eq 0 ]
+then
+	echo "KERNEL already in BOOT FLASH"
+else
+	flashcp -v LINUX_FILE_NAME /dev/mtd3
+fi
+# remove binary file
+rm -f LINUX_FILE_NAME 
+rm -f /tmp/root/dtb.bin
+# add ephemereral script for module dependencies update
+echo '#!/bin/sh' > /etc/rcS.d/S02_tmp_depmod
+echo 'depmod -a' >> /etc/rcS.d/S02_tmp_depmod
+echo 'rm -f $0' >> /etc/rcS.d/S02_tmp_depmod
+chmod a+x /etc/rcS.d/S02_tmp_depmod
+
+echo "KNL successfuly installed!"

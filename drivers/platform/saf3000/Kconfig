@@ -36,6 +36,14 @@ config OPX_GPIO
 	---help---
 	  Driver GPIO pour les Outputs OPx du MPC8xx
 
+config U16_GPIO
+	bool "Simple GPIO driver on u16 registers"
+	depends on GPIOLIB
+	depends on OF_GPIO
+	default y
+	---help---
+	  Driver GPIO sur des registres de 16 bits
+
 if MCR3000
 config MCR3000_CPLD
 	bool "CPLD ChipSelect SPI"
@@ -47,7 +55,7 @@ config MCR3000_CPLD
 	  Driver GPIO pour les ChipSelects SPI
 endif
 
-if MOD885
+if CMPC885
 config FPGAF_INFO
 	tristate "Infos FPGAF"
 	select SAF3000_CLASS

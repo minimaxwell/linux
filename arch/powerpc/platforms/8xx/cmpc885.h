@@ -3,8 +3,8 @@
  */
 
 #ifdef __KERNEL__
-#ifndef __ASM_MOD885_H__
-#define __ASM_MOD885_H__
+#ifndef __ASM_CMPC885_H__
+#define __ASM_CMPC885_H__
 
 /* Bits of interest in the BCSRs.
  */
@@ -35,5 +35,5 @@
 #define BCSR5_MII1_RST		0x01
 
 
-#endif /* __ASM_MOD885_H__ */
+#endif /* __ASM_CMPC885_H__ */
 #endif /* __KERNEL__ */

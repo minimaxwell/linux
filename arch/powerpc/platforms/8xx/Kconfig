@@ -5,9 +5,6 @@ config CPM1
 	bool
 	select CPM
 
-config SAF3000
-	bool
-
 choice
 	prompt "8xx Machine Type"
 	depends on PPC_8xx
@@ -26,21 +23,12 @@ config MPC86XADS
 	  The MPC86xADS is meant to serve as a platform for s/w and h/w
 	  development around the MPC86X processor families.
 
-config MOD885
-	bool "MOD885"
+config SAF3000
+	bool "SAF3000"
 	select DEFAULT_UIMAGE
 	select CPM1
-	select SAF3000
 	help
-	  MOD885 platform based on MPC885 CPU.
-
-config MCR3000
-	bool "MCR3000"
-	select DEFAULT_UIMAGE
-	select CPM1
-	select SAF3000
-	help
-	  MCR3000 platform based on MPC866 CPU.
+	  SAF3000 platform based on MPC8xx CPU (MCR3000, CMPC885)
 
 config MPC885ADS
 	bool "MPC885ADS"
@@ -75,6 +63,14 @@ config TQM8XX
 	  support for the mpc8xx based boards from TQM.
 
 endchoice
+
+config MCR3000
+	bool "Support for MCR3000 (MCR 1G)"
+	depends on SAF3000
+
+config CMPC885
+	bool "Support for CMPC885 (MCR 2G, MIAe)"
+	depends on SAF3000
 
 menu "Freescale Ethernet driver platform-specific options"
 	depends on (FS_ENET && MPC885ADS)

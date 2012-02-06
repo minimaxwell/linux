@@ -115,11 +115,11 @@ config MTD_NAND_AMS_DELTA
 	help
 	  Support for NAND flash on Amstrad E3 (Delta).
 
-config MTD_NAND_MOD885
-	bool "NAND Flash device on MOD885 board"
-	depends on MOD885
+config MTD_NAND_CMPC885
+	bool "NAND Flash device on CMPC885 board"
+	depends on CMPC885
 	help
-	  Support for NAND flash on MOD885 board.
+	  Support for NAND flash on CMPC885 board.
 
 config MTD_NAND_MCR3000
 	bool "NAND Flash device on MCR3000 board"

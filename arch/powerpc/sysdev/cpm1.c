@@ -531,6 +531,9 @@ struct cpm1_gpio16_chip {
 
 	/* shadowed data register to clear/set bits safely */
 	u16 cpdata;
+	
+	/* IRQ associated with Pins when relevant */
+	int irq[16];
 };
 
 static inline struct cpm1_gpio16_chip *
@@ -586,6 +589,29 @@ static void cpm1_gpio16_set(struct gpio_chip *gc, unsigned int gpio, int value)
 	spin_unlock_irqrestore(&cpm1_gc->lock, flags);
 }
 
+static int __cpm1_gpio16_to_irq(struct of_mm_gpio_chip *mm_gc, unsigned int gpio)
+{
+	struct cpm1_gpio16_chip *cpm1_gc = to_cpm1_gpio16_chip(mm_gc);
+	
+	return cpm1_gc->irq[gpio] ? cpm1_gc->irq[gpio] : -ENXIO;
+}
+
+static int cpm1_gpio16_to_irq(struct gpio_chip *gc, unsigned int gpio)
+{
+	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
+	struct cpm1_gpio16_chip *cpm1_gc = to_cpm1_gpio16_chip(mm_gc);
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&cpm1_gc->lock, flags);
+
+	ret = __cpm1_gpio16_to_irq(mm_gc, gpio);
+
+	spin_unlock_irqrestore(&cpm1_gc->lock, flags);
+	
+	return ret;
+}
+
 static int cpm1_gpio16_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
 {
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
@@ -626,12 +652,17 @@ int cpm1_gpiochip_add16(struct device_node *np)
 	struct cpm1_gpio16_chip *cpm1_gc;
 	struct of_mm_gpio_chip *mm_gc;
 	struct gpio_chip *gc;
+	int i;
 
 	cpm1_gc = kzalloc(sizeof(*cpm1_gc), GFP_KERNEL);
 	if (!cpm1_gc)
 		return -ENOMEM;
 
 	spin_lock_init(&cpm1_gc->lock);
+	
+	for (i=0; i<16 ;i++) {
+		cpm1_gc->irq[i] = irq_of_parse_and_map(np, i);
+	}
 
 	mm_gc = &cpm1_gc->mm_gc;
 	gc = &mm_gc->gc;
@@ -642,6 +673,7 @@ int cpm1_gpiochip_add16(struct device_node *np)
 	gc->direction_output = cpm1_gpio16_dir_out;
 	gc->get = cpm1_gpio16_get;
 	gc->set = cpm1_gpio16_set;
+	gc->to_irq = cpm1_gpio16_to_irq;
 
 	return of_mm_gpiochip_add(np, mm_gc);
 }

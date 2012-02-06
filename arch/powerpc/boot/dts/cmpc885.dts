@@ -1,5 +1,5 @@
 /*
- * MOD885 Device Tree Source
+ * CMPC885 Device Tree Source
  *
  * Copyright 2010 CSSI, Inc
  */
@@ -7,8 +7,8 @@
 /dts-v1/;
 
 / {
-	model = "MOD885";
-	compatible = "fsl,mod885";
+	model = "CMPC885";
+	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -43,19 +43,19 @@
 	};
 
 	localbus@ff000100 {
-		compatible = "fsl,mod885-localbus", "fsl,pq1-localbus";
+		compatible = "fsl,cmpc885-localbus", "fsl,pq1-localbus";
 		#address-cells = <2>;
 		#size-cells = <1>;
 		reg = <0xff000100 0x40>;		  // ORx and BRx register
 
-		ranges = <0 0x0 0x40000000 0x00400000   // Boot Flash
-			  1 0x0 0x00000000 0x08000000   // SRAM
-			  2 0x0 0xc0000000 0x00008000   // Nand Flash
-			  3 0x0 0xe0000000 0x00010000   // DPRAM
-			  4 0x0 0xd0000000 0x10000000   // Periphs
-			  5 0x0 0xc8000000 0x00008000   // CPLD
-			  6 0x0 0x80000000 0x00008000   // mezzanine
-			  7 0x0 0xf0000000 0x00008000>; // DSP
+		ranges = <0 0x0 0x40000000 0x00400000	// Boot Flash
+			  1 0x0 0x00000000 0x08000000	// SRAM
+			  2 0x0 0xc0000000 0x00008000	// Nand Flash
+			  3 0x0 0xe0000000 0x00010000	// DPRAM
+			  4 0x0 0xd0000000 0x10000000	// Periphs
+			  5 0x0 0xc8000000 0x00008000	// CPLD
+			  6 0x0 0x80000000 0x00008000	// mezzanine
+			  7 0x0 0xf0000000 0x00008000>;	// DSP
 
 		flash@0,0 {
 			#address-cells = <1>;
@@ -83,13 +83,20 @@
 		};
 
 		nand@2,0 {
-			compatible = "s3k,mod885-nand";
+			compatible = "s3k,cmpc885-nand";
 			reg = <2 0x0 0x01>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 			gpios = <&CPM1_PIO_D 12 1 	// CLE
 				 &CPM1_PIO_D 13 1	// ALE
 				 &CPM1_PIO_D 15 1>;	// NCE
+		};
+
+		cpld-cmpc@5,0000000 { // Driver KNL
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cpld-cmpc";
+			reg = <5 0x0 0x10>;
 		};
 	};
 
@@ -136,6 +143,13 @@
 			#interrupt-cells = <2>;
 			reg = <0x0 0x24>;
 			compatible = "fsl,mpc885-pic", "fsl,pq1-pic";
+		};
+
+		SIT: sit@200 {
+			compatible = "fsl,mpc866-sit", "fsl,pq1-sit";
+			reg = <0x200 0x80>;
+			interrupts = <11 1>;
+			interrupt-parent = <&PIC>;
 		};
 
 		cpm@9c0 {
@@ -193,6 +207,8 @@
 				#gpio-cells = <2>;
 				compatible = "fsl,cpm1-pario-bank-c";
 				reg = <0x960 0x10>;
+				interrupts = <0 0 0 0 1 2 6 9 10 11 14 15 23 24 26 31>;
+				interrupt-parent = <&CPM_PIC>;
 				gpio-controller;
 			};
 		
@@ -203,15 +219,63 @@
 				gpio-controller;
 			};
 
+			CPM1_PIO_E: gpio-controller@ac8 {
+				#gpio-cells = <2>;
+				compatible = "fsl,cpm1-pario-bank-e";
+				reg = <0xac8 0x18>;
+				gpio-controller;
+			};
+
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
 				reg = <0xa80 0x10 0x3e80 0x40>;
 				interrupts = <4>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <1>;
+				fsl,cpm-brg = <4>;
 				fsl,cpm-command = <0x90>;
 			};
+
+			scc2: serial@a20 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa20 0x20 0x3d00 0x80>;
+				interrupts = <29>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <1>;
+				fsl,cpm-command = <0x40>;
+			};
+
+			scc3: serial@a40 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x80>;
+			};
+
+			scc4: serial@a60 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa60 0x20 0x3f00 0x80>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0xc0>;
+			};
+
+			smc2: serial@a90 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+				reg = <0xa90 0x10 0x3f80 0x40>;
+				interrupts = <3>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
+				fsl,cpm-command = <0xd0>;
+			};
+
 			spi: spi@a80 {
 				#address-cells = <1>;
 				#size-cells = <0>;

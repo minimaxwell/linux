@@ -137,37 +137,17 @@ static int __devinit fpga_cs_probe(struct platform_device *ofdev, const struct o
 	}
 
 	data->prog = of_get_gpio(np, 0);
-	if (!gpio_is_valid(data->prog)) {
-		dev_err(dev, "invalid gpio PROG %d\n", data->prog);
-		ret = -EINVAL;
-		goto err_free;
-	}
-	ret = gpio_request(data->prog, dev_driver_string(dev));
+	ret = gpio_request_one(data->prog, GPIOF_OUT_INIT_LOW, dev_driver_string(dev));
 	if (ret) {
 		dev_err(dev, "can't request gpio PROG: err %d\n", ret);
 		goto err_free;
 	}
-	ret = gpio_direction_output(data->prog, 0);
-	if (ret) {
-		dev_err(dev, "can't set direction for PROG: %d\n", ret);
-		goto err_gpio;
-	}
 	
 	data->init = of_get_gpio(np, 1);
-	if (!gpio_is_valid(data->init)) {
-		dev_err(dev, "invalid gpio INIT %d\n", data->init);
-		ret = -EINVAL;
-		goto err_gpio;
-	}
-	ret = gpio_request(data->init, dev_driver_string(dev));
+	ret = gpio_request_one(data->init, GPIOF_IN, dev_driver_string(dev));
 	if (ret) {
 		dev_err(dev, "can't request gpio INIT: err %d\n", ret);
 		goto err_gpio;
-	}
-	ret = gpio_direction_input(data->init);
-	if (ret) {
-		dev_err(dev, "can't set direction for INIT: %d\n", ret);
-		goto err_gpio2;
 	}
 	
 	spin_lock_init(&data->fpga_cs_lock);
@@ -184,8 +164,6 @@ static int __devinit fpga_cs_probe(struct platform_device *ofdev, const struct o
 
 	return of_mm_gpiochip_add(np, mm_gc);
 
-err_gpio2:
-	gpio_free(data->init);
 err_gpio:
 	gpio_free(data->prog);
 err_free:

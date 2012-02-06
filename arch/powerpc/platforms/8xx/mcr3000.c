@@ -96,7 +96,7 @@ static struct cpm_pin mcr3000_pins[] = {
 	{CPM_PORTB, 21, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* EE_WP 		*/
 	
 	/* ALARMES */
-	{CPM_PORTC, 13, CPM_PIN_INPUT | CPM_PIN_GPIO | CPM_PIN_FALLEDGE},	/* ACQ_ALARM		*/
+	{CPM_PORTC, 13, CPM_PIN_INPUT | CPM_PIN_GPIO},				/* ACQ_ALARM		*/
 	{CPM_PORTD, 15, CPM_PIN_OUTPUT | CPM_PIN_GPIO},				/* Alarme Mineure	*/
 	
 };

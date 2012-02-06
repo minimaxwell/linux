@@ -1079,7 +1079,7 @@ static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribut
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 
-	return sprintf(buf, "%d\n",fep->phydevs[0]->link ?1:0);
+	return sprintf(buf, "%d\n", fep->phydev != fep->phydevs[0]? 0 : fep->phydevs[0]->link ?2:1);
 }
 
 static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
@@ -1089,12 +1089,7 @@ static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribut
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 	
-	if (!fep->phydevs[1]) {
-		dev_warn(dev, "PHY on address 1 does not exist\n");
-		return sprintf(buf, "0\n");
-	}
-
-	return sprintf(buf, "%d\n",fep->phydevs[1]->link ?1:0);
+	return sprintf(buf, "%d\n", fep->phydev != fep->phydevs[1]? 0 : fep->phydevs[1]->link ?2:1);
 }
 
 static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
@@ -1123,10 +1118,9 @@ static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribu
 
 	int mode = simple_strtol(buf, NULL, 10);
 	
-	if (phydev) {
-		if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
-		if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
-	}
+	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
 	return count;
 }
 
@@ -1285,9 +1279,9 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 	ret = 0;
 	ret |= device_create_file(fep->dev, &dev_attr_active_link);
 	ret |= device_create_file(fep->dev, &dev_attr_phy0_link);
-	ret |= device_create_file(fep->dev, &dev_attr_phy1_link);
+	if (fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_link);
 	ret |= device_create_file(fep->dev, &dev_attr_phy0_mode);
-	ret |= device_create_file(fep->dev, &dev_attr_phy1_mode);
+	if (fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_mode);
 	ret |= device_create_file(fep->dev, &dev_attr_mode);
 	if (ret)
 		goto out_remove_file;
