@@ -2475,6 +2475,7 @@ int uart_add_one_port(struct uart_driver *drv, struct uart_port *uport)
 	 * Ensure UPF_DEAD is not set.
 	 */
 	uport->flags &= ~UPF_DEAD;
+
  out:
 	mutex_unlock(&port->mutex);
 	mutex_unlock(&port_mutex);
