@@ -222,7 +222,8 @@
 		fpga-loader@5,9c {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-base-loader";
+			compatible = "s3k,mcr3000-fpga-mcr-loader";
+			autoload;
 			reg = <5 0x9c 1 5 0x9d 1>; /* Version ; addresse carte */
 			gpios = <&FPGA_CS0 1 1	// INITFPGA\
 				&CPM1_PIO_B 17 1	// DONEFPGA\
@@ -497,7 +498,7 @@
 					spi-max-frequency = <2000000>;
 					reg = <0>;
 					spi-cs-high;
-					loader = "base";
+					loader = "mcr";
 				};
 				pot1@1 {
 					compatible = "cs,mcr3000-pot1";

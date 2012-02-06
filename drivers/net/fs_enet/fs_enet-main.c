@@ -916,6 +916,7 @@ static int fs_enet_close(struct net_device *dev)
 	netif_carrier_off(dev);
 	if (fep->fpi->use_napi)
 		napi_disable(&fep->napi);
+	cancel_delayed_work_sync(&fep->link_queue);
 	phy_stop(fep->phydevs[0]);
 	if (fep->phydevs[1]) {
 		phy_stop(fep->phydevs[1]);

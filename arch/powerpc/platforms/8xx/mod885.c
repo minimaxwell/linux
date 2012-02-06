@@ -107,14 +107,16 @@ static void __init init_ioports(void)
 		cpm1_set_pin(pin->port, pin->pin, pin->flags);
 	}
 
-	cpm1_clk_setup(CPM_CLK_SMC1, CPM_BRG1, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC1, CPM_BRG2, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG3, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG4, CPM_CLK_RTX);
-	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG4, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC2, CPM_BRG1, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC3, CPM_BRG2, CPM_CLK_RTX);
+	cpm1_clk_setup(CPM_CLK_SCC4, CPM_BRG3, CPM_CLK_RTX);
+	/* cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX); */
+	cpm1_clk_setup(CPM_CLK_SMC2, CPM_BRG3, CPM_CLK_RTX); /* Normalement SMC2 est clocké par un BRG dans le FPGA via CLK5 */
 	
-	/* Set FEC1 and FEC2 to MII mode */
-	/*clrbits32(&mpc8xx_immr->im_cpm.cp_cptr, 0x00000180);*/
+	cpm1_clk_setup(CPM_CLK_SMC1, CPM_BRG4, CPM_CLK_RTX);
+	
+	/* Set FEC1 and FEC2 to RMII mode */
+	mpc8xx_immr->im_cpm.cp_cptr = 0x00000180;
 }
 
 
@@ -192,34 +194,29 @@ static int __init declare_of_platform_devices(void)
 
 		model = of_get_property(np, "model", NULL);
 
+		pr_info("%s declare_of_platform_devices()\n", model);
+		
+		mpc8xx_early_ping_watchdog();
+		proc_mkdir("s3k",0);
+		of_platform_bus_probe(NULL, of_bus_ids, NULL);
+		
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
-			pr_info("MCR3000_2G declare_of_platform_devices()\n");
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpgaf_cascade);
-			mpc8xx_early_ping_watchdog();
-			proc_mkdir("s3k",0);
 			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
-			of_platform_bus_probe(NULL, of_bus_ids, NULL);
 			fpgaf_init_platform_devices();
-
+			
+/*			fpga_clk_init();
+			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
+*/
+		} 
 		/* MOD885 configuration by default */
-		} else {
-			pr_info("MOD885 declare_of_platform_devices()\n");
-			mpc8xx_early_ping_watchdog();
-			proc_mkdir("s3k",0);
-			of_platform_bus_probe(NULL, of_bus_ids, NULL);
+		else {
 		}
-	
-		/* MCR3000_2G configuration */
-		if (!strcmp(model, "MCR3000_2G")) {
-			simple_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
-			fpgaf_init_platform_devices();
-		}
-		
 	} else {
-		printk(KERN_ERR "MODEL: failed to identify model\n");
+		pr_err("MODEL: failed to identify model\n");
 	}
 
 	return 0;

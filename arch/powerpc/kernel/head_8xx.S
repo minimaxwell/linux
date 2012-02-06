@@ -196,7 +196,7 @@ i##n:								\
 			  ret_from_except)
 
 /* System reset */
-	EXCEPTION(0x100, Reset, unknown_exception, EXC_XFER_STD)
+	EXCEPTION(0x100, Reset, watchdog_exception, EXC_XFER_STD)
 
 /* Machine check */
 	. = 0x200

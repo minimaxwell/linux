@@ -14,11 +14,15 @@ menuconfig SAF3000_PLATFORM_DEVICES
 
 if SAF3000_PLATFORM_DEVICES
 
+config SAF3000_CLASS
+	bool
+
 config FPGA_LOADER
 	tristate "FPGA loader"
 	depends on GPIOLIB
 	depends on SPI
 	depends on OF_GPIO
+	select SAF3000_CLASS
 	default y
 	---help---
 	  Module de chargement du code FPGA. Permet de charger le uCOR FPGA
@@ -37,6 +41,7 @@ config MCR3000_CPLD
 	bool "CPLD ChipSelect SPI"
 	depends on GPIOLIB
 	depends on OF_GPIO
+	select SAF3000_CLASS
 	default y
 	---help---
 	  Driver GPIO pour les ChipSelects SPI
@@ -45,9 +50,17 @@ endif
 if MOD885
 config FPGAF_INFO
 	tristate "Infos FPGAF"
+	select SAF3000_CLASS
+	select LEDS_CLASS
 	default y
 	---help---
 	  Driver pour recuperer dans /sys les infos FPGA Firmware
-endif
 
+config CMPC_CPLD
+	tristate "Pilotage CPLD Carte MPC"
+	select LEDS_CLASS
+	default y
+	---help---
+	  Driver pour piloter les leds de la MCR 2G
+endif
 endif

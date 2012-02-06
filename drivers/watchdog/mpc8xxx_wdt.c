@@ -50,10 +50,17 @@ struct mpc8xxx_wdt_type {
 static struct mpc8xxx_wdt __iomem *wd_base;
 static int mpc8xxx_wdt_init_late(void);
 
+#define WD_TIMO 10			/* Default heartbeat = 10 seconds */
+
+static int heartbeat = WD_TIMO;
+module_param(heartbeat, int, 0);
+MODULE_PARM_DESC(heartbeat,
+	"Watchdog SW heartbeat in seconds. (0 < heartbeat < 65536s, default="
+				__MODULE_STRING(WD_TIMO) "s)");
 static u16 timeout = 0xffff;
 module_param(timeout, ushort, 0);
 MODULE_PARM_DESC(timeout,
-	"Watchdog timeout in ticks. (0<timeout<65536, default=65535)");
+	"Watchdog HW timeout in ticks. (0<timeout<65536, default=65535)");
 
 static int reset = 1;
 module_param(reset, bool, 0);
@@ -72,8 +79,10 @@ MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 static int prescale = 1;
 static unsigned int timeout_sec;
 
+static int wdt_auto = 1;
 static unsigned long wdt_is_open;
 static DEFINE_SPINLOCK(wdt_spinlock);
+static unsigned long wdt_last_ping;
 
 static void mpc8xxx_wdt_keepalive(void)
 {
@@ -89,9 +98,20 @@ static DEFINE_TIMER(wdt_timer, mpc8xxx_wdt_timer_ping, 0, 0);
 
 static void mpc8xxx_wdt_timer_ping(unsigned long arg)
 {
-	mpc8xxx_wdt_keepalive();
-	/* We're pinging it twice faster than needed, just to be sure. */
-	mod_timer(&wdt_timer, jiffies + HZ * timeout_sec / 2);
+	if (wdt_auto)
+		wdt_last_ping = jiffies;
+	
+	if (jiffies - wdt_last_ping <= heartbeat * HZ) {
+		mpc8xxx_wdt_keepalive();
+		/* We're pinging it twice faster than needed, just to be sure. */
+		mod_timer(&wdt_timer, jiffies + HZ * timeout_sec / 2);
+	}
+}
+
+static void mpc8xxx_wdt_sw_keepalive(void)
+{
+	wdt_last_ping = jiffies;
+	mpc8xxx_wdt_timer_ping(0);
 }
 
 static void mpc8xxx_wdt_pr_warn(const char *msg)
@@ -104,7 +124,7 @@ static ssize_t mpc8xxx_wdt_write(struct file *file, const char __user *buf,
 				 size_t count, loff_t *ppos)
 {
 	if (count)
-		mpc8xxx_wdt_keepalive();
+		mpc8xxx_wdt_sw_keepalive();
 	return count;
 }
 
@@ -127,8 +147,8 @@ static int mpc8xxx_wdt_open(struct inode *inode, struct file *file)
 	tmp |= timeout << 16;
 
 	out_be32(&wd_base->swcrr, tmp);
-
-	del_timer_sync(&wdt_timer);
+	
+	wdt_auto = 0;
 
 	return nonseekable_open(inode, file);
 }
@@ -136,7 +156,8 @@ static int mpc8xxx_wdt_open(struct inode *inode, struct file *file)
 static int mpc8xxx_wdt_release(struct inode *inode, struct file *file)
 {
 	if (!nowayout)
-		mpc8xxx_wdt_timer_ping(0);
+		wdt_auto = 1;
+
 	else
 		mpc8xxx_wdt_pr_warn("watchdog closed");
 	clear_bit(0, &wdt_is_open);
@@ -161,10 +182,12 @@ static long mpc8xxx_wdt_ioctl(struct file *file, unsigned int cmd,
 	case WDIOC_GETBOOTSTATUS:
 		return put_user(0, p);
 	case WDIOC_KEEPALIVE:
-		mpc8xxx_wdt_keepalive();
+		mpc8xxx_wdt_sw_keepalive();
 		return 0;
 	case WDIOC_GETTIMEOUT:
-		return put_user(timeout_sec, p);
+		return put_user(heartbeat, p);
+	case WDIOC_SETTIMEOUT:
+		return get_user(heartbeat, p);
 	default:
 		return -ENOTTY;
 	}

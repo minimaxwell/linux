@@ -40,6 +40,7 @@
 #include <linux/firmware.h>
 #include <sysdev/fsl_soc.h>
 #include <ldb/ldb_gpio.h>
+#include <saf3000/saf3000.h>
 
 #define STATUS_WAITING 0
 #define STATUS_LOADING 1
@@ -53,14 +54,14 @@
 #define DONEFPGA 1
 #define RST_FPGA 2
 
-
-
 struct fpga_data {
-	u8 __iomem *version,*mcrid;
+	u8 __iomem *version,*board;
 	struct device *dev;
 	int gpio[NB_GPIO]; /* initfpga, donefpga, rst_fpga */
 	int status;
 	struct spi_device *spi;
+	struct device *infos;
+	struct device *loader;
 };
 
 static void fpga_fw_load(const struct firmware *fw, void *context)
@@ -101,15 +102,15 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 				dev_err(dev,"fw load failed, data not complete\n");
 			}
 			else {
-				u8 version, mcrid;
+				u8 version, board;
 				dev_info(dev,"fw load ok\n");
 				ldb_gpio_set_value(data->gpio[RST_FPGA], 0);
 				data->status = STATUS_LOADED;
 				version = *data->version;
 				dev_info(dev,"fw version %X.%X\n",(version>>4)&0xf, version&0xf);
-				if (data->mcrid) {
-					mcrid = *data->mcrid;
-					dev_info(dev,"adresse carte %X.%X\n",(mcrid>>4)&0xf, mcrid&0xf);
+				if (data->board) {
+					board = *data->board;
+					dev_info(dev,"adresse carte %X.%X\n",(board>>4)&0xf, board&0xf);
 				}
 			}
 		}
@@ -121,7 +122,7 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 	
 	if (data->status != STATUS_LOADED) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			data->status = STATUS_NOTLOADED;
 		}
@@ -134,10 +135,10 @@ static ssize_t fs_attr_status_show(struct device *dev, struct device_attribute *
 	int ret=0;
 
 	switch (data->status) {
-	case STATUS_WAITING: ret=sprintf(buf, "waiting\n"); break;
-	case STATUS_LOADING: ret=sprintf(buf, "loading\n"); break;
-	case STATUS_LOADED: ret=sprintf(buf, "loaded\n"); break;
-	case STATUS_NOTLOADED: ret=sprintf(buf, "not loaded\n"); break;
+	case STATUS_WAITING: ret=snprintf(buf, PAGE_SIZE, "waiting\n"); break;
+	case STATUS_LOADING: ret=snprintf(buf, PAGE_SIZE, "loading\n"); break;
+	case STATUS_LOADED: ret=snprintf(buf, PAGE_SIZE, "loaded\n"); break;
+	case STATUS_NOTLOADED: ret=snprintf(buf, PAGE_SIZE, "not loaded\n"); break;
 	}
 	return ret;
 }
@@ -148,7 +149,7 @@ static ssize_t fs_attr_status_store(struct device *dev, struct device_attribute 
 
 	if (data->status != STATUS_WAITING && !strncmp("reload",buf,6)) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "FPGA.bin", data->loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			data->status = STATUS_NOTLOADED;
 		}
@@ -164,43 +165,43 @@ static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute 
 	u8 version = *data->version;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%X.%X\n",(version>>4)&0xf, version&0xf):
-			sprintf(buf,"-.-\n");
+			snprintf(buf, PAGE_SIZE, "%X.%X\n",(version>>4)&0xf, version&0xf):
+			snprintf(buf, PAGE_SIZE, "-.-\n");
 }
 static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
-static ssize_t fs_attr_num_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fs_attr_board_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
+	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",id):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",id):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
-static DEVICE_ATTR(num, S_IRUGO, fs_attr_num_show, NULL);
+static DEVICE_ATTR(board, S_IRUGO, fs_attr_board_show, NULL);
 
-static ssize_t fs_attr_chassis_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fs_attr_rack_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
+	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",(id>>4)&0xf):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",(id>>4)&0xf):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
-static DEVICE_ATTR(chassis, S_IRUGO, fs_attr_chassis_show, NULL);
+static DEVICE_ATTR(rack, S_IRUGO, fs_attr_rack_show, NULL);
 
-static ssize_t fs_attr_carte_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fpga_data *data = dev_get_drvdata(dev);
-	u8 id = *data->mcrid;
+	u8 id = *data->board;
 	
 	return data->status == STATUS_LOADED?
-			sprintf(buf,"%d\n",(id>>0)&0xf):
-			sprintf(buf,"-1\n");
+			snprintf(buf, PAGE_SIZE, "%d\n",(id>>0)&0xf):
+			snprintf(buf, PAGE_SIZE, "-1\n");
 }
-static DEVICE_ATTR(carte, S_IRUGO, fs_attr_carte_show, NULL);
+static DEVICE_ATTR(slot, S_IRUGO, fs_attr_slot_show, NULL);
 
 static int __devinit fpga_probe(struct platform_device *ofdev)
 {
@@ -212,6 +213,9 @@ static int __devinit fpga_probe(struct platform_device *ofdev)
 	int ngpios = of_gpio_count(np);
 	struct fpga_data *data;
 	int dir[NB_GPIO]=DIR_GPIO;
+	struct class *class;
+	struct device *infos = NULL;
+	struct device *loader;
 
 	match = of_match_device(ofdev->dev.driver->of_match_table, &ofdev->dev);
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
@@ -246,20 +250,32 @@ static int __devinit fpga_probe(struct platform_device *ofdev)
 		ret = -ENOMEM;
 		goto err_gpios;
 	}
-	data->mcrid = of_iomap(np, 1);
+	data->board = of_iomap(np, 1);
 	
-	if ((ret=device_create_file(dev, &dev_attr_status))
-			|| (ret=device_create_file(dev, &dev_attr_version)))
+	class = saf3000_class_get();
+		
+	loader = device_create(class, dev, MKDEV(0, 0), NULL, "%s", match->compatible+12);
+	dev_set_drvdata(loader, data);
+	data->loader = loader;
+	
+	if ((ret=device_create_file(loader, &dev_attr_status))
+			|| (ret=device_create_file(loader, &dev_attr_version)))
 		goto err_unfile;
 		
-	if (data->mcrid && ((ret=device_create_file(dev, &dev_attr_num))
-			|| (ret=device_create_file(dev, &dev_attr_chassis))
-			|| (ret=device_create_file(dev, &dev_attr_carte))))
-		goto err_unfile;
+	if (data->board) {
+		infos = device_create(class, dev, MKDEV(0, 0), NULL, "infos");
+		dev_set_drvdata(infos, data);
+		data->infos = infos;
+	
+		if ((ret=device_create_file(infos, &dev_attr_board))
+				|| (ret=device_create_file(infos, &dev_attr_rack))
+				|| (ret=device_create_file(infos, &dev_attr_slot)))
+			goto err_unfile;
+	}
 
-	if (strstr(match->compatible,"base")) {
+	if (of_find_property(np,"autoload",NULL)) {
 		data->status = STATUS_WAITING;
-		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", dev, GFP_KERNEL, data, fpga_fw_load)) {
+		if (request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG, "mcr3000/uFPGA.bin", loader, GFP_KERNEL, data, fpga_fw_load)) {
 			dev_err(dev,"fw async loading problem\n");
 			goto err_unfile;
 		}
@@ -273,16 +289,21 @@ static int __devinit fpga_probe(struct platform_device *ofdev)
 	return 0;
 	
 err_unfile:
-	device_remove_file(dev, &dev_attr_status);
-	device_remove_file(dev, &dev_attr_version);
-	device_remove_file(dev, &dev_attr_num);
-	device_remove_file(dev, &dev_attr_chassis);
-	device_remove_file(dev, &dev_attr_carte);
+	device_remove_file(loader, &dev_attr_status);
+	device_remove_file(loader, &dev_attr_version);
+	device_unregister(loader);
+	data->loader = NULL;
+	if (infos) {
+		device_remove_file(infos, &dev_attr_board);
+		device_remove_file(infos, &dev_attr_rack);
+		device_remove_file(infos, &dev_attr_slot);
+		device_unregister(infos);
+	}
 	
 	iounmap(data->version);
 	data->version = NULL;
-	if (data->mcrid) iounmap(data->mcrid);
-	data->mcrid = NULL;
+	if (data->board) iounmap(data->board);
+	data->board = NULL;
 err_gpios:
 	for (idx=0; idx<NB_GPIO ; idx++) {
 		int gpio = data->gpio[idx];
@@ -301,16 +322,24 @@ static int fpga_remove(struct platform_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);
 	int idx;
+	struct device *infos = data->infos;
+	struct device *loader = data->loader;
 	
-	device_remove_file(dev, &dev_attr_status);
-	device_remove_file(dev, &dev_attr_version);
-	device_remove_file(dev, &dev_attr_num);
-	device_remove_file(dev, &dev_attr_chassis);
-	device_remove_file(dev, &dev_attr_carte);
+	device_remove_file(loader, &dev_attr_status);
+	device_remove_file(loader, &dev_attr_version);
+	device_unregister(loader);
+	data->loader = NULL;
+	if (infos) {
+		device_remove_file(infos, &dev_attr_board);
+		device_remove_file(infos, &dev_attr_rack);
+		device_remove_file(infos, &dev_attr_slot);
+		device_unregister(infos);
+		data->infos = NULL;
+	}
 	iounmap(data->version);
 	data->version = NULL;
-	if (data->mcrid) iounmap(data->mcrid);
-	data->mcrid = NULL;
+	if (data->board) iounmap(data->board);
+	data->board = NULL;
 	for (idx=0; idx<NB_GPIO ; idx++) {
 		int gpio = data->gpio[idx];
 		if (ldb_gpio_is_valid(gpio))

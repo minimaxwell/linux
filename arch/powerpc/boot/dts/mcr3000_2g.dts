@@ -63,7 +63,7 @@
 			#size-cells = <1>;
 			compatible = "cfi-flash";
 			reg = <0x0 0x00000000 0x400000>;
-			bank-width = <1>;
+			bank-width = <2>;
 			device-width = <2>;
 			partition@0 {
 				label = "boot";
@@ -93,21 +93,28 @@
 				 &CPM1_PIO_D 15 1>;	// NCE
 		};
 
-		cpld-mpc@5,0000000 {
+		cpld-cmpc@5,0000000 { // Driver KNL
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cpld-cmpc";
+			reg = <5 0x0 0x10>;
+		};
+		
+		cpld-mpc@5,0000000 { // Driver LDB (deviendra obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-cpld-mpc";
 			reg = <5 0x0 0x10>;
 		};
 		
-		fpgaf-info@4,0000002 {
+		fpgaf-info@4,0000002 { // Driver KNL
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpgaf-info";
-			reg = <4 0x0000002 1 4 0x0000042 1>;	// Version FPGA, Adresse carte/chassis
+			reg = <4 0x0 0x90 6 0x0 0x0002>;	// Mappage registres FPGAF ; Ident carte Mezzanine
 		};
 
-		fpga-f@4,0000000 {
+		fpga-f@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-f";
@@ -390,11 +397,11 @@
 		fpga-loader@4,100009c {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "s3k,mcr3000-fpga-radio-loader";
+			compatible = "s3k,mcr3000-fpga-mcr-loader";
 			reg = <4 0x100009c 1>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
-				 &rst2 2 1 >;			// RST_FPGA
+				 &rst2 5 1 >;			// RST_FPGA
 		};
 		c4e1@6,0 {
 			#address-cells = <1>;
@@ -412,7 +419,7 @@
 			reg = <6 0x501 1>; 		// Version FPGA Mezz
 			gpios = <&FPGA_CS1 1 1		// INIT Mezz
 				&CPM1_PIO_B 17 1	// DONE Mezz
-				&rst2 6 1 >;		// RST Mezz
+				&rst2 1 1 >;		// RST Mezz
 		};
 
 		cag@6,0 {
@@ -445,11 +452,15 @@
 			#size-cells = <0>;
 
 			PHY1: ethernet-phy@1 {
+				interrupts = <2 1>;
+				interrupt-parent = <&PIC>;
 				reg = <0x1>;
 				device_type = "ethernet-phy";
 			};
 
 			PHY2: ethernet-phy@2 {
+				interrupts = <2 1>;
+				interrupt-parent = <&PIC>;
 				reg = <0x2>;
 				device_type = "ethernet-phy";
 			};
@@ -693,7 +704,7 @@
 					spi-max-frequency = <2000000>;
 					reg = <7>;
 					spi-cs-high;
-					loader = "radio";
+					loader = "mcr";
 				};
 				mezz@8 {
 					compatible = "s3k,mcr3000-fpga-loader";
