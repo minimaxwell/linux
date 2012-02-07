@@ -36,9 +36,9 @@
 static struct fpgam *fpgam_regs;
 static struct irq_host *fpgam_pic_host;
 
-static void fpgam_mask_irq(unsigned int irq)
+static void fpgam_mask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	if (vec < 16)
 		clrbits16(&fpgam_regs->it_mask1, 1 << (15-vec));
@@ -48,9 +48,9 @@ static void fpgam_mask_irq(unsigned int irq)
 	}
 }
 
-static void fpgam_unmask_irq(unsigned int irq)
+static void fpgam_unmask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	if (vec < 16)
 		setbits16(&fpgam_regs->it_mask1, 1 << (15-vec));
@@ -60,9 +60,9 @@ static void fpgam_unmask_irq(unsigned int irq)
 	}
 }
 
-static void fpgam_end_irq(unsigned int irq)
+static void fpgam_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	if (vec < 16)
 		clrbits16(&fpgam_regs->it_ack1, 1 << (15-vec));
@@ -74,9 +74,9 @@ static void fpgam_end_irq(unsigned int irq)
 
 static struct irq_chip fpgam_pic = {
 	.name = "FPGAM PIC",
-	.mask = fpgam_mask_irq,
-	.unmask = fpgam_unmask_irq,
-	.eoi = fpgam_end_irq,
+	.irq_mask = fpgam_mask_irq,
+	.irq_unmask = fpgam_unmask_irq,
+	.irq_eoi = fpgam_end_irq,
 };
 
 int fpgam_get_irq(void)
@@ -97,8 +97,8 @@ static int fpgam_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_numb
 {
 	pr_debug("fpgaf_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
-	irq_to_desc(virq)->status |= IRQ_LEVEL;
-	set_irq_chip_and_handler(virq, &fpgam_pic, handle_fasteoi_irq);
+	irq_set_status_flags(virq, IRQ_LEVEL);
+	irq_set_chip_and_handler(virq, &fpgam_pic, handle_fasteoi_irq);
 	return 0;
 }
 
@@ -134,7 +134,7 @@ int fpgam_pic_init(void)
 		goto end;
 
 	/* Initialize the FPGAM interrupt controller. */
-	hwirq = (unsigned int)irq_map[irq].hwirq;
+	hwirq = (unsigned int)virq_to_hw(irq);
 
 	fpgam_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 32, &fpgam_pic_host_ops, 32);
 	if (fpgam_pic_host == NULL) {
@@ -151,14 +151,17 @@ end:
 void fpgam_cascade(unsigned int irq, struct irq_desc *desc)
 {
 	int cascade_irq;
+	struct irq_chip *chip;
 
 	if ((cascade_irq = fpgam_get_irq()) >= 0) {
 		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
 
 		generic_handle_irq(cascade_irq);
-		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+		chip = irq_desc_get_chip(cdesc);
+		if (chip->irq_eoi) chip->irq_eoi(&cdesc->irq_data);
 	}
-	if (desc->chip->eoi) desc->chip->eoi(irq);
+	chip = irq_desc_get_chip(desc);
+	if (chip->irq_eoi) chip->irq_eoi(&desc->irq_data);
 }
 
 /*

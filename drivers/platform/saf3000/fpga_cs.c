@@ -111,8 +111,10 @@ static void fpga_cs_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit fpga_cs_probe(struct platform_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id fpga_cs_match[];
+static int __devinit fpga_cs_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct of_mm_gpio_chip *mm_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
@@ -121,6 +123,10 @@ static int __devinit fpga_cs_probe(struct platform_device *ofdev, const struct o
 	int ret;
 	struct fpga_cs_data *data;
 
+	match = of_match_device(fpga_cs_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	dev_info(dev,"driver for MCR3000 FPGA Programming ChipSelect initialised\n");
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
@@ -194,7 +200,7 @@ static const struct of_device_id fpga_cs_match[] = {
 };
 MODULE_DEVICE_TABLE(of, fpga_cs_match);
 
-static struct of_platform_driver fpga_cs_driver = {
+static struct platform_driver fpga_cs_driver = {
 	.probe		= fpga_cs_probe,
 	.remove		= __devexit_p(fpga_cs_remove),
 	.driver		= {

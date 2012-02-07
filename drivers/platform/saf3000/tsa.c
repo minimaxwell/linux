@@ -75,8 +75,10 @@ static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *a
 }
 static DEVICE_ATTR(debug, S_IRUGO, fs_attr_debug_show, NULL);
 
-static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id tsa_match[];
+static int __devinit tsa_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct tsa_data *data;
@@ -91,6 +93,10 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	const __be32 *ts = NULL;
 	int len = 0, len_param = 0, offset = 0;
 
+	match = of_match_device(tsa_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	setbits16(&immap->im_ioport.iop_papar, 0x01c0);
 	setbits16(&immap->im_ioport.iop_padir, 0x00c0);
 	clrbits16(&immap->im_ioport.iop_padir, 0x0100);
@@ -201,7 +207,7 @@ err:
 	return ret;
 }
 
-static int __devexit tsa_remove(struct of_device *ofdev)
+static int __devexit tsa_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct tsa_data *data = dev_get_drvdata(dev);
@@ -226,7 +232,7 @@ static const struct of_device_id tsa_match[] = {
 };
 MODULE_DEVICE_TABLE(of, tsa_match);
 
-static struct of_platform_driver tsa_driver = {
+static struct platform_driver tsa_driver = {
 	.probe		= tsa_probe,
 	.remove		= __devexit_p(tsa_remove),
 	.driver		= {
@@ -238,7 +244,7 @@ static struct of_platform_driver tsa_driver = {
 
 static int __init tsa_init(void)
 {
-	return of_register_platform_driver(&tsa_driver);
+	return platform_driver_register(&tsa_driver);
 }
 module_init(tsa_init);
 

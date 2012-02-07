@@ -6,6 +6,7 @@
  *
  */
 
+#include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -45,8 +46,10 @@ struct gpio_data {
 	int		gpios_ngpios;
 };
 
-static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id gpios_match[];
+static int __devinit gpios_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	int ret;
@@ -56,6 +59,9 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 	int len_names = 0;
 	struct gpio_data *data;
 
+	match = of_match_device(gpios_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
 	dev_info(dev, "GPIOs driver probe.\n");
 	
 	data = kzalloc(sizeof *data, GFP_KERNEL);
@@ -126,7 +132,7 @@ err:
 	return ret;
 }
 
-static int __devexit gpios_remove(struct of_device *ofdev)
+static int __devexit gpios_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct gpio_data *data = dev_get_drvdata(dev);
@@ -151,7 +157,7 @@ static const struct of_device_id gpios_match[] = {
 };
 MODULE_DEVICE_TABLE(of, gpios_match);
 
-static struct of_platform_driver gpios_driver = {
+static struct platform_driver gpios_driver = {
 	.probe		= gpios_probe,
 	.remove		= __devexit_p(gpios_remove),
 	.driver		= {
@@ -163,13 +169,13 @@ static struct of_platform_driver gpios_driver = {
 
 static int __init gpios_init(void)
 {
-	return of_register_platform_driver(&gpios_driver);
+	return platform_driver_register(&gpios_driver);
 }
 module_init(gpios_init);
 
 static void __exit gpios_exit(void)
 {
-	of_unregister_platform_driver(&gpios_driver);
+	platform_driver_unregister(&gpios_driver);
 }
 module_exit(gpios_exit);
 

@@ -21,6 +21,7 @@
 #include <linux/cdev.h>
 #include <linux/proc_fs.h>
 #include <linux/of_spi.h>
+#include <linux/of.h>
 #include <saf3000/saf3000.h>
 
 

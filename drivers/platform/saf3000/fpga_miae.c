@@ -445,8 +445,10 @@ static void fpga_m_free_attr(struct device *infos)
 /*
  * Chargement du module
  */
-static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id fpga_m_match[];
+static int __devinit fpga_m_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct class *class;
@@ -455,6 +457,10 @@ static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_devic
 	struct fpgam *fpgam;
 	struct fpga_data *data;
 
+	match = of_match_device(fpga_m_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	data = kzalloc(sizeof *data, GFP_KERNEL);
 	if (!data) {
 		_Result = -ENOMEM;
@@ -615,7 +621,7 @@ err:
 /*
  * Déchargement du module
  */
-static int __devexit fpga_m_remove(struct of_device *ofdev)
+static int __devexit fpga_m_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);
@@ -638,7 +644,7 @@ static const struct of_device_id fpga_m_match[] = {
 MODULE_DEVICE_TABLE(of, fpga_m_match);
 
 
-static struct of_platform_driver fpga_m_driver = {
+static struct platform_driver fpga_m_driver = {
 	.probe		= fpga_m_probe,
 	.remove		= __devexit_p(fpga_m_remove),
 	.driver		= {
@@ -652,7 +658,7 @@ static struct of_platform_driver fpga_m_driver = {
 static int __init fpga_m_init(void)
 {
 	int ret;
-	ret = of_register_platform_driver(&fpga_m_driver);
+	ret = platform_driver_register(&fpga_m_driver);
 //	u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
 	return ret;
 }

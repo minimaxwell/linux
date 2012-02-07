@@ -38,14 +38,14 @@ static struct irq_host *fpgaf_pic_host;
 
 static void fpgaf_mask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	clrbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }
 
 static void fpgaf_unmask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	setbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }

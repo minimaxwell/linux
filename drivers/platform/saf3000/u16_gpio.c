@@ -101,7 +101,6 @@ static int __init u16_gpiochip_add(struct device_node *np)
 	int ret;
 	struct u16_gpio_chip *u16_gc;
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	int i;
 
@@ -116,11 +115,9 @@ static int __init u16_gpiochip_add(struct device_node *np)
 	}
 
 	mm_gc = &u16_gc->mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = u16_gpio_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 16;
 	gc->direction_input = u16_gpio_dir_in;
 	gc->direction_output = u16_gpio_dir_out;
