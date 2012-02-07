@@ -84,7 +84,7 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	struct device *infos;
 	cpm8xx_t *cpm;
 	int ret, i, nb_ts;
-	u32 simode, siram = 0;
+	u32 simode, siram = 0, sicr = 0;
 	siram_entry *siram_rx, *siram_tx;
 	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
 	const char *param = NULL;
@@ -116,9 +116,9 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	}
 	
 	if (sysfs_streq(param, "SCC1")) siram = SIRAM_CSEL_SCC1;
-	else if (sysfs_streq(param, "SCC2")) siram = SIRAM_CSEL_SCC2;
-	else if (sysfs_streq(param, "SCC3")) siram = SIRAM_CSEL_SCC3;
-	else if (sysfs_streq(param, "SCC4")) siram = SIRAM_CSEL_SCC4;
+	else if (sysfs_streq(param, "SCC2")) siram = SIRAM_CSEL_SCC2, sicr = SICR_SC2;
+	else if (sysfs_streq(param, "SCC3")) siram = SIRAM_CSEL_SCC3, sicr = SICR_SC3;
+	else if (sysfs_streq(param, "SCC4")) siram = SIRAM_CSEL_SCC4, sicr = SICR_SC4;
 	else if (sysfs_streq(param, "SMC1")) siram = SIRAM_CSEL_SMC1;
 	else if (sysfs_streq(param, "SMC2")) siram = SIRAM_CSEL_SMC2;
 	len /= sizeof(__be32);
@@ -149,8 +149,15 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	siram_tx = (siram_entry*)&cpm->cp_siram + 64;
 	/* programmation des premiers TimeSlots si non utilises */
 	if (ts[0] != 0) {
-		out_be32(siram_rx + offset, SIRAM_CNT(ts[0]) | SIRAM_BYT);
-		out_be32(siram_tx + offset, SIRAM_CNT(ts[0]) | SIRAM_BYT);
+		nb_ts = ts[0];
+		while (nb_ts > 16) {
+			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
+			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
+			offset++;
+			nb_ts -= 16;
+		}
+		out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+		out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
 		offset++;
 	}
 	/* programmation des TimeSlots affectes aux codecs */
@@ -160,25 +167,43 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 			nb_ts++;
 		else {
 			/* programmation des TS consecutifs */
+			while (nb_ts > 16) {
+				out_be32(siram_rx + offset, siram | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, siram | SIRAM_CNT(16));
+				offset++;
+				nb_ts -= 16;
+			}
 			out_be32(siram_rx + offset, siram | SIRAM_CNT(nb_ts));
 			out_be32(siram_tx + offset, siram | SIRAM_CNT(nb_ts));
 			offset++;
 			nb_ts = 1;
 			/* programmation des TS non utilises */
-			out_be32(siram_rx + offset, SIRAM_CNT(ret) | SIRAM_BYT);
-			out_be32(siram_tx + offset, SIRAM_CNT(ret) | SIRAM_BYT);
+			while (ret > 16) {
+				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				offset++;
+				ret -= 16;
+			}
+			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(ret));
+			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(ret));
 			offset++;
 		}
 	}
 	/* programmation des derniers TimeSlots affectes aux codecs */
+	while (nb_ts > 16) {
+		out_be32(siram_rx + offset, siram | SIRAM_CNT(16));
+		out_be32(siram_tx + offset, siram | SIRAM_CNT(16));
+		offset++;
+		nb_ts -= 16;
+	}
 	siram |= SIRAM_LST;
-	out_be32(siram_rx + ts[i], siram | SIRAM_CNT(nb_ts));
-	out_be32(siram_tx + ts[i], siram | SIRAM_CNT(nb_ts));
+	out_be32(siram_rx + offset, siram | SIRAM_CNT(nb_ts));
+	out_be32(siram_tx + offset, siram | SIRAM_CNT(nb_ts));
 	
 	simode = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
 	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode));
 	
-	setbits32(&cpm->cp_sicr, SICR_SC4);
+	setbits32(&cpm->cp_sicr, sicr);
 	
 	out_8(&cpm->cp_sigmr, SIGMR_ENa | SIGMR_RDM_STATIC_TDMa);
 	

@@ -19,4 +19,18 @@ extern void __init u16_gpiochip_init(const char *);
 
 extern void fpga_clk_set_brg(void);
 		
+#include <linux/ioctl.h>
+
+#define SAF3000_PCM_IOC_MAGIC		0x90
+
+#define SAF3000_PCM_TIME_IDENT		0
+struct pcm_time {
+	unsigned long	time;
+};
+
+/* pour lire le temps en ms sur /dev/pcm */
+#define SAF3000_PCM_TIME			_IOR(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_TIME_IDENT, \
+						struct pcm_time)
+ 
 #endif
