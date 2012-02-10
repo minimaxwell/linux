@@ -686,7 +686,6 @@ void watchdog_exception(struct pt_regs *regs)
 
 	/* print trace */	
 	printk("Watchdog Reset:\n");
-	sysfs_printk_last_file();
 	print_modules();
 	show_regs(regs);
 	

@@ -271,19 +271,7 @@ static int __devinit cmpc885_probe(struct platform_device *ofdev)
 		goto GPIO_ERROR;
 	}
 
-	num_partitions = parse_mtd_partitions(mtd, part_probes, &partitions, 0);
-	if (num_partitions < 0) {
-		dev_err(&ofdev->dev, "partitions undeclared\n");
-		res = num_partitions;
-		goto PARTITION_ERROR;
-	}
-	if (num_partitions == 0) {
-		partitions 	= partition_info;
-		num_partitions 	= NUM_PARTITIONS;
-		dev_notice(&ofdev->dev, "Using static partition definition\n");
-	}
-	
-	if (mtd_device_register(mtd, partitions, num_partitions)) {
+	if (mtd_device_parse_register(mtd, part_probes, 0, partitions, num_partitions)) {
 		dev_err(&ofdev->dev, "unable to add mtd partition\n");
 		res = -EINVAL;
 		goto PARTITION_ERROR;
