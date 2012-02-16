@@ -24,13 +24,25 @@ extern void fpga_clk_set_brg(void);
 #define SAF3000_PCM_IOC_MAGIC		0x90
 
 #define SAF3000_PCM_TIME_IDENT		0
-struct pcm_time {
-	unsigned long	time;
+#define SAF3000_PCM_LOST_IDENT		1
+#define SAF3000_PCM_SILENT_IDENT	2
+struct info {
+	unsigned long	info;
 };
 
-/* pour lire le temps en ms sur /dev/pcm */
+/* pour lire le temps de fonctionnement en ms sur /dev/pcm */
 #define SAF3000_PCM_TIME			_IOR(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_TIME_IDENT, \
-						struct pcm_time)
- 
+						struct info)
+
+/* pour lire le nombre de paquets reception de 5ms perdus sur /dev/pcm */
+#define SAF3000_PCM_LOST			_IOR(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_LOST_IDENT, \
+						struct info)
+
+/* pour lire le nombre de paquets silence de 1ms emis sur /dev/pcm */
+#define SAF3000_PCM_SILENT			_IOR(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_SILENT_IDENT, \
+						struct info)
+
 #endif

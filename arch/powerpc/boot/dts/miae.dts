@@ -8,7 +8,6 @@
 
 / {
 	model = "MIAE";
-//	model = "MCR3000_2G";
 	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -212,7 +211,7 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x44 2>;
-				interrupts = <255 255 255 255 255 255 255 255 255 25 255 27 255 24 255 26>;
+				interrupts = <255 255 255 255 255 255 255 255 17 25 19 27 16 24 18 26>;
 				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
@@ -240,7 +239,7 @@
 				#interrupt-cells = <1>;
 				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x00 0x60>;	// Mappage registres FPGAF
+				reg = <0x00 0x60>;	// Mappage registres FPGAM
 				compatible = "s3k,miae-pic";
 			};
 		};
@@ -332,12 +331,12 @@
 				&etatref 15 1	// Synchro E1
 				&etatref 14 1	// Synchro S0
 				&etatref 13 1	// Alternat res
-				&etatref 12 1	// Alternat res
-				&etatref 11 1	// Alternat res
-				&etatref 10 1	// Alternat res
-				&etatref  9 1>;	// Alternat res
+				&fav     10 1	// Presence µMain1
+				&fav     14 1	// Presence µMain2
+				&fav      8 1	// Presence µCasque1
+				&fav     12 1>;	// Presence µCasque2
 			names = "tor_in_1",
-				"tor_in_1",
+				"tor_in_2",
 				"tor_in_3",
 				"tor_in_4",
 				"tor_in_5",
@@ -364,10 +363,10 @@
 				"it2_res_2",
 				"it2_res_3",
 				"it2_res_4",
-				"it2_res_5",
-				"it2_res_6",
-				"it2_res_7",
-				"it2_res_8";
+				"pres_1",
+				"pres_2",
+				"pres_3",
+				"pres_4";
 		};
 	};
 
@@ -527,7 +526,9 @@
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440>;
 				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
-				param = "SCC4";
+				scc_codec = "SCC4";
+				ts_e1 = <1 31>;
+				scc_e1 = "SMC2";
 			};
 
 			smc1: serial@a80 {
@@ -569,13 +570,12 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
-			smc2: serial@a90 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+			smc2: tdm_e1@a90 {
+				device_type = "tdm";
+				compatible = "fsl,mpc885-smc-tdm", "fsl,cpm1-smc-tdm";
 				reg = <0xa90 0x10 0x3f80 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
 				fsl,cpm-command = <0xd0>;
 			};
 

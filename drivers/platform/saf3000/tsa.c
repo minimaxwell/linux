@@ -83,13 +83,13 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	struct class *class;
 	struct device *infos;
 	cpm8xx_t *cpm;
-	int ret, i, nb_ts;
-	u32 simode, siram = 0, sicr = 0;
+	int ret, i, nb_ts, val;
+	u32 simode = 0, siram_c, sicr = 0, siram_e, simode_tdma;
 	siram_entry *siram_rx, *siram_tx;
 	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
-	const char *param = NULL;
-	const __be32 *ts = NULL;
-	int len = 0, len_param = 0, offset = 0;
+	const char *scc = NULL;
+	const __be32 *ts_c = NULL, *ts_e1 = NULL;
+	int len_c = 0, len_scc = 0, len_e1 = 0, offset = 0;
 
 	setbits16(&immap->im_ioport.iop_papar, 0x01c0);
 	setbits16(&immap->im_ioport.iop_padir, 0x00c0);
@@ -108,29 +108,68 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
 
-	param = of_get_property(np, "param", &len_param);
-	ts = of_get_property(np, "ts_codec", &len);
-	if (!param || (len_param < sizeof(*param)) || !ts || (len < sizeof(*ts))) {
+	scc = of_get_property(np, "scc_codec", &len_scc);
+	if (!scc || (len_scc < sizeof(*scc))) {
 		ret = -EINVAL;
 		goto err;
 	}
-	
-	if (sysfs_streq(param, "SCC1")) siram = SIRAM_CSEL_SCC1;
-	else if (sysfs_streq(param, "SCC2")) siram = SIRAM_CSEL_SCC2, sicr = SICR_SC2;
-	else if (sysfs_streq(param, "SCC3")) siram = SIRAM_CSEL_SCC3, sicr = SICR_SC3;
-	else if (sysfs_streq(param, "SCC4")) siram = SIRAM_CSEL_SCC4, sicr = SICR_SC4;
-	else if (sysfs_streq(param, "SMC1")) siram = SIRAM_CSEL_SMC1;
-	else if (sysfs_streq(param, "SMC2")) siram = SIRAM_CSEL_SMC2;
-	len /= sizeof(__be32);
-	for (i = 1; i < len; i++) {
-		if (ts[i] <= ts[i - 1])
+	if (sysfs_streq(scc, "SCC4")) siram_c = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+	else if (sysfs_streq(scc, "SMC2")) siram_c = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+	else siram_c = 0;
+
+	scc = NULL;
+	scc = of_get_property(np, "scc_e1", &len_scc);
+	if (!scc || (len_scc < sizeof(*scc))) {
+		ret = -EINVAL;
+		goto err;
+	}
+	if (sysfs_streq(scc, "SCC4")) siram_e = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+	else if (sysfs_streq(scc, "SMC2")) siram_e = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+	else siram_e = 0;
+
+	ts_c = of_get_property(np, "ts_codec", &len_c);
+	if (!ts_c || (len_c < sizeof(*ts_c))) {
+		ret = -EINVAL;
+		goto err;
+	}
+	len_c /= sizeof(__be32);
+
+	ts_e1 = of_get_property(np, "ts_e1", &len_e1);
+	if (!ts_e1 || (len_e1 < sizeof(*ts_e1))) {
+		ret = -EINVAL;
+		goto err;
+	}
+	len_e1 /= sizeof(__be32);
+
+	/* mise en ordre croissant des TS codec */
+	i = 0;
+	while (i < len_c) {
+		for (i = 1; i < len_c; i++) {
+			if (ts_c[i] < ts_c[i - 1]) {
+				val = ts_c[i];
+				*(__be32 *)&(ts_c[i]) = *(__be32 *)&(ts_c[i - 1]);
+				*(__be32 *)&(ts_c[i - 1]) = (__be32)val;
+				break;
+			}
+		}
+	}
+	/* vérification TS codec differents et ordre croissant */
+	for (i = 1; i < len_c; i++) {
+		if (ts_c[i] <= ts_c[i - 1])
 			break;
 	}
-	if (!siram || !len || (i < len)) {
+	if (!siram_c || !len_c || (i < len_c)) {
 		ret = -EINVAL;
 		goto err;
 	}
-	siram |= SIRAM_BYT;
+	siram_c |= SIRAM_BYT;
+
+	/* vérification TS e1 differents et ordre croissant */
+	if (!siram_e || (len_e1 != 2) || (ts_e1[0] > ts_e1[1])) {
+		ret = -EINVAL;
+		goto err;
+	}
+	siram_e |= SIRAM_BYT;
 
 	cpm = of_iomap(np, 0);
 	if (cpm == NULL) {
@@ -147,9 +186,39 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 
 	siram_rx = (siram_entry*)&cpm->cp_siram;
 	siram_tx = (siram_entry*)&cpm->cp_siram + 64;
-	/* programmation des premiers TimeSlots si non utilises */
-	if (ts[0] != 0) {
-		nb_ts = ts[0];
+
+	/* programmation des TimeSlots e1 si avant ceux des codecs */
+	val = 0;
+	if (ts_e1[1] < ts_c[0]) {
+		if (ts_e1[0] != 0) {
+			nb_ts = ts_e1[0];
+			while (nb_ts > 16) {
+				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				offset++;
+				nb_ts -= 16;
+			}
+			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+			offset++;
+		}
+		nb_ts = ts_e1[1] - ts_e1[0] + 1;
+		/* programmation des TimeSlots affectes au lien E1 */
+		while (nb_ts > 16) {
+			out_be32(siram_rx + offset, siram_e | SIRAM_CNT(16));
+			out_be32(siram_tx + offset, siram_e | SIRAM_CNT(16));
+			offset++;
+			nb_ts -= 16;
+		}
+		out_be32(siram_rx + offset, siram_e | SIRAM_CNT(nb_ts));
+		out_be32(siram_tx + offset, siram_e | SIRAM_CNT(nb_ts));
+		offset++;
+		val = ts_e1[1] + 1;
+	}
+
+	/* programmation des TimeSlots codecs */
+	if (ts_c[0] != val) {
+		nb_ts = ts_c[0] - val;
 		while (nb_ts > 16) {
 			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
 			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
@@ -161,23 +230,24 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 		offset++;
 	}
 	/* programmation des TimeSlots affectes aux codecs */
-	for (i = 1, nb_ts = 1; i < len; i++) {
-		ret = ts[i] - ts[i - 1];
+	for (i = 1, nb_ts = 1; i < len_c; i++) {
+		ret = ts_c[i] - ts_c[i - 1];
 		if (ret == 1)	/* TS consecutifs */
 			nb_ts++;
 		else {
 			/* programmation des TS consecutifs */
 			while (nb_ts > 16) {
-				out_be32(siram_rx + offset, siram | SIRAM_CNT(16));
-				out_be32(siram_tx + offset, siram | SIRAM_CNT(16));
+				out_be32(siram_rx + offset, siram_c | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, siram_c | SIRAM_CNT(16));
 				offset++;
 				nb_ts -= 16;
 			}
-			out_be32(siram_rx + offset, siram | SIRAM_CNT(nb_ts));
-			out_be32(siram_tx + offset, siram | SIRAM_CNT(nb_ts));
+			out_be32(siram_rx + offset, siram_c | SIRAM_CNT(nb_ts));
+			out_be32(siram_tx + offset, siram_c | SIRAM_CNT(nb_ts));
 			offset++;
 			nb_ts = 1;
 			/* programmation des TS non utilises */
+			ret--;		/* intervalle entre TS utilises */
 			while (ret > 16) {
 				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
 				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
@@ -191,17 +261,47 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	}
 	/* programmation des derniers TimeSlots affectes aux codecs */
 	while (nb_ts > 16) {
-		out_be32(siram_rx + offset, siram | SIRAM_CNT(16));
-		out_be32(siram_tx + offset, siram | SIRAM_CNT(16));
+		out_be32(siram_rx + offset, siram_c | SIRAM_CNT(16));
+		out_be32(siram_tx + offset, siram_c | SIRAM_CNT(16));
 		offset++;
 		nb_ts -= 16;
 	}
-	siram |= SIRAM_LST;
-	out_be32(siram_rx + offset, siram | SIRAM_CNT(nb_ts));
-	out_be32(siram_tx + offset, siram | SIRAM_CNT(nb_ts));
+	if (ts_e1[1] < ts_c[0])
+		siram_c |= SIRAM_LST;
+	out_be32(siram_rx + offset, siram_c | SIRAM_CNT(nb_ts));
+	out_be32(siram_tx + offset, siram_c | SIRAM_CNT(nb_ts));
+	offset++;
 	
-	simode = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
-	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode));
+	/* programmation des TimeSlots e1 si apres ceux des codecs */
+	if (ts_e1[1] > ts_c[len_c - 1]) {
+		val = ts_c[len_c - 1] + 1;
+		if (ts_e1[0] > val) {
+			nb_ts = ts_e1[0] - val;
+			while (nb_ts > 16) {
+				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(16));
+				offset++;
+				nb_ts -= 16;
+			}
+			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+			offset++;
+		}
+		nb_ts = ts_e1[1] - ts_e1[0] + 1;
+		/* programmation des TimeSlots affectes au lien E1 */
+		while (nb_ts > 16) {
+			out_be32(siram_rx + offset, siram_e | SIRAM_CNT(16));
+			out_be32(siram_tx + offset, siram_e | SIRAM_CNT(16));
+			offset++;
+			nb_ts -= 16;
+		}
+		siram_e |= SIRAM_LST;
+		out_be32(siram_rx + offset, siram_e | SIRAM_CNT(nb_ts));
+		out_be32(siram_tx + offset, siram_e | SIRAM_CNT(nb_ts));
+	}
+
+	simode_tdma = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
+	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode_tdma) | simode);
 	
 	setbits32(&cpm->cp_sicr, sicr);
 	
