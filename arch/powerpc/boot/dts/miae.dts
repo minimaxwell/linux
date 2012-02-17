@@ -402,13 +402,6 @@
 				reg = <0x2>;
 				device_type = "ethernet-phy";
 			};
-
-			PHY3: ethernet-phy@3 {
-				interrupts = <2 1>;
-				interrupt-parent = <&PIC>;
-				reg = <0x3>;
-				device_type = "ethernet-phy";
-			};
 		};
 
 		eth0: ethernet@e00 {
@@ -429,9 +422,8 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <7 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY2 &PHY3>;
+			phy-handle = <&PHY2>;
 			linux,network-index = <1>;
-			gpios = <&CPM1_PIO_E 18 1>;
 		};
 
 		PIC: pic@0 {
