@@ -38,6 +38,8 @@
 #include <linux/of_spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
+#include <linux/syscalls.h>
+
 #include <sysdev/fsl_soc.h>
 #include <ldb/ldb_gpio.h>
 #include <saf3000/saf3000.h>
@@ -487,6 +489,9 @@ static void __exit fpga_exit(void)
 	spi_unregister_driver(&fpga_spi_driver);
 }
 module_exit(fpga_exit);
+
+EXPORT_SYMBOL(sys_symlink);
+EXPORT_SYMBOL(sys_unlink);
 
 MODULE_AUTHOR("Christophe LEROY CSSI");
 MODULE_DESCRIPTION("LOader for FPGA on MCR3000 ");
