@@ -199,6 +199,7 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 		if (data->ix_tx == PCM_NB_TXBD) data->ix_tx = 0;
 		data->time++;
 	}
+
 	if (lct & UART_SCCM_RX) {
 		if (data->rec.octet_packet) data->packet_lost++;
 		memcpy(data->rec.packet, data->rx_buf[data->ix_rx], PCM_NB_BYTE_RXBD);
@@ -209,12 +210,14 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 		if (data->open)		/* si device /dev/pcm utilisé */
 			wake_up(&data->read_wait);
 	}
+
 	if (lct & UART_SCCM_BSY) {
 		pr_info("TDM Interrupt RX Busy\n");
 	}
-	setbits16(&data->cp_scc->scc_scce, lct);
 
+	setbits16(&data->cp_scc->scc_scce, lct);
 	ret = IRQ_HANDLED;
+
 	return ret;
 }
 

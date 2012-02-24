@@ -226,6 +226,7 @@ static irqreturn_t pcm_e1_interrupt(s32 irq, void *context)
 		if (data->ix_tx == PCM_NB_TXBD) data->ix_tx = 0;
 		data->time++;
 	}
+
 	if (lct & SMCM_RX) {
 		if (data->rec.octet_packet) data->packet_lost++;
 		memcpy(data->rec.packet, data->rx_buf[data->ix_rx], PCM_NB_BYTE_RXBD);
@@ -236,12 +237,14 @@ static irqreturn_t pcm_e1_interrupt(s32 irq, void *context)
 		if (data->open)		/* si device /dev/pcm utilisé */
 			wake_up(&data->read_wait);
 	}
+
 	if (lct & SMCM_BSY) {
 		pr_info("TDM-E1 Interrupt RX Busy\n");
 	}
+
 	setbits8(&data->cp_smc->smc_smce, lct);
-	
 	ret = IRQ_HANDLED;
+
 	return ret;
 }
 

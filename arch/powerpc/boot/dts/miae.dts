@@ -244,15 +244,6 @@
 			};
 		};
 		
-//		fpga@4,1000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-fpga";
-//			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
-//			interrupts = <6 1>;
-//			interrupt-parent = <&PIC>;
-//		};
-
 		e1@4,2000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -261,24 +252,6 @@
 			interrupts = <8 1>;
 			interrupt-parent = <&PIC>;
 		};
-		
-//		mtsl@4,3000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-mtsl";
-//			reg = <4 0x3000000 0xFFFF>;
-//		};
-
-//		codec {
-//			compatible = "s3k,mcr3000-codec";
-//		};
-
-//		alarmes {
-//			compatible = "s3k,mcr3000-alarmes";
-//			gpios = <&alin 13 1 	// ACQ_ALRM
-//				&alout 15 1	// ALRM_MAJ
-//				&alout 14 1>;	// ALRM_MIN
-//		};
 		
 		dpram@3,0 {
 			#address-cells = <1>;
@@ -303,6 +276,7 @@
 			/* 1 = entree */
 			/* 2 = sortie initialisee inactive */
 			compatible = "s3k,gpios-appli";
+			reg = <4 0x42 4>;
 			gpios = <&torin  15 1	// TOR in 1
 				&torin   14 1	// TOR in 2
 				&torin   13 1	// TOR in 3
@@ -314,12 +288,15 @@
 				&torin    7 1	// TOR in 9
 				&torin    6 1	// TOR in 10
 				&torin    5 1	// TOR in 11
-				&torin    4 1	// TOR res
-				&torin    3 1	// TOR res
-				&torin    2 1	// TOR res
-				&torin    1 1	// TOR res
-				&torin    0 1	// TOR res
-				&far     15 1	// Alternat BP
+				&torout  15 2	// TOR out 1
+				&torout  14 2	// TOR out 2
+				&torout  13 2	// TOR out 3
+				&torout  12 2	// TOR out 4
+				&torout  11 2	// TOR out 5
+				&torout  10 2	// TOR out 6
+				&torout   9 2	// TOR out 7
+				&torout   8 2	// TOR out 8
+				&far     15 1	// BP Alt
 				&far     13 1	// Alternat 1
 				&far     14 1	// Alternat 2
 				&far     12 1	// Alternat Combine
@@ -327,46 +304,65 @@
 				&fav     15 1	// Alternat µMain2
 				&fav      9 1	// Alternat µCasque1
 				&fav     13 1	// Alternat µCasque2
-				&gen     14 1	// Pres Alim 24V
-				&etatref 15 1	// Synchro E1
-				&etatref 14 1	// Synchro S0
-				&etatref 13 1	// Alternat res
 				&fav     10 1	// Presence µMain1
 				&fav     14 1	// Presence µMain2
 				&fav      8 1	// Presence µCasque1
 				&fav     12 1>;	// Presence µCasque2
 			names = "tor_in_1",
-				"tor_in_2",
-				"tor_in_3",
-				"tor_in_4",
-				"tor_in_5",
-				"tor_in_6",
-				"tor_in_7",
-				"tor_in_8",
-				"tor_in_9",
-				"tor_in_10",
-				"tor_in_11",
-				"it1_res_1",
-				"it1_res_2",
-				"it1_res_3",
-				"it1_res_4",
-				"it1_res_5",
-				"alt_1",
-				"alt_2",
-				"alt_3",
-				"alt_4",
-				"alt_5",
-				"alt_6",
-				"alt_7",
-				"alt_8",
-				"it2_res_1",
-				"it2_res_2",
-				"it2_res_3",
-				"it2_res_4",
-				"pres_1",
-				"pres_2",
-				"pres_3",
-				"pres_4";
+				"tor_in_2",		// by_pass
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"tor_out_1",		// Sortie Jour/Nuit
+				"tor_out_2",		// Sortie Alternat POUS
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"alt_bp",		// Alternat BP
+				"tor_in_13",		// Alternat 1
+				"tor_in_14",		// Alternat 2
+				"alt_ucomb",		// Alternat Combine
+				"alt_umain_a",		// Alternat µMain_a
+				"alt_umain_b",		// Alternat µMain_b
+				"alt_ucasque_a",	// Alternat µCasque_a
+				"alt_ucasque_b",	// Alternat µCasque_b
+				"pres_umain_a",		// Presence µMain_a
+				"pres_umain_b",		// Presence µMain_b
+				"pres_ucasque_a",	// Presence µCasque_a
+				"pres_ucasque_b";	// Presence µCasque_b
+			codec = "Rec. In 1",
+				"Interco In 1",
+				"Rec. In 2",
+				"Interco In 2",
+				"Micro ITH",
+				"none",
+				"none",
+				"Micro Combine",
+				"Micro Casque_a",
+				"Micro Main_a",
+				"Micro Casque_b",
+				"Micro Main_b",
+				"Rec. Out 1",
+				"Interco Out 1",
+				"Rec. Out 2",
+				"Interco Out 2",
+				"HP ITH",
+				"HP 1",
+				"HP 2",
+				"Ecoute Combine",
+				"Ec. droite Casque _a",
+				"Ec. gauche Casque _a",
+				"Ec. droite Casque _b",
+				"Ec. gauche Casque _b";
 		};
 	};
 

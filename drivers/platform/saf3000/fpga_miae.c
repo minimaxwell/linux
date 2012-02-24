@@ -221,8 +221,8 @@ static ssize_t fs_attr_type_face_show(struct device *dev, struct device_attribut
 	else sprintf(type, "non defini");
 	return snprintf(buf, PAGE_SIZE, "La %s est de type %s\n", face, type);
 }
-static DEVICE_ATTR(fav, S_IRUGO, fs_attr_type_face_show, NULL);
-static DEVICE_ATTR(far, S_IRUGO, fs_attr_type_face_show, NULL);
+static DEVICE_ATTR(type_fav, S_IRUGO, fs_attr_type_face_show, NULL);
+static DEVICE_ATTR(type_far, S_IRUGO, fs_attr_type_face_show, NULL);
 
 static ssize_t fs_attr_led_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -416,8 +416,8 @@ static void fpga_m_free_attr(struct device *infos)
 	device_remove_file(infos, &dev_attr_tor_out6);
 	device_remove_file(infos, &dev_attr_tor_out7);
 	device_remove_file(infos, &dev_attr_tor_out8);
-	device_remove_file(infos, &dev_attr_far);
-	device_remove_file(infos, &dev_attr_fav);
+	device_remove_file(infos, &dev_attr_type_far);
+	device_remove_file(infos, &dev_attr_type_fav);
 	device_remove_file(infos, &dev_attr_led_rouge);
 	device_remove_file(infos, &dev_attr_led_verte);
 	device_remove_file(infos, &dev_attr_led_debug1);
@@ -552,9 +552,9 @@ static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_devic
 	if (_Result) goto err_unfile;
 	_Result = device_create_file(infos, &dev_attr_tor_out8);
 	if (_Result) goto err_unfile;
-	_Result = device_create_file(infos, &dev_attr_far);
+	_Result = device_create_file(infos, &dev_attr_type_far);
 	if (_Result) goto err_unfile;
-	_Result = device_create_file(infos, &dev_attr_fav);
+	_Result = device_create_file(infos, &dev_attr_type_fav);
 	if (_Result) goto err_unfile;
 	_Result = device_create_file(infos, &dev_attr_led_rouge);
 	if (_Result) goto err_unfile;

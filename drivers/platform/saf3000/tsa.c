@@ -46,7 +46,6 @@
 /*
  * driver TSA
  */
- 
 struct tsa_data {
 	struct device *dev;
 	struct device *infos;

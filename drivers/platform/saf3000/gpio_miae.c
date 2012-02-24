@@ -35,15 +35,40 @@
 #define GPIO_AUTHOR		"VASSEUR Patrick - Janvier 2012"
 
 
-#define NBMAX 32
+#define NBMAX 64
 
 struct gpio_data {
 	struct device	*dev;
 	struct device	*gpios_infos;
+	struct device	*codecs_infos;
 	int		gpios_gpio[NBMAX];
-	char		*name_gpio[NBMAX];
 	int		gpios_ngpios;
+	unsigned short	type_far;
+	unsigned short	type_fav;
 };
+
+static ssize_t fs_attr_infos_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct gpio_data *data = dev_get_drvdata(dev);
+	struct device_node *np = data->dev->of_node;
+	int len_info = 0, len = 0, i;
+	const char *info = of_get_property(np, "codec", &len_info);
+	
+	for (i = 0; ((i < 12) && (len_info > 0)); i++) {
+		int lg = strlen(info) + 1;
+		len += snprintf(buf + len, PAGE_SIZE - len, "Codec %d Canal in %d = %s\n", (i / 4) + 1, (i % 4) + 1, info);
+		info += lg;
+		len_info -= lg;
+	}
+	for (i = 0; ((i < 12) && (len_info > 0)); i++) {
+		int lg = strlen(info) + 1;
+		len += snprintf(buf + len, PAGE_SIZE - len, "Codec %d Canal out %d = %s\n", (i / 4) + 1, (i % 4) + 1, info);
+		info += lg;
+		len_info -= lg;
+	}
+	return len;
+}
+static DEVICE_ATTR(infos, S_IRUGO, fs_attr_infos_show, NULL);
 
 static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device_id *match)
 {
@@ -55,6 +80,8 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 	const char *names;
 	int len_names = 0;
 	struct gpio_data *data;
+	struct device *infos;
+	short *fpgam;
 
 	dev_info(dev, "GPIOs driver probe.\n");
 	
@@ -68,6 +95,17 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 
 	data->gpios_ngpios = of_gpio_count(np);
 	
+	fpgam = of_iomap(np, 0);
+	if (fpgam == NULL) {
+		dev_err(dev, "of_iomap FPGAM failed\n");
+		ret = -ENOMEM;
+		goto err_map;
+	}
+	data->type_far = (*fpgam >> 5) & 0x07;
+	data->type_fav = (*(fpgam + 1) >> 13) & 0x07;
+	dev_info(dev,"FAR %d FAV %d\n", data->type_far, data->type_fav);
+	iounmap(fpgam);
+
 	names = of_get_property(np, "names", &len_names);
 	
 	if (data->gpios_ngpios < 1) {
@@ -85,16 +123,25 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 		int gpio;
 		int len = strlen(names) + 1;
 		
+		if (sysfs_streq(names, "none")) {
+			names += len;
+			len_names -= len;
+			 continue;
+		}
 		gpio = of_get_gpio_flags(np, i, &flags);
 		ret = gpio_request_one(gpio, flags, dev_driver_string(dev));
 		if (ret) {
 			dev_err(dev, "can't request gpio n %d => %d: %d\n", i, gpio, ret);
+			names += len;
+			len_names -= len;
 			continue;
 		}
 
 		ret = gpio_export(gpio, 0);
 		if (ret) {
 			dev_err(dev,"can't export gpio %d: %d\n", gpio, ret);
+			names += len;
+			len_names -= len;
 			continue;
 		}
 
@@ -102,19 +149,18 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 		ret = gpio_export_link(data->gpios_infos, names, gpio);
 //		dev_info(dev,"Retour gpio_export_link du GPIO %d (id = %d) = %d\n", i, gpio, ret);
 
-		data->name_gpio[i] = kzalloc(len, GFP_KERNEL);
-		if (data->name_gpio[i] == NULL) {
-			dev_err(dev,"can't attribute name gpio %d\n", i);
-			continue;
-		}
-		memcpy(data->name_gpio[i], names, len);
-		dev_info(dev,"Name gpio = %s\n", data->name_gpio[i]);
+		dev_info(dev,"Name gpio = %s\n", names);
 		
 		data->gpios_gpio[i] = gpio;
-		
+
 		names += len;
 		len_names -= len;
 	}
+
+	infos = device_create(class, dev, MKDEV(0, 0), NULL, "codec");
+	dev_set_drvdata(infos, data);
+	data->codecs_infos = infos;
+	ret = device_create_file(infos, &dev_attr_infos);
 	
 	dev_info(dev,"GPIOs driver added.\n");
 	return 0;
@@ -136,6 +182,8 @@ static int __devexit gpios_remove(struct of_device *ofdev)
 		gpio_free(data->gpios_gpio[i]);
 	}
 	device_unregister(data->gpios_infos);
+	device_remove_file(data->codecs_infos, &dev_attr_infos);
+	device_unregister(data->codecs_infos);
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 		
