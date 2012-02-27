@@ -912,13 +912,10 @@ void fs_link_monitor(struct work_struct *work)
 	}
 		
 
-	/* If the active PHY has a link */
+	/* If the active PHY has a link and carrier is off, 
+           call netif_carrier_on */
 	if (phydev->link) {
-		/* If the over PHY has lost its link, netif_carrier_off may have
-		   been called in phy.c -> call netif_carrier_on */
-		if ((nb_changed_phydevs == 1 && ! changed_phydevs[0]->link) ||
-		    (nb_changed_phydevs == 2 && 
-		     (! changed_phydevs[0]->link || ! changed_phydevs[1]->link)))
+		if (! netif_carrier_ok(fep->phydev->attached_dev))
 			netif_carrier_on(fep->phydev->attached_dev);
 		return;
 	}
