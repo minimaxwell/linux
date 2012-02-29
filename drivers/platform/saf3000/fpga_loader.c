@@ -93,7 +93,16 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		buf = kmalloc(fw->size,GFP_KERNEL);
 		if (buf) {
 			int ret;
-			memcpy((void*)buf, fw->data, fw->size);
+			int i;
+			u16 *src=(u16*)fw->data;
+			u16 *dst=(u16*)buf;
+			
+			/* On fait une permutation des octets de chaque mot pour pouvoir programmer en mode 16 bits */
+			
+			for (i = 0 ; i < (fw->size + 1) / 2 ; i++) {
+				u16 val = src[i];
+				dst[i] = ((val & 0xff00) >> 8 ) | ((val & 0x00ff) << 8);
+			}
 
 			ret = spi_write(data->spi, buf, fw->size);
 			if (ret != 0) dev_err(dev,"pb spi_write\n");

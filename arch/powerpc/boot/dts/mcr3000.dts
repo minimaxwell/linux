@@ -497,10 +497,11 @@
 					 
 				fpga-loader@0 {
 					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <2000000>;
+					spi-max-frequency = <10000000>;
 					reg = <0>;
 					spi-cs-high;
 					loader = "mcr";
+					spi-bits = <16>;
 				};
 				pot1@1 {
 					compatible = "cs,mcr3000-pot1";
@@ -534,10 +535,11 @@
 				};
 				mezz@6 {
 					compatible = "s3k,mcr3000-fpga-loader";
-					spi-max-frequency = <2000000>;
+					spi-max-frequency = <10000000>;
 					reg = <6>;
 					spi-cs-high;
 					loader = "mezz";
+					spi-bits = <16>;
 				};
 				sicofi@7 {
 					compatible = "infineon,mcr3000-sicofi";
