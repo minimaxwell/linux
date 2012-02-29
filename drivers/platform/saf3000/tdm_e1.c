@@ -367,24 +367,24 @@ static ssize_t pcm_e1_aio_read(struct kiocb *iocb, const struct iovec *iov,
 static int pcm_e1_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
-	struct info info;
+	unsigned long info;
 	
 	switch (cmd) {
 	case SAF3000_PCM_TIME:
-		info.info = data->time;
+		info = data->time;
 		break;
 	case SAF3000_PCM_LOST:
-		info.info = data->packet_lost;
+		info = data->packet_lost;
 		break;
 	case SAF3000_PCM_SILENT:
-		info.info = data->packet_silence;
+		info = data->packet_silence;
 		break;
 	default:
 		ret = -ENOTTY;
 		break;
 	}
 	if (ret == 0)
-		ret = __copy_to_user((struct info *)arg, &info, _IOC_SIZE(cmd));
+		ret = __copy_to_user((void *)arg, &info, _IOC_SIZE(cmd));
 	return ret;
 }
 
