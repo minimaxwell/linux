@@ -525,7 +525,7 @@ static int __devinit codec_probe(struct spi_device *spi)
 		goto err;
 	}
 	len = 0;
-	np = of_find_compatible_node(NULL, NULL, "fsl,mpc885-tsa");
+	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
 	if (np)
 		ts = of_get_property(np, "ts_codec", &len);
 	if (!ts || (len < sizeof(*ts))) {

@@ -203,7 +203,7 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x42 2>;
-				interrupts = <255 255 255 255 255 255 255 255 255 255 255 255 28 30 29 31>;
+				interrupts = <255 255 255 255 255 255 255 255 255 255 255 0 28 30 29 31>;
 				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
@@ -304,6 +304,7 @@
 				&fav     15 1	// Alternat µMain2
 				&fav      9 1	// Alternat µCasque1
 				&fav     13 1	// Alternat µCasque2
+				&far     11 1	// Presence Combine
 				&fav     10 1	// Presence µMain1
 				&fav     14 1	// Presence µMain2
 				&fav      8 1	// Presence µCasque1
@@ -335,6 +336,7 @@
 				"alt_umain_b",		// Alternat µMain_b
 				"alt_ucasque_a",	// Alternat µCasque_a
 				"alt_ucasque_b",	// Alternat µCasque_b
+				"pres_ucomb",		// Presence Combine
 				"pres_umain_a",		// Presence µMain_a
 				"pres_umain_b",		// Presence µMain_b
 				"pres_ucasque_a",	// Presence µCasque_a
@@ -359,10 +361,10 @@
 				"HP 1",
 				"HP 2",
 				"Ecoute Combine",
-				"Ec. droite Casque _a",
-				"Ec. gauche Casque _a",
-				"Ec. droite Casque _b",
-				"Ec. gauche Casque _b";
+				"Ec. droite Casque_a",
+				"Ec. gauche Casque_a",
+				"Ec. droite Casque_b",
+				"Ec. gauche Casque_b";
 		};
 	};
 
@@ -525,6 +527,10 @@
 				scc_codec = "SCC4";
 				ts_e1 = <1 31>;
 				scc_e1 = "SMC2";
+//				ts_e1 = <0 8>;	// phase = 0, debit = 8MHz
+//				scc_e1 = "SCC4";
+//				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
+//				scc_codec = "SCC4";
 			};
 
 			smc1: serial@a80 {
