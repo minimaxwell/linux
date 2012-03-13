@@ -145,6 +145,7 @@ struct fs_enet_private {
 	unsigned int last_mii_status;
 	int interrupt;
 	int gpio;
+	int disable_phy;
 
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];

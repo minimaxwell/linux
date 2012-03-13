@@ -430,6 +430,7 @@
 			phy-handle = <&PHY2 &PHY3>;
 			linux,network-index = <1>;
 			gpios = <&CPM1_PIO_E 18 1>;
+			PHY-disable = "isolate";
 		};
 
 		PIC: pic@0 {

@@ -50,6 +50,9 @@
 
 #include "fs_enet.h"
 
+#define PHY_ISOLATE 1
+#define PHY_POWER_DOWN 2
+
 /*************************************************/
 
 MODULE_AUTHOR("Pantelis Antoniou <panto@intracom.gr>");
@@ -798,6 +801,32 @@ void fs_link_switch(struct fs_enet_private *fep)
 	struct phy_device *phydev = fep->phydev;
 	unsigned long flags;
 	int value;
+
+	/* If the PHY must be powered down to disable it (mcr3000 1G) */
+	if (fep->disable_phy == PHY_POWER_DOWN)
+	{
+		if (phydev->drv->suspend) phydev->drv->suspend(phydev);
+
+		if (phydev == fep->phydevs[0]) {
+			if (fep->phydevs[1]) {
+				phydev = fep->phydevs[1];
+				dev_err(fep->dev, "Switch to PHYB\n");
+			}
+		}
+		else {
+			phydev = fep->phydevs[0];
+			dev_err(fep->dev, "Switch to PHYA\n");
+		}
+
+		spin_lock_irqsave(&fep->lock, flags);
+		fep->change_time = jiffies;
+		fep->phydev = phydev;
+		spin_unlock_irqrestore(&fep->lock, flags);
+
+		if (phydev->drv->resume) phydev->drv->resume(phydev);
+
+		return;
+	}
 	
 	/* Do not suspend the PHY, but isolate it. We can't get a powered 
 	   down PHY's link status */
@@ -833,6 +862,8 @@ void fs_link_switch(struct fs_enet_private *fep)
 
 	netif_carrier_on(fep->phydev->attached_dev);
 }
+
+// #define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
 {
@@ -877,6 +908,18 @@ void fs_link_monitor(struct work_struct *work)
 	if (! fep->phydevs[1]) {
 		if (!phydev->link && fep->mode == MODE_AUTO) 
 			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+	/* If the PHY must be powered down to disable it (mcr3000 1G) */
+	if (fep->disable_phy == PHY_POWER_DOWN)
+	{
+		if (!phydev->link && fep->mode == MODE_AUTO) {
+			if (fep->phydevs[1] && 
+			    (jiffies - fep->change_time >= LINK_MONITOR_RETRY))
+				fs_link_switch(fep);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		}
 		return;
 	}
 
@@ -963,6 +1006,11 @@ static int fs_init_phy(struct net_device *dev)
 				&fs_adjust_link, 0, PHY_INTERFACE_MODE_MII);
 	fep->phy_oldlinks[1] = 0;
 
+	if (fep->phydevs[1] && fep->disable_phy == PHY_POWER_DOWN) {
+		if (fep->phydevs[1]->drv->suspend) 
+			fep->phydevs[1]->drv->suspend(fep->phydevs[1]);
+	}
+
 	return 0;
 }
 
@@ -1001,13 +1049,17 @@ static int fs_enet_open(struct net_device *dev)
 
 	if (fep->phydevs[1]) {
 		phy_start(fep->phydevs[1]);
-        	value = phy_read(fep->phydevs[1], MII_BMCR);
-        	phy_write(fep->phydevs[1], MII_BMCR, 
-			((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
-		if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
-		/* autoneg must be disabled at this point. Otherwise, it will
-		   remove the isolated status and break networking */
-		fep->phydevs[1]->autoneg = AUTONEG_DISABLE;
+		/* If the PHY must be isolated to disable it (MIAe) */
+		if (fep->disable_phy == PHY_ISOLATE) {
+        		value = phy_read(fep->phydevs[1], MII_BMCR);
+        		phy_write(fep->phydevs[1], MII_BMCR, 
+				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			/* autoneg must be disabled at this point. Otherwise, 
+			the driver will remove the ISOLATE bit in the command
+			register and break networking */
+			fep->phydevs[1]->autoneg = AUTONEG_DISABLE;
+		}
 	}
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
@@ -1040,6 +1092,7 @@ static int fs_enet_close(struct net_device *dev)
 	spin_unlock_irqrestore(&fep->lock, flags);
 
 	/* release any irqs */
+
 	phy_disconnect(fep->phydevs[0]);
 	if (fep->phydevs[1]) {
 		phy_disconnect(fep->phydevs[1]);
@@ -1375,11 +1428,10 @@ static int __devinit fs_enet_probe(struct of_device *ofdev,
 	const u8 *mac_addr;
 	int privsize, len, ret = -ENODEV;
 	int ngpios = of_gpio_count(ofdev->dev.of_node);
-	int gpio;
+	int gpio = -1;
+	char *Disable_PHY;
 
-	if (ngpios != 1) 
-                gpio = -1;
-	else
+	if (ngpios == 1) 
 		gpio = ldb_gpio_init(ofdev->dev.of_node, &ofdev->dev, 0, 1);
 
 	fpi = kzalloc(sizeof(*fpi), GFP_KERNEL);
@@ -1424,6 +1476,17 @@ static int __devinit fs_enet_probe(struct of_device *ofdev,
 	fep->fpi = fpi;
 	fep->ops = match->data;
 	fep->gpio = gpio;
+
+	fep->disable_phy = 0;
+	Disable_PHY = (char *)of_get_property(ofdev->dev.of_node, 
+		"PHY-disable", NULL);
+	if (Disable_PHY) {
+		printk("PHY-disable = %s\n", Disable_PHY);
+		if (! strcmp(Disable_PHY, "power-down"))
+			fep->disable_phy = PHY_POWER_DOWN;
+		else if (! strcmp(Disable_PHY, "isolate"))
+			fep->disable_phy = PHY_ISOLATE;
+	}
 
 	ret = fep->ops->setup_data(ndev);
 	if (ret)
