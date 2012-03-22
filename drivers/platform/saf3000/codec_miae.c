@@ -503,9 +503,9 @@ static int __devinit codec_probe(struct spi_device *spi)
 	struct codec *codec;
 	struct device *dev;
 	struct class *class;
-	int _Result = -1, _Canal;
+	int _Result = -1, _Canal, _Ts;
 	const char *name_codec = NULL;
-	const __be32 *ts = NULL;
+	const __be32 *ts_info = NULL;
 	int len = 0, num = 0;
 	struct device_node *np = spi->dev.of_node;
 	
@@ -527,8 +527,8 @@ static int __devinit codec_probe(struct spi_device *spi)
 	len = 0;
 	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
 	if (np)
-		ts = of_get_property(np, "ts_codec", &len);
-	if (!ts || (len < sizeof(*ts))) {
+		ts_info = of_get_property(np, "ts_info", &len);
+	if (!ts_info || (len < sizeof(*ts_info))) {
 		_Result = -EINVAL;
 		goto err;
 	}
@@ -541,11 +541,19 @@ static int __devinit codec_probe(struct spi_device *spi)
 	dev_info(dev, "Reservation spi codec : 0x%08X\n", (int)spi);
 	dev_info(dev, "Reservation dev codec : 0x%08X\n", (int)codec->dev);
 
-	len = (num - 1) * MAX_CANAL_AUDIO;	/* index pour TS d'un codec */
+	_Ts = ts_info[0] + (ts_info[1] / 2) + 1;	/* index premier TS codec 1 */
+	len = (num - 1) * MAX_CANAL_AUDIO;	/* nombre de TS phonie codec a ignorer */
+	while (len >= ((ts_info[1] / 2) - 1)) {
+		len -= (ts_info[1] / 2) - 1;
+		_Ts += (ts_info[1] / 2);
+	}
+	if (len) _Ts += len;
 	for (_Canal = 0; _Canal < MAX_CANAL_AUDIO; _Canal++) {
 		dev_info(dev, "Initialisation du canal %d du CODEC %d\n", _Canal, num);
 		/* affectation TS em et rec en loi A et canal en 'power down' */
-		codec->canal[_Canal].ts = ts[_Canal + len];
+		codec->canal[_Canal].ts = _Ts++;
+		/* sauter le TS E1 si necessaire */
+		if (((_Ts - ts_info[0]) % (ts_info[1] / 2)) == 0) _Ts++;
 		if (mode_canal(spi, codec, _Canal, 0) < 0)
 			break;
 		codec->canal[_Canal].mode = 0;

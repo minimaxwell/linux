@@ -523,15 +523,14 @@
 			
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
-				reg = <0x9c0 0x440>;
-				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
+				reg = <0x9c0 0x440 0x930 0x20>;
+				/* parametres possible : SCC4 ou SMC2 */
 				scc_codec = "SCC4";
-				ts_e1 = <1 31>;
-				scc_e1 = "SMC2";
-//				ts_e1 = <0 8>;	// phase = 0, debit = 8MHz
-//				scc_e1 = "SCC4";
-//				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
-//				scc_codec = "SCC4";
+				scc_e1 = "SCC4";
+				/* 1er parametre = channel phase E1 (0 à 3 si data rate = 8MHz */
+				/* 2eme parametre = data rate (8MHz ou 4MHz pour utiliser SMC2 */
+				/* les TS codecs se deduiront a partir du channel phase du E1 */
+				ts_info = <0 8>;	/* phase = 0, debit = 8MHz */
 			};
 
 			smc1: serial@a80 {
@@ -573,7 +572,7 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
-			smc2: tdm_e1@a90 {
+			smc2: tdm_scm@a90 {
 				device_type = "tdm";
 				compatible = "fsl,mpc885-smc-tdm", "fsl,cpm1-smc-tdm";
 				reg = <0xa90 0x10 0x3f80 0x40>;

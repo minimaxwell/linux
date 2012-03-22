@@ -53,11 +53,24 @@ struct fpga_data {
 	struct device		*infos;
 	int			status;
 };
+static struct fpga_data *data;
 
 #define FPGA_HS		0
 #define FPGA_OK		1
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
+
+
+void gest_led_debug(int led, int cmde)
+{
+	u16 info = (1 << (led + 3)) & 0x0070;
+	
+	if (cmde)
+		clrbits16(&data->fpgam->fct_gen, info);
+	else	
+		setbits16(&data->fpgam->fct_gen, info);
+}
+EXPORT_SYMBOL(gest_led_debug);
 
 
 static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -453,7 +466,6 @@ static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_devic
 	struct device *infos;
 	int _Result = 0;
 	struct fpgam *fpgam;
-	struct fpga_data *data;
 
 	data = kzalloc(sizeof *data, GFP_KERNEL);
 	if (!data) {

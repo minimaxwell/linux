@@ -66,5 +66,12 @@
 #define SIGMR_RDM_DYN_TDMa	0x01
 #define SIGMR_RDM_STATIC_TDMab	0x02
 #define SIGMR_RDM_DYN_TDMab	0x03
+
+#define CICR_HP_MASK		0x00001f00
+#define CICR_HP_SCC2		0x00001d00
+#define CICR_HP_SCC3		0x00001c00
+#define CICR_HP_SCC4		0x00001b00
+#define CICR_IRL_MASK		0x0000e000
+#define CICR_IRL_HIGH		0x00002000
 	
 #endif /* __TSA_H__ */
