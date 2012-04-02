@@ -7,6 +7,8 @@ Group:              Documentation
 License:            N/A
 BuildArch:          noarch
 
+BuildRoot:          %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+
 %description
 Install optionnal manpages of the KNL in the cldk manpages.
 
@@ -18,19 +20,15 @@ Requires:           CLDK
 %clean
 
 %build
-cp -pa man %{_builddir}/
 
 %install
-rm -rf %{buildroot}/*
+rm -rf %{buildroot}
 mkdir -p %{buildroot}/opt/cldk/
-cp -pa man/ %{buildroot}/opt/cldk/
-for FILE in %{buildroot}/opt/cldk/man/man9[x]/*.9[x]; do
-    gzip -p $FILE
-done
+cp -ap man %{buildroot}/opt/cldk/
 
 %files
 %defattr(-,root,root,-)
-%{buildroot}/opt/cldk/man/man9[x]/*
+/opt/cldk/man/*
 
 %changelog
 * Thu Mar 29 2012 Jerome Chantelauze 
