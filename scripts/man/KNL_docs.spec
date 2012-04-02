@@ -5,6 +5,7 @@ Version:            0.1
 Release:            1%{?dist}
 Group:              Documentation
 License:            N/A
+BuildArch:          noarch
 
 %description
 Install optionnal manpages of the KNL in the cldk manpages.
