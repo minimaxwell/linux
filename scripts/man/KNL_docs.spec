@@ -1,5 +1,5 @@
 Summary:            KNL manpages
-Name:               KNL-docs
+Name:               KNL_docs
 Source:             %{name}-%{version}.tar.gz
 Version:            0.1
 Release:            1%{?dist}
