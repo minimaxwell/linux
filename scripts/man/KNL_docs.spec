@@ -23,12 +23,12 @@ Requires:           CLDK
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/opt/cldk/
-cp -ap man %{buildroot}/opt/cldk/
+mkdir -p %{buildroot}/opt/cldk/share
+cp -ap man %{buildroot}/opt/cldk/share/
 
 %files
 %defattr(-,root,root,-)
-/opt/cldk/man/*
+/opt/cldk/share/man/*
 
 %changelog
 * Thu Mar 29 2012 Jerome Chantelauze 
