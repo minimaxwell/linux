@@ -27,6 +27,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/netdevice.h>
+#include <linux/inetdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
@@ -47,6 +48,8 @@
 #include <asm/uaccess.h>
 
 #include <ldb/ldb_gpio.h>
+
+#include <net/arp.h>
 
 #include "fs_enet.h"
 
@@ -801,6 +804,8 @@ void fs_link_switch(struct fs_enet_private *fep)
 	struct phy_device *phydev = fep->phydev;
 	unsigned long flags;
 	int value;
+	__be32 ip_addr;
+	struct sk_buff *skb;
 
 	/* If the PHY must be powered down to disable it (mcr3000 1G) */
 	if (fep->disable_phy == PHY_POWER_DOWN)
@@ -838,10 +843,6 @@ void fs_link_switch(struct fs_enet_private *fep)
 			phydev = fep->phydevs[1];
 			dev_err(fep->dev, "Switch to PHY B\n");
 			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
-			/* In the open function, autoneg was disabled for PHY B.
-			   It must be enabled when PHY B is activated for the 
-			   first time. */
-			phydev->autoneg = AUTONEG_ENABLE;
 		}
 	}
 	else {
@@ -861,6 +862,15 @@ void fs_link_switch(struct fs_enet_private *fep)
 		phydev->drv->config_aneg(phydev);
 
 	netif_carrier_on(fep->phydev->attached_dev);
+
+	/* Send gratuitous ARP */
+	ip_addr = inet_select_addr(fep->ndev, 0, 0);
+	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
+		 	fep->ndev->dev_addr, NULL);
+	if (skb == NULL)
+		printk("arp_create failure -> gratuitous arp not sent\n");
+	else 
+		arp_xmit(skb);
 }
 
 // #define DOUBLE_ATTACH_DEBUG 1
@@ -1049,16 +1059,14 @@ static int fs_enet_open(struct net_device *dev)
 
 	if (fep->phydevs[1]) {
 		phy_start(fep->phydevs[1]);
+		if (fep->phydevs[1]->drv->config_aneg)
+			fep->phydevs[1]->drv->config_aneg(fep->phydevs[1]);
 		/* If the PHY must be isolated to disable it (MIAe) */
 		if (fep->disable_phy == PHY_ISOLATE) {
         		value = phy_read(fep->phydevs[1], MII_BMCR);
         		phy_write(fep->phydevs[1], MII_BMCR, 
 				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
-			/* autoneg must be disabled at this point. Otherwise, 
-			the driver will remove the ISOLATE bit in the command
-			register and break networking */
-			fep->phydevs[1]->autoneg = AUTONEG_DISABLE;
 		}
 	}
 
