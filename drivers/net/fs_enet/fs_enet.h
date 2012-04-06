@@ -150,6 +150,7 @@ struct fs_enet_private {
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];
 	struct delayed_work link_queue;
+	struct work_struct arp_queue;
 
 	int oldduplex, oldspeed, oldlink;	/* current settings */
 	int change_time;

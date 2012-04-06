@@ -799,13 +799,29 @@ static void fs_adjust_link(struct net_device *dev)
 	if (fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, 0);
 }
 
+
+void fs_send_gratuitous_arp(struct work_struct *work)
+{
+	struct fs_enet_private *fep =
+			container_of(work, struct fs_enet_private, arp_queue);
+	__be32 ip_addr;
+	struct sk_buff *skb;
+
+	ip_addr = inet_select_addr(fep->ndev, 0, 0);
+	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
+		 	fep->ndev->dev_addr, NULL);
+	if (skb == NULL)
+		printk("arp_create failure -> gratuitous arp not sent\n");
+	else 
+		arp_xmit(skb);
+}
+
+
 void fs_link_switch(struct fs_enet_private *fep)
 {
 	struct phy_device *phydev = fep->phydev;
 	unsigned long flags;
 	int value;
-	__be32 ip_addr;
-	struct sk_buff *skb;
 
 	/* If the PHY must be powered down to disable it (mcr3000 1G) */
 	if (fep->disable_phy == PHY_POWER_DOWN)
@@ -864,13 +880,7 @@ void fs_link_switch(struct fs_enet_private *fep)
 	netif_carrier_on(fep->phydev->attached_dev);
 
 	/* Send gratuitous ARP */
-	ip_addr = inet_select_addr(fep->ndev, 0, 0);
-	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
-		 	fep->ndev->dev_addr, NULL);
-	if (skb == NULL)
-		printk("arp_create failure -> gratuitous arp not sent\n");
-	else 
-		arp_xmit(skb);
+	schedule_work(&fep->arp_queue);
 }
 
 // #define DOUBLE_ATTACH_DEBUG 1
@@ -1072,6 +1082,7 @@ static int fs_enet_open(struct net_device *dev)
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
 	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+	INIT_WORK(&fep->arp_queue, fs_send_gratuitous_arp);
 
 	netif_start_queue(dev);
 
