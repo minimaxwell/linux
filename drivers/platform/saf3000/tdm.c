@@ -66,8 +66,17 @@
 #define TYPE_SCC		0
 #define TYPE_SMC		1
 
+#define CARTE_MCR3K_2G		1
+#define CARTE_MIAE		2
+
+/* gestion ligne à retard */
+#define DELAY_NB_BYTE		(1000 * NB_BYTE_BY_MS)
+#define DELAY_NB_LINE_EM	16
+#define DELAY_NB_LINE_REC	16
+#define DELAY_NB_LINE		(DELAY_NB_LINE_EM + DELAY_NB_LINE_REC)
+
 struct em_buf{
-	int	num_packet_wr;
+//	int	num_packet_wr;
 	int	octet_packet[PCM_NB_BUF_PACKET];
 	char	*packet[PCM_NB_BUF_PACKET];
 };
@@ -76,12 +85,19 @@ struct rec_buf{
 	int	octet_packet;
 	char	*packet;
 };
-
+/*
+struct delay_buf {
+	int	ix_wr;
+	int	ix_rd;
+	char	*buf[DELAY_NB_BYTE];
+};
+*/
 struct tdm_data {
 	struct device		*dev;
 	struct device		*infos;
 	scc_t			*cp_scc;
 	smc_t			*cp_smc;
+	int			carte;
 	int			irq;
 	sccp_t			*pram;
 	struct cpm_buf_desc __iomem	*tx_bd;
@@ -94,7 +110,7 @@ struct tdm_data {
 	unsigned char		ix_tx_trft;	/* index ecriture transfert */
 	unsigned char		ix_rx;
 	unsigned char		nb_canal;
-	unsigned char		ts_inter;
+	unsigned char		e1_mask;
 	unsigned char		canal_write;
 	unsigned char		canal_read;
 	unsigned char		nb_write;
@@ -108,6 +124,7 @@ struct tdm_data {
 	unsigned long		packet_silence;
 	unsigned long		open;
 	unsigned long		time;
+//	struct delay_buf	delay[DELAY_NB_LINE];
 };
 
 static struct tdm_data *data_scc;
@@ -349,17 +366,28 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	/* ecriture canaux codec */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC)) && (data->nb_canal == NB_CANAUX_MAX)) {
 		pread = (u8 *)buf;
-		ix_wr = 1;	/* on saute le premier TS E1 */
 		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
-			for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
+			for (canal = 0, ix_wr = 0; canal < NB_CANAUX_CODEC; canal++, ix_wr++) {
+				/* on saute les TS E1 */
+				if ((ix_wr & data->e1_mask) == 0) {
+					ix_wr++;
+					pwrite++;
+				}
 				*pwrite++ = *pread++;
-				canal++;
-				if ((canal % data->ts_inter) == 0)
-					pwrite++;	/* on saute le TS E1 */
 			}
-			ix_wr += data->nb_canal;
 		}
+//		ix_wr = 1;	/* on saute le premier TS E1 */
+//		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
+//			for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+//				*pwrite++ = *pread++;
+//				canal++;
+//				if ((canal % data->ts_inter) == 0)
+//					pwrite++;	/* on saute le TS E1 */
+//			}
+//			ix_wr += data->nb_canal;
+//		}
 		if ((data->canal_write & IDENT_CODEC) == 0) {
 			data->em.octet_packet[data->ix_tx_user] += count;
 			data->canal_write |= IDENT_CODEC;
@@ -368,20 +396,28 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	/* ecriture canaux e1 */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1)) && (data->nb_canal == NB_CANAUX_MAX)) {
 		pread = (u8 *)buf;
-		ix_wr = 0;
 		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
+	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
 			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
 				*pwrite++ = *pread++;
-				if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
-					/* on saute les TS phonie Codec */
-					ret = NB_CANAUX_CODEC - (canal * data->ts_inter);
-					ret = (ret > data->ts_inter) ? data->ts_inter : ret;
-					pwrite += ret;
-				}
+				if ((canal * data->e1_mask) < NB_CANAUX_CODEC)
+					pwrite += data->e1_mask;
 			}
-			ix_wr += data->nb_canal;
 		}
+//		ix_wr = 0;
+//		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
+//			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
+//				*pwrite++ = *pread++;
+//				if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
+//					/* on saute les TS phonie Codec */
+//					ret = NB_CANAUX_CODEC - (canal * data->ts_inter);
+//					ret = (ret > data->ts_inter) ? data->ts_inter : ret;
+//					pwrite += ret;
+//				}
+//			}
+//			ix_wr += data->nb_canal;
+//		}
 		if ((data->canal_write & IDENT_E1) == 0) {
 			data->em.octet_packet[data->ix_tx_user] += count;
 			data->canal_write |= IDENT_E1;
@@ -443,14 +479,15 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	/* ecriture canaux codec */
 	if (nr_segs == NB_CANAUX_CODEC) {
-		ix_wr = 1;	/* on saute le premier TS E1 */
-		for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+		for (canal = 0, ix_wr = 0; canal < NB_CANAUX_CODEC; canal++, ix_wr++) {
 			/* test taille buffer >= taille nécessaire pour transfert */
 			if (iov->iov_len < NB_BYTE_BY_5_MS)
 				return -EINVAL;
 			if (!access_ok(VERIFY_READ, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pread = (u8 *)iov->iov_base;
+			if ((ix_wr & data->e1_mask) == 0)
+				ix_wr++;	/* on saute le TS E1 */
 	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
 	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 				*pwrite = *pread;
@@ -458,11 +495,7 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				pwrite += data->nb_canal;
 			}
 			nb_byte += NB_BYTE_BY_5_MS;
-			canal++;
 			iov++;
-			ix_wr++;
-			if ((canal % data->ts_inter) == 0)
-				ix_wr++;	/* on saute le TS E1 */
 		}
 		if ((data->canal_write & IDENT_CODEC) == 0) {
 			data->em.octet_packet[data->ix_tx_user] += nb_byte;
@@ -488,11 +521,11 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			nb_byte += NB_BYTE_BY_5_MS;
 			iov++;
 			ix_wr++;
-			if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
+			if ((canal * data->e1_mask) < NB_CANAUX_CODEC) {
 				/* on saute les TS phonie Codec */
-				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
-				i = (i > data->ts_inter) ? data->ts_inter : i;
-				ix_wr += i;
+//				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
+//				i = (i > data->ts_inter) ? data->ts_inter : i;
+				ix_wr += data->e1_mask;
 			}
 		}
 		if ((data->canal_write & IDENT_E1) == 0) {
@@ -517,7 +550,7 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-	int ret, ix_lct = 0, i, canal;
+	int ret, ix_lct = 0, i, canal, mask;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
@@ -534,8 +567,13 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 		return -EFAULT;
 	}
 
+	mask = IDENT_CODEC | IDENT_E1;
+	if (count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC))
+		mask = IDENT_CODEC;
+	else if (count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1))
+		mask = IDENT_E1;
 	if ((file->f_flags & O_NONBLOCK) == 0)
-		wait_event(data->read_wait, data->rec.octet_packet);
+		wait_event(data->read_wait, (data->rec.octet_packet && ((data->canal_read & mask) == 0)));
 		
 	/* lecture de tous les canaux */
 	if (count == (NB_BYTE_BY_5_MS * data->nb_canal)) {
@@ -545,17 +583,27 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	/* lecture canaux codec */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC)) && (data->nb_canal == NB_CANAUX_MAX)) {
       		pwrite = (u8 *)buf;
-		ix_lct = 1;
-      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pread = &data->rec.packet[ix_lct];
-			for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+	      		pread = &data->rec.packet[i * data->nb_canal];
+			for (canal = 0, ix_lct = 0; canal < NB_CANAUX_CODEC; canal++, ix_lct++) {
+				/* on saute les TS E1 */
+				if ((ix_lct & data->e1_mask) == 0) {
+					ix_lct++;
+					pread++;
+				}
 				*pwrite++ = *pread++;
-				canal++;
-				if ((canal % data->ts_inter) == 0)
-					pread++;	/* on saute le TS E1 */
 			}
-			ix_lct += data->nb_canal;
 		}
+//		ix_lct = 1;
+//		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//			for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+//				*pwrite++ = *pread++;
+//				canal++;
+//				if ((canal % data->ts_inter) == 0)
+//					pread++;	/* on saute le TS E1 */
+//			}
+//			ix_lct += data->nb_canal;
+//		}
 		if ((data->canal_read & IDENT_CODEC) == 0) {
 			data->rec.octet_packet -= count;
 			data->canal_read |= IDENT_CODEC;
@@ -563,21 +611,28 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	}
 	/* lecture canaux e1 */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1)) && (data->nb_canal == NB_CANAUX_MAX)) {
-		ix_lct = 0;
       		pwrite = (u8 *)buf;
-      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pread = &data->rec.packet[ix_lct];
+		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+	      		pread = &data->rec.packet[i * data->nb_canal];
 			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
 				*pwrite++ = *pread++;
-				if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
-					/* on saute les TS phonie Codec */
-					ret = NB_CANAUX_CODEC - (canal * data->ts_inter);
-					ret = (ret > data->ts_inter) ? data->ts_inter : ret;
-					pread += ret;
-				}
+				if ((canal * data->e1_mask) < NB_CANAUX_CODEC)
+					pread += data->e1_mask;
 			}
-			ix_lct += data->nb_canal;
 		}
+//      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//	      		pread = &data->rec.packet[ix_lct];
+//			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
+//				*pwrite++ = *pread++;
+//				if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
+//					/* on saute les TS phonie Codec */
+//					ret = NB_CANAUX_CODEC - (canal * data->ts_inter);
+//					ret = (ret > data->ts_inter) ? data->ts_inter : ret;
+//					pread += ret;
+//				}
+//			}
+//			ix_lct += data->nb_canal;
+//		}
 		if ((data->canal_read & IDENT_E1) == 0) {
 			data->rec.octet_packet -= count;
 			data->canal_read |= IDENT_E1;
@@ -609,14 +664,15 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 		
 	/* lecture canaux codec */
 	if ((nr_segs == NB_CANAUX_CODEC) || (nr_segs == NB_CANAUX_MAX)) {
-		ix_lct = 1;	/* on saute le premier TS E1 */
-		for (canal = 0; canal < NB_CANAUX_CODEC; ) {
+		for (canal = 0, ix_lct = 0; canal < NB_CANAUX_CODEC; canal++, ix_lct++) {
 			/* test taille buffer >= taille nécessaire pour transfert */
 			if (iov->iov_len < NB_BYTE_BY_5_MS)
 				return -EINVAL;
 			if (!access_ok(VERFIFY_WRITE, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pwrite = (u8 *)iov->iov_base;
+			if ((ix_lct & data->e1_mask) == 0)
+				ix_lct++;	/* on saute le TS E1 */
 	      		pread = &data->rec.packet[ix_lct];
 	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 				*pwrite = *pread;
@@ -624,11 +680,7 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 				pread += data->nb_canal;
 			}
 			nb_byte += NB_BYTE_BY_5_MS;
-			canal++;
 			iov++;
-			ix_lct++;
-			if ((canal % data->ts_inter) == 0)
-				ix_lct++;	/* on saute le TS E1 */
 		}
 		if ((data->canal_read & IDENT_CODEC) == 0) {
 			data->rec.octet_packet -= nb_byte;
@@ -654,11 +706,11 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			nb_byte += NB_BYTE_BY_5_MS;
 			iov++;
 			ix_lct++;
-			if ((canal * data->ts_inter) < NB_CANAUX_CODEC) {
+			if ((canal * data->e1_mask) < NB_CANAUX_CODEC) {
 				/* on saute les TS phonie Codec */
-				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
-				i = (i > data->ts_inter) ? data->ts_inter : i;
-				ix_lct += i;
+//				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
+//				i = (i > data->ts_inter) ? data->ts_inter : i;
+				ix_lct += data->e1_mask;
 			}
 		}
 		if ((data->canal_read & IDENT_E1) == 0) {
@@ -672,8 +724,9 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 
 static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
-	int ret = 0;
+	int ret = 0/*, ix*/;
 	unsigned long info;
+//	struct pose_delay delay;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(inode->i_rdev);
 	
@@ -688,11 +741,39 @@ static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 		case SAF3000_PCM_TIME: info = data->time; break;
 		case SAF3000_PCM_LOST: info = data->packet_lost; break;
 		case SAF3000_PCM_SILENT: info = data->packet_silence; break;
-		default: ret = -ENOTTY; break;
+		default: ret = -ENOTTY; goto mcr3k; break;
 	}
-	if (ret == 0)
-		ret = __copy_to_user((void*)arg, &info, _IOC_SIZE(cmd));
+	ret = __copy_to_user((void*)arg, &info, _IOC_SIZE(cmd));
 	return ret;
+
+mcr3k:
+/*	if (data->carte == CARTE_MCR3K_2G) {
+		delay.ident = 0;
+		if (__copy_from_user((void*)arg, &delay, _IOC_SIZE(cmd)) == 0) {
+			if (delay.ident && (delay.ident < DELAY_NB_LINE_EM)
+				&& (delay.delay <= 1000)) {
+				switch (cmd) {
+				case SAF3000_PCM_DELAY_EM:
+					ix = 16 + delay.ident - 1;
+					break;
+				case SAF3000_PCM_DELAY_REC:
+					ix = delay.ident - 1;
+					break;
+				default: ret = -ENOTTY; goto erreur; break;
+				}
+				data->delay[ix].ix_wr = 0;
+				data->delay[ix].ix_rd = 0;
+				if (delay.delay > 5) {
+					data->delay[ix].ix_rd = -((delay.delay * NB_BYTE_BY_MS) - 1);
+				}
+			}
+			else ret = -EINVAL;
+		}
+		else ret = -EACCES;
+	}
+
+erreur:
+*/	return ret;
 }
 
 static int pcm_open(struct inode *inode, struct file *file)
@@ -766,11 +847,12 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	int irq;
 	unsigned short bds_ofs;
 	int len;
-	const u32 *prop;
+	const u32 *cmd;
 	dma_addr_t dma_addr = 0;
 	struct cpm_buf_desc __iomem *ad_bd;
 	const char *scc = NULL;
 	const __be32 *info_ts = NULL;
+	const void *prop = 0;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -786,7 +868,25 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 		data->flags = TYPE_SMC;
 	}
 
-	/* releve du nombre et du positionnement des TS sur SCC4 */
+	/* recherche type de carte support MIAE ou MCR3K-2G */
+	np = of_find_compatible_node(NULL, NULL, "fsl,cmpc885");
+	if (np) {
+		prop = of_get_property(np, "model", NULL);
+		if (prop) {
+			if (strcmp(prop, "MCR3000_2G") == 0)
+				data->carte = CARTE_MCR3K_2G;
+			else if (strcmp(prop, "MIAE") == 0)
+				data->carte = CARTE_MIAE;
+		}
+	}
+	if (data->carte)
+		dev_info(dev, "La carte support est %s.\n", (data->carte == CARTE_MIAE) ? "MIAe" : "MCR3K-2G");
+	else {
+		ret = -EINVAL;
+		goto err;
+	}
+
+	/* releve du nombre et du positionnement des TS */
 	data->nb_canal = 0;
 	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
 	if (np) {
@@ -805,11 +905,11 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 				data->nb_canal += NB_CANAUX_E1;
 			info_ts = of_get_property(np, "ts_info", &len);
 			if (info_ts && (len >= sizeof(*info_ts)))
-				data->ts_inter = (info_ts[1] / 2) - 1;
+				data->e1_mask = (info_ts[1] / 2) - 1;
 		}
 	}
 	/* sortie si pas de canaux affectes au SCC4 ou au SMC2 */
-	if ((data->nb_canal == 0) || (data->ts_inter == 0)) {
+	if ((data->nb_canal == 0) || (data->e1_mask == 0)) {
 		ret = -ENODATA;
 		goto err;
 	}
@@ -842,13 +942,13 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	data->dev = dev;
 
 	np = dev->of_node;
-	prop = of_get_property(np, "fsl,cpm-command", &len);
-	if (!prop || len != 4) {
+	cmd = of_get_property(np, "fsl,cpm-command", &len);
+	if (!cmd || len != 4) {
 		dev_err(dev, "CPM UART %s has no/invalid fsl,cpm-command property.\n", np->name);
 		ret = -EINVAL;
 		goto err;
 	}
-	data->command = *prop;
+	data->command = *cmd;
 
 	if (data->flags == TYPE_SCC) {
 		cp_scc = of_iomap(np, 0);
@@ -980,7 +1080,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	if (data->flags == TYPE_SCC)
 		dev_info(dev, "driver TDM added.\n");
 	else
-		dev_info(dev, "driver TDM_SCM added.\n");
+		dev_info(dev, "driver TDM_SMC added.\n");
 	
 	return 0;
 
