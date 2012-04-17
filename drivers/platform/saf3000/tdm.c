@@ -59,9 +59,12 @@
 
 #define PCM_MINOR		240
 #define PCM_SMC_MINOR		241
-#define PCM_NB_TXBD		3
+#define PCM_NB_TXBD		16
+#define PCM_MASK_TXBD		15
 #define PCM_NB_RXBD		2
-#define PCM_NB_BUF_PACKET	4
+//#define PCM_NB_BUF_PACKET	4
+
+#define NB_IT_EM_FOR_REC	5
 
 #define TYPE_SCC		0
 #define TYPE_SMC		1
@@ -74,18 +77,18 @@
 #define DELAY_NB_LINE_EM	16
 #define DELAY_NB_LINE_REC	16
 #define DELAY_NB_LINE		(DELAY_NB_LINE_EM + DELAY_NB_LINE_REC)
-
+/*
 struct em_buf{
 //	int	num_packet_wr;
 	int	octet_packet[PCM_NB_BUF_PACKET];
 	char	*packet[PCM_NB_BUF_PACKET];
 };
-
+*/ /*
 struct rec_buf{
 	int	octet_packet;
-	char	*packet;
+//	char	*packet;
 };
-/*
+*/ /*
 struct delay_buf {
 	int	ix_wr;
 	int	ix_rd;
@@ -104,20 +107,25 @@ struct tdm_data {
 	struct cpm_buf_desc __iomem	*rx_bd;
 	char			*rx_buf[PCM_NB_RXBD];
 	char			*tx_buf[PCM_NB_TXBD];
+	int			octet_em[PCM_NB_TXBD];
 	unsigned char		flags;
-	unsigned char		ix_tx;		/* descripteur emission à écrire */
-	unsigned char		ix_tx_user;	/* index ecriture user */
-	unsigned char		ix_tx_trft;	/* index ecriture transfert */
-	unsigned char		ix_rx;
-	unsigned char		nb_canal;
-	unsigned char		e1_mask;
+	unsigned char		ix_tx;		/* descripteur emission à transmettre */
+	unsigned char		ix_tx_wr;	/* descripteur emission à écrire */
 	unsigned char		canal_write;
+//	unsigned char		ix_tx_user;	/* index ecriture user */
+//	unsigned char		ix_tx_trft;	/* index ecriture transfert */
+	int			octet_recu;
+	unsigned char		ix_rx;
+	unsigned char		ix_rx_lct;
 	unsigned char		canal_read;
-	unsigned char		nb_write;
-	unsigned char		em_write;
+	unsigned char		nb_canal;
+	unsigned char		e1_interval;
+	unsigned char		nb_it_em;
+//	unsigned char		nb_write;
+//	unsigned char		em_write;
 	char			*packet_repos;
-	struct em_buf		em;
-	struct rec_buf		rec;
+//	struct em_buf		em;
+//	struct rec_buf		rec;
 	u32			command;
 	wait_queue_head_t	read_wait;
 	unsigned long		packet_lost;
@@ -221,76 +229,98 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 		cpm_command(data->command, CPM_CR_INIT_TX);
 		/* initialisation des descripteurs Tx */
 		for (i = 0; i < PCM_NB_TXBD; i++) {
+			memcpy(data->tx_buf[i], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
+			data->octet_em[i] = 0;
 			ad_bd = data->tx_bd + i;
 			if (i != (PCM_NB_TXBD - 1)) {
-				memcpy(data->tx_buf[i], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
 				out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT);
 			}
 			else
 				out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 		}
-		data->ix_tx = PCM_NB_TXBD - 1;
-		/* initialisation structure emission */
-		for (i = 0; i < PCM_NB_BUF_PACKET; i++)
-			data->em.octet_packet[i] = 0;
-		data->ix_tx_user = 0;
-		data->ix_tx_trft = 0;
+//		data->ix_tx = PCM_NB_TXBD - 1;
+		data->ix_tx = 2;
+		data->ix_tx_wr = 2 + 6;
+//		/* initialisation structure emission */
+//		for (i = 0; i < PCM_NB_BUF_PACKET; i++)
+//			data->em.octet_packet[i] = 0;
+//		data->ix_tx_user = 0;
+//		data->ix_tx_trft = 0;
 		setbits16(&data->cp_smc->smc_smcmr, SMCMR_TEN);
 		pr_info("TDM-E1 Interrupt TX underrun\n");
 	}
 
 	if (lct & mask_tx) {
-		i = 0;
-		data->nb_write++;
-		if (data->ix_tx_trft != data->ix_tx_user) {
-			if (data->em_write) {
-				i = data->em.octet_packet[data->ix_tx_trft];
-			}
-			else if (data->nb_write == 6)
-				data->em_write = 1;
-		}
-		else {
-			data->em_write = 0;
-			data->nb_write = 0;
-		}
-		if (i >= (NB_BYTE_BY_MS * data->nb_canal)) {
-			memcpy(data->tx_buf[data->ix_tx],
-				&data->em.packet[data->ix_tx_trft][(NB_BYTE_BY_5_MS * data->nb_canal) - i],
-				(NB_BYTE_BY_MS * data->nb_canal));
-			i -= (NB_BYTE_BY_MS * data->nb_canal);
-			data->em.octet_packet[data->ix_tx_trft] = i;
-			if (i < (NB_BYTE_BY_MS * data->nb_canal)) {
-				data->em.octet_packet[data->ix_tx_trft] = 0;
-				data->ix_tx_trft++;
-				if (data->ix_tx_trft == PCM_NB_BUF_PACKET)
-					data->ix_tx_trft = 0;
-			}
-		}
-		else {
+//		i = 0;
+//		data->nb_write++;
+//		if (data->ix_tx_trft != data->ix_tx_user) {
+//			if (data->em_write) {
+//				i = data->em.octet_packet[data->ix_tx_trft];
+//			}
+//			else if (data->nb_write == 6)
+//				data->em_write = 1;
+//		}
+//		else {
+//			data->em_write = 0;
+//			data->nb_write = 0;
+//		}
+//		if (i >= (NB_BYTE_BY_MS * data->nb_canal)) {
+//			memcpy(data->tx_buf[data->ix_tx],
+//				&data->em.packet[data->ix_tx_trft][(NB_BYTE_BY_5_MS * data->nb_canal) - i],
+//				(NB_BYTE_BY_MS * data->nb_canal));
+//			i -= (NB_BYTE_BY_MS * data->nb_canal);
+//			data->em.octet_packet[data->ix_tx_trft] = i;
+//			if (i < (NB_BYTE_BY_MS * data->nb_canal)) {
+//				data->em.octet_packet[data->ix_tx_trft] = 0;
+//				data->ix_tx_trft++;
+//				if (data->ix_tx_trft == PCM_NB_BUF_PACKET)
+//					data->ix_tx_trft = 0;
+//			}
+//		}
+//		else {
+		if (data->octet_em[data->ix_tx] == 0) {
 			memcpy(data->tx_buf[data->ix_tx], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
 			data->packet_silence++;
 		}
 		setbits16(&(data->tx_bd + data->ix_tx)->cbd_sc, BD_SC_READY);
-		data->ix_tx++;
-		if (data->ix_tx == PCM_NB_TXBD) data->ix_tx = 0;
+		if (data->octet_em[data->ix_tx_wr] == 0)
+			data->ix_tx_wr = (data->ix_tx + 6) & PCM_MASK_TXBD;
+		data->octet_em[data->ix_tx] = 0;
+		data->ix_tx = (data->ix_tx + 1) & PCM_MASK_TXBD;
 		data->time++;
+		data->nb_it_em++;
+		if (data->nb_it_em == NB_IT_EM_FOR_REC) {
+			data->nb_it_em = 0;
+			gest_led_debug(1, 1);
+			if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
+				data->packet_lost++;
+			data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
+			data->canal_read = 0;
+			setbits16(&(data->rx_bd + data->ix_rx)->cbd_sc, BD_SC_EMPTY);
+			data->ix_rx_lct = data->ix_rx++;
+			if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
+			if (data->open)		/* si device /dev/pcm utilisé */
+				wake_up(&data->read_wait);
+			gest_led_debug(1, 0);
+		}
 	}
 
-	if (lct & mask_rx) {
+/*	if (lct & mask_rx) {
 		gest_led_debug(1, 1);
-		if (data->rec.octet_packet == (NB_BYTE_BY_5_MS * data->nb_canal))
+		if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
 			data->packet_lost++;
-		memcpy(data->rec.packet, data->rx_buf[data->ix_rx], (NB_BYTE_BY_5_MS * data->nb_canal));
-		data->rec.octet_packet = (NB_BYTE_BY_5_MS * data->nb_canal);
+//		memcpy(data->rec.packet, data->rx_buf[data->ix_rx], (NB_BYTE_BY_5_MS * data->nb_canal));
+		data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
 		data->canal_read = 0;
 		setbits16(&(data->rx_bd + data->ix_rx)->cbd_sc, BD_SC_EMPTY);
-		data->ix_rx++;
+		data->ix_rx_lct = data->ix_rx++;
+//		data->ix_rx++;
 		if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
-		if (data->open)		/* si device /dev/pcm utilisé */
-			wake_up(&data->read_wait);
+		if (data->open)	*/	/* si device /dev/pcm utilisé */
+/*			wake_up(&data->read_wait);
 		gest_led_debug(1, 0);
 	}
-
+*/
 	if (lct & mask_bsy) {
 		pr_info("TDM Interrupt RX Busy\n");
 	}
@@ -314,7 +344,7 @@ static unsigned int pcm_poll(struct file *file, poll_table *wait)
 		return -1;
 	
 	poll_wait(file, &data->read_wait, wait);
-	if (data->rec.octet_packet == (NB_BYTE_BY_5_MS * data->nb_canal))
+	if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
 		mask = POLLIN | POLLRDNORM;
 
 	return mask;
@@ -322,7 +352,7 @@ static unsigned int pcm_poll(struct file *file, poll_table *wait)
 
 static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
-	int ret, ix_wr, i, canal;
+	int ret, ix_wr, i, canal, j;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
@@ -337,13 +367,16 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	/* si changement buffer demande ou buffer utilise */
 	if (((count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC)) && (data->canal_write & IDENT_CODEC))
 		|| ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1)) && (data->canal_write & IDENT_E1))) {
-		ix_wr = data->ix_tx_user + 1;
-		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
-		if (data->em.octet_packet[ix_wr] == 0) {
-			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
-			data->canal_write = 0;
-			data->ix_tx_user = ix_wr;
-		}
+      		data->ix_tx_wr += 5;
+      		data->ix_tx_wr &= PCM_MASK_TXBD;
+		data->canal_write = 0;
+//		ix_wr = data->ix_tx_user + 1;
+//		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
+//		if (data->em.octet_packet[ix_wr] == 0) {
+//			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
+//			data->canal_write = 0;
+//			data->ix_tx_user = ix_wr;
+//		}
 	}
 
 	ret = access_ok(VERFIFY_READ, buf, count);
@@ -351,32 +384,55 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 		return -EFAULT;
 	}
 
-	if (data->em.octet_packet[data->ix_tx_user] == 0) {
-		for (i = 0; i < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); i++) {
-			ix_wr = NB_BYTE_BY_MS * data->nb_canal * i;
-			memcpy(&data->em.packet[data->ix_tx_user][ix_wr], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
-		}
+	for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+		i = (data->ix_tx_wr + j) & PCM_MASK_TXBD;
+		if (data->octet_em[i] == 0)
+			memcpy(data->tx_buf[i], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
 	}
+//	if (data->em.octet_packet[data->ix_tx_user] == 0) {
+//		for (i = 0; i < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); i++) {
+//			ix_wr = NB_BYTE_BY_MS * data->nb_canal * i;
+//			memcpy(&data->em.packet[data->ix_tx_user][ix_wr], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
+//		}
+//	}
 	
 	/* ecriture de tous les canaux */
 	if (count == (NB_BYTE_BY_5_MS * data->nb_canal)) {
-		ret = __copy_from_user(data->em.packet[data->ix_tx_user], buf, count);
-		data->em.octet_packet[data->ix_tx_user] = count;
+		for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+			ix_wr = NB_BYTE_BY_MS * data->nb_canal * j;
+			i = (data->ix_tx_wr + j) & PCM_MASK_TXBD;
+			__copy_from_user(data->tx_buf[i], &buf[ix_wr], (NB_BYTE_BY_MS * data->nb_canal));
+			data->octet_em[i] = NB_BYTE_BY_MS * data->nb_canal;
+//			data->em.octet_packet[data->ix_tx_user] = count;
+		}
 	}
 	/* ecriture canaux codec */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC)) && (data->nb_canal == NB_CANAUX_MAX)) {
 		pread = (u8 *)buf;
-		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
-			for (canal = 0, ix_wr = 0; canal < NB_CANAUX_CODEC; canal++, ix_wr++) {
-				/* on saute les TS E1 */
-				if ((ix_wr & data->e1_mask) == 0) {
-					ix_wr++;
-					pwrite++;
+		for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+			pwrite = &data->tx_buf[(data->ix_tx_wr + j) & PCM_MASK_TXBD][0];
+		      	for (i = 0; i < NB_BYTE_BY_MS; i++) {
+				for (canal = 0, ix_wr = 0; canal < NB_CANAUX_CODEC; canal++, ix_wr++) {
+					/* on saute les TS E1 */
+					if ((ix_wr & data->e1_interval) == 0) {
+						ix_wr++;
+						pwrite++;
+					}
+					*pwrite++ = *pread++;
 				}
-				*pwrite++ = *pread++;
 			}
 		}
+//		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
+//			for (canal = 0, ix_wr = 0; canal < NB_CANAUX_CODEC; canal++, ix_wr++) {
+//				/* on saute les TS E1 */
+//				if ((ix_wr & data->e1_interval) == 0) {
+//					ix_wr++;
+//					pwrite++;
+//				}
+//				*pwrite++ = *pread++;
+//			}
+//		}
 //		ix_wr = 1;	/* on saute le premier TS E1 */
 //		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 //	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
@@ -388,22 +444,37 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 //			}
 //			ix_wr += data->nb_canal;
 //		}
+//		if ((data->canal_write & IDENT_CODEC) == 0) {
+//			data->em.octet_packet[data->ix_tx_user] += count;
+//			data->canal_write |= IDENT_CODEC;
+//		}
 		if ((data->canal_write & IDENT_CODEC) == 0) {
-			data->em.octet_packet[data->ix_tx_user] += count;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++)
+		      		data->octet_em[(data->ix_tx_wr + j) & PCM_MASK_TXBD] += NB_BYTE_BY_MS * NB_CANAUX_CODEC;
 			data->canal_write |= IDENT_CODEC;
 		}
 	}
 	/* ecriture canaux e1 */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1)) && (data->nb_canal == NB_CANAUX_MAX)) {
 		pread = (u8 *)buf;
-		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
-			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
-				*pwrite++ = *pread++;
-				if ((canal * data->e1_mask) < NB_CANAUX_CODEC)
-					pwrite += data->e1_mask;
+		for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+			pwrite = &data->tx_buf[(data->ix_tx_wr + j) & PCM_MASK_TXBD][0];
+		      	for (i = 0; i < NB_BYTE_BY_MS; i++) {
+				for (canal = 0; canal < NB_CANAUX_E1; canal++) {
+					*pwrite++ = *pread++;
+					if ((canal * data->e1_interval) < NB_CANAUX_CODEC)
+						pwrite += data->e1_interval;
+				}
 			}
 		}
+//		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+//	      		pwrite = &data->em.packet[data->ix_tx_user][i * data->nb_canal];
+//			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
+//				*pwrite++ = *pread++;
+//				if ((canal * data->e1_interval) < NB_CANAUX_CODEC)
+//					pwrite += data->e1_interval;
+//			}
+//		}
 //		ix_wr = 0;
 //		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 //	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
@@ -418,8 +489,13 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 //			}
 //			ix_wr += data->nb_canal;
 //		}
+//		if ((data->canal_write & IDENT_E1) == 0) {
+//			data->em.octet_packet[data->ix_tx_user] += count;
+//			data->canal_write |= IDENT_E1;
+//		}
 		if ((data->canal_write & IDENT_E1) == 0) {
-			data->em.octet_packet[data->ix_tx_user] += count;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++)
+		      		data->octet_em[(data->ix_tx_wr + j) & PCM_MASK_TXBD] += NB_BYTE_BY_MS * NB_CANAUX_E1;
 			data->canal_write |= IDENT_E1;
 		}
 	}
@@ -427,15 +503,20 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 		count = 0;
 
 	/* si buffer plein */
-	if (data->em.octet_packet[data->ix_tx_user] == (NB_BYTE_BY_5_MS * data->nb_canal)) {
-		ix_wr = data->ix_tx_user + 1;
-		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
-		if (data->em.octet_packet[ix_wr] == 0) {
-			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
-			data->canal_write = 0;
-			data->ix_tx_user = ix_wr;
-		}
-	}
+	if (data->octet_em[data->ix_tx_wr] == (NB_BYTE_BY_MS * data->nb_canal)) {
+      		data->ix_tx_wr += 5;
+      		data->ix_tx_wr &= PCM_MASK_TXBD;
+		data->canal_write = 0;
+      	}
+//	if (data->em.octet_packet[data->ix_tx_user] == (NB_BYTE_BY_5_MS * data->nb_canal)) {
+//		ix_wr = data->ix_tx_user + 1;
+//		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
+//		if (data->em.octet_packet[ix_wr] == 0) {
+//			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
+//			data->canal_write = 0;
+//			data->ix_tx_user = ix_wr;
+//		}
+//	}
 
 	return count;
 }
@@ -443,7 +524,7 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			  unsigned long nr_segs, loff_t pos)
 {
-	int i, ix_wr, canal, nb_byte = 0;
+	int i, ix_wr, canal, nb_byte = 0, j;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(iocb->ki_filp->f_dentry->d_inode->i_rdev);
@@ -458,24 +539,32 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	/* si changement buffer demande ou buffer utilise */
 	if (((nr_segs == NB_CANAUX_CODEC) && (data->canal_write & IDENT_CODEC))
 		|| ((nr_segs == NB_CANAUX_E1) && (data->canal_write & IDENT_E1))) {
-		ix_wr = data->ix_tx_user + 1;
-		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
-		if (data->em.octet_packet[ix_wr] == 0) {
-			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
-			data->canal_write = 0;
-			data->ix_tx_user = ix_wr;
-		}
+      		data->ix_tx_wr += 5;
+      		data->ix_tx_wr &= PCM_MASK_TXBD;
+		data->canal_write = 0;
+//		ix_wr = data->ix_tx_user + 1;
+//		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
+//		if (data->em.octet_packet[ix_wr] == 0) {
+//			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
+//			data->canal_write = 0;
+//			data->ix_tx_user = ix_wr;
+//		}
 	}
 
 	if ((nr_segs != NB_CANAUX_CODEC) && (nr_segs != NB_CANAUX_E1))
 		return -EINVAL;
 		
-	if (data->em.octet_packet[data->ix_tx_user] == 0) {
-		for (i = 0; i < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); i++) {
-			ix_wr = NB_BYTE_BY_MS * data->nb_canal * i;
-			memcpy(&data->em.packet[data->ix_tx_user][ix_wr], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
-		}
+	for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+		i = (data->ix_tx_wr + j) & PCM_MASK_TXBD;
+		if (data->octet_em[i] == 0)
+			memcpy(data->tx_buf[i], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
 	}
+//	if (data->em.octet_packet[data->ix_tx_user] == 0) {
+//		for (i = 0; i < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); i++) {
+//			ix_wr = NB_BYTE_BY_MS * data->nb_canal * i;
+//			memcpy(&data->em.packet[data->ix_tx_user][ix_wr], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
+//		}
+//	}
 
 	/* ecriture canaux codec */
 	if (nr_segs == NB_CANAUX_CODEC) {
@@ -486,19 +575,22 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			if (!access_ok(VERIFY_READ, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pread = (u8 *)iov->iov_base;
-			if ((ix_wr & data->e1_mask) == 0)
+			if ((ix_wr & data->e1_interval) == 0)
 				ix_wr++;	/* on saute le TS E1 */
-	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
-	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-				*pwrite = *pread;
-				pread++;
-				pwrite += data->nb_canal;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+				pwrite = &data->tx_buf[(data->ix_tx_wr + j) & PCM_MASK_TXBD][ix_wr];
+		      		for (i = 0; i < NB_BYTE_BY_MS; i++) {
+					*pwrite = *pread;
+					pread++;
+					pwrite += data->nb_canal;
+				}
 			}
-			nb_byte += NB_BYTE_BY_5_MS;
+			nb_byte += NB_BYTE_BY_MS;
 			iov++;
 		}
 		if ((data->canal_write & IDENT_CODEC) == 0) {
-			data->em.octet_packet[data->ix_tx_user] += nb_byte;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++)
+		      		data->octet_em[(data->ix_tx_wr + j) & PCM_MASK_TXBD] += nb_byte;
 			data->canal_write |= IDENT_CODEC;
 		}
 	}
@@ -512,39 +604,46 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			if (!access_ok(VERIFY_READ, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pread = (u8 *)iov->iov_base;
-	      		pwrite = &data->em.packet[data->ix_tx_user][ix_wr];
-	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-				*pwrite = *pread;
-				pread++;
-				pwrite += data->nb_canal;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
+		      		pwrite = &data->tx_buf[(data->ix_tx_wr + j) & PCM_MASK_TXBD][ix_wr];
+		      		for (i = 0; i < NB_BYTE_BY_MS; i++) {
+					*pwrite = *pread;
+					pread++;
+					pwrite += data->nb_canal;
+				}
 			}
-			nb_byte += NB_BYTE_BY_5_MS;
+			nb_byte += NB_BYTE_BY_MS;
 			iov++;
 			ix_wr++;
-			if ((canal * data->e1_mask) < NB_CANAUX_CODEC) {
+			if ((canal * data->e1_interval) < NB_CANAUX_CODEC) {
 				/* on saute les TS phonie Codec */
-//				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
-//				i = (i > data->ts_inter) ? data->ts_inter : i;
-				ix_wr += data->e1_mask;
+				ix_wr += data->e1_interval;
 			}
 		}
 		if ((data->canal_write & IDENT_E1) == 0) {
-			data->em.octet_packet[data->ix_tx_user] += nb_byte;
+			for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++)
+		      		data->octet_em[(data->ix_tx_wr + j) & PCM_MASK_TXBD] += nb_byte;
 			data->canal_write |= IDENT_E1;
 		}
 	}
 
 	/* si buffer plein */
-	if (data->em.octet_packet[data->ix_tx_user] == (NB_BYTE_BY_5_MS * data->nb_canal)) {
-		ix_wr = data->ix_tx_user + 1;
-		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
-		if (data->em.octet_packet[ix_wr] == 0) {
-			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
-			data->canal_write = 0;
-			data->ix_tx_user = ix_wr;
-		}
-	}
+	if (data->octet_em[data->ix_tx_wr] == (NB_BYTE_BY_MS * data->nb_canal)) {
+      		data->ix_tx_wr += 5;
+      		data->ix_tx_wr &= PCM_MASK_TXBD;
+		data->canal_write = 0;
+      	}
+//	if (data->em.octet_packet[data->ix_tx_user] == (NB_BYTE_BY_5_MS * data->nb_canal)) {
+//		ix_wr = data->ix_tx_user + 1;
+//		if (ix_wr == PCM_NB_BUF_PACKET) ix_wr = 0;
+//		if (data->em.octet_packet[ix_wr] == 0) {
+//			data->em.octet_packet[data->ix_tx_user] = NB_BYTE_BY_5_MS * data->nb_canal;
+//			data->canal_write = 0;
+//			data->ix_tx_user = ix_wr;
+//		}
+//	}
 
+	nb_byte *= (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS);
 	return(nb_byte);
 }
 
@@ -573,21 +672,21 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	else if (count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1))
 		mask = IDENT_E1;
 	if ((file->f_flags & O_NONBLOCK) == 0)
-		wait_event(data->read_wait, (data->rec.octet_packet && ((data->canal_read & mask) == 0)));
+		wait_event(data->read_wait, (data->octet_recu && ((data->canal_read & mask) == 0)));
 		
 	/* lecture de tous les canaux */
 	if (count == (NB_BYTE_BY_5_MS * data->nb_canal)) {
-		ret = __copy_to_user((void*)buf, data->rec.packet, count);
-		data->rec.octet_packet = 0;
+		ret = __copy_to_user((void*)buf, data->rx_buf[data->ix_rx_lct], count);
+		data->octet_recu = 0;
 	}
 	/* lecture canaux codec */
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_CODEC)) && (data->nb_canal == NB_CANAUX_MAX)) {
       		pwrite = (u8 *)buf;
 		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pread = &data->rec.packet[i * data->nb_canal];
+	      		pread = &data->rx_buf[data->ix_rx_lct][i * data->nb_canal];
 			for (canal = 0, ix_lct = 0; canal < NB_CANAUX_CODEC; canal++, ix_lct++) {
 				/* on saute les TS E1 */
-				if ((ix_lct & data->e1_mask) == 0) {
+				if ((ix_lct & data->e1_interval) == 0) {
 					ix_lct++;
 					pread++;
 				}
@@ -605,7 +704,7 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 //			ix_lct += data->nb_canal;
 //		}
 		if ((data->canal_read & IDENT_CODEC) == 0) {
-			data->rec.octet_packet -= count;
+			data->octet_recu -= count;
 			data->canal_read |= IDENT_CODEC;
 		}
 	}
@@ -613,11 +712,11 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	else if ((count == (NB_BYTE_BY_5_MS * NB_CANAUX_E1)) && (data->nb_canal == NB_CANAUX_MAX)) {
       		pwrite = (u8 *)buf;
 		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-	      		pread = &data->rec.packet[i * data->nb_canal];
+	      		pread = &data->rx_buf[data->ix_rx_lct][i * data->nb_canal];
 			for (canal = 0; canal < NB_CANAUX_E1; canal++) {
 				*pwrite++ = *pread++;
-				if ((canal * data->e1_mask) < NB_CANAUX_CODEC)
-					pread += data->e1_mask;
+				if ((canal * data->e1_interval) < NB_CANAUX_CODEC)
+					pread += data->e1_interval;
 			}
 		}
 //      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
@@ -634,7 +733,7 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 //			ix_lct += data->nb_canal;
 //		}
 		if ((data->canal_read & IDENT_E1) == 0) {
-			data->rec.octet_packet -= count;
+			data->octet_recu -= count;
 			data->canal_read |= IDENT_E1;
 		}
 	}
@@ -647,7 +746,7 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 				unsigned long nr_segs, loff_t pos)
 {
-	int i, canal, nb_byte = 0, ix_lct = 0;
+	int i, canal, nb_byte = 0, ix_lct = 0, mask;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(iocb->ki_filp->f_dentry->d_inode->i_rdev);
@@ -662,6 +761,14 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	if ((nr_segs != NB_CANAUX_CODEC) && (nr_segs != NB_CANAUX_E1) && (nr_segs != data->nb_canal))
 		return -EINVAL;
 		
+	mask = IDENT_CODEC | IDENT_E1;
+	if (nr_segs == NB_CANAUX_CODEC)
+		mask = IDENT_CODEC;
+	else if (nr_segs == NB_CANAUX_E1)
+		mask = IDENT_E1;
+	if ((iocb->ki_filp->f_flags & O_NONBLOCK) == 0)
+		wait_event(data->read_wait, (data->octet_recu && ((data->canal_read & mask) == 0)));
+
 	/* lecture canaux codec */
 	if ((nr_segs == NB_CANAUX_CODEC) || (nr_segs == NB_CANAUX_MAX)) {
 		for (canal = 0, ix_lct = 0; canal < NB_CANAUX_CODEC; canal++, ix_lct++) {
@@ -671,9 +778,9 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			if (!access_ok(VERFIFY_WRITE, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pwrite = (u8 *)iov->iov_base;
-			if ((ix_lct & data->e1_mask) == 0)
+			if ((ix_lct & data->e1_interval) == 0)
 				ix_lct++;	/* on saute le TS E1 */
-	      		pread = &data->rec.packet[ix_lct];
+	      		pread = &data->rx_buf[data->ix_rx_lct][ix_lct];
 	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 				*pwrite = *pread;
 				pwrite++;
@@ -683,7 +790,7 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			iov++;
 		}
 		if ((data->canal_read & IDENT_CODEC) == 0) {
-			data->rec.octet_packet -= nb_byte;
+			data->octet_recu -= nb_byte;
 			data->canal_read |= IDENT_CODEC;
 		}
 	}
@@ -697,7 +804,7 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			if (!access_ok(VERFIFY_WRITE, iov->iov_base, NB_BYTE_BY_5_MS))
 				return -EFAULT;
       			pwrite = (u8 *)iov->iov_base;
-	      		pread = &data->rec.packet[ix_lct];
+	      		pread = &data->rx_buf[data->ix_rx_lct][ix_lct];
 	      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
 				*pwrite = *pread;
 				pwrite++;
@@ -706,15 +813,15 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			nb_byte += NB_BYTE_BY_5_MS;
 			iov++;
 			ix_lct++;
-			if ((canal * data->e1_mask) < NB_CANAUX_CODEC) {
+			if ((canal * data->e1_interval) < NB_CANAUX_CODEC) {
 				/* on saute les TS phonie Codec */
 //				i = NB_CANAUX_CODEC - (canal * data->ts_inter);
 //				i = (i > data->ts_inter) ? data->ts_inter : i;
-				ix_lct += data->e1_mask;
+				ix_lct += data->e1_interval;
 			}
 		}
 		if ((data->canal_read & IDENT_E1) == 0) {
-			data->rec.octet_packet -= nb_byte;
+			data->octet_recu -= nb_byte;
 			data->canal_read |= IDENT_E1;
 		}
 	}
@@ -905,24 +1012,24 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 				data->nb_canal += NB_CANAUX_E1;
 			info_ts = of_get_property(np, "ts_info", &len);
 			if (info_ts && (len >= sizeof(*info_ts)))
-				data->e1_mask = (info_ts[1] / 2) - 1;
+				data->e1_interval = (info_ts[1] / 2) - 1;
 		}
 	}
 	/* sortie si pas de canaux affectes au SCC4 ou au SMC2 */
-	if ((data->nb_canal == 0) || (data->e1_mask == 0)) {
+	if ((data->nb_canal == 0) || (data->e1_interval == 0)) {
 		ret = -ENODATA;
 		goto err;
 	}
 	
-	/* initialisation structure emission */
-	for (i = 0; i < PCM_NB_BUF_PACKET; i++) {
-		data->em.packet[i] = kzalloc((NB_BYTE_BY_5_MS * data->nb_canal), GFP_KERNEL);
-		if (!data->em.packet[i]) {
-			ret = -ENOMEM;
-			goto err;
-		}
-		data->em.octet_packet[i] = 0;
-	}
+	/* initialisation structure emission repos */
+//	for (i = 0; i < PCM_NB_BUF_PACKET; i++) {
+//		data->em.packet[i] = kzalloc((NB_BYTE_BY_5_MS * data->nb_canal), GFP_KERNEL);
+//		if (!data->em.packet[i]) {
+//			ret = -ENOMEM;
+//			goto err;
+//		}
+//		data->em.octet_packet[i] = 0;
+//	}
 	data->packet_repos = kzalloc((NB_BYTE_BY_MS * data->nb_canal), GFP_KERNEL);
 	for (i = 0; i < NB_BYTE_BY_MS; i++) {
 		if (i & 1)
@@ -931,12 +1038,12 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 			memset(data->packet_repos + (i * data->nb_canal), 0x55, data->nb_canal);
 	}
 	/* initialisation structure reception */
-	data->rec.packet = kzalloc((NB_BYTE_BY_5_MS * data->nb_canal), GFP_KERNEL);
-	if (!data->rec.packet) {
-		ret = -ENOMEM;
-		goto err;
-	}
-	data->rec.octet_packet = 0;
+//	data->rec.packet = kzalloc((NB_BYTE_BY_5_MS * data->nb_canal), GFP_KERNEL);
+//	if (!data->rec.packet) {
+//		ret = -ENOMEM;
+//		goto err;
+//	}
+	data->octet_recu = 0;
 	init_waitqueue_head(&data->read_wait);
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
@@ -1019,18 +1126,23 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 		out_be16(&data->cp_smc->smc_smcmr, 0);
 
 	/* initialisation des descripteurs Tx */
+	data->tx_buf[0] = dma_alloc_coherent(dev, L1_CACHE_ALIGN(NB_BYTE_BY_MS * data->nb_canal * PCM_NB_TXBD), &dma_addr, GFP_KERNEL);
 	for (i = 0; i < PCM_NB_TXBD; i++) {
 		ad_bd = data->tx_bd + i;
-		data->tx_buf[i] = dma_alloc_coherent(dev, L1_CACHE_ALIGN(NB_BYTE_BY_MS * data->nb_canal), &dma_addr, GFP_KERNEL);
+		if (i)
+			data->tx_buf[i] = data->tx_buf[0] + (i * NB_BYTE_BY_MS * data->nb_canal);
+//		data->tx_buf[i] = dma_alloc_coherent(dev, L1_CACHE_ALIGN(NB_BYTE_BY_MS * data->nb_canal), &dma_addr, GFP_KERNEL);
 		out_be16(&ad_bd->cbd_datlen, (NB_BYTE_BY_MS * data->nb_canal));
-		out_be32(&ad_bd->cbd_bufaddr, dma_addr);
+		out_be32(&ad_bd->cbd_bufaddr, dma_addr + (i * NB_BYTE_BY_MS * data->nb_canal));
 		memcpy(data->tx_buf[i], data->packet_repos, (NB_BYTE_BY_MS * data->nb_canal));
 		if (i != (PCM_NB_TXBD - 1))
 			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT);
 		else
 			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 	}
-	data->ix_tx = PCM_NB_TXBD - 1;
+//	data->ix_tx = PCM_NB_TXBD - 1;
+	data->ix_tx = 2;
+	data->ix_tx_wr = 2 + 6;
 	if (data->flags == TYPE_SCC) {
 		setbits16(&data->cp_scc->scc_sccm, UART_SCCM_TX);
 		setbits16(&data->cp_scc->scc_scce, UART_SCCM_TX);
@@ -1052,14 +1164,14 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_rx = 0;
-	if (data->flags == TYPE_SCC) {
-		setbits16(&data->cp_scc->scc_sccm, UART_SCCM_RX | UART_SCCM_BSY);
-		setbits16(&data->cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
-	}
-	else {
-		setbits8(&data->cp_smc->smc_smcm, SMCM_RX | SMCM_BSY);
-		setbits8(&data->cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
-	}
+//	if (data->flags == TYPE_SCC) {
+//		setbits16(&data->cp_scc->scc_sccm, UART_SCCM_RX | UART_SCCM_BSY);
+//		setbits16(&data->cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
+//	}
+//	else {
+//		setbits8(&data->cp_smc->smc_smcm, SMCM_RX | SMCM_BSY);
+//		setbits8(&data->cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
+//	}
 
 	if (data->flags == TYPE_SCC) {
 		out_be32(&data->cp_scc->scc_gsmrh,
@@ -1097,11 +1209,11 @@ err_unfile:
 	dev_set_drvdata(dev, NULL);
 err:
 	if (data) {
-		for (i = 0; i < PCM_NB_BUF_PACKET; i++) {
-			if (data->em.packet[i]) kfree(data->em.packet[i]);
-		}
+//		for (i = 0; i < PCM_NB_BUF_PACKET; i++) {
+//			if (data->em.packet[i]) kfree(data->em.packet[i]);
+//		}
 		if (data->packet_repos) kfree(data->packet_repos);
-		if (data->rec.packet) kfree(data->rec.packet);
+//		if (data->rec.packet) kfree(data->rec.packet);
 		kfree(data);
 	}
 	return ret;
@@ -1109,7 +1221,7 @@ err:
 
 static int __devexit tdm_remove(struct of_device *ofdev)
 {
-	int i;
+//	int i;
 	struct device *dev = &ofdev->dev;
 	struct tdm_data *data = dev_get_drvdata(dev);
 	struct device *infos = data->infos;
@@ -1126,10 +1238,10 @@ static int __devexit tdm_remove(struct of_device *ofdev)
 	dev_set_drvdata(dev, NULL);
 	misc_deregister(&pcm_scc_miscdev);
 	misc_deregister(&pcm_smc_miscdev);
-	for (i = 0; i < PCM_NB_BUF_PACKET; i++)
-		kfree(data->em.packet[i]);
+//	for (i = 0; i < PCM_NB_BUF_PACKET; i++)
+//		kfree(data->em.packet[i]);
 	kfree(data->packet_repos);
-	kfree(data->rec.packet);
+//	kfree(data->rec.packet);
 	kfree(data);
 	
 	dev_info(dev,"driver TDM removed.\n");
