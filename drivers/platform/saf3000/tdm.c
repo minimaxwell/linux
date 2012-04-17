@@ -64,7 +64,6 @@
 #define PCM_NB_RXBD		2
 //#define PCM_NB_BUF_PACKET	4
 
-#define NB_IT_EM_FOR_REC	5
 
 #define TYPE_SCC		0
 #define TYPE_SMC		1
@@ -120,7 +119,6 @@ struct tdm_data {
 	unsigned char		canal_read;
 	unsigned char		nb_canal;
 	unsigned char		e1_interval;
-	unsigned char		nb_it_em;
 //	unsigned char		nb_write;
 //	unsigned char		em_write;
 	char			*packet_repos;
@@ -288,24 +286,9 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 		data->octet_em[data->ix_tx] = 0;
 		data->ix_tx = (data->ix_tx + 1) & PCM_MASK_TXBD;
 		data->time++;
-		data->nb_it_em++;
-		if (data->nb_it_em == NB_IT_EM_FOR_REC) {
-			data->nb_it_em = 0;
-			gest_led_debug(1, 1);
-			if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
-				data->packet_lost++;
-			data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
-			data->canal_read = 0;
-			setbits16(&(data->rx_bd + data->ix_rx)->cbd_sc, BD_SC_EMPTY);
-			data->ix_rx_lct = data->ix_rx++;
-			if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
-			if (data->open)		/* si device /dev/pcm utilisé */
-				wake_up(&data->read_wait);
-			gest_led_debug(1, 0);
-		}
 	}
 
-/*	if (lct & mask_rx) {
+	if (lct & mask_rx) {
 		gest_led_debug(1, 1);
 		if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
 			data->packet_lost++;
@@ -316,11 +299,11 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 		data->ix_rx_lct = data->ix_rx++;
 //		data->ix_rx++;
 		if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
-		if (data->open)	*/	/* si device /dev/pcm utilisé */
-/*			wake_up(&data->read_wait);
+		if (data->open)		/* si device /dev/pcm utilisé */
+			wake_up(&data->read_wait);
 		gest_led_debug(1, 0);
 	}
-*/
+
 	if (lct & mask_bsy) {
 		pr_info("TDM Interrupt RX Busy\n");
 	}
@@ -1164,14 +1147,14 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_rx = 0;
-//	if (data->flags == TYPE_SCC) {
+	if (data->flags == TYPE_SCC) {
 //		setbits16(&data->cp_scc->scc_sccm, UART_SCCM_RX | UART_SCCM_BSY);
-//		setbits16(&data->cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
-//	}
-//	else {
+		setbits16(&data->cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
+	}
+	else {
 //		setbits8(&data->cp_smc->smc_smcm, SMCM_RX | SMCM_BSY);
-//		setbits8(&data->cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
-//	}
+		setbits8(&data->cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
+	}
 
 	if (data->flags == TYPE_SCC) {
 		out_be32(&data->cp_scc->scc_gsmrh,
