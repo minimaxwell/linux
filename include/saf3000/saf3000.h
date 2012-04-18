@@ -28,20 +28,37 @@ extern void gest_led_debug(int led, int cmde);
 #define SAF3000_PCM_TIME_IDENT		0
 #define SAF3000_PCM_LOST_IDENT		1
 #define SAF3000_PCM_SILENT_IDENT	2
+#define SAF3000_PCM_DELAY_EM_IDENT	3
+#define SAF3000_PCM_DELAY_REC_IDENT	4
 
-/* pour lire le temps de fonctionnement en ms sur /dev/pcm */
+/* pour lire le temps de fonctionnement en ms sur /dev/pcm... */
 #define SAF3000_PCM_TIME			_IOR(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_TIME_IDENT, \
 						unsigned long)
 
-/* pour lire le nombre de paquets reception de 5ms perdus sur /dev/pcm */
+/* pour lire le nombre de paquets reception de 5ms perdus sur /dev/pcm... */
 #define SAF3000_PCM_LOST			_IOR(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_LOST_IDENT, \
 						unsigned long)
 
-/* pour lire le nombre de paquets silence de 1ms emis sur /dev/pcm */
+/* pour lire le nombre de paquets silence de 1ms emis sur /dev/pcm... */
 #define SAF3000_PCM_SILENT			_IOR(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_SILENT_IDENT, \
 						unsigned long)
+
+struct pose_delay {
+	unsigned short	ident;
+	unsigned short	delay;
+};
+
+/* pour ecrire le retard d'une ligne emission sur /dev/pcm... */
+#define SAF3000_PCM_DELAY_EM			_IOW(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_DELAY_EM_IDENT, \
+						struct pose_delay)
+
+/* pour ecrire le retard d'une ligne reception sur /dev/pcm... */
+#define SAF3000_PCM_DELAY_REC			_IOW(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_DELAY_REC_IDENT, \
+						struct pose_delay)
 
 #endif

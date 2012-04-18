@@ -47,12 +47,15 @@
  * driver TSA
  */
 struct tsa_data {
+	int carte;
 	struct device *dev;
 	struct device *infos;
 	cpm8xx_t *cpm;
 };
 
-#define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
+#define EXTRACT(x,dec,bits)	((x>>dec) & ((1<<bits)-1))
+#define CARTE_MCR3K_2G		1
+#define CARTE_MIAE		2
 
 static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -83,13 +86,14 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	struct device *infos;
 	cpm8xx_t *cpm;
 	cpic8xx_t *cpic;
-	int ret, i, nb_ts, inter;
-	u32 simode = 0, siram_c, sicr = 0, siram_e, simode_tdma;
+	int ret, i, nb_ts, inter = 0;
+	u32 simode = 0, siram_a = 0, sicr = 0, siram_b = 0, simode_tdma;
 	siram_entry *siram_rx, *siram_tx;
 	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
 	const char *scc = NULL;
 	const __be32 *info_ts = NULL;
 	int len_scc = 0, len_info = 0, offset = 0;
+	const void *prop = 0;
 
 	/* programmation des signaux ports pour le TSA */
 	setbits16(&immap->im_ioport.iop_papar, 0x01c0);
@@ -108,47 +112,78 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
 
-	scc = of_get_property(np, "scc_codec", &len_scc);
-	if (!scc || (len_scc < sizeof(*scc))) {
+	/* recherche type de carte support MIAE ou MCR3K-2G */
+	np = of_find_compatible_node(NULL, NULL, "fsl,cmpc885");
+	if (np) {
+		prop = of_get_property(np, "model", NULL);
+		if (prop) {
+			if (strcmp(prop, "MCR3000_2G") == 0)
+				data->carte = CARTE_MCR3K_2G;
+			else if (strcmp(prop, "MIAE") == 0)
+				data->carte = CARTE_MIAE;
+		}
+	}
+	np = dev->of_node;
+	if (data->carte)
+		dev_info(dev, "La carte support est %s.\n", (data->carte == CARTE_MIAE) ? "MIAe" : "MCR3K-2G");
+	else {
 		ret = -EINVAL;
 		goto err;
 	}
-	if (sysfs_streq(scc, "SCC4")) siram_c = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-	else if (sysfs_streq(scc, "SMC2")) siram_c = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-	else siram_c = 0;
 
-	scc = NULL;
-	scc = of_get_property(np, "scc_e1", &len_scc);
-	if (!scc || (len_scc < sizeof(*scc))) {
-		ret = -EINVAL;
-		goto err;
-	}
-	if (sysfs_streq(scc, "SCC4")) siram_e = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-	else if (sysfs_streq(scc, "SMC2")) siram_e = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-	else siram_e = 0;
+	if (data->carte == CARTE_MIAE) {
+		scc = of_get_property(np, "scc_codec", &len_scc);
+		if (!scc || (len_scc < sizeof(*scc))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		if (sysfs_streq(scc, "SCC3")) siram_a = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
+		else if (sysfs_streq(scc, "SCC4")) siram_a = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+		else if (sysfs_streq(scc, "SMC2")) siram_a = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+		else siram_a = 0;
 
-	info_ts = of_get_property(np, "ts_info", &len_info);
-	if (!info_ts || (len_info < sizeof(*info_ts))) {
-		ret = -EINVAL;
-		goto err;
-	}
-	len_info /= sizeof(__be32);
+		scc = NULL;
+		scc = of_get_property(np, "scc_e1", &len_scc);
+		if (!scc || (len_scc < sizeof(*scc))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		if (sysfs_streq(scc, "SCC3")) siram_b = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
+		else if (sysfs_streq(scc, "SCC4")) siram_b = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+		else if (sysfs_streq(scc, "SMC2")) siram_b = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+		else siram_b = SIRAM_BYT;
+		
+		/* codecs et lien e1 sur SCC different */
+		if (siram_a == siram_b) {
+			ret = -EINVAL;
+			goto err;
+		}
 
-	/* vérification SCC pour TS codec */
-	if (!siram_c) {
-		ret = -EINVAL;
-		goto err;
-	}
-	siram_c |= SIRAM_BYT;
+		info_ts = of_get_property(np, "ts_info", &len_info);
+		if (!info_ts || (len_info < sizeof(*info_ts))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		len_info /= sizeof(__be32);
 
-	/* vérification parametres E1 */
-	if (!siram_e || (len_info != 2) || ((info_ts[1] != 4) && (info_ts[1] != 8))
-		|| (info_ts[0] >= (info_ts[1] / 2))) {
-		ret = -EINVAL;
-		goto err;
+		/* vérification SCC pour TS codec */
+		if (!siram_a) {
+			ret = -EINVAL;
+			goto err;
+		}
+		siram_a |= SIRAM_BYT;
+
+		/* vérification parametres E1 */
+		if (!siram_b || (len_info != 2) || ((info_ts[1] != 4) && (info_ts[1] != 8))
+			|| (info_ts[0] >= (info_ts[1] / 2))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		siram_b |= SIRAM_BYT;
+		inter = info_ts[1] / 2;
 	}
-	siram_e |= SIRAM_BYT;
-	inter = info_ts[1] / 2;
+	else {
+	}
 
 	cpm = of_iomap(np, 0);
 	if (cpm == NULL) {
@@ -166,42 +201,46 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 	siram_rx = (siram_entry*)&cpm->cp_siram;
 	siram_tx = (siram_entry*)&cpm->cp_siram + 64;
 
-	/* programmation des TimeSlots : 31 TS phonie E1 et 12 TS phonie Codec */
-	/* programmation des premiers TS non utilises TS0 E1 + interval E1 */
-	nb_ts = info_ts[0] + inter;
-	out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
-	out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
-	offset++;
-	/* programmation des 30 premiers TS phonie E1 et des 12 TS phonie Codec */
-	for (i = 0, nb_ts = 12; i < 30; i++) {
-		/* programmation TS E1 */
-		out_be32(siram_rx + offset, siram_e | SIRAM_CNT(1));
-		out_be32(siram_tx + offset, siram_e | SIRAM_CNT(1));
+	if (data->carte == CARTE_MIAE) {
+		/* programmation des TimeSlots : 31 TS phonie E1 et 12 TS phonie Codec */
+		/* programmation des premiers TS non utilises TS0 E1 + interval E1 */
+		nb_ts = info_ts[0] + inter;
+		out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
+		out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(nb_ts));
 		offset++;
-		/* programmation de X TS phonie codec ou X TS non utilises entre 2 TS E1 */
-		ret = (nb_ts > (inter - 1)) ? 3 : nb_ts;
-		if (ret) {
-			out_be32(siram_rx + offset, siram_c | SIRAM_CNT(ret));
-			out_be32(siram_tx + offset, siram_c | SIRAM_CNT(ret));
+		/* programmation des 30 premiers TS phonie E1 et des 12 TS phonie Codec */
+		for (i = 0, nb_ts = 12; i < 30; i++) {
+			/* programmation TS E1 */
+			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(1));
+			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
 			offset++;
-			nb_ts -= ret;
-			if (ret < (inter - 1)) {
-				ret = (inter - 1) - ret;
-				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(ret));
-				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(ret));
+			/* programmation de X TS phonie codec ou X TS non utilises entre 2 TS E1 */
+			ret = (nb_ts > (inter - 1)) ? 3 : nb_ts;
+			if (ret) {
+				out_be32(siram_rx + offset, siram_a | SIRAM_CNT(ret));
+				out_be32(siram_tx + offset, siram_a | SIRAM_CNT(ret));
+				offset++;
+				nb_ts -= ret;
+				if (ret < (inter - 1)) {
+					ret = (inter - 1) - ret;
+					out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(ret));
+					out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(ret));
+					offset++;
+				}
+			}
+			else {
+				out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(inter - 1));
+				out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(inter - 1));
 				offset++;
 			}
 		}
-		else {
-			out_be32(siram_rx + offset, SIRAM_BYT | SIRAM_CNT(inter - 1));
-			out_be32(siram_tx + offset, SIRAM_BYT | SIRAM_CNT(inter - 1));
-			offset++;
-		}
+		/* programmation du dernier TS E1 */
+		siram_b |= SIRAM_LST;
+		out_be32(siram_rx + offset, siram_b | SIRAM_CNT(1));
+		out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
 	}
-	/* programmation du dernier TS E1 */
-	siram_e |= SIRAM_LST;
-	out_be32(siram_rx + offset, siram_e | SIRAM_CNT(1));
-	out_be32(siram_tx + offset, siram_e | SIRAM_CNT(1));
+	else {
+	}
 
 	simode_tdma = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
 	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode_tdma) | simode);
