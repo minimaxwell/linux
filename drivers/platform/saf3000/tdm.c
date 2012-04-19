@@ -57,19 +57,21 @@
 #define NB_BYTE_BY_MS		(1000 / 125)
 #define NB_BYTE_BY_5_MS		(5000 / 125)
 
-#define PCM_MINOR		240
-#define PCM_SCC3_MINOR		241
-#define PCM_SMC_MINOR		242
+#define PCM_CODEC_MINOR		240
+#define PCM_E1_MINOR		241
 #define PCM_NB_TXBD		16
 #define PCM_MASK_TXBD		15
 #define PCM_NB_RXBD		2
-//#define PCM_NB_BUF_PACKET	4
 
-
-#define TYPE_SCC3		0
-#define TYPE_SCC4		1
-#define TYPE_SMC		2
-#define TYPE_SCC		TYPE_SCC4
+#define TYPE_SCC1		1
+#define TYPE_SCC2		2
+#define TYPE_SCC3		3
+#define TYPE_SCC4		4
+#define TYPE_SMC1		5
+#define TYPE_SMC2		6
+#define NAME_CODEC_DEVICE	"pcm"
+//#define NAME_CODEC_DEVICE	"pcm_codec"
+#define NAME_E1_DEVICE		"pcm_e1"
 
 #define CARTE_MCR3K_2G		1
 #define CARTE_MIAE		2
@@ -100,12 +102,12 @@ struct tdm_data {
 	char			*rx_buf[PCM_NB_RXBD];
 	char			*tx_buf[PCM_NB_TXBD];
 	int			octet_em[PCM_NB_TXBD];
-	unsigned char		flags;
+	unsigned char		flags;		/* type de lien serie */
 	unsigned char		ix_tx;		/* descripteur emission à transmettre */
-	unsigned char		ix_rx;
-	unsigned char		ix_rx_lct;
-	int			octet_recu;
-	unsigned char		nb_canal;
+	unsigned char		ix_rx;		/* descripteur reception en cours */
+	unsigned char		ix_rx_lct;	/* descripteur reception à lire */
+	int			octet_recu;	/* nombre d'octets recus dispo */
+	unsigned char		nb_canal;	/* nombre de canaux à gerer */
 	char			*packet_repos;
 	u32			command;
 	wait_queue_head_t	read_wait;
@@ -116,8 +118,8 @@ struct tdm_data {
 //	struct delay_buf	delay[DELAY_NB_LINE];
 };
 
-static struct tdm_data *data_scc;
-static struct tdm_data *data_smc;
+static struct tdm_data *data_codec;
+static struct tdm_data *data_e1;
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
 
@@ -187,21 +189,21 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 	int i = 0;
 	short lct, mask_tx, mask_rx, mask_bsy, mask_txe;
 	
-	if (data->flags == TYPE_SCC) {
-		lct = in_be16(&data->cp_scc->scc_scce);
-		out_be16(&data->cp_scc->scc_scce, lct);
-		mask_tx = UART_SCCM_TX;
-		mask_rx= UART_SCCM_RX;
-		mask_bsy = UART_SCCM_BSY;
-		mask_txe = 0;
-	}
-	else {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		lct = in_8(&data->cp_smc->smc_smce);
 		out_8(&data->cp_smc->smc_smce, lct);
 		mask_tx = SMCM_TX;
 		mask_rx= SMCM_RX;
 		mask_bsy = SMCM_BSY;
 		mask_txe = SMCM_TXE;
+	}
+	else {
+		lct = in_be16(&data->cp_scc->scc_scce);
+		out_be16(&data->cp_scc->scc_scce, lct);
+		mask_tx = UART_SCCM_TX;
+		mask_rx= UART_SCCM_RX;
+		mask_bsy = UART_SCCM_BSY;
+		mask_txe = 0;
 	}
 
 	if (lct & mask_txe) {
@@ -263,10 +265,10 @@ static unsigned int pcm_poll(struct file *file, poll_table *wait)
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
 	
-	if (minor == PCM_MINOR)
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -283,10 +285,10 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
 	
-	if (minor == PCM_MINOR)
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -315,10 +317,10 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct tdm_data *data = NULL;
 	int minor = MINOR(iocb->ki_filp->f_dentry->d_inode->i_rdev);
 	
-	if ((minor == PCM_MINOR) || (minor == PCM_SCC3_MINOR))
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -358,10 +360,10 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
 	
-	if ((minor == PCM_MINOR) || (minor == PCM_SCC3_MINOR))
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -388,10 +390,10 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	struct tdm_data *data = NULL;
 	int minor = MINOR(iocb->ki_filp->f_dentry->d_inode->i_rdev);
 	
-	if ((minor == PCM_MINOR) || (minor == PCM_SCC3_MINOR))
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -432,10 +434,10 @@ static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 	struct tdm_data *data = NULL;
 	int minor = MINOR(inode->i_rdev);
 	
-	if (minor == PCM_MINOR)
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -483,10 +485,10 @@ static int pcm_open(struct inode *inode, struct file *file)
 	struct tdm_data *data = NULL;
 	int minor = MINOR(inode->i_rdev);
 	
-	if (minor == PCM_MINOR)
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 	
@@ -500,10 +502,10 @@ static int pcm_release(struct inode *inode, struct file *file)
 	struct tdm_data *data = NULL;
 	int minor = MINOR(inode->i_rdev);
 	
-	if (minor == PCM_MINOR)
-		data = data_scc;
-	else if (minor == PCM_SMC_MINOR)
-		data = data_smc;
+	if (minor == PCM_CODEC_MINOR)
+		data = data_codec;
+	else if (minor == PCM_E1_MINOR)
+		data = data_e1;
 	if (data == NULL)
 		return -1;
 
@@ -524,21 +526,15 @@ static const struct file_operations pcm_fops = {
 	.release	= pcm_release,
 };
 
-static struct miscdevice pcm_scc_miscdev = {
-	.minor	= PCM_MINOR,
-	.name	= "pcm",
+static struct miscdevice pcm_codec_miscdev = {
+	.minor	= PCM_CODEC_MINOR,
+	.name	= NAME_CODEC_DEVICE,
 	.fops	= &pcm_fops,
 };
 
-static struct miscdevice pcm_scc3_miscdev = {
-	.minor	= PCM_SCC3_MINOR,
-	.name	= "pcm_scc3",
-	.fops	= &pcm_fops,
-};
-
-static struct miscdevice pcm_smc_miscdev = {
-	.minor	= PCM_SMC_MINOR,
-	.name	= "pcm_smc",
+static struct miscdevice pcm_e1_miscdev = {
+	.minor	= PCM_E1_MINOR,
+	.name	= NAME_E1_DEVICE,
 	.fops	= &pcm_fops,
 };
 
@@ -561,6 +557,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	const char *scc = NULL;
 	const __be32 *info_ts = NULL;
 	const void *prop = 0;
+	struct miscdevice *device = NULL;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -576,17 +573,19 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	}
 	data->command = *cmd;
 
-	if (of_device_is_compatible(np, "fsl,cpm1-scc-tdm")) {
-		data_scc = data;
-		if (*cmd == 0xC0)
-			data->flags = TYPE_SCC4;
-		else if (*cmd == 0X80)
-			data->flags = TYPE_SCC3;
-	}
-	else {
-		data_smc = data;
-		data->flags = TYPE_SMC;
-	}
+	scc = of_get_property(np, "tdm_name", &len);
+	if (sysfs_streq(scc, "scc1"))
+		data->flags = TYPE_SCC1;
+	else if (sysfs_streq(scc, "scc2"))
+		data->flags = TYPE_SCC2;
+	else if (sysfs_streq(scc, "scc3"))
+		data->flags = TYPE_SCC3;
+	else if (sysfs_streq(scc, "scc4"))
+		data->flags = TYPE_SCC4;
+	else if (sysfs_streq(scc, "smc1"))
+		data->flags = TYPE_SMC1;
+	else if (sysfs_streq(scc, "smc2"))
+		data->flags = TYPE_SMC2;
 	dev_info(dev, "Le flag est %d.\n", data->flags);
 
 	/* recherche type de carte support MIAE ou MCR3K-2G */
@@ -613,21 +612,23 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	if (np) {
 		scc = of_get_property(np, "scc_codec", &len);
 		if (scc && (len >= sizeof(*scc))) {
-			if ((data->flags == TYPE_SCC4) && sysfs_streq(scc, "SCC4"))
-				data->nb_canal += NB_CANAUX_CODEC;
-			if ((data->flags == TYPE_SCC3) && sysfs_streq(scc, "SCC3"))
-				data->nb_canal += NB_CANAUX_CODEC;
-			if ((data->flags == TYPE_SMC) && sysfs_streq(scc, "SMC2"))
-				data->nb_canal += NB_CANAUX_CODEC;
+			if (((data->flags == TYPE_SCC4) && sysfs_streq(scc, "SCC4"))
+				|| ((data->flags == TYPE_SCC3) && sysfs_streq(scc, "SCC3"))
+				|| ((data->flags == TYPE_SMC2) && sysfs_streq(scc, "SMC2"))) {
+				data->nb_canal = NB_CANAUX_CODEC;
+				data_codec = data;
+				device = &pcm_codec_miscdev;
+			}
 		}
 		scc = of_get_property(np, "scc_e1", &len);
 		if (scc && (len >= sizeof(*scc))) {
-			if ((data->flags == TYPE_SCC4) && sysfs_streq(scc, "SCC4"))
-				data->nb_canal += NB_CANAUX_E1;
-			if ((data->flags == TYPE_SCC3) && sysfs_streq(scc, "SCC3"))
-				data->nb_canal += NB_CANAUX_E1;
-			if ((data->flags == TYPE_SMC) && sysfs_streq(scc, "SMC2"))
-				data->nb_canal += NB_CANAUX_E1;
+			if (((data->flags == TYPE_SCC4) && sysfs_streq(scc, "SCC4"))
+				|| ((data->flags == TYPE_SCC3) && sysfs_streq(scc, "SCC3"))
+				|| ((data->flags == TYPE_SMC2) && sysfs_streq(scc, "SMC2"))) {
+				data->nb_canal = NB_CANAUX_E1;
+				data_e1 = data;
+				device = &pcm_e1_miscdev;
+			}
 			info_ts = of_get_property(np, "ts_info", &len);
 		}
 	}
@@ -651,7 +652,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	data->dev = dev;
 
 	np = dev->of_node;
-	if (data->flags == TYPE_SMC) {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		cp_smc = of_iomap(np, 0);
 		if (cp_smc == NULL) {
 			dev_err(dev,"of_iomap CPM failed\n");
@@ -671,29 +672,11 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	}
 	
 	class = saf3000_class_get();
-	if (data->flags == TYPE_SMC) {
-		infos = device_create(class, dev, MKDEV(0, 0), NULL, "tdm_smc");
-		ret = misc_register(&pcm_smc_miscdev);
-		if (ret) {
-			dev_err(dev, "pcm: cannot register miscdev on minor=%d (err=%d)\n", PCM_SMC_MINOR, ret);
-			goto err_unfile;
-		}
-	}
-	else if (data->flags == TYPE_SCC3) {
-		infos = device_create(class, dev, MKDEV(0, 0), NULL, "tdm_scc3");
-		ret = misc_register(&pcm_scc3_miscdev);
-		if (ret) {
-			dev_err(dev, "pcm: cannot register miscdev on minor=%d (err=%d)\n", PCM_SCC3_MINOR, ret);
-			goto err_unfile;
-		}
-	}
-	else {
-		infos = device_create(class, dev, MKDEV(0, 0), NULL, "tdm");
-		ret = misc_register(&pcm_scc_miscdev);
-		if (ret) {
-			dev_err(dev, "pcm: cannot register miscdev on minor=%d (err=%d)\n", PCM_MINOR, ret);
-			goto err_unfile;
-		}
+	infos = device_create(class, dev, MKDEV(0, 0), NULL, device->name);
+	ret = misc_register(device);
+	if (ret) {
+		dev_err(dev, "pcm: cannot register miscdev on minor=%d (err=%d)\n", device->minor, ret);
+		goto err_unfile;
 	}
 	dev_set_drvdata(infos, data);
 	data->infos = infos;
@@ -705,7 +688,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 		goto err_unfile;
 	}
 	data->irq = irq;
-	ret = request_irq(irq, pcm_interrupt, 0, "tdm", data);
+	ret = request_irq(irq, pcm_interrupt, 0, device->name, data);
 	
 	data->pram = of_iomap(np, 1);
 
@@ -722,7 +705,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	out_be16(&data->pram->scc_mrblr, (NB_BYTE_BY_5_MS * data->nb_canal));
 	
 	cpm_command(data->command, CPM_CR_INIT_TRX);
-	if (data->flags == TYPE_SMC)
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
 		out_be16(&data->cp_smc->smc_smcmr, 0);
 	else
 		out_be32(&data->cp_scc->scc_gsmrl, 0);
@@ -742,7 +725,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_tx = 2;
-	if (data->flags == TYPE_SMC) {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		setbits8(&data->cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
 		setbits8(&data->cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
 	}
@@ -763,14 +746,14 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_rx = 0;
-	if (data->flags == TYPE_SMC) {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		setbits8(&data->cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
 	}
 	else {
 		setbits16(&data->cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
 	}
 
-	if (data->flags == TYPE_SMC) {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		out_be16(&data->cp_smc->smc_smcmr, smcr_mk_clen(15) | SMCMR_SM_TRANS);
 		setbits16(&data->cp_smc->smc_smcmr, SMCMR_REN);
 		setbits16(&data->cp_smc->smc_smcmr, SMCMR_TEN);
@@ -786,10 +769,7 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	if (device_create_file(infos, &dev_attr_debug))
 		goto err_unfile;
 
-	if (data->flags == TYPE_SMC)
-		dev_info(dev, "driver TDM_SMC added.\n");
-	else
-		dev_info(dev, "driver TDM added.\n");
+	dev_info(dev, "driver TDM %s added.\n", device->name);
 	
 	return 0;
 
@@ -799,7 +779,7 @@ err_unfile:
 	free_irq(data->irq, pcm_interrupt);
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
-	if (data->flags == TYPE_SMC)
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
 		iounmap(data->cp_smc), data->cp_smc = NULL;
 	else
 		iounmap(data->cp_scc), data->cp_scc = NULL;
@@ -823,17 +803,14 @@ static int __devexit tdm_remove(struct of_device *ofdev)
 	free_irq(data->irq, pcm_interrupt);
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
-	if (data->flags == TYPE_SMC) {
+	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
 		iounmap(data->cp_smc), data->cp_smc = NULL;
-		misc_deregister(&pcm_smc_miscdev);
-	}
-	else {
+	else
 		iounmap(data->cp_scc), data->cp_scc = NULL;
-		if (data->flags == TYPE_SCC3)
-			misc_deregister(&pcm_scc3_miscdev);
-		else
-			misc_deregister(&pcm_scc_miscdev);
-	}
+	if (data->nb_canal == NB_CANAUX_CODEC)
+		misc_deregister(&pcm_codec_miscdev);
+	else
+		misc_deregister(&pcm_e1_miscdev);
 	dev_set_drvdata(dev, NULL);
 	kfree(data->packet_repos);
 	kfree(data);
