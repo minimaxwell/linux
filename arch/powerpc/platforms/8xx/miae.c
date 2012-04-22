@@ -84,10 +84,10 @@ int fpgam_get_irq(void)
 	int vec;
 	int ret;
 
-	if (in_be16(&fpgam_regs->it_pend1) & 0x07FF)
-		vec = 16 - ffs(in_be16(&fpgam_regs->it_pend1) & 0x07FF);
+	if (in_be16(&fpgam_regs->it_pend1) & 0x87FF)
+		vec = 16 - ffs(in_be16(&fpgam_regs->it_pend1) & 0x87FF);
 	else
-		vec = 32 - ffs(in_be16(&fpgam_regs->it_pend2) & 0x0FFF);
+		vec = 32 - ffs(in_be16(&fpgam_regs->it_pend2));
 	
 	ret=irq_linear_revmap(fpgam_pic_host, vec);
 	return ret;

@@ -74,8 +74,6 @@ package_knl()
 	cp ./pkg_knl.control 	$PATH_PKG/DEBIAN/control
 	cp ./pkg_knl.postinst 	$PATH_PKG/DEBIAN/postinst
 	cp ./pkg_knl.preinst 	$PATH_PKG/DEBIAN/preinst
-	echo /tmp/root/${linux_file} > $PATH_PKG/DEBIAN/conffiles
-	echo /tmp/root/dtb.bin >> $PATH_PKG/DEBIAN/conffiles
 
 	# replace with the good file name
 	sed -i "s#LINUX_FILE_NAME#/tmp/root/${linux_file}#g" $PATH_PKG/DEBIAN/postinst

@@ -8,7 +8,6 @@
 
 / {
 	model = "MIAE";
-//	model = "MCR3000_2G";
 	compatible = "fsl,cmpc885", "fsl,mod885";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -204,7 +203,7 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x42 2>;
-				interrupts = <255 255 255 255 255 255 255 255 255 255 255 255 28 30 29 31>;
+				interrupts = <255 255 255 255 255 255 255 255 255 255 255 0 28 30 29 31>;
 				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
@@ -212,7 +211,7 @@
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
 				reg = <0x44 2>;
-				interrupts = <255 255 255 255 255 255 255 255 255 25 255 27 255 24 255 26>;
+				interrupts = <255 255 255 255 255 255 255 255 17 25 19 27 16 24 18 26>;
 				interrupt-parent = <&FPGAM_PIC>;
 				gpio-controller;
 			};
@@ -240,20 +239,11 @@
 				#interrupt-cells = <1>;
 				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x00 0x60>;	// Mappage registres FPGAF
+				reg = <0x00 0x60>;	// Mappage registres FPGAM
 				compatible = "s3k,miae-pic";
 			};
 		};
 		
-//		fpga@4,1000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-fpga";
-//			reg = <4 0x1000000 0x0200 6 0x0 0x0002>;
-//			interrupts = <6 1>;
-//			interrupt-parent = <&PIC>;
-//		};
-
 		e1@4,2000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -262,24 +252,6 @@
 			interrupts = <8 1>;
 			interrupt-parent = <&PIC>;
 		};
-		
-//		mtsl@4,3000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-mtsl";
-//			reg = <4 0x3000000 0xFFFF>;
-//		};
-
-//		codec {
-//			compatible = "s3k,mcr3000-codec";
-//		};
-
-//		alarmes {
-//			compatible = "s3k,mcr3000-alarmes";
-//			gpios = <&alin 13 1 	// ACQ_ALRM
-//				&alout 15 1	// ALRM_MAJ
-//				&alout 14 1>;	// ALRM_MIN
-//		};
 		
 		dpram@3,0 {
 			#address-cells = <1>;
@@ -304,6 +276,7 @@
 			/* 1 = entree */
 			/* 2 = sortie initialisee inactive */
 			compatible = "s3k,gpios-appli";
+			reg = <4 0x42 4>;
 			gpios = <&torin  15 1	// TOR in 1
 				&torin   14 1	// TOR in 2
 				&torin   13 1	// TOR in 3
@@ -315,12 +288,15 @@
 				&torin    7 1	// TOR in 9
 				&torin    6 1	// TOR in 10
 				&torin    5 1	// TOR in 11
-				&torin    4 1	// TOR res
-				&torin    3 1	// TOR res
-				&torin    2 1	// TOR res
-				&torin    1 1	// TOR res
-				&torin    0 1	// TOR res
-				&far     15 1	// Alternat BP
+				&torout  15 2	// TOR out 1
+				&torout  14 2	// TOR out 2
+				&torout  13 2	// TOR out 3
+				&torout  12 2	// TOR out 4
+				&torout  11 2	// TOR out 5
+				&torout  10 2	// TOR out 6
+				&torout   9 2	// TOR out 7
+				&torout   8 2	// TOR out 8
+				&far     15 1	// BP Alt
 				&far     13 1	// Alternat 1
 				&far     14 1	// Alternat 2
 				&far     12 1	// Alternat Combine
@@ -328,46 +304,67 @@
 				&fav     15 1	// Alternat µMain2
 				&fav      9 1	// Alternat µCasque1
 				&fav     13 1	// Alternat µCasque2
-				&gen     14 1	// Pres Alim 24V
-				&etatref 15 1	// Synchro E1
-				&etatref 14 1	// Synchro S0
-				&etatref 13 1	// Alternat res
-				&etatref 12 1	// Alternat res
-				&etatref 11 1	// Alternat res
-				&etatref 10 1	// Alternat res
-				&etatref  9 1>;	// Alternat res
+				&far     11 1	// Presence Combine
+				&fav     10 1	// Presence µMain1
+				&fav     14 1	// Presence µMain2
+				&fav      8 1	// Presence µCasque1
+				&fav     12 1>;	// Presence µCasque2
 			names = "tor_in_1",
-				"tor_in_1",
-				"tor_in_3",
-				"tor_in_4",
-				"tor_in_5",
-				"tor_in_6",
-				"tor_in_7",
-				"tor_in_8",
-				"tor_in_9",
-				"tor_in_10",
-				"tor_in_11",
-				"it1_res_1",
-				"it1_res_2",
-				"it1_res_3",
-				"it1_res_4",
-				"it1_res_5",
-				"alt_1",
-				"alt_2",
-				"alt_3",
-				"alt_4",
-				"alt_5",
-				"alt_6",
-				"alt_7",
-				"alt_8",
-				"it2_res_1",
-				"it2_res_2",
-				"it2_res_3",
-				"it2_res_4",
-				"it2_res_5",
-				"it2_res_6",
-				"it2_res_7",
-				"it2_res_8";
+				"tor_in_2",		// by_pass
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"tor_out_1",		// Sortie Jour/Nuit
+				"tor_out_2",		// Sortie Alternat POUS
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"alt_bp",		// Alternat BP
+				"tor_in_13",		// Alternat 1
+				"tor_in_14",		// Alternat 2
+				"alt_ucomb",		// Alternat Combine
+				"alt_umain_a",		// Alternat µMain_a
+				"alt_umain_b",		// Alternat µMain_b
+				"alt_ucasque_a",	// Alternat µCasque_a
+				"alt_ucasque_b",	// Alternat µCasque_b
+				"pres_ucomb",		// Presence Combine
+				"pres_umain_a",		// Presence µMain_a
+				"pres_umain_b",		// Presence µMain_b
+				"pres_ucasque_a",	// Presence µCasque_a
+				"pres_ucasque_b";	// Presence µCasque_b
+			codec = "Rec. In 1",
+				"Interco In 1",
+				"Rec. In 2",
+				"Interco In 2",
+				"Micro ITH",
+				"none",
+				"none",
+				"Micro Combine",
+				"Micro Casque_a",
+				"Micro Main_a",
+				"Micro Casque_b",
+				"Micro Main_b",
+				"Rec. Out 1",
+				"Interco Out 1",
+				"Rec. Out 2",
+				"Interco Out 2",
+				"HP ITH",
+				"HP 1",
+				"HP 2",
+				"Ecoute Combine",
+				"Ec. droite Casque_a",
+				"Ec. gauche Casque_a",
+				"Ec. droite Casque_b",
+				"Ec. gauche Casque_b";
 		};
 	};
 
@@ -417,7 +414,7 @@
 			compatible = "fsl,mpc885-fec-enet", "fsl,pq1-fec-enet";
 			reg = <0xe00 0x188>;
 			local-mac-address = [ 00 00 00 00 00 00 ];
-			interrupts = <3 1>;
+			interrupts = <5 1>;
 			interrupt-parent = <&PIC>;
 			phy-handle = <&PHY1>;
 			linux,network-index = <0>;
@@ -433,6 +430,7 @@
 			phy-handle = <&PHY2 &PHY3>;
 			linux,network-index = <1>;
 			gpios = <&CPM1_PIO_E 18 1>;
+			PHY-disable = "isolate";
 		};
 
 		PIC: pic@0 {
@@ -480,7 +478,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <5 2 0 2>;
+				interrupts = <3 2 0 2>;
 				interrupt-parent = <&PIC>;
 				reg = <0x930 0x20>;
 				compatible = "fsl,mpc885-cpm-pic", "fsl,cpm1-pic";
@@ -525,9 +523,15 @@
 			
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
-				reg = <0x9c0 0x440>;
-				ts_codec = <32 33 34 35 36 37 38 39 40 41 42 43>;
-				param = "SCC4";
+				reg = <0x9c0 0x440 0x930 0x20>;
+				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
+				scc_codec = "SCC4";
+				scc_e1 = "none";
+				/* 1er parametre = channel phase E1 (0 à 3 si data rate = 8MHz */
+				/* 2eme parametre = data rate (8MHz ou 4MHz) */
+				/* par défaut ts_info = <0 8> */
+				/* les TS codecs se deduiront a partir du channel phase du E1 */
+				ts_info = <0 8>;	/* phase = 0, debit = 8MHz */
 			};
 
 			smc1: serial@a80 {
@@ -550,18 +554,20 @@
 				fsl,cpm-command = <0x40>;
 			};
 
-			scc3: serial@a40 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc3: tdm@a40 {
+				device_type = "tdm";
+				tdm_name = "scc3";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <2>;
+//				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
 			};
 
 			scc4: tdm@a60 {
 				device_type = "tdm";
+				tdm_name = "scc4";
 				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
@@ -569,13 +575,13 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
-			smc2: serial@a90 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+			smc2: tdm_smc@a90 {
+				device_type = "tdm";
+				tdm_name = "smc2";
+				compatible = "fsl,mpc885-smc-tdm", "fsl,cpm1-smc-tdm";
 				reg = <0xa90 0x10 0x3f80 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
 				fsl,cpm-command = <0xd0>;
 			};
 
@@ -591,7 +597,7 @@
 				gpios = <&CPM1_PIO_C 4 1	/* SICOFI 1 */
 					 &CPM1_PIO_B 23 1	/* TEMP MCR */
 					 &CPM1_PIO_C 8 1	/* SICOFI 2 */
-					 &CPM1_PIO_C 12 1	/* EEPROM MCR3000 2G*/
+					 &CPM1_PIO_C 12 1	/* EEPROM MIAE */
 					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
 					 &CPM1_PIO_B 21 1>;	/* EEPROM CMPC885 */
@@ -603,6 +609,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec 1";
+					delta_em = "0,5dB";
+					delta_rec = "-0,5dB";
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -618,6 +626,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec 2";
+					delta_em = "0,5dB";
+					delta_rec = "-0,5dB";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25080", "cs,eeprom";
@@ -633,6 +643,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec 3";
+					delta_em = "0,5dB";
+					delta_rec = "-0,5dB";
 				};
 				lm74@5 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -646,7 +658,6 @@
 					reg = <6>;
 					spi-cs-high;
 				};
-				
 			};
 			
 			dummy_pio {

@@ -33,10 +33,10 @@
 
 #define MAX_CANAL_AUDIO		4
 
-/* tableau de conversion gain numérique réception carte */
-#define GAIN_AUDIO_REC_0DB	13
-#define INDEX_AUDIO_REC_MAX	67
-static const unsigned int GAIN_AUDIO_REC[INDEX_AUDIO_REC_MAX] = {
+/* tableau de conversion gain numérique emission MIAe */
+#define GAIN_AUDIO_EM_0DB	13
+#define INDEX_AUDIO_EM_MAX	67
+static const unsigned int GAIN_AUDIO_EM[INDEX_AUDIO_EM_MAX] = {
 /*  (0)	-3,25	-3	-2.75	-2.5	-2.25	-2	-1.75	-1.5	-1.25	-1 */
 	1252,	1288,	1326,	1365,	1405,	1446,	1488,	1531,	1576,	1622,
 /* (10)	-0.75	-0.5	-0.25	0	0.25	0.5	0.75	1	1.25	1.5 */
@@ -53,10 +53,10 @@ static const unsigned int GAIN_AUDIO_REC[INDEX_AUDIO_REC_MAX] = {
 	7040,	7246,	7457,	7675,	7899,	8130,	8192
 };
 
-/* tableau de conversion gain numérique émission carte */
-#define GAIN_AUDIO_EM_0DB	97
-#define INDEX_AUDIO_EM_MAX	110
-static const unsigned int GAIN_AUDIO_EM[INDEX_AUDIO_EM_MAX] = {
+/* tableau de conversion gain numérique reception MIAe */
+#define GAIN_AUDIO_REC_0DB	97
+#define INDEX_AUDIO_REC_MAX	110
+static const unsigned int GAIN_AUDIO_REC[INDEX_AUDIO_REC_MAX] = {
 /*  (0)	-24,25	-24	-23.75	-23.5	-23.25	-23	-22.75	-22.5	-22.25	-22 */
 	154,	158,	163,	167,	172,	177,	183,	188,	193,	199,
 /* (10)	-21.75	-21.5	-21.25	-21	-20.75	-20.5	-20.25	-20	-19.75	-19.5 */
@@ -192,7 +192,7 @@ static int gain_rec(struct spi_device *spi, int canal, int val)
 	}
 	if (_Result < 0) goto fin;
 
-	_Gain = GAIN_AUDIO_EM[_Ix];
+	_Gain = GAIN_AUDIO_REC[_Ix];
 	_Info = 0xC0 + (canal << 2);
 	_Result = spi_write_then_read(spi, &_Info, 1, NULL, 0);
 	if (_Result < 0) goto fin;
@@ -243,12 +243,12 @@ static int mode_canal(struct spi_device *spi, struct codec *codec, int canal, in
 		codec->canal[canal].io = _Result;
 	else goto fin;
 	/* changement de mode => initialisation gain emission */
-	_Info = gain_val(codec->canal[canal].gain_em, 10);
-	_Result = gain_em(spi, canal, _Info);
+	_Result = gain_val(codec->canal[canal].gain_em, 10);
+	_Result = gain_em(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 	/* changement de mode => initialisation gain reception */
-	_Info = gain_val(codec->canal[canal].gain_rec, 10);
-	_Result = gain_rec(spi, canal, _Info);
+	_Result = gain_val(codec->canal[canal].gain_rec, 10);
+	_Result = gain_rec(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 
 	_Info = 0xA0 + (canal << 2);
@@ -460,7 +460,7 @@ static ssize_t fs_attr_niveau_rec_show(struct device *dev, struct device_attribu
 {
 	struct codec *codec = dev_get_drvdata(dev);
 	int canal = simple_strtol(attr->attr.name + 12, NULL, 10) - 1;
-	return snprintf(buf, PAGE_SIZE, "Le niveau reception du canal %d est %s dBm\n", canal + 1, codec->canal[0].gain_rec);
+	return snprintf(buf, PAGE_SIZE, "Le niveau reception du canal %d est %s dBm\n", canal + 1, codec->canal[canal].gain_rec);
 }
 static ssize_t fs_attr_niveau_rec_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -504,9 +504,9 @@ static int __devinit codec_probe(struct spi_device *spi)
 	struct codec *codec;
 	struct device *dev;
 	struct class *class;
-	int _Result = -1, _Canal;
+	int _Result = -1, _Canal, _Ts;
 	const char *name_codec = NULL;
-	const __be32 *ts = NULL;
+	const __be32 *ts_info = NULL;
 	int len = 0, num = 0;
 	struct device_node *np = spi->dev.of_node;
 	
@@ -526,10 +526,10 @@ static int __devinit codec_probe(struct spi_device *spi)
 		goto err;
 	}
 	len = 0;
-	np = of_find_compatible_node(NULL, NULL, "fsl,mpc885-tsa");
+	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
 	if (np)
-		ts = of_get_property(np, "ts_codec", &len);
-	if (!ts || (len < sizeof(*ts))) {
+		ts_info = of_get_property(np, "ts_info", &len);
+	if (!ts_info || (len < sizeof(*ts_info))) {
 		_Result = -EINVAL;
 		goto err;
 	}
@@ -542,11 +542,19 @@ static int __devinit codec_probe(struct spi_device *spi)
 	dev_info(dev, "Reservation spi codec : 0x%08X\n", (int)spi);
 	dev_info(dev, "Reservation dev codec : 0x%08X\n", (int)codec->dev);
 
-	len = (num - 1) * MAX_CANAL_AUDIO;	/* index pour TS d'un codec */
+	_Ts = ts_info[0] + (ts_info[1] / 2) + 1;	/* index premier TS codec 1 */
+	len = (num - 1) * MAX_CANAL_AUDIO;	/* nombre de TS phonie codec a ignorer */
+	while (len >= ((ts_info[1] / 2) - 1)) {
+		len -= (ts_info[1] / 2) - 1;
+		_Ts += (ts_info[1] / 2);
+	}
+	if (len) _Ts += len;
 	for (_Canal = 0; _Canal < MAX_CANAL_AUDIO; _Canal++) {
 		dev_info(dev, "Initialisation du canal %d du CODEC %d\n", _Canal, num);
 		/* affectation TS em et rec en loi A et canal en 'power down' */
-		codec->canal[_Canal].ts = ts[_Canal + len];
+		codec->canal[_Canal].ts = _Ts++;
+		/* sauter le TS E1 si necessaire */
+		if (((_Ts - ts_info[0]) % (ts_info[1] / 2)) == 0) _Ts++;
 		if (mode_canal(spi, codec, _Canal, 0) < 0)
 			break;
 		codec->canal[_Canal].mode = 0;
@@ -633,7 +641,7 @@ MODULE_DEVICE_TABLE(spi, codec_ids);
 
 static struct spi_driver codec_driver = {
 	.driver = {
-		.name	= "codec",
+		.name	= "codec MIAe",
 		.owner	= THIS_MODULE,
 	},
 	.id_table = codec_ids,

@@ -38,6 +38,8 @@
 #include <linux/of_spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
+#include <linux/syscalls.h>
+
 #include <sysdev/fsl_soc.h>
 #include <ldb/ldb_gpio.h>
 #include <saf3000/saf3000.h>
@@ -91,7 +93,16 @@ static void fpga_fw_load(const struct firmware *fw, void *context)
 		buf = kmalloc(fw->size,GFP_KERNEL);
 		if (buf) {
 			int ret;
-			memcpy((void*)buf, fw->data, fw->size);
+			int i;
+			u16 *src=(u16*)fw->data;
+			u16 *dst=(u16*)buf;
+			
+			/* On fait une permutation des octets de chaque mot pour pouvoir programmer en mode 16 bits */
+			
+			for (i = 0 ; i < (fw->size + 1) / 2 ; i++) {
+				u16 val = src[i];
+				dst[i] = ((val & 0xff00) >> 8 ) | ((val & 0x00ff) << 8);
+			}
 
 			ret = spi_write(data->spi, buf, fw->size);
 			if (ret != 0) dev_err(dev,"pb spi_write\n");
@@ -489,6 +500,9 @@ static void __exit fpga_exit(void)
 	spi_unregister_driver(&fpga_spi_driver);
 }
 module_exit(fpga_exit);
+
+EXPORT_SYMBOL(sys_symlink);
+EXPORT_SYMBOL(sys_unlink);
 
 MODULE_AUTHOR("Christophe LEROY CSSI");
 MODULE_DESCRIPTION("LOader for FPGA on MCR3000 ");

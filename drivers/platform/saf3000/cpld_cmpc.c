@@ -266,10 +266,16 @@ static enum led_brightness cpld_cmpc_led_pwr_get(struct led_classdev *cdev)
 	struct cpld_cmpc_data *data = dev_get_drvdata(dev);
 	struct cpld *cpld = data->cpld;
 	enum led_brightness ret;
+	short info;
 	
-	if (data->blink && (in_be16(&cpld->cmde) & COLOUR_MASK) == data->colour_blink)
+	if (data->led_fav)
+		info = in_be16(data->led_fav) & DEPORT_MASK;
+	else
+		info = in_be16(&cpld->cmde) & COLOUR_MASK;
+
+	if (data->blink && (info == data->colour_blink))
 		ret = LED_OFF;
-	else if (in_be16(&cpld->cmde) & COLOUR_MASK)
+	else if (info)
 		ret = LED_FULL;
 	else 
 		ret = LED_OFF;

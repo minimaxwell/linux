@@ -1,0 +1,162 @@
+.TH "DOUBLE ATTACHEMENT" 9 2012-03-28 "VERSION 0.1"
+.SH NAME
+Double attachement \- Driver double attachement sur MIAe
+.SH DESCRIPTION
+Le driver
+.B double attachement
+permet de gerer les deux interfaces PHY (
+.B PHY2 
+et 
+.B PHY3
+) reliees au deuxieme controleur ethernet (interface eth1) de la carte 
+.B MIAe.
+Il se presente sous la forme d'un driver Free Scale Ethernet modifie.
+
+Comme ils sont relies au meme FEC, Les deux PHY ne peuvent pas etre utilise
+en meme temps. 
+
+Au demarrage, le driver active le PHY prioritaire (le 
+.B PHY2
+).
+
+Quand le PHY actif perd son lien avec le reseau, le driver le desactive et 
+active l'autre PHY si ce dernier est relie a un reseau.
+
+.SH ACTIVATION D'UN PHY
+Le driver a besoin de connaitre en permanence l'etat du lien de chaque PHY.
+Le bit
+.B POWER_DOWN
+du registre
+.B MII_BMCR
+des deux PHY doit donc toujours etre a 0.
+
+Deux mecanismes sont utilises pour selectionner le PHY actif : Le 
+.B PIO PE 18
+et le bit
+.B ISOLATE 
+du registre 
+.B MII_BMCR
+des deux PHYs.
+
+.B PHY2
+et
+.B PHY3
+se partagent le meme bus. Seul le PHY actif doit pouvoir acceder au bus. Le
+.B PIO PE 18
+permet de selectionner le PHY ayant acces au bus. Quand il est en position 
+basse, 
+.B PHY2
+a acces au bus. Quand il est en position haute, c'est
+.B PHY3
+qui a acces au bus.
+
+Le bit
+.B ISOLATE
+du registre 
+.B MII_BMCR 
+doit etre a 0 pour le PHY actif et 1 pour le PHY inactif. 
+
+.SH PRIORITE DES PHYs
+Le 
+.B PHY2 
+est prioritaire sur le 
+.B PHY3. 
+A l'ouverture du driver, si les deux PHY ont un link, c'est 
+.B PHY2 
+qui doit devenir le PHY actif. De meme, si aucun PHY n'a de link et que 
+les deux PHY recuperent un link en meme temps, c'est 
+.B PHY2 
+qui devra etre active.
+
+Un PHY qui devient actif le reste aussi longtemps qu'il a un link. Si il 
+perd son link, le changement de PHY actif ne doit intervenir que si l'autre
+PHY a un link (il ne faut pas basculer vers un PHY n'ayant pas de link).
+Si aucun PHY n'a de link, c'est le premier PHY qui retrouvera un link qui
+deviendra actif.
+
+Bien que 
+.B PHY2 
+soit prioritaire, si 
+.B PHY3 
+devient actif, 
+.B PHY3 
+devra rester actif aussi longtemps qu'il aura un link,
+meme si 
+.B PHY2 
+retrouve son link.
+
+.SH ETHTOOL ET MII-TOOL 
+La gestion du 
+.B PIO PE 18 
+doit-etre totalement transparente pour ces commandes. 
+
+A l'issue d'une commande ethtool ou mii-tool, il faut se baser sur les bits
+.B ISOLATE 
+et 
+.B POWER_DOWN 
+du registre de controle
+.B MII_BMCR 
+des PHYs pour determiner le niveau du 
+.B PIO PE 18.
+
+Le 
+.B PIO PE 18 
+doit pointer sur un PHY qui n'est pas dans un etat 
+.B ISOLATE 
+ou 
+.B POWER DOWN. 
+Si aucun des deux PHYs ne satisfait cette exigence, le 
+.B PIO PE 18 
+doit etre mis en position basse (pointer sur 
+.B PHY 2
+).
+
+Afin que le driver soit toujours dans un etat coherent, le 
+.B PIO PE 18 
+doit pointer vers le PHY actif. Si une modification du niveau du 
+.B PIO PE 18 
+est necessaire, il faut aussi changer le PHY actif.
+
+.SH FICHIERS
+
+Le driver communique avec l'espace user a travers des fichiers virtuels
+situes dans le repertoire /sys/devices/soc.1/ff001e00.ethernet/.
+
+Le fichier
+.B active_link
+(lecture/ecriture) permet de lire et/ou de modifier le PHY actif (0 si 
+.B PHY2
+est actif, 1 si 
+.B PHY3
+est actif).
+
+Le fichier 
+.B phy0_link 
+(lecture seule) permet de savoir si 
+.B PHY2
+a un link (0 si le lien est tombe, 1 sinon).
+
+Le fichier 
+.B phy1_link 
+(lecture seule) permet de savoir si 
+.B PHY3
+a un link (0 si le lien est tombe, 1 sinon).
+
+Le fichier 
+.B phy0_mode
+(ecriture seule) permet de suspendre ou redemarrer le 
+.B PHY2
+(0 pour suspendre, 1 pour redemarrer).
+
+Le fichier 
+.B phy1_mode
+(ecriture seule) permet de suspendre ou redemarrer le 
+.B PHY3
+(0 pour suspendre, 1 pour redemarrer).
+
+Le fichier 
+.B mode
+(lecture/ecriture) permet de modifier le mode de fonctionnement du driver
+(1 pour le mode manuel, 2 pour le mode automatique). En mode manuel, le
+driver n'entreprend plus aucune action quand le lien du PHT actif tombe.
+
