@@ -521,7 +521,7 @@ static const struct file_operations pcm_fops = {
 	.aio_write	= pcm_aio_write,
 	.read		= pcm_read,
 	.aio_read	= pcm_aio_read,
-	.ioctl		= pcm_ioctl,
+	.unlocked_ioctl		= pcm_ioctl,
 	.open		= pcm_open,
 	.release	= pcm_release,
 };
