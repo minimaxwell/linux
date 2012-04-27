@@ -284,6 +284,7 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	int ret, ix_wr, ix, j;
 	struct tdm_data *data = NULL;
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
+	int nb_bytes;
 	
 	if (minor == PCM_CODEC_MINOR)
 		data = data_codec;
@@ -292,17 +293,21 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	if (data == NULL)
 		return -ENODEV;
 	
+	if (count != (NB_BYTE_BY_5_MS * data->nb_canal)) {
+		return -EINVAL;
+	}
 	ret = access_ok(VERFIFY_READ, buf, count);
-	if ((ret == 0) || (count != (NB_BYTE_BY_5_MS * data->nb_canal))) {
+	if (ret == 0) {
 		return -EFAULT;
 	}
 	
 	/* ecriture des canaux */
+	nb_bytes = NB_BYTE_BY_MS * data->nb_canal;
 	ix = (data->ix_tx + 2) & PCM_MASK_TXBD;
 	for (j = 0; j < (NB_BYTE_BY_5_MS / NB_BYTE_BY_MS); j++) {
-		ix_wr = NB_BYTE_BY_MS * data->nb_canal * j;
-		__copy_from_user(data->tx_buf[ix], &buf[ix_wr], (NB_BYTE_BY_MS * data->nb_canal));
-		data->octet_em[ix++] = NB_BYTE_BY_MS * data->nb_canal;
+		ix_wr = nb_bytes * j;
+		__copy_from_user(data->tx_buf[ix], &buf[ix_wr], nb_bytes);
+		data->octet_em[ix++] = nb_bytes;
 		ix &= PCM_MASK_TXBD;
 	}
 
@@ -367,8 +372,11 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	if (data == NULL)
 		return -ENODEV;
 	
+	if (count != (NB_BYTE_BY_5_MS * data->nb_canal)) {
+		return -EINVAL;
+	}
 	ret = access_ok(VERFIFY_WRITE, buf, count);
-	if ((ret == 0) || (count != (NB_BYTE_BY_5_MS * data->nb_canal))) {
+	if (ret == 0) {
 		return -EFAULT;
 	}
 
