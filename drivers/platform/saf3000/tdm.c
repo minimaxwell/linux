@@ -290,7 +290,7 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	else if (minor == PCM_E1_MINOR)
 		data = data_e1;
 	if (data == NULL)
-		return -1;
+		return -ENODEV;
 	
 	ret = access_ok(VERFIFY_READ, buf, count);
 	if ((ret == 0) || (count != (NB_BYTE_BY_5_MS * data->nb_canal))) {
@@ -365,15 +365,19 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	else if (minor == PCM_E1_MINOR)
 		data = data_e1;
 	if (data == NULL)
-		return -1;
+		return -ENODEV;
 	
 	ret = access_ok(VERFIFY_WRITE, buf, count);
 	if ((ret == 0) || (count != (NB_BYTE_BY_5_MS * data->nb_canal))) {
 		return -EFAULT;
 	}
 
-	if ((file->f_flags & O_NONBLOCK) == 0)
-		wait_event(data->read_wait, data->octet_recu);
+	if (data->octet_recu == 0) {
+		if ((file->f_flags & O_NONBLOCK))
+			return -EAGAIN;
+		else 
+			wait_event(data->read_wait, data->octet_recu);
+	}
 		
 	/* lecture dees canaux */
 	ret = __copy_to_user((void*)buf, data->rx_buf[data->ix_rx_lct], count);
@@ -395,13 +399,17 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	else if (minor == PCM_E1_MINOR)
 		data = data_e1;
 	if (data == NULL)
-		return -1;
+		return -ENODEV;
 	
 	if (nr_segs != data->nb_canal)
 		return -EINVAL;
 		
-	if ((iocb->ki_filp->f_flags & O_NONBLOCK) == 0)
-		wait_event(data->read_wait, data->octet_recu);
+	if (data->octet_recu == 0) {
+		if ((iocb->ki_filp->f_flags & O_NONBLOCK))
+			return -EAGAIN;
+		else
+			wait_event(data->read_wait, data->octet_recu);
+	}
 
 	/* lecture des canaux */
 	for (canal = 0, ix_lct = 0; canal < data->nb_canal; canal++, ix_lct++) {
@@ -490,7 +498,7 @@ static int pcm_open(struct inode *inode, struct file *file)
 	else if (minor == PCM_E1_MINOR)
 		data = data_e1;
 	if (data == NULL)
-		return -1;
+		return -ENODEV;
 	
 	if (test_and_set_bit(0, &data->open))
 		return -EBUSY;
@@ -507,7 +515,7 @@ static int pcm_release(struct inode *inode, struct file *file)
 	else if (minor == PCM_E1_MINOR)
 		data = data_e1;
 	if (data == NULL)
-		return -1;
+		return -ENODEV;
 
 	wake_up(&data->read_wait);
 	clear_bit(0, &data->open);
