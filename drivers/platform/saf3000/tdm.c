@@ -65,7 +65,8 @@
 #define PCM_RETARD_MINOR	243
 #define PCM_NB_TXBD		15	/* multiple de 5 pour écriture en 1 passe */
 #define PCM_NB_RXBD		2
-#define FIRST_TXBD_TRANSMIT	(PCM_NB_TXBD - 7)	/* 7 = delai prise en compte ecriture */
+//#define FIRST_TXBD_TRANSMIT	(PCM_NB_TXBD - 7)	/* 7 = delai prise en compte ecriture */
+#define FIRST_TXBD_WRITE	10	/* 7 = delai prise en compte ecriture */
 
 #define TYPE_SCC1		1
 #define TYPE_SCC2		2
@@ -135,7 +136,6 @@ static struct tdm_data *data_e1;
 static struct tdm_data *data_voie;
 static struct tdm_data *data_retard;
 
-#define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
 
 static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -228,43 +228,47 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 			data->octet_em[i] = 0;
 			out_be32(&(data->tx_bd + i)->cbd_bufaddr, data->phys_packet_repos);
 			if (i != (PCM_NB_TXBD - 1)) {
-				out_be16(&(data->tx_bd + i)->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT);
+				out_be16(&(data->tx_bd + i)->cbd_sc, BD_SC_READY | BD_SC_INTRPT);
 			}
 			else
-				out_be16(&(data->tx_bd + i)->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
+				out_be16(&(data->tx_bd + i)->cbd_sc, BD_SC_READY | BD_SC_INTRPT | BD_SC_WRAP);
 		}
-		data->ix_tx = FIRST_TXBD_TRANSMIT;
-		data->nb_emis = 0;
-		data->ix_wr = 0;
+		data->ix_tx = 0;
+		data->nb_emis = -3;
+		data->ix_wr = FIRST_TXBD_WRITE;
 		setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_TEN);
 		pr_info("TDM-E1 Interrupt TX underrun\n");
 	}
 
 	if (lct & mask_tx) {
-		if (data->octet_em[data->ix_tx] == 0)
-			data->packet_silence++;
-		out_be32(&(data->tx_bd + data->ix_tx)->cbd_bufaddr, data->phys_packet_repos);
-		setbits16(&(data->tx_bd + data->ix_tx)->cbd_sc, BD_SC_READY);
-		data->octet_em[data->ix_tx] = 0;
-		if (++data->ix_tx == PCM_NB_TXBD) data->ix_tx = 0;
-		data->time++;
-		if (++data->nb_emis == NB_DESC_EM_BY_5_MS) {
-			data->nb_emis = 0;
-			data->ix_wr += NB_DESC_EM_BY_5_MS;
-			if (data->ix_wr == PCM_NB_TXBD) data->ix_wr = 0;
+		while ((in_be16(&(data->tx_bd + data->ix_tx)->cbd_sc) & BD_SC_READY) == 0) {
+			if (data->octet_em[data->ix_tx] == 0)
+				data->packet_silence++;
+			out_be32(&(data->tx_bd + data->ix_tx)->cbd_bufaddr, data->phys_packet_repos);
+			setbits16(&(data->tx_bd + data->ix_tx)->cbd_sc, BD_SC_READY);
+			data->octet_em[data->ix_tx] = 0;
+			if (++data->ix_tx == PCM_NB_TXBD) data->ix_tx = 0;
+			data->time++;
+			if (++data->nb_emis == NB_DESC_EM_BY_5_MS) {
+				data->nb_emis = 0;
+				data->ix_wr += NB_DESC_EM_BY_5_MS;
+				if (data->ix_wr == PCM_NB_TXBD) data->ix_wr = 0;
+			}
 		}
 	}
 
 	if (lct & mask_rx) {
 		gest_led_debug(1, 1);
-		if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
-			data->packet_lost++;
-		data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
-		setbits16(&(data->rx_bd + data->ix_rx)->cbd_sc, BD_SC_EMPTY);
-		data->ix_rx_lct = data->ix_rx++;
-		if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
-		if (data->open)		/* si device /dev/pcm utilisé */
-			wake_up(&data->read_wait);
+		while ((in_be16(&(data->rx_bd + data->ix_rx)->cbd_sc) & BD_SC_EMPTY) == 0) {
+			if (data->octet_recu == (NB_BYTE_BY_5_MS * data->nb_canal))
+				data->packet_lost++;
+			data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
+			setbits16(&(data->rx_bd + data->ix_rx)->cbd_sc, BD_SC_EMPTY);
+			data->ix_rx_lct = data->ix_rx++;
+			if (data->ix_rx == PCM_NB_RXBD) data->ix_rx = 0;
+			if (data->open)		/* si device /dev/pcm utilisé */
+				wake_up(&data->read_wait);
+		}
 		gest_led_debug(1, 0);
 	}
 
@@ -793,13 +797,13 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 		out_be16(&ad_bd->cbd_datlen, (NB_BYTE_BY_MS * data->nb_canal));
 		out_be32(&ad_bd->cbd_bufaddr, data->phys_packet_repos);
 		if (i != (PCM_NB_TXBD - 1))
-			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT);
+			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_INTRPT);
 		else
-			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
+			out_be16(&ad_bd->cbd_sc, BD_SC_READY | BD_SC_INTRPT | BD_SC_WRAP);
 	}
-	data->ix_tx = FIRST_TXBD_TRANSMIT;
-	data->nb_emis = 0;
-	data->ix_wr = 0;
+	data->ix_tx = 0;
+	data->nb_emis = -3;
+	data->ix_wr = FIRST_TXBD_WRITE;
 	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
 		setbits8(&data->cp_ades.cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
 		setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
@@ -816,9 +820,9 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 		out_be16(&ad_bd->cbd_datlen, (NB_BYTE_BY_5_MS * data->nb_canal));
 		out_be32(&ad_bd->cbd_bufaddr, dma_addr);
 		if (i != (PCM_NB_RXBD - 1))
-			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_CM | BD_SC_INTRPT);
+			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_INTRPT);
 		else
-			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_CM | BD_SC_INTRPT | BD_SC_WRAP);
+			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_rx = 0;
 	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
