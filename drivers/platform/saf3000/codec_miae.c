@@ -32,24 +32,29 @@
 #define CODEC_AUTHOR		"VASSEUR Patrick - Janvier 2012"
 
 #define MAX_CANAL_AUDIO		4
+#define VAL_BUS_NUM		-1500	/* soit -15,00dB */
 
 /* tableau de conversion gain numérique emission MIAe */
-#define GAIN_AUDIO_EM_0DB	13
-#define INDEX_AUDIO_EM_MAX	67
+#define GAIN_AUDIO_EM_0DB	33
+#define INDEX_AUDIO_EM_MAX	87
 static const unsigned int GAIN_AUDIO_EM[INDEX_AUDIO_EM_MAX] = {
-/*  (0)	-3,25	-3	-2.75	-2.5	-2.25	-2	-1.75	-1.5	-1.25	-1 */
+/*  (0)	-8,25	-8	-7.75	-7.5	-7.25	-7	-6.75	-6.5	-6.25	-6 */
+	704,	725,	746,	767,	790,	813,	837,	861,	886,	912,
+/* (10)	-5,75	-5.5	-5.25	-5	-4.75	-4.5	-4.25	-4	-3.75	-3.5 */
+	939,	966,	994,	1023,	1053,	1084,	1116,	1148,	1182,	1216,
+/* (20)	-3,25	-3	-2.75	-2.5	-2.25	-2	-1.75	-1.5	-1.25	-1 */
 	1252,	1288,	1326,	1365,	1405,	1446,	1488,	1531,	1576,	1622,
-/* (10)	-0.75	-0.5	-0.25	0	0.25	0.5	0.75	1	1.25	1.5 */
+/* (30)	-0.75	-0.5	-0.25	0	0.25	0.5	0.75	1	1.25	1.5 */
 	1669,	1718,	1768,	1820,	1873,	1928,	1984,	2042,	2102,	2163,
-/* (20)	1.75	2	2.25	2.5	2.75	3	3.25	3.5	3.75	4 */
+/* (40)	1.75	2	2.25	2.5	2.75	3	3.25	3.5	3.75	4 */
 	2226,	2291,	2358,	2427,	2498,	2571,	2646,	2723,	2803,	2885,
-/* (30)	4.25	4.5	4.75	5	5.25	5.5	5.75	6	6.25	6.5 */
+/* (50)	4.25	4.5	4.75	5	5.25	5.5	5.75	6	6.25	6.5 */
 	2967,	3055,	3145,	3236,	3331,	3428,	3528,	3631,	3737,	3847,
-/* (40)	6.75	7	7.25	7.5	7.75	8	8.25	8.5	8.75	9 */
+/* (60)	6.75	7	7.25	7.5	7.75	8	8.25	8.5	8.75	9 */
 	3959,	4074,	4193,	4316,	4442,	4572,	4705,	4843,	4984,	5129,
-/* (50)	9.25	9.5	9.75	10	10.25	10.5	10.75	11	11.25	11.5 */
+/* (70)	9.25	9.5	9.75	10	10.25	10.5	10.75	11	11.25	11.5 */
 	5279,	5433,	5592,	5755,	5923,	6096,	6274,	6458,	6646,	6840,
-/* (60)	11.75	12	12.25	12.5	12.75	13	13.25 */
+/* (80)	11.75	12	12.25	12.5	12.75	13	13.25 */
 	7040,	7246,	7457,	7675,	7899,	8130,	8192
 };
 
@@ -90,6 +95,8 @@ struct canal_audio {
 	char			io;
 	char			gain_em[10];
 	char			gain_rec[10];
+	int			delta_em;
+	int			delta_rec;
 };
 
 struct codec {
@@ -104,10 +111,12 @@ struct codec {
 /* conversion texte niveau en valeur arrondie au centieme */
 static int gain_val(const char *buf, size_t count)
 {
-	int _Val = 0, i, j;
+	int _Val = 0, i, j, signe = 1;
 
 	for (i = 0, j = 0; i < count; i++) {
-		if ((buf[i] == ',') || (buf[i] == '.'))
+		if (buf[i] == '-')
+			signe = 0;
+		else if ((buf[i] == ',') || (buf[i] == '.'))
 			j = 1;
 		else if ((buf[i] >= '0') && (buf[i] <= '9')) {
 			if (j == 1) {
@@ -126,7 +135,7 @@ static int gain_val(const char *buf, size_t count)
 		}
 	}
 	if (j == 0) _Val *= 100;
-	if (buf[0] == '-') _Val = ~(_Val - 1);
+	if (signe == 0) _Val = ~(_Val - 1);
 
 	return _Val;
 }
@@ -243,11 +252,15 @@ static int mode_canal(struct spi_device *spi, struct codec *codec, int canal, in
 		codec->canal[canal].io = _Result;
 	else goto fin;
 	/* changement de mode => initialisation gain emission */
-	_Result = gain_val(codec->canal[canal].gain_em, 10);
+	_Result = VAL_BUS_NUM;
+	_Result -= codec->canal[canal].delta_em;
+	_Result -= gain_val(codec->canal[canal].gain_em, 10);
 	_Result = gain_em(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 	/* changement de mode => initialisation gain reception */
 	_Result = gain_val(codec->canal[canal].gain_rec, 10);
+	_Result -= codec->canal[canal].delta_rec;
+	_Result -= VAL_BUS_NUM;
 	_Result = gain_rec(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 
@@ -294,15 +307,17 @@ static int niveau_em(struct device *dev, int canal, const char *buf, size_t coun
 	struct codec *codec = dev_get_drvdata(dev);
 	int _Result = 0, _Ix, _Val = 0;
 
+	_Val = VAL_BUS_NUM;
 	if (codec->debug)
 		dev_info(dev, "entree gain = %s (lg = %d)\n", buf, count);
-	_Val = gain_val(buf, count);
+	_Val -= codec->canal[canal].delta_em;
+	_Val -= gain_val(buf, count);
 	if (codec->debug)
-		dev_info(dev, "lecture = %d\n", _Val);
+		dev_info(dev, "gain em = %d\n", _Val);
 
 	if (codec->canal[0].mode == 2) {
 		_Ix = codec->canal[canal].io;
-		if (_Val <= -1000) {
+		if (_Val < -300) {
 			_Val += 1000;
 			if (codec->debug)
 				dev_info(dev, "Activation I/O -10dB\n");
@@ -341,15 +356,17 @@ static int niveau_rec(struct device *dev, int canal, const char *buf, size_t cou
 	if (codec->debug)
 		dev_info(dev, "entree gain = %s (lg = %d)\n", buf, count);
 	_Val = gain_val(buf, count);
+	_Val -= codec->canal[canal].delta_rec;
+	_Val -= VAL_BUS_NUM;
 	if (codec->debug)
-		dev_info(dev, "lecture = %d\n", _Val);
+		dev_info(dev, "gain rec = %d\n", _Val);
 
 	if (codec->canal[0].mode == 2) {
 		_Ix = codec->canal[canal].io;
-		if (_Val <= -1000) {
-			_Val += 1000;
+		if (_Val > 300) {
+			_Val -= 1000;
 			if (codec->debug)
-				dev_info(dev, "Activation I/O -10dB\n");
+				dev_info(dev, "Activation I/O +10dB\n");
 			_Ix &= ~(0x08);
 		}
 		else {
@@ -505,9 +522,9 @@ static int __devinit codec_probe(struct spi_device *spi)
 	struct device *dev;
 	struct class *class;
 	int _Result = -1, _Canal, _Ts;
-	const char *name_codec = NULL;
+	const char *name_codec = NULL, *ana_em = NULL, *ana_rec = NULL;
 	const __be32 *ts_info = NULL;
-	int len = 0, num = 0;
+	int len = 0, num = 0, len_em = 0, len_rec = 0, offset;
 	struct device_node *np = spi->dev.of_node;
 	
 	codec = kzalloc(sizeof *codec, GFP_KERNEL);
@@ -519,11 +536,40 @@ static int __devinit codec_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, codec);
 	codec->spi_dev = spi;
 	codec->status = CODEC_HS;
-	if (np)
+	if (np) {
 		name_codec = of_get_property(np, "name_codec", &len);
+		ana_em = of_get_property(np, "analog_em", &len_em);
+		ana_rec = of_get_property(np, "analog_rec", &len_rec);
+	}
 	if (!name_codec || (len < sizeof(*name_codec))) {
 		_Result = -ENODEV;
 		goto err;
+	}
+	if (ana_em && len_em) {
+		for (_Canal = 0; (_Canal < MAX_CANAL_AUDIO) && (len_em > 0); _Canal++) {
+			offset = 0;
+			while (ana_em[offset++] != 'B') {
+				if (--len_em == 0) break;
+			}
+			if (len_em) {
+				len_em--;
+				codec->canal[_Canal].delta_em = gain_val(ana_em, offset);
+				ana_em = &ana_em[offset];
+			}
+		}
+	}
+	if (ana_rec && len_rec) {
+		for (_Canal = 0; (_Canal < MAX_CANAL_AUDIO) && (len_rec > 0); _Canal++) {
+			offset = 0;
+			while (ana_rec[offset++] != 'B') {
+				if (--len_rec == 0) break;
+			}
+			if (len_rec) {
+				len_rec--;
+				codec->canal[_Canal].delta_rec = gain_val(ana_rec, offset);
+				ana_rec = &ana_rec[offset];
+			}
+		}
 	}
 	len = 0;
 	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
@@ -555,21 +601,13 @@ static int __devinit codec_probe(struct spi_device *spi)
 		codec->canal[_Canal].ts = _Ts++;
 		/* sauter le TS E1 si necessaire */
 		if (((_Ts - ts_info[0]) % (ts_info[1] / 2)) == 0) _Ts++;
+		_Result = VAL_BUS_NUM - codec->canal[_Canal].delta_em;
+		sprintf(codec->canal[_Canal].gain_em, "%d.%d", _Result / 100, (int)abs(_Result % 100));
+		_Result = VAL_BUS_NUM + codec->canal[_Canal].delta_rec;
+		sprintf(codec->canal[_Canal].gain_rec, "%d.%d", _Result / 100, (int)abs(_Result % 100));
 		if (mode_canal(spi, codec, _Canal, 0) < 0)
 			break;
 		codec->canal[_Canal].mode = 0;
-		/* initialisation gain emission carte à 0 dB */
-		if (gain_em(spi, _Canal, 0) < 0)
-			break;
-		sprintf(codec->canal[_Canal].gain_em, "0");
-		/* initialisation gain reception carte à 0 dB */
-		if (gain_em(spi, _Canal, 0) < 0)
-			break;
-		sprintf(codec->canal[_Canal].gain_rec, "0");
-		/* initialisation des I/O d'un canal en sortie a l'etat '1' */
-		if (io_canal(spi, _Canal, 0x1F) < 0)
-			break;
-		codec->canal[_Canal].io = 0x1F;
 	}
 
 	if (_Canal != MAX_CANAL_AUDIO) {

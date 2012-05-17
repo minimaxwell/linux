@@ -966,7 +966,13 @@ void fs_link_monitor(struct work_struct *work)
 	}
 
 	/* If nothing has changed, exit */
-	if (! nb_changed_phydevs) return;
+	if (! nb_changed_phydevs) {
+		/* Check the consistency of the carrier before exiting */
+		if ((! netif_carrier_ok(fep->phydev->attached_dev)) && 
+		    (fep->phydevs[0]->link || fep->phydevs[1]->link))
+			netif_carrier_on(fep->phydev->attached_dev);
+		return;
+	}
 
 	/* If both PHYs obtained a new link, PHY2 must become the active link */
 	if (nb_changed_phydevs==2 && fep->phydevs[0]->link && 
@@ -1318,7 +1324,7 @@ static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attri
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 	int active = simple_strtol(buf, NULL, 10);
-	
+
 	if (active != 1) active = 0;
 	if (!fep->phydevs[active]) {
 		dev_warn(dev, "PHY on address %d does not exist\n", active);
