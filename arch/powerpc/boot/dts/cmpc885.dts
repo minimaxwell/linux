@@ -281,7 +281,7 @@
 				#size-cells = <0>;
 				cell-index = <0>;
 				compatible = "fsl,spi", "fsl,cpm1-spi";
-				reg = <0xa80 0x30 0x1d80 0x30>;
+				reg = <0xa80 0x30 0x3d80 0x30>;
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
