@@ -60,7 +60,7 @@ void __init cmpc885_pics_init(void)
 	
 	np = of_find_node_by_path("/");
 	if (np) {
-
+		model = of_get_property(np, "model", NULL);
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
 			irq = fpgaf_pic_init();
@@ -120,7 +120,6 @@ static int __init declare_of_platform_devices(void)
 {
 	struct device_node *np;
 	const char *model = "";
-	int irq;
 
 	np = of_find_node_by_path("/");
 	if (np) {
@@ -136,9 +135,6 @@ static int __init declare_of_platform_devices(void)
 		init_ioports_fev170();		
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
-			irq = fpgaf_pic_init();
-			if (irq != NO_IRQ)
-				irq_set_chained_handler(irq, fpgaf_cascade);
 			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			fpgaf_init_platform_devices();
 			
@@ -147,9 +143,6 @@ static int __init declare_of_platform_devices(void)
 		} 
 		/* MIAE configuration */
 		else if (!strcmp(model, "MIAE")) {
-			irq = fpgam_pic_init();
-			if (irq != NO_IRQ)
-				irq_set_chained_handler(irq, fpgam_cascade);
 			u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
 			fpgam_init_platform_devices();
 		} 
