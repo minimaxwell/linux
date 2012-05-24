@@ -103,6 +103,7 @@ struct codec {
 	struct device		*dev;
 	int			status;
 	int			debug;
+	int			ident;
 	struct canal_audio	canal[MAX_CANAL_AUDIO];
 };
 
@@ -251,15 +252,16 @@ static int mode_canal(struct spi_device *spi, struct codec *codec, int canal, in
 		codec->canal[canal].io = _Result;
 	else goto fin;
 	/* changement de mode => initialisation gain emission */
-	_Result = VAL_BUS_NUM;
-	_Result -= codec->canal[canal].delta_em;
+	_Result = VAL_BUS_NUM - codec->canal[canal].delta_em;
+	sprintf(codec->canal[canal].gain_em, "%d.%d", _Result / 100, (int)abs(_Result % 100));
 	_Result -= gain_val(codec->canal[canal].gain_em, 10);
 	_Result = gain_em(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 	/* changement de mode => initialisation gain reception */
-	_Result = gain_val(codec->canal[canal].gain_rec, 10);
-	_Result -= codec->canal[canal].delta_rec;
-	_Result -= VAL_BUS_NUM;
+	_Result = VAL_BUS_NUM + codec->canal[canal].delta_rec;
+	sprintf(codec->canal[canal].gain_rec, "%d.%d", _Result / 100, (int)abs(_Result % 100));
+	_Result = -_Result;
+	_Result += gain_val(codec->canal[canal].gain_rec, 10);
 	_Result = gain_rec(spi, canal, _Result);
 	if (_Result < 0) goto fin;
 
@@ -282,11 +284,13 @@ static int mode(struct device *dev, int canal, const char *buf, size_t count)
 {
 	struct codec *codec = dev_get_drvdata(dev);
 	int _Result = -1, _Val;
+	char _Max = '1';
 
 	if (codec->debug)
 		dev_info(dev, "entree mode = %s (lg = %d)\n", buf, count);
 
-	if ((buf[0] >= '0') && (buf[0] <= '2')) _Val = buf[0] - '0';
+	if (codec->ident == 1) _Max = '2';
+	if ((buf[0] >= '0') && (buf[0] <= _Max)) _Val = buf[0] - '0';
 	else  goto fin;
 	_Result = mode_canal(codec->spi_dev, codec, canal, _Val);
 	if (_Result >= 0) {
@@ -314,7 +318,7 @@ static int niveau_em(struct device *dev, int canal, const char *buf, size_t coun
 	if (codec->debug)
 		dev_info(dev, "gain em = %d\n", _Val);
 
-	if (codec->canal[0].mode == 2) {
+	if ((codec->ident == 1) && (codec->canal[canal].mode != 2)) {
 		_Ix = codec->canal[canal].io;
 		if (_Val < -300) {
 			_Val += 1000;
@@ -360,7 +364,7 @@ static int niveau_rec(struct device *dev, int canal, const char *buf, size_t cou
 	if (codec->debug)
 		dev_info(dev, "gain rec = %d\n", _Val);
 
-	if (codec->canal[0].mode == 2) {
+	if ((codec->ident == 1) && (codec->canal[canal].mode != 2)) {
 		_Ix = codec->canal[canal].io;
 		if (_Val > 300) {
 			_Val -= 1000;
@@ -433,8 +437,13 @@ static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *at
 	struct codec *codec = dev_get_drvdata(dev);
 	char info[20];
 	int canal = simple_strtol(attr->attr.name + 6, NULL, 10) - 1;
-	if (codec->canal[canal].mode == 2) sprintf(info, "actif avec switch");
-	else if (codec->canal[canal].mode == 1) sprintf(info, "actif sans switch");
+	if (codec->canal[canal].mode) {
+		if (codec->ident == 1) {
+			if (codec->canal[canal].mode == 2) sprintf(info, "actif sans switch");
+			else sprintf(info, "actif avec switch");
+		}
+		else sprintf(info, "actif");
+	}
 	else sprintf(info, "inactif");
 	return snprintf(buf, PAGE_SIZE, "Le canal %d est %s\n", canal + 1, info);
 }
@@ -523,7 +532,7 @@ static int __devinit codec_probe(struct spi_device *spi)
 	int _Result = -1, _Canal, _Ts;
 	const char *name_codec = NULL, *ana_em = NULL, *ana_rec = NULL;
 	const __be32 *ts_info = NULL;
-	int len = 0, num = 0, len_em = 0, len_rec = 0, offset;
+	int len = 0, len_em = 0, len_rec = 0, offset;
 	struct device_node *np = spi->dev.of_node;
 	
 	codec = kzalloc(sizeof *codec, GFP_KERNEL);
@@ -579,7 +588,11 @@ static int __devinit codec_probe(struct spi_device *spi)
 		goto err;
 	}
 
-	num = simple_strtol(name_codec + 6, NULL, 10);
+	codec->ident = simple_strtol(name_codec + 6, NULL, 10);
+	if ((codec->ident == 0) || (codec->ident > 3)) {
+		_Result = -EINVAL;
+		goto err;
+	}
 	class = saf3000_class_get();
 	dev = device_create(class, &spi->dev, MKDEV(0, 0), NULL, "%s", name_codec);
 	dev_set_drvdata(dev, codec);
@@ -588,35 +601,31 @@ static int __devinit codec_probe(struct spi_device *spi)
 	dev_info(dev, "Reservation dev codec : 0x%08X\n", (int)codec->dev);
 
 	_Ts = ts_info[0] + (ts_info[1] / 2) + 1;	/* index premier TS codec 1 */
-	len = (num - 1) * MAX_CANAL_AUDIO;	/* nombre de TS phonie codec a ignorer */
+	len = (codec->ident - 1) * MAX_CANAL_AUDIO;	/* nombre de TS phonie codec a ignorer */
 	while (len >= ((ts_info[1] / 2) - 1)) {
 		len -= (ts_info[1] / 2) - 1;
 		_Ts += (ts_info[1] / 2);
 	}
 	if (len) _Ts += len;
 	for (_Canal = 0; _Canal < MAX_CANAL_AUDIO; _Canal++) {
-		dev_info(dev, "Initialisation du canal %d du CODEC %d\n", _Canal, num);
+		dev_info(dev, "Initialisation du canal %d du CODEC %d\n", _Canal, codec->ident);
 		/* affectation TS em et rec en loi A et canal en 'power down' */
 		codec->canal[_Canal].ts = _Ts++;
 		/* sauter le TS E1 si necessaire */
 		if (((_Ts - ts_info[0]) % (ts_info[1] / 2)) == 0) _Ts++;
-		_Result = VAL_BUS_NUM - codec->canal[_Canal].delta_em;
-		sprintf(codec->canal[_Canal].gain_em, "%d.%d", _Result / 100, (int)abs(_Result % 100));
-		_Result = VAL_BUS_NUM + codec->canal[_Canal].delta_rec;
-		sprintf(codec->canal[_Canal].gain_rec, "%d.%d", _Result / 100, (int)abs(_Result % 100));
 		if (mode_canal(spi, codec, _Canal, 0) < 0)
 			break;
 		codec->canal[_Canal].mode = 0;
 	}
 
 	if (_Canal != MAX_CANAL_AUDIO) {
-		dev_info(dev, "Pb sur canal %d du CODEC %d\n", _Canal, num);
+		dev_info(dev, "Pb sur canal %d du CODEC %d\n", _Canal, codec->ident);
 		_Result = -ENODEV;
 		goto err_unfile;
 	}
 		
 	codec->status = CODEC_OK;
-	dev_info(dev, "Le CODEC %d est initialise\n", num);
+	dev_info(dev, "Le CODEC %d est initialise\n", codec->ident);
 
 	_Result = device_create_file(dev, &dev_attr_debug);
 	if (_Result) goto err_unfile;
