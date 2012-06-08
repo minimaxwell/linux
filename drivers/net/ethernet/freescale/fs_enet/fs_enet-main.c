@@ -812,10 +812,10 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 
 	ip_addr = inet_select_addr(fep->ndev, 0, 0);
 	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
-		 	fep->ndev->dev_addr, NULL);
+			fep->ndev->dev_addr, NULL);
 	if (skb == NULL)
 		printk("arp_create failure -> gratuitous arp not sent\n");
-	else 
+	else
 		arp_xmit(skb);
 }
 
@@ -854,14 +854,18 @@ void fs_link_switch(struct fs_enet_private *fep)
 	
 	/* Do not suspend the PHY, but isolate it. We can't get a powered 
 	   down PHY's link status */
-        value = phy_read(phydev, MII_BMCR);
-        phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
 	if (phydev == fep->phydevs[0]) {
 		if (fep->phydevs[1]) {
 			phydev = fep->phydevs[1];
 			dev_err(fep->dev, "Switch to PHY B\n");
 			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
+			/* In the open function, autoneg was disabled for PHY B.
+			   It must be enabled when PHY B is activated for the 
+			   first time. */
+			phydev->autoneg = AUTONEG_ENABLE;
 		}
 	}
 	else {
@@ -875,15 +879,18 @@ void fs_link_switch(struct fs_enet_private *fep)
 	fep->change_time = jiffies;
 	spin_unlock_irqrestore(&fep->lock, flags);
 
-        value = phy_read(phydev, MII_BMCR);
-        phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
 	if (phydev->drv->config_aneg)
 		phydev->drv->config_aneg(phydev);
 
-	netif_carrier_on(fep->phydev->attached_dev);
+	if (fep->phydev->link)
+	{
+		netif_carrier_on(fep->phydev->attached_dev);
 
-	/* Send gratuitous ARP */
-	schedule_work(&fep->arp_queue);
+		/* Send gratuitous ARP */
+		schedule_work(&fep->arp_queue);
+	}
 }
 
 // #define DOUBLE_ATTACH_DEBUG 1
@@ -896,9 +903,8 @@ void fs_link_monitor(struct work_struct *work)
 	struct phy_device *phydev = fep->phydev;
 	struct phy_device *changed_phydevs[2] = {NULL, NULL};
 	int nb_changed_phydevs = 0;
-	#ifdef DOUBLE_ATTACH_DEBUG
-	int value; 
 
+	#ifdef DOUBLE_ATTACH_DEBUG
 	printk("Current PHY : %s\n", fep->phydev==fep->phydevs[0] ? "PHY 0": "PHY 1");
 	printk("PHY 0 (addr=%d) : %s ", fep->phydevs[0]->addr, fep->phydevs[0]->link ? "Up": "Down");
 	value = phy_read(fep->phydevs[0], MII_BMSR);
@@ -968,8 +974,7 @@ void fs_link_monitor(struct work_struct *work)
 	/* If nothing has changed, exit */
 	if (! nb_changed_phydevs) {
 		/* Check the consistency of the carrier before exiting */
-		if ((! netif_carrier_ok(fep->phydev->attached_dev)) && 
-		    (fep->phydevs[0]->link || fep->phydevs[1]->link))
+		if (fep->phydev->link && ! netif_carrier_ok(fep->phydev->attached_dev))
 			netif_carrier_on(fep->phydev->attached_dev);
 		return;
 	}
@@ -979,13 +984,14 @@ void fs_link_monitor(struct work_struct *work)
 	    fep->phydevs[1]->link) {
 		if (fep->phydev != fep->phydevs[0])
 			fs_link_switch(fep);
-		netif_carrier_on(fep->phydev->attached_dev);
+		if (! netif_carrier_ok(fep->phydev->attached_dev))
+			netif_carrier_on(fep->phydev->attached_dev);
 		return;
 	}
 		
 
 	/* If the active PHY has a link and carrier is off, 
-           call netif_carrier_on */
+	   call netif_carrier_on */
 	if (phydev->link) {
 		if (! netif_carrier_ok(fep->phydev->attached_dev))
 			netif_carrier_on(fep->phydev->attached_dev);
@@ -1078,20 +1084,22 @@ static int fs_enet_open(struct net_device *dev)
 
 	if (fep->phydevs[1]) {
 		phy_start(fep->phydevs[1]);
-		if (fep->phydevs[1]->drv->config_aneg)
-			fep->phydevs[1]->drv->config_aneg(fep->phydevs[1]);
 		/* If the PHY must be isolated to disable it (MIAe) */
 		if (fep->disable_phy == PHY_ISOLATE) {
-        		value = phy_read(fep->phydevs[1], MII_BMCR);
-        		phy_write(fep->phydevs[1], MII_BMCR, 
+			value = phy_read(fep->phydevs[1], MII_BMCR);
+			phy_write(fep->phydevs[1], MII_BMCR, 
 				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			/* autoneg must be disabled at this point. Otherwise, 
+			the driver will remove the ISOLATE bit in the command
+			register and break networking */
+			fep->phydevs[1]->autoneg = AUTONEG_DISABLE;
 		}
 	}
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
-	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 	INIT_WORK(&fep->arp_queue, fs_send_gratuitous_arp);
+	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 
 	netif_start_queue(dev);
 
@@ -1489,8 +1497,8 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 	fpi->phy_node2 = of_parse_phandle(ofdev->dev.of_node, "phy-handle", 1);
 
 	privsize = sizeof(*fep) +
-	           sizeof(struct sk_buff **) *
-	           (fpi->rx_ring + fpi->tx_ring);
+		   sizeof(struct sk_buff **) *
+		   (fpi->rx_ring + fpi->tx_ring);
 
 	ndev = alloc_etherdev(privsize);
 	if (!ndev) {
@@ -1547,7 +1555,7 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 	ndev->watchdog_timeo = 2 * HZ;
 	if (fpi->use_napi)
 		netif_napi_add(ndev, &fep->napi, fs_enet_rx_napi,
-		               fpi->napi_weight);
+			       fpi->napi_weight);
 
 	ndev->ethtool_ops = &fs_ethtool_ops;
 
