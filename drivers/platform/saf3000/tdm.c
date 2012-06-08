@@ -518,11 +518,11 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	return(nb_byte);
 }
 
-static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
+static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
 	struct tdm_data *data = NULL;
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = iminor(file->f_path.dentry->d_inode);
 	
 	if (minor == PCM_CODEC_MINOR)
 		data = data_codec;
@@ -656,7 +656,7 @@ static const struct file_operations pcm_delay_fops = {
 //	.aio_write	= pcm_aio_write,
 //	.read		= pcm_read,
 //	.aio_read	= pcm_aio_read,
-	.ioctl		= pcm_ioctl,
+	.unlocked_ioctl		= pcm_ioctl,
 	.open		= pcm_open,
 	.release	= pcm_release,
 };
