@@ -151,7 +151,7 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 		if (sysfs_streq(scc, "SCC3")) siram_b = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
 		else if (sysfs_streq(scc, "SCC4")) siram_b = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
 		else if (sysfs_streq(scc, "SMC2")) siram_b = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-		else siram_b = SIRAM_BYT;
+		else siram_b = SIRAM_BYT;	/* positionnement des TS E1 meme si non definis */
 		
 		/* codecs et lien e1 sur SCC different */
 		if (siram_a == siram_b) {
@@ -183,6 +183,37 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 		inter = info_ts[1] / 2;
 	}
 	else {
+		scc = of_get_property(np, "scc_voie", &len_scc);
+		if (!scc || (len_scc < sizeof(*scc))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		if (sysfs_streq(scc, "SCC3")) siram_a = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
+		else if (sysfs_streq(scc, "SCC4")) siram_a = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+		else if (sysfs_streq(scc, "SMC2")) siram_a = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+		else siram_a = SIRAM_BYT;	/* positionnement des TS voie meme si non definis */
+
+		scc = NULL;
+		scc = of_get_property(np, "scc_retard", &len_scc);
+		if (!scc || (len_scc < sizeof(*scc))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		if (sysfs_streq(scc, "SCC3")) siram_b = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
+		else if (sysfs_streq(scc, "SCC4")) siram_b = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
+		else if (sysfs_streq(scc, "SMC2")) siram_b = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+		else siram_b = 0;
+		
+		/* voies et retard sur SCC different */
+		if (siram_a == siram_b) {
+			ret = -EINVAL;
+			goto err;
+		}
+
+		if (siram_a)
+			siram_a |= SIRAM_BYT;
+		if (siram_b)
+			siram_b |= SIRAM_BYT;
 	}
 
 	cpm = of_iomap(np, 0);
@@ -240,6 +271,30 @@ static int __devinit tsa_probe(struct of_device *ofdev, const struct of_device_i
 		out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
 	}
 	else {
+		/* programmation des 16 TimeSlots voies */
+		if (siram_b) {
+			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(16));
+			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(16));
+			offset++;
+			/* programmation des 32 TimeSlots retard */
+			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(16));
+			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(16));
+			offset++;
+			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(15));
+			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(15));
+			offset++;
+			siram_b |= SIRAM_LST;
+			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(1));
+			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
+		}
+		else {
+			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(15));
+			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(15));
+			offset++;
+			siram_a |= SIRAM_LST;
+			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(1));
+			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(1));
+		}
 	}
 
 	simode_tdma = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
