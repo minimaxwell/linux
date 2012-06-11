@@ -33,6 +33,7 @@ config SAF3000
 config MPC885ADS
 	bool "MPC885ADS"
 	select CPM1
+	select OF_DYNAMIC
 	help
 	  Freescale Semiconductor MPC885 Application Development System (ADS).
 	  Also known as DUET.

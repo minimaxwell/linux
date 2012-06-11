@@ -39,7 +39,6 @@
 #include <asm/emulated_ops.h>
 #include <asm/pgtable.h>
 #include <asm/uaccess.h>
-#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/machdep.h>
 #include <asm/rtas.h>
@@ -150,6 +149,8 @@ static void __kprobes oops_end(unsigned long flags, struct pt_regs *regs,
 		arch_spin_unlock(&die_lock);
 	raw_local_irq_restore(flags);
 
+	crash_fadump(regs, "die oops");
+
 	/*
 	 * A system reset (0x100) is a request to dump, so we always send
 	 * it through the crashdump code.
@@ -248,6 +249,9 @@ void _exception(int signr, struct pt_regs *regs, int code, unsigned long addr)
 				   current->comm, current->pid, signr,
 				   addr, regs->nip, regs->link, code);
 	}
+
+	if (arch_irqs_disabled() && !arch_irq_disabled_regs(regs))
+		local_irq_enable();
 
 	memset(&info, 0, sizeof(info));
 	info.si_signo = signr;
@@ -1035,7 +1039,9 @@ void __kprobes program_check_exception(struct pt_regs *regs)
 		return;
 	}
 
-	local_irq_enable();
+	/* We restore the interrupt state now */
+	if (!arch_irq_disabled_regs(regs))
+		local_irq_enable();
 
 #ifdef CONFIG_MATH_EMULATION
 	/* (reason & REASON_ILLEGAL) would be the obvious thing here,
@@ -1084,6 +1090,10 @@ void __kprobes program_check_exception(struct pt_regs *regs)
 void alignment_exception(struct pt_regs *regs)
 {
 	int sig, code, fixed = 0;
+
+	/* We restore the interrupt state now */
+	if (!arch_irq_disabled_regs(regs))
+		local_irq_enable();
 
 	/* we don't implement logging of alignment exceptions */
 	if (!(current->thread.align_ctl & PR_UNALIGN_SIGBUS))
