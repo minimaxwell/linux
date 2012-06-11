@@ -1670,16 +1670,6 @@ static struct platform_driver fs_enet_driver = {
 	.remove = fs_enet_remove,
 };
 
-static int __init fs_init(void)
-{
-	return platform_driver_register(&fs_enet_driver);
-}
-
-static void __exit fs_cleanup(void)
-{
-	platform_driver_unregister(&fs_enet_driver);
-}
-
 #ifdef CONFIG_NET_POLL_CONTROLLER
 static void fs_enet_netpoll(struct net_device *dev)
 {
@@ -1689,7 +1679,4 @@ static void fs_enet_netpoll(struct net_device *dev)
 }
 #endif
 
-/**************************************************************************************/
-
-module_init(fs_init);
-module_exit(fs_cleanup);
+module_platform_driver(fs_enet_driver);

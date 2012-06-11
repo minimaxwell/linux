@@ -62,7 +62,7 @@ module_param(timeout, ushort, 0);
 MODULE_PARM_DESC(timeout,
 	"Watchdog HW timeout in ticks. (0<timeout<65536, default=65535)");
 
-static int reset = 1;
+static bool reset = 1;
 module_param(reset, bool, 0);
 MODULE_PARM_DESC(reset,
 	"Watchdog Interrupt/Reset Mode. 0 = interrupt, 1 = reset");
