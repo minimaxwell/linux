@@ -1,7 +1,7 @@
 /*
- * MCR3000_2G Device Tree Source
+ * MCR3000_2G_GRS Device Tree Source
  *
- * Copyright 2010 CSSI, Inc
+ * Copyright 2012 CSSI, Inc
  */
 
 /dts-v1/;
@@ -510,6 +510,14 @@
 				reg = <0xac8 0x18>;
 				gpio-controller;
 			};
+			
+			tsa: tsa@9c0 {
+				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
+				reg = <0x9c0 0x440 0x930 0x20>;
+				/* parametres possible : none, SCC3, SCC4 */
+				scc_voie = "SCC4";
+				scc_retard = "SCC3";
+			};
 
 			smc1: serial@a80 {
 				device_type = "serial";
@@ -531,23 +539,23 @@
 				fsl,cpm-command = <0x40>;
 			};
 
-			scc3: serial@a40 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc3: tdm@a40 {
+				device_type = "tdm";
+				tdm_name = "scc3";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
 			};
 
-			scc4: serial@a60 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc4: tdm@a60 {
+				device_type = "tdm";
+				tdm_name = "scc4";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
 			};
 
