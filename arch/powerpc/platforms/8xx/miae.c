@@ -14,7 +14,6 @@
 
 #include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/system.h>
 #include <asm/time.h>
 #include <asm/8xx_immap.h>
 #include <asm/cpm1.h>
@@ -34,7 +33,7 @@
  * Controlleur d'IRQ du FPGA MIAE 
  */
 static struct fpgam *fpgam_regs;
-static struct irq_host *fpgam_pic_host;
+static struct irq_domain *fpgam_pic_host;
 
 static void fpgam_mask_irq(struct irq_data *d)
 {
@@ -93,7 +92,7 @@ int fpgam_get_irq(void)
 	return ret;
 }
 
-static int fpgam_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_number_t hw)
+static int fpgam_pic_host_map(struct irq_domain *h, unsigned int virq, irq_hw_number_t hw)
 {
 	pr_debug("fpgaf_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
@@ -102,7 +101,7 @@ static int fpgam_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_numb
 	return 0;
 }
 
-static struct irq_host_ops fpgam_pic_host_ops = {
+static struct irq_domain_ops fpgam_pic_host_ops = {
 	.map = fpgam_pic_host_map,
 };
 
@@ -136,7 +135,7 @@ int fpgam_pic_init(void)
 	/* Initialize the FPGAM interrupt controller. */
 	hwirq = (unsigned int)virq_to_hw(irq);
 
-	fpgam_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 32, &fpgam_pic_host_ops, 32);
+	fpgam_pic_host = irq_domain_add_linear(np, 32, &fpgam_pic_host_ops, NULL);
 	if (fpgam_pic_host == NULL) {
 		printk(KERN_ERR "FPGAM PIC: failed to allocate irq host!\n");
 		irq = NO_IRQ;

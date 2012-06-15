@@ -15,7 +15,6 @@
 
 #include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/system.h>
 #include <asm/time.h>
 #include <asm/8xx_immap.h>
 #include <asm/cpm1.h>
@@ -122,7 +121,7 @@ static void __init init_ioports(void)
  */
 
 static u16 __iomem *cpld_pic_reg;
-static struct irq_host *cpld_pic_host;
+static struct irq_domain *cpld_pic_host;
 
 static void cpld_mask_irq(struct irq_data *d)
 {
@@ -159,7 +158,7 @@ int cpld_get_irq(void)
 	return ret;
 }
 
-static int cpld_pic_host_map(struct irq_host *h, unsigned int virq,
+static int cpld_pic_host_map(struct irq_domain *h, unsigned int virq,
 			  irq_hw_number_t hw)
 {
 	pr_debug("cpld_pic_host_map(%d, 0x%lx)\n", virq, hw);
@@ -169,7 +168,7 @@ static int cpld_pic_host_map(struct irq_host *h, unsigned int virq,
 	return 0;
 }
 
-static struct irq_host_ops cpld_pic_host_ops = {
+static struct irq_domain_ops cpld_pic_host_ops = {
 	.map = cpld_pic_host_map,
 };
 
@@ -203,7 +202,7 @@ static int cpld_pic_init(void)
 	/* Initialize the CPLD interrupt controller. */
 	hwirq = (unsigned int)virq_to_hw(irq);
 
-	cpld_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &cpld_pic_host_ops, 16);
+	cpld_pic_host = irq_domain_add_linear(np, 16, &cpld_pic_host_ops, NULL);
 	if (cpld_pic_host == NULL) {
 		printk(KERN_ERR "CPLD PIC: failed to allocate irq host!\n");
 		irq = NO_IRQ;

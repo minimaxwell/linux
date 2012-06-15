@@ -14,7 +14,6 @@
 
 #include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/system.h>
 #include <asm/time.h>
 #include <asm/8xx_immap.h>
 #include <asm/cpm1.h>
@@ -34,7 +33,7 @@
  * Controlleur d'IRQ du FPGA Firmware 
  */
 static struct fpgaf *fpgaf_regs;
-static struct irq_host *fpgaf_pic_host;
+static struct irq_domain *fpgaf_pic_host;
 
 static void fpgaf_mask_irq(struct irq_data *d)
 {
@@ -75,7 +74,7 @@ int fpgaf_get_irq(void)
 	return ret;
 }
 
-static int fpgaf_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_number_t hw)
+static int fpgaf_pic_host_map(struct irq_domain *h, unsigned int virq, irq_hw_number_t hw)
 {
 	pr_debug("fpgaf_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
@@ -84,7 +83,7 @@ static int fpgaf_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_numb
 	return 0;
 }
 
-static struct irq_host_ops fpgaf_pic_host_ops = {
+static struct irq_domain_ops fpgaf_pic_host_ops = {
 	.map = fpgaf_pic_host_map,
 };
 
@@ -118,7 +117,7 @@ int fpgaf_pic_init(void)
 	/* Initialize the FPGAF interrupt controller. */
 	hwirq = (unsigned int)virq_to_hw(irq);
 
-	fpgaf_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &fpgaf_pic_host_ops, 16);
+	fpgaf_pic_host = irq_domain_add_linear(np, 16, &fpgaf_pic_host_ops, NULL);
 	if (fpgaf_pic_host == NULL) {
 		printk(KERN_ERR "FPGAF PIC: failed to allocate irq host!\n");
 		irq = NO_IRQ;
