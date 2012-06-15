@@ -56,6 +56,9 @@
 #include <asm/kexec.h>
 #include <asm/ppc-opcode.h>
 #include <asm/rio.h>
+#include <asm/fadump.h>
+#include <asm/switch_to.h>
+#include <asm/debug.h>
 #ifdef CONFIG_8xx
 #include <asm/mpc8xx.h>
 #include <asm/8xx_immap.h>
