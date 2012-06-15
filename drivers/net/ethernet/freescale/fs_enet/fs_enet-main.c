@@ -1015,6 +1015,7 @@ static int fs_init_phy(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	struct phy_device *phydev;
+	phy_interface_t iface;
 
 	fep->oldlink = 0;
 	fep->oldspeed = 0;
@@ -1022,11 +1023,14 @@ static int fs_init_phy(struct net_device *dev)
 	fep->change_time = jiffies;
 	fep->mode = MODE_AUTO;
 
+	iface = fep->fpi->use_rmii ?
+		PHY_INTERFACE_MODE_RMII : PHY_INTERFACE_MODE_MII;
+
 	phydev = of_phy_connect(dev, fep->fpi->phy_node, &fs_adjust_link, 0,
-				PHY_INTERFACE_MODE_MII);
+				iface);
 	if (!phydev) {
 		phydev = of_phy_connect_fixed_link(dev, &fs_adjust_link,
-						   PHY_INTERFACE_MODE_MII);
+						   iface);
 	}
 	if (!phydev) {
 		dev_err(&dev->dev, "Could not attach to PHY\n");
@@ -1038,7 +1042,7 @@ static int fs_init_phy(struct net_device *dev)
 	fep->phy_oldlinks[0] = 0;
 	
 	fep->phydevs[1] = of_phy_connect(dev, fep->fpi->phy_node2, 
-				&fs_adjust_link, 0, PHY_INTERFACE_MODE_MII);
+				&fs_adjust_link, 0, iface);
 	fep->phy_oldlinks[1] = 0;
 
 	if (fep->phydevs[1] && fep->disable_phy == PHY_POWER_DOWN) {
