@@ -3,6 +3,6 @@ Version:
 Section: base
 Priority: optional
 Architecture: powerpc
-Depends: btl(>=3.5.0), ofs(>=3.3.1)
+Depends: btl(>=3.6.0), ofs(>=3.3.1)
 Maintainer: F.TRINH THAI <florent.trinh-thai@c-s.fr>
 Description: install of LINUX_FILE_NAME
