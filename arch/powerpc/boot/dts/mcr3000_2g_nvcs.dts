@@ -312,6 +312,15 @@
 			interrupt-parent = <&FPGAF_PIC>;
 		};
 
+		msg-dsp {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-msg-dsp";
+			reg = <3 0x0 0x300>;
+			interrupts = <0 1>;
+			interrupt-parent = <&FPGAF_PIC>;
+		};
+
 		fpga-loader@4,100009c {
 			#address-cells = <1>;
 			#size-cells = <1>;
