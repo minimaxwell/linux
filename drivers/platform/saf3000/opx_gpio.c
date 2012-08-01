@@ -35,7 +35,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <sysdev/fsl_soc.h>

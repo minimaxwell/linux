@@ -33,7 +33,7 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/device.h>
 #include <asm/prom.h>
 #include <saf3000/saf3000.h>

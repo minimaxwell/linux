@@ -21,7 +21,7 @@
 #include <linux/of_platform.h>
 #include <linux/of.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <saf3000/saf3000.h>

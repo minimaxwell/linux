@@ -34,7 +34,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <linux/leds.h>
@@ -391,7 +391,7 @@ static const struct of_device_id fpgaf_info_match[] = {
 };
 MODULE_DEVICE_TABLE(of, fpgaf_info_match);
 
-static struct of_platform_driver fpgaf_info_driver = {
+static struct platform_driver fpgaf_info_driver = {
 	.probe		= fpgaf_info_probe,
 	.remove		= __devexit_p(fpgaf_info_remove),
 	.driver		= {
