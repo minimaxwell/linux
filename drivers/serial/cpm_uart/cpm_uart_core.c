@@ -781,7 +781,7 @@ static void cpm_uart_init_scc(struct uart_cpm_port *pinfo)
 	cpm_set_scc_fcr(sup);
 
 	out_be16(&sup->scc_genscc.scc_mrblr, pinfo->rx_fifosize);
-	out_be16(&sup->scc_maxidl, pinfo->rx_fifosize);
+	out_be16(&sup->scc_maxidl, 1);
 	out_be16(&sup->scc_brkcr, 1);
 	out_be16(&sup->scc_parec, 0);
 	out_be16(&sup->scc_frmec, 0);
@@ -855,7 +855,7 @@ static void cpm_uart_init_smc(struct uart_cpm_port *pinfo)
 
 	/* Using idle charater time requires some additional tuning.  */
 	out_be16(&up->smc_mrblr, pinfo->rx_fifosize);
-	out_be16(&up->smc_maxidl, pinfo->rx_fifosize);
+	out_be16(&up->smc_maxidl, 1);
 	out_be16(&up->smc_brklen, 0);
 	out_be16(&up->smc_brkec, 0);
 	out_be16(&up->smc_brkcr, 1);
