@@ -26,6 +26,11 @@
 #include <saf3000/dpram.h>
 
 
+/*
+ * 1.0 - 09/08/2012 - creation du module MSG DSP
+ */
+#define	MSG_DSP_VERSION		"1.0"
+
 struct messagerie_data {
 	struct device *dev;
 	struct device *info;
@@ -45,8 +50,13 @@ static struct messagerie_data *data_msg = NULL;
 static ssize_t fs_attr_messagerie_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct messagerie_data *data = dev_get_drvdata(dev);
+	int len = 0;
 	
-	return snprintf(buf, PAGE_SIZE, "by %s\n", data->gestion ? "KERNEL" : "DRIVER");
+	len += snprintf(buf + len, PAGE_SIZE - len, "Le driver messagerie DSP est en version %s\n", MSG_DSP_VERSION);
+	len += snprintf(buf + len, PAGE_SIZE - len, "La messagerie DSP est geree par le %s\n",
+			data->gestion ? "KERNEL" : "DRIVER");
+	
+	return len;
 }
 static DEVICE_ATTR(messagerie, S_IRUGO, fs_attr_messagerie_show, NULL);
 
@@ -115,8 +125,10 @@ void enreg_it_msg(void)
 		ret = request_irq(irq, gest_irq, 0, "messagerie", NULL);
 		if (ret)
 			dev_err(data_msg->dev, "request irq retour %d\n", ret);
-		else
+		else {
 			dev_info(data_msg->dev, "Irq messagerie %d\n", irq);
+			data_msg->gestion = 1;	/* temoin messagerie geree par KERNEL */
+		}
 	}
 	else
 		dev_err(data_msg->dev, "Pb enregistrment IT DSP Messagerie\n");
@@ -199,7 +211,6 @@ static int __devinit messagerie_probe(struct of_device *ofdev, const struct of_d
 		|| (ret = device_create_file(info, &dev_attr_fifo_msg)))
 		goto err_unfile;
 
-//	data->gestion = 1;	/* temoin messagerie geree par KERNEL */
 	data_msg = data;
 	dev_info(dev, "driver messagerie DSP added.\n");
 	return 0;
