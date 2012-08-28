@@ -1,6 +1,8 @@
 #ifndef _SAF3000_H
 #define _SAF3000_H
 
+#ifdef __KERNEL__
+
 #define SAF3000_TFTP_PORT	7883
 
 #define SAF3000_SIP1_PORT	5064
@@ -20,6 +22,8 @@ extern void __init u16_gpiochip_init(const char *);
 extern void fpga_clk_set_brg(void);
 
 extern void gest_led_debug(int led, int cmde);
+
+#endif /* __KERNEL__ */
 		
 #include <linux/ioctl.h>
 
