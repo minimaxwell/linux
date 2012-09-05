@@ -9,7 +9,7 @@
  *
  * Copyright (c) 2010 CSSI
  *
- * Added support for LXT973
+ * Added support for buggy LXT973 rev A2
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
