@@ -66,10 +66,11 @@ static ssize_t fs_attr_fifo_cmd_show(struct device *dev, struct device_attribute
 	short *ades = data->ades;
 	int len = 0, i;
 	len += snprintf(buf + len, PAGE_SIZE - len, "La fifo \"commande\" (indice ecriture %d) :\n", data->ix_wr_cmd);
-	for (i = 0; i < 32; i++, ades += 3)
-		len += snprintf(buf + len, PAGE_SIZE - len, "%02d (%03d/%03d) = 0x%04hX, 0x%04hX, 0x%04hX\n",
-				i, data->cmde[i] & 0xff, data->cmde[i] >> 8, *ades, *(ades + 1), *(ades + 2));
-	
+	for (i = 0; i < 32; i++, ades += 3) {
+		len += snprintf(buf + len, PAGE_SIZE - len, "%s %02d (%04hX > %03hhu/%03hhu) = %04hX %04hX %04hX\n",
+				(i == data->ix_wr_cmd) ? ">" : " ", i, data->cmde[i], data->cmde[i],
+				data->cmde[i] >> 8, *ades, *(ades + 1), *(ades + 2));
+	}
 	return len;
 }
 static DEVICE_ATTR(fifo_cmd, S_IRUGO, fs_attr_fifo_cmd_show, NULL);
@@ -81,8 +82,9 @@ static ssize_t fs_attr_fifo_msg_show(struct device *dev, struct device_attribute
 	int len = 0, i;
 	len += snprintf(buf + len, PAGE_SIZE - len, "La fifo \"message\" (indice lecture %d) :\n", data->ix_rd_msg);
 	for (i = 0; i < 96; i++, ades += 3)
-		len += snprintf(buf + len, PAGE_SIZE - len, "%02d (%03d/%03d) = 0x%04hX, 0x%04hX, 0x%04hX\n",
-				i, data->mesg[i] & 0xff, data->mesg[i] >> 8, *ades, *(ades + 1), *(ades + 2));
+		len += snprintf(buf + len, PAGE_SIZE - len, "%s %02d (%04hX > %03hhu/%03hhu) = %04hX %04hX %04hX\n",
+				(i == data->ix_rd_msg) ? ">" : " ", i, data->mesg[i], data->mesg[i],
+				data->mesg[i] >> 8, *ades, *(ades + 1), *(ades + 2));
 	
 	return len;
 }
@@ -191,16 +193,6 @@ static int __devinit messagerie_probe(struct of_device *ofdev, const struct of_d
 		goto err_unmap;
 	}
 
-/*	irq = of_irq_to_resource(np, 0, NULL);
-	if (irq) {
-		data->irq = irq;
-		ret = request_irq(irq, gest_irq, 0, "messagerie", NULL);
-		if (ret)
-			dev_err(dev, "request irq retour %d\n", ret);
-	}
-	else
-		dev_err(dev, "Pb enregistrment IT DSP Messagerie\n");
-*/
 	class = saf3000_class_get();
 	info = device_create(class, dev, MKDEV(0, 0), NULL, "msg_dsp");
 	dev_set_drvdata(info, data);
