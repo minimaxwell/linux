@@ -1416,7 +1416,7 @@ static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribut
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 
-	ctrl = phy_read(phydevs[0], MII_BMCR);
+	ctrl = phy_read(fep->phydevs[0], MII_BMCR);
 	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[0]->link ? 2 : 1);
 }
 
@@ -1428,7 +1428,7 @@ static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribut
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 	
-	ctrl = phy_read(phydevs[1], MII_BMCR);
+	ctrl = phy_read(fep->phydevs[1], MII_BMCR);
 	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[1]->link ? 2 : 1);
 }
 
