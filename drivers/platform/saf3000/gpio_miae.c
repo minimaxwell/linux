@@ -54,15 +54,17 @@ static ssize_t fs_attr_infos_show(struct device *dev, struct device_attribute *a
 	int len_info = 0, len = 0, i;
 	const char *info = of_get_property(np, "codec", &len_info);
 	
+	len += snprintf(buf + len, PAGE_SIZE - len, "Codec/Canal/Test/Fonction\n");
 	for (i = 0; ((i < 12) && (len_info > 0)); i++) {
 		int lg = strlen(info) + 1;
-		len += snprintf(buf + len, PAGE_SIZE - len, "Codec %d Canal in %d = %s\n", (i / 4) + 1, (i % 4) + 1, info);
+		len += snprintf(buf + len, PAGE_SIZE - len, "  %d   in %d   %2d  %s\n", (i / 4) + 1, (i % 4) + 1, i + 1, info);
 		info += lg;
 		len_info -= lg;
 	}
+	len += snprintf(buf + len, PAGE_SIZE - len, "\nCodec/Canal/Test/Fonction\n");
 	for (i = 0; ((i < 12) && (len_info > 0)); i++) {
 		int lg = strlen(info) + 1;
-		len += snprintf(buf + len, PAGE_SIZE - len, "Codec %d Canal out %d = %s\n", (i / 4) + 1, (i % 4) + 1, info);
+		len += snprintf(buf + len, PAGE_SIZE - len, "  %d   out %d  %2d  %s\n", (i / 4) + 1, (i % 4) + 1, i + 1, info);
 		info += lg;
 		len_info -= lg;
 	}
@@ -103,10 +105,13 @@ static int __devinit gpios_probe(struct of_device *ofdev, const struct of_device
 	}
 	data->type_far = (*fpgam >> 5) & 0x07;
 	data->type_fav = (*(fpgam + 1) >> 13) & 0x07;
-	dev_info(dev,"FAR %d FAV %d\n", data->type_far, data->type_fav);
+	dev_info(dev,"Ident face AR : %d, ident face AV : %d\n", data->type_far, data->type_fav);
 	iounmap(fpgam);
 
-	names = of_get_property(np, "names", &len_names);
+	if (data->type_far == 1)
+		names = of_get_property(np, "names_nvcs", &len_names);
+	else
+		names = of_get_property(np, "names", &len_names);
 	
 	if (data->gpios_ngpios < 1) {
 		dev_err(dev, "missing GPIO definition in device tree\n");

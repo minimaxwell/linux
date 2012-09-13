@@ -221,16 +221,16 @@ static ssize_t fs_attr_type_face_show(struct device *dev, struct device_attribut
 	struct fpgam *fpgam = data->fpgam;
 	u16 info;
 	char face[10], type[20];
-	if (strncmp(attr->attr.name, "fav", 3) == 0) {
-		info = in_be16(&fpgam->gest_fav) >> 14;
+	if (strncmp(&attr->attr.name[5], "fav", 3) == 0) {
+		info = in_be16(&fpgam->gest_fav) >> 13;
 		sprintf(face, "FAV");
 	}
 	else {
-		info = in_be16(&fpgam->gest_far) >> 6;
+		info = in_be16(&fpgam->gest_far) >> 5;
 		sprintf(face, "FAR");
 	}
-	if (EXTRACT(info,0,2) == 2) sprintf(type, "FABEC");
-	else if (EXTRACT(info,0,2) == 3) sprintf(type, "CLA2000");
+	if (EXTRACT(info,0,3) == 0) sprintf(type, "CLA2000");
+	else if (EXTRACT(info,0,3) == 1) sprintf(type, "NVCS");
 	else sprintf(type, "non defini");
 	return snprintf(buf, PAGE_SIZE, "La %s est de type %s\n", face, type);
 }
