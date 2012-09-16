@@ -1417,20 +1417,24 @@ static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_
 
 static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+	int ctrl;
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 
-	return sprintf(buf, "%d\n", fep->phydev != fep->phydevs[0]? 0 : fep->phydevs[0]->link ?2:1);
+	ctrl = phy_read(fep->phydevs[0], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[0]->link ? 2 : 1);
 }
 
 static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
 
 static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+	int ctrl;
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fs_enet_private *fep = netdev_priv(ndev);
 	
-	return sprintf(buf, "%d\n", fep->phydev != fep->phydevs[1]? 0 : fep->phydevs[1]->link ?2:1);
+	ctrl = phy_read(fep->phydevs[1], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[1]->link ? 2 : 1);
 }
 
 static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);

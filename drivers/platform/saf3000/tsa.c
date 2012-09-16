@@ -41,21 +41,27 @@
 #include <sysdev/fsl_soc.h>
 #include <asm/8xx_immap.h>
 #include <saf3000/saf3000.h>
+#include <asm/cpm1.h>
 #include "tsa.h"
 
 /*
  * driver TSA
  */
+/*
+ * 1.0 - xx/xx/2011 - creation du module TSA
+ * 1.1 - 09/08/2012 - evolution pour gestion MCR3K-2G NVCS
+ */
+#define	TSA_VERSION		"1.1"
+
 struct tsa_data {
-	int carte;
+//	int carte;
 	struct device *dev;
 	struct device *infos;
-	cpm8xx_t *cpm;
 };
 
 #define EXTRACT(x,dec,bits)	((x>>dec) & ((1<<bits)-1))
-#define CARTE_MCR3K_2G		1
-#define CARTE_MIAE		2
+//#define CARTE_MCR3K_2G		1
+//#define CARTE_MIAE		2
 
 static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -77,6 +83,16 @@ static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *a
 }
 static DEVICE_ATTR(debug, S_IRUGO, fs_attr_debug_show, NULL);
 
+static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int len = 0;
+
+	len = snprintf(buf, PAGE_SIZE, "Le driver TSA est en version %s\n", TSA_VERSION);
+	
+	return len;
+}
+static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
+
 static const struct of_device_id tsa_match[];
 static int __devinit tsa_probe(struct platform_device *ofdev)
 {
@@ -89,13 +105,12 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 	cpm8xx_t *cpm;
 	cpic8xx_t *cpic;
 	int ret, i, nb_ts, inter = 0;
-	u32 simode = 0, siram_a = 0, sicr = 0, siram_b = 0, simode_tdma;
+	u32 siram_a = 0, siram_b = 0, ts_enreg = 0, simode_tdma;
 	siram_entry *siram_rx, *siram_tx;
 	volatile immap_t *immap = ioremap(get_immrbase(),sizeof(*immap));
 	const char *scc = NULL;
 	const __be32 *info_ts = NULL;
 	int len_scc = 0, len_info = 0, offset = 0;
-	const void *prop = 0;
 
 	match = of_match_device(tsa_match, &ofdev->dev);
 	if (!match)
@@ -118,108 +133,69 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
 
-	/* recherche type de carte support MIAE ou MCR3K-2G */
-	np = of_find_compatible_node(NULL, NULL, "fsl,cmpc885");
-	if (np) {
-		prop = of_get_property(np, "model", NULL);
-		if (prop) {
-			if (strcmp(prop, "MCR3000_2G") == 0)
-				data->carte = CARTE_MCR3K_2G;
-			else if (strcmp(prop, "MIAE") == 0)
-				data->carte = CARTE_MIAE;
-		}
-	}
-	np = dev->of_node;
-	if (data->carte)
-		dev_info(dev, "La carte support est %s.\n", (data->carte == CARTE_MIAE) ? "MIAe" : "MCR3K-2G");
-	else {
-		ret = -EINVAL;
-		goto err;
-	}
-
-	if (data->carte == CARTE_MIAE) {
-		scc = of_get_property(np, "scc_codec", &len_scc);
-		if (!scc || (len_scc < sizeof(*scc))) {
-			ret = -EINVAL;
-			goto err;
-		}
-		if (sysfs_streq(scc, "SCC3")) siram_a = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
-		else if (sysfs_streq(scc, "SCC4")) siram_a = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-		else if (sysfs_streq(scc, "SMC2")) siram_a = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
+	/* releve des informations du TSA */
+	scc = of_get_property(np, "scc_codec", &len_scc);
+	/* TSA du MIAE */
+	if (scc && (len_scc >= sizeof(*scc))) {
+		siram_a = SIRAM_BYT;
+		if (sysfs_streq(scc, "SCC3")) siram_a |= SIRAM_CSEL_SCC3;
+		else if (sysfs_streq(scc, "SCC4")) siram_a |= SIRAM_CSEL_SCC4;
+		else if (sysfs_streq(scc, "SMC2")) siram_a |= SIRAM_CSEL_SMC2;
 		else siram_a = 0;
-
-		scc = NULL;
 		scc = of_get_property(np, "scc_e1", &len_scc);
-		if (!scc || (len_scc < sizeof(*scc))) {
-			ret = -EINVAL;
-			goto err;
+		if (scc && (len_scc >= sizeof(*scc))) {
+			siram_b = SIRAM_BYT;
+			if (sysfs_streq(scc, "SCC3")) siram_b |= SIRAM_CSEL_SCC3;
+			else if (sysfs_streq(scc, "SCC4")) siram_b |= SIRAM_CSEL_SCC4;
+			else if (sysfs_streq(scc, "SMC2")) siram_b |= SIRAM_CSEL_SMC2;
 		}
-		if (sysfs_streq(scc, "SCC3")) siram_b = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
-		else if (sysfs_streq(scc, "SCC4")) siram_b = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-		else if (sysfs_streq(scc, "SMC2")) siram_b = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-		else siram_b = SIRAM_BYT;	/* positionnement des TS E1 meme si non definis */
-		
-		/* codecs et lien e1 sur SCC different */
-		if (siram_a == siram_b) {
-			ret = -EINVAL;
-			goto err;
-		}
-
+		/* releve recurrence des TS E1 */
 		info_ts = of_get_property(np, "ts_info", &len_info);
-		if (!info_ts || (len_info < sizeof(*info_ts))) {
+		if (info_ts && (len_info >= sizeof(*info_ts))) {
+			len_info /= sizeof(__be32);
+			if ((len_info == 2) && (info_ts[0] < (info_ts[1] / 2))
+				&& ((info_ts[1] == 4) || (info_ts[1] == 8)))
+				inter = info_ts[1] / 2;
+		}
+		/* verification que tous les parametres soient corrects */
+		if ((siram_a == 0) || (siram_b == 0) || (inter == 0)) {
 			ret = -EINVAL;
 			goto err;
 		}
-		len_info /= sizeof(__be32);
-
-		/* vérification SCC pour TS codec */
-		if (!siram_a) {
-			ret = -EINVAL;
-			goto err;
-		}
-		siram_a |= SIRAM_BYT;
-
-		/* vérification parametres E1 */
-		if (!siram_b || (len_info != 2) || ((info_ts[1] != 4) && (info_ts[1] != 8))
-			|| (info_ts[0] >= (info_ts[1] / 2))) {
-			ret = -EINVAL;
-			goto err;
-		}
-		siram_b |= SIRAM_BYT;
-		inter = info_ts[1] / 2;
 	}
+	/* TSA de la MCR3K-2G */
 	else {
 		scc = of_get_property(np, "scc_voie", &len_scc);
-		if (!scc || (len_scc < sizeof(*scc))) {
-			ret = -EINVAL;
-			goto err;
+		if (scc && (len_scc >= sizeof(*scc))) {
+			siram_a = SIRAM_BYT;
+			if (sysfs_streq(scc, "SCC3")) siram_a |= SIRAM_CSEL_SCC3;
+			else if (sysfs_streq(scc, "SCC4")) siram_a |= SIRAM_CSEL_SCC4;
+			else if (sysfs_streq(scc, "SMC2")) siram_a |= SIRAM_CSEL_SMC2;
 		}
-		if (sysfs_streq(scc, "SCC3")) siram_a = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
-		else if (sysfs_streq(scc, "SCC4")) siram_a = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-		else if (sysfs_streq(scc, "SMC2")) siram_a = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-		else siram_a = SIRAM_BYT;	/* positionnement des TS voie meme si non definis */
-
-		scc = NULL;
 		scc = of_get_property(np, "scc_retard", &len_scc);
-		if (!scc || (len_scc < sizeof(*scc))) {
+		if (scc && (len_scc >= sizeof(*scc))) {
+			siram_b = SIRAM_BYT;
+			if (sysfs_streq(scc, "SCC3")) siram_b |= SIRAM_CSEL_SCC3;
+			else if (sysfs_streq(scc, "SCC4")) siram_b |= SIRAM_CSEL_SCC4;
+			else if (sysfs_streq(scc, "SMC2")) siram_b |= SIRAM_CSEL_SMC2;
+			else siram_b = 0;
+		}
+		/* TS supplementaires pour enregistrement */
+		info_ts = of_get_property(np, "ts_enreg", &len_info);
+		if (info_ts && (len_info >= sizeof(*info_ts)) && (len_info == sizeof(__be32)))
+			ts_enreg = info_ts[0];
+		/* verification que tous les parametres soient corrects */
+		/* voies GRS definies et ts_enreg <= 64 TS */
+		if ((siram_a == 0) && (ts_enreg <= 64)) {
 			ret = -EINVAL;
 			goto err;
 		}
-		if (sysfs_streq(scc, "SCC3")) siram_b = SIRAM_CSEL_SCC3, sicr |= SICR_SC3;
-		else if (sysfs_streq(scc, "SCC4")) siram_b = SIRAM_CSEL_SCC4, sicr |= SICR_SC4;
-		else if (sysfs_streq(scc, "SMC2")) siram_b = SIRAM_CSEL_SMC2, simode |= SIMODE_SMC2;
-		else siram_b = 0;
-		
-		/* voies et retard sur SCC different */
-		if (siram_a == siram_b) {
-			ret = -EINVAL;
-			goto err;
-		}
+	}
 
-		if (siram_a)
-			siram_a |= SIRAM_BYT;
-		if (siram_b)
-			siram_b |= SIRAM_BYT;
+	/* affectation differente sur les SCCs */
+	if (siram_a == siram_b) {
+		ret = -EINVAL;
+		goto err;
 	}
 
 	cpm = of_iomap(np, 0);
@@ -228,7 +204,6 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 		ret = -ENOMEM;
 		goto err;
 	}
-	data->cpm = cpm;
 	
 	class = saf3000_class_get();
 	infos = device_create(class, dev, MKDEV(0, 0), NULL, "tsa");
@@ -238,7 +213,7 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 	siram_rx = (siram_entry*)&cpm->cp_siram;
 	siram_tx = (siram_entry*)&cpm->cp_siram + 64;
 
-	if (data->carte == CARTE_MIAE) {
+	if (inter) {
 		/* programmation des TimeSlots : 31 TS phonie E1 et 12 TS phonie Codec */
 		/* programmation des premiers TS non utilises TS0 E1 + interval E1 */
 		nb_ts = info_ts[0] + inter;
@@ -277,46 +252,61 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 		out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
 	}
 	else {
+		u32 siram = SIRAM_LST;
+		/* si TS enreg => programmation obligatoire des TS retard */
+		if (ts_enreg) siram_b |= SIRAM_BYT;
 		/* programmation des 16 TimeSlots voies */
+		if (siram_b) nb_ts = 16; else nb_ts = 15, siram |= siram_a;
+		out_be32(siram_rx + offset, siram_a | SIRAM_CNT(nb_ts));
+		out_be32(siram_tx + offset, siram_a | SIRAM_CNT(nb_ts));
+		offset++;
 		if (siram_b) {
-			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(16));
-			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(16));
-			offset++;
-			/* programmation des 32 TimeSlots retard */
 			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(16));
 			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(16));
 			offset++;
-			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(15));
-			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(15));
+			if (ts_enreg) nb_ts = 16; else nb_ts = 15, siram |= siram_b;
+			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(nb_ts));
+			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(nb_ts));
 			offset++;
-			siram_b |= SIRAM_LST;
-			out_be32(siram_rx + offset, siram_b | SIRAM_CNT(1));
-			out_be32(siram_tx + offset, siram_b | SIRAM_CNT(1));
 		}
-		else {
-			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(15));
-			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(15));
-			offset++;
-			siram_a |= SIRAM_LST;
-			out_be32(siram_rx + offset, siram_a | SIRAM_CNT(1));
-			out_be32(siram_tx + offset, siram_a | SIRAM_CNT(1));
+		if (ts_enreg) {
+			while (ts_enreg > 16) {
+				out_be32(siram_rx + offset, siram_a | SIRAM_CNT(16));
+				out_be32(siram_tx + offset, siram_a | SIRAM_CNT(16));
+				offset++;
+				ts_enreg -= 16;
+			}
+			if (ts_enreg > 1) {
+				out_be32(siram_rx + offset, siram_a | SIRAM_CNT(ts_enreg - 1));
+				out_be32(siram_tx + offset, siram_a | SIRAM_CNT(ts_enreg - 1));
+				offset++;
+			}
+			siram |= siram_a;
 		}
+		out_be32(siram_rx + offset, siram | SIRAM_CNT(1));
+		out_be32(siram_tx + offset, siram | SIRAM_CNT(1));
 	}
 
 	simode_tdma = (SIMODE_SDM_NORM | SIMODE_RFSD_0 | SIMODE_CRT | SIMODE_FE | SIMODE_GM | SIMODE_TFSD_0);
-	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode_tdma) | simode);
-	
-	setbits32(&cpm->cp_sicr, sicr);
-
+	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode_tdma));
+//	out_be32(&cpm->cp_simode, (in_be32(&cpm->cp_simode) & ~SIMODE_TDMa(SIMODE_TDM_MASK)) | SIMODE_TDMa(simode_tdma) | simode);
+//	
+//	setbits32(&cpm->cp_sicr, sicr);
+//
 	/* SCC4 a la priorite la plus haute dans son niveau de priorite */ 
 	cpic = of_iomap(np, 1);
-	if (sicr & SICR_SC4)
+	if ((siram_a & SIRAM_CSEL_SCC4) || (siram_b & SIRAM_CSEL_SCC4))
 		clrsetbits_be32(&cpic->cpic_cicr, CICR_HP_MASK, CICR_HP_SCC4);
 	iounmap(cpic);
 	
 	out_8(&cpm->cp_sigmr, SIGMR_ENa | SIGMR_RDM_STATIC_TDMa);
+	iounmap(cpm);
 	
 	if ((ret=device_create_file(infos, &dev_attr_debug))) {
+		goto err_unfile;
+	}
+	if ((ret=device_create_file(infos, &dev_attr_version))) {
+		device_remove_file(infos, &dev_attr_debug);
 		goto err_unfile;
 	}
 	
@@ -325,10 +315,8 @@ static int __devinit tsa_probe(struct platform_device *ofdev)
 	return 0;
 
 err_unfile:
-	device_remove_file(infos, &dev_attr_debug);
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
-	iounmap(data->cpm), data->cpm = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 err:
@@ -342,9 +330,9 @@ static int __devexit tsa_remove(struct platform_device *ofdev)
 	struct device *infos = data->infos;
 	
 	device_remove_file(infos, &dev_attr_debug);
+	device_remove_file(infos, &dev_attr_version);
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
-	iounmap(data->cpm), data->cpm = NULL;
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 	

@@ -44,11 +44,18 @@
 #include <asm/cpm1.h>
 #include <asm/irq.h>
 #include <saf3000/saf3000.h>
+#include "tsa.h"
 
 
 /*
  * driver TDM
  */
+/*
+ * 1.0 - xx/xx/2011 - creation du module TDM
+ * 1.1 - 09/08/2012 - evolution pour gestion MCR3K-2G NVCS
+ */
+#define	TDM_VERSION		"1.1"
+
 #define UART_SCCM_TXE		((ushort)0x0010)
 
 /* nombre de canaux pour gestion TDM MIAE */
@@ -70,7 +77,8 @@
 #define PCM_RETARD_MINOR	243
 #define PCM_NB_TXBD		15	/* multiple de 5 pour écriture en 1 passe */
 #define PCM_NB_RXBD		2
-#define FIRST_TXBD_WRITE	10	/* delai par defaut pour ecriture (multiple de 5) */
+#define DELAY_READ		5	/* delai de lecture par defaut (5ms) */
+#define FIRST_TXBD_WRITE	10	/* delai pour ecriture (multiple de 5 et > DELAY_READ) */
 #define MAX_DELAY_MS		100	/* nombre de ms max (multiple de 5) */
 #define PCM_NB_TXBD_DELAY	(MAX_DELAY_MS + FIRST_TXBD_WRITE)
 
@@ -80,15 +88,12 @@
 #define TYPE_SCC4		4
 #define TYPE_SMC1		5
 #define TYPE_SMC2		6
+
 #define NAME_CODEC_DEVICE	"pcm"
 //#define NAME_CODEC_DEVICE	"pcm_codec"
 #define NAME_E1_DEVICE		"pcm_e1"
 #define NAME_VOIE_DEVICE	"pcm_voie"
 #define NAME_RETARD_DEVICE	"pcm_retard"
-
-#define CARTE_MCR3K_2G		1
-#define CARTE_MCR3K_2G_DELAY	2
-#define CARTE_MIAE		3
 
 
 union cp_ades {
@@ -121,10 +126,11 @@ struct tdm_data {
 	struct device		*dev;
 	struct device		*infos;
 	union cp_ades		cp_ades;
-	int			carte;
+	cpm8xx_t		*cpm;
 	int			irq;
 	int			irq_active;
 	sccp_t			*pram;
+	struct miscdevice 	*device;
 	struct cpm_buf_desc __iomem	*tx_bd;
 	struct cpm_buf_desc __iomem	*rx_bd;
 	char			*rx_buf[PCM_NB_RXBD];
@@ -195,6 +201,16 @@ static ssize_t fs_attr_debug_show(struct device *dev, struct device_attribute *a
 	return l;
 }
 static DEVICE_ATTR(debug, S_IRUGO, fs_attr_debug_show, NULL);
+
+static ssize_t fs_attr_version_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int len = 0;
+
+	len = snprintf(buf, PAGE_SIZE, "Le driver TDM est en version %s\n", TDM_VERSION);
+	
+	return len;
+}
+static DEVICE_ATTR(version, S_IRUGO, fs_attr_version_show, NULL);
 
 static ssize_t fs_attr_stat_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -415,7 +431,7 @@ static unsigned int pcm_poll(struct file *file, poll_table *wait)
 
 static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
-	int ret, i;
+	int i, canal, ix_wr = 0, ix_lct = 0;
 	struct tdm_data *data = NULL;
 	struct gest_std *gest; 
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
@@ -431,18 +447,24 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 	if (data == NULL)
 		return -ENODEV;
 	
-	if (count != (NB_BYTE_BY_5_MS * data->nb_canal)) {
+	if ((count > (NB_BYTE_BY_5_MS * data->nb_canal)) || (count % NB_BYTE_BY_5_MS))
 		return -EINVAL;
-	}
-	ret = access_ok(VERFIFY_READ, buf, count);
-	if (ret == 0) {
+	if (access_ok(VERFIFY_READ, buf, count) == 0)
 		return -EFAULT;
-	}
 	
 	gest = &data->fct.std;
 	/* ecriture des canaux */
 	gest->ix_trft = gest->ix_wr;
-	__copy_from_user(gest->tx_buf[gest->ix_trft], buf, count);
+	if (count == (NB_BYTE_BY_5_MS * data->nb_canal))
+		__copy_from_user(gest->tx_buf[gest->ix_trft], buf, count);
+	else {
+		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+			for (canal = 0; canal < (count / NB_BYTE_BY_5_MS); canal++)
+				gest->tx_buf[gest->ix_trft][ix_wr++] = buf[ix_lct++];
+			for (; canal < data->nb_canal; canal++)
+				gest->tx_buf[gest->ix_trft][ix_wr++] = 0xD5;
+		}
+	}
 	for (i = gest->ix_trft; i < (gest->ix_trft + NB_DESC_EM_BY_5_MS); i++) {
 		out_be32(&(data->tx_bd + i)->cbd_bufaddr, gest->phys_tx_buf[i]);
 		gest->octet_em[i] = NB_BYTE_BY_MS * data->nb_canal;
@@ -454,7 +476,7 @@ static ssize_t pcm_write(struct file *file, const char __user *buf, size_t count
 static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			  unsigned long nr_segs, loff_t pos)
 {
-	int i, canal;
+	int i, canal, a_ecrire;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	struct gest_std *gest; 
@@ -471,24 +493,34 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	if (data == NULL)
 		return -1;
 	
-	if (nr_segs != data->nb_canal)
-		return -EINVAL;
+	if (nr_segs < data->nb_canal)
+		a_ecrire = nr_segs;
+	else
+		a_ecrire = data->nb_canal;
 		
 	gest = &data->fct.std;
 	/* ecriture des canaux */
 	gest->ix_trft = gest->ix_wr;
 	for (canal = 0; canal < data->nb_canal; canal++) {
-		/* test taille buffer >= taille nécessaire pour transfert */
-		if (iov->iov_len < NB_BYTE_BY_5_MS)
-			return -EINVAL;
-		if (!access_ok(VERIFY_READ, iov->iov_base, NB_BYTE_BY_5_MS))
-			return -EFAULT;
-		pread = (u8 *)iov->iov_base;
 		pwrite = &gest->tx_buf[gest->ix_trft][canal];
-		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-			*pwrite = *pread;
-			pread++;
-			pwrite += data->nb_canal;
+		if (iov->iov_base && iov->iov_len && (canal < a_ecrire)) {
+			/* test taille buffer >= taille nécessaire pour transfert */
+			if (iov->iov_len < NB_BYTE_BY_5_MS)
+				return -EINVAL;
+			if (!access_ok(VERIFY_READ, iov->iov_base, NB_BYTE_BY_5_MS))
+				return -EFAULT;
+			pread = (u8 *)iov->iov_base;
+			for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+				*pwrite = *pread;
+				pread++;
+				pwrite += data->nb_canal;
+			}
+		}
+		else {
+			for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+				*pwrite = 0xD5;
+				pwrite += data->nb_canal;
+			}
 		}
 		iov++;
 	}
@@ -502,7 +534,7 @@ static ssize_t pcm_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-	int ret;
+	int i, canal, ix_wr = 0, ix_lct = 0;
 	struct tdm_data *data = NULL;
 	struct gest_std *gest; 
 	int minor = MINOR(file->f_dentry->d_inode->i_rdev);
@@ -518,13 +550,10 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	if (data == NULL)
 		return -ENODEV;
 	
-	if (count != (NB_BYTE_BY_5_MS * data->nb_canal)) {
+	if ((count > (NB_BYTE_BY_5_MS * data->nb_canal)) || (count % NB_BYTE_BY_5_MS))
 		return -EINVAL;
-	}
-	ret = access_ok(VERFIFY_WRITE, buf, count);
-	if (ret == 0) {
+	if (access_ok(VERFIFY_WRITE, buf, count) == 0)
 		return -EFAULT;
-	}
 
 	gest = &data->fct.std;
 	if (data->octet_recu == 0) {
@@ -535,7 +564,15 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 	}
 		
 	/* lecture des canaux */
-	ret = __copy_to_user((void*)buf, data->rx_buf[data->ix_rx_lct], count);
+	if (count == (NB_BYTE_BY_5_MS * data->nb_canal))
+		__copy_to_user((void*)buf, data->rx_buf[data->ix_rx_lct], count);
+	else {
+		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+			ix_lct = i * data->nb_canal;
+			for (canal = 0; canal < (count / NB_BYTE_BY_5_MS); canal++)
+				buf[ix_wr++] = data->rx_buf[data->ix_rx_lct][ix_lct++];
+		}
+	}
 	data->octet_recu = 0;
 
 	return count;
@@ -544,7 +581,7 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 				unsigned long nr_segs, loff_t pos)
 {
-	int i, canal, nb_byte = 0;
+	int i, canal, nb_byte = 0, a_lire = 0;
 	u8 *pread, *pwrite;
 	struct tdm_data *data = NULL;
 	struct gest_std *gest; 
@@ -561,8 +598,10 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	if (data == NULL)
 		return -ENODEV;
 	
-	if (nr_segs != data->nb_canal)
-		return -EINVAL;
+	if (nr_segs < data->nb_canal)
+		a_lire = nr_segs;
+	else
+		a_lire = data->nb_canal;
 		
 	gest = &data->fct.std;
 	if (data->octet_recu == 0) {
@@ -573,23 +612,25 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	}
 
 	/* lecture des canaux */
-	for (canal = 0; canal < data->nb_canal; canal++) {
-		/* test taille buffer >= taille nécessaire pour transfert */
-		if (iov->iov_len < NB_BYTE_BY_5_MS)
-			return -EINVAL;
-		if (!access_ok(VERFIFY_WRITE, iov->iov_base, NB_BYTE_BY_5_MS))
-			return -EFAULT;
-		pwrite = (u8 *)iov->iov_base;
-      		pread = &data->rx_buf[data->ix_rx_lct][canal];
-      		for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
-			*pwrite = *pread;
-			pwrite++;
-			pread += data->nb_canal;
+	for (canal = 0; canal < a_lire; canal++) {
+		if (iov->iov_base && iov->iov_len) {	/* parametres null => pas de transfert du canal */
+			/* test taille buffer >= taille nécessaire pour transfert */
+			if (iov->iov_len < NB_BYTE_BY_5_MS)
+				return -EINVAL;
+			if (!access_ok(VERFIFY_WRITE, iov->iov_base, NB_BYTE_BY_5_MS))
+				return -EFAULT;
+			pwrite = (u8 *)iov->iov_base;
+	      		pread = &data->rx_buf[data->ix_rx_lct][canal];
+      			for (i = 0; i < NB_BYTE_BY_5_MS; i++) {
+				*pwrite = *pread;
+				pwrite++;
+				pread += data->nb_canal;
+			}
 		}
 		nb_byte += NB_BYTE_BY_5_MS;
 		iov++;
 	}
-	if (nb_byte == (NB_BYTE_BY_5_MS * data->nb_canal))
+	if (nb_byte == (NB_BYTE_BY_5_MS * a_lire))
 		data->octet_recu = 0;	
 
 	return(nb_byte);
@@ -643,11 +684,11 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 					break;
 				}
 				if (info.delay < FIRST_TXBD_WRITE)
-					gest->delay[info.ident] = FIRST_TXBD_WRITE;
+					gest->delay[info.ident] = (FIRST_TXBD_WRITE - DELAY_READ);
 				else {
 					/* delai multiple de 5 */
 					info.delay /= 5;
-					gest->delay[info.ident] = info.delay * 5;
+					gest->delay[info.ident] = (info.delay * 5) - DELAY_READ;
 				}
 			}
 			else {
@@ -699,10 +740,73 @@ static int pcm_open(struct inode *inode, struct file *file)
 	if (test_and_set_bit(0, &data->open))
 		return -EBUSY;
 
-	if (data->carte != CARTE_MCR3K_2G_DELAY)
-		ret = request_irq(data->irq, pcm_interrupt, 0, name, data);
-	else if (data->irq_active == 0)
-		ret = request_irq(data->irq, pcm_delay_interrupt, 0, name, data);
+	if (data->irq_active == 0) {
+		if (minor != PCM_RETARD_MINOR) {
+			ret = request_irq(data->irq, pcm_interrupt, 0, name, data);
+			if (ret) return ret;
+		}
+		else {
+			ret = request_irq(data->irq, pcm_delay_interrupt, 0, name, data);
+			if (ret) return ret;
+		}
+	}
+
+	if (data->irq_active == 0) {
+		if (data->flags == TYPE_SCC1)
+			setbits32(&data->cpm->cp_sicr, SICR_SC1);
+		if (data->flags == TYPE_SCC2)
+			setbits32(&data->cpm->cp_sicr, SICR_SC2);
+		if (data->flags == TYPE_SCC3)
+			setbits32(&data->cpm->cp_sicr, SICR_SC3);
+		if (data->flags == TYPE_SCC4)
+			setbits32(&data->cpm->cp_sicr, SICR_SC4);
+		if (data->flags == TYPE_SMC1)
+			setbits32(&data->cpm->cp_sicr, SIMODE_SMC1);
+		if (data->flags == TYPE_SMC2)
+			setbits32(&data->cpm->cp_sicr, SIMODE_SMC2);
+
+		/* Initialize parameter ram. */
+		out_be16(&data->pram->scc_rbase, (void*)data->rx_bd-cpm_dpram_addr(0));
+		out_be16(&data->pram->scc_tbase, (void*)data->tx_bd-cpm_dpram_addr(0));
+		out_8(&data->pram->scc_tfcr, CPMFCR_EB);
+		out_8(&data->pram->scc_rfcr, CPMFCR_EB);
+		out_be16(&data->pram->scc_mrblr, (NB_BYTE_BY_5_MS * data->nb_canal));
+	
+		cpm_command(data->command, CPM_CR_INIT_TRX);
+		if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
+			out_be16(&data->cp_ades.cp_smc->smc_smcmr, 0);
+			out_be16(&data->cp_ades.cp_smc->smc_smcmr, smcr_mk_clen(15) | SMCMR_SM_TRANS);
+			setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_REN);
+			setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_TEN);
+		}
+		else {
+			out_be32(&data->cp_ades.cp_scc->scc_gsmrl, 0);
+			out_be32(&data->cp_ades.cp_scc->scc_gsmrh,
+				SCC_GSMRH_REVD | SCC_GSMRH_TRX | SCC_GSMRH_TTX | SCC_GSMRH_CDS | SCC_GSMRH_CTSS | SCC_GSMRH_CDP | SCC_GSMRH_CTSP);
+			out_be32(&data->cp_ades.cp_scc->scc_gsmrl, SCC_GSMRL_ENR | SCC_GSMRL_ENT);
+		}
+dev_info(data->dev, "Initialisation SCC (flag %d)\n", data->flags);
+	}
+
+	/* pour retard une fois seulement, autres chaque fois */
+	if ((minor != PCM_RETARD_MINOR) || (data->irq_active == 0)) {
+		if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
+			/* initialisation des descripteurs Tx */
+			setbits8(&data->cp_ades.cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
+			setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
+			/* initialisation des descripteurs Rx */
+			setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
+		}
+		else {
+			/* initialisation des descripteurs Tx */
+			setbits16(&data->cp_ades.cp_scc->scc_sccm, UART_SCCM_TXE | UART_SCCM_TX);
+			setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_TXE | UART_SCCM_TX);
+			/* initialisation des descripteurs Rx */
+			setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
+		}
+dev_info(data->dev, "Activation descripteurs (flag %d)\n", data->flags);
+	}
+
 	data->irq_active = 1;
 
 	return 0;
@@ -725,10 +829,23 @@ static int pcm_release(struct inode *inode, struct file *file)
 		return -ENODEV;
 
 	if (data->open) {
-		if (data->carte != CARTE_MCR3K_2G_DELAY) {
+		if (minor != PCM_RETARD_MINOR) {
 			wake_up(&data->fct.std.read_wait);
-			free_irq(data->irq, data);
-			data->irq_active = 0;
+			if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
+				/* initialisation des descripteurs Tx */
+				clrbits8(&data->cp_ades.cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
+				setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
+				/* initialisation des descripteurs Rx */
+				setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
+			}
+			else {
+				/* initialisation des descripteurs Tx */
+				clrbits16(&data->cp_ades.cp_scc->scc_sccm, UART_SCCM_TXE | UART_SCCM_TX);
+				setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_TXE | UART_SCCM_TX);
+				/* initialisation des descripteurs Rx */
+				setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
+			}
+dev_info(data->dev, "Desactivation descripteurs (flag %d)\n", data->flags);
 		}
 		clear_bit(0, &data->open);
 	}
@@ -796,7 +913,6 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 	struct cpm_buf_desc __iomem *ad_bd;
 	const char *scc = NULL;
 	const __be32 *info_ts = NULL;
-	const void *prop = 0;
 	struct miscdevice *device = NULL;
 
 	match = of_match_device(tdm_match, &ofdev->dev);
@@ -832,24 +948,6 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 		data->flags = TYPE_SMC2;
 	dev_info(dev, "Le flag est %d.\n", data->flags);
 
-	/* recherche type de carte support MIAE ou MCR3K-2G */
-	np = of_find_compatible_node(NULL, NULL, "fsl,cmpc885");
-	if (np) {
-		prop = of_get_property(np, "model", NULL);
-		if (prop) {
-			if (strcmp(prop, "MCR3000_2G") == 0)
-				data->carte = CARTE_MCR3K_2G;
-			else if (strcmp(prop, "MIAE") == 0)
-				data->carte = CARTE_MIAE;
-		}
-	}
-	if (data->carte)
-		dev_info(dev, "La carte support est %s.\n", (data->carte == CARTE_MIAE) ? "MIAe" : "MCR3K-2G");
-	else {
-		ret = -EINVAL;
-		goto err;
-	}
-
 	/* releve du nombre et du positionnement des TS */
 	data->nb_canal = 0;
 	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1-tsa");
@@ -873,7 +971,6 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 				data_e1 = data;
 				device = &pcm_e1_miscdev;
 			}
-			info_ts = of_get_property(np, "ts_info", &len);
 		}
 		scc = of_get_property(np, "scc_voie", &len);
 		if (scc && (len >= sizeof(*scc))) {
@@ -883,6 +980,11 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 				data->nb_canal = NB_CANAUX_VOIE;
 				data_voie = data;
 				device = &pcm_voie_miscdev;
+				info_ts = of_get_property(np, "ts_enreg", &len);
+				if (info_ts && (len >= sizeof(*scc)) && (len == sizeof(__be32))) {
+					if (info_ts[0] <= 64)
+						data->nb_canal += info_ts[0];
+				}
 			}
 		}
 		scc = of_get_property(np, "scc_retard", &len);
@@ -891,7 +993,6 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 				|| ((data->flags == TYPE_SCC3) && sysfs_streq(scc, "SCC3"))
 				|| ((data->flags == TYPE_SMC2) && sysfs_streq(scc, "SMC2"))) {
 				data->nb_canal = NB_CANAUX_RETARD;
-				data->carte = CARTE_MCR3K_2G_DELAY;
 				data_retard = data;
 				device = &pcm_retard_miscdev;
 			}
@@ -903,8 +1004,16 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 		goto err;
 	}
 	
+	/* remappage de l'adresse CPM du lien */
+	data->cpm = of_iomap(np, 0);
+	if (data->cpm == NULL) {
+		dev_err(dev,"of_iomap CPM failed\n");
+		ret = -ENOMEM;
+		goto err;
+	}
+
 	data->octet_recu = 0;
-	if (data->carte != CARTE_MCR3K_2G_DELAY)
+	if (device->minor != PCM_RETARD_MINOR)
 		init_waitqueue_head(&data->fct.std.read_wait);
 	dev_set_drvdata(dev, data);
 	data->dev = dev;
@@ -915,7 +1024,7 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 		if (data->cp_ades.cp_smc == NULL) {
 			dev_err(dev,"of_iomap CPM failed\n");
 			ret = -ENOMEM;
-			goto err;
+			goto err_cpm;
 		}
 	}
 	else {
@@ -923,31 +1032,33 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 		if (data->cp_ades.cp_scc == NULL) {
 			dev_err(dev,"of_iomap CPM failed\n");
 			ret = -ENOMEM;
-			goto err;
+			goto err_cpm;
 		}
 	}
 	
 	class = saf3000_class_get();
 	infos = device_create(class, dev, MKDEV(0, 0), NULL, device->name);
+	dev_set_drvdata(infos, data);
+	data->infos = infos;
+
 	ret = misc_register(device);
 	if (ret) {
 		dev_err(dev, "pcm: cannot register miscdev on minor=%d (err=%d)\n", device->minor, ret);
-		goto err_unfile;
+		goto err_scc;
 	}
-	dev_set_drvdata(infos, data);
-	data->infos = infos;
+	data->device = device;
 	
 	irq = of_irq_to_resource(np, 0, NULL);
 	if (!irq) {
 		dev_err(dev,"no irq defined\n");
 		ret = -EINVAL;
-		goto err_unfile;
+		goto err_misc;
 	}
 	data->irq = irq;
 	
 	data->pram = of_iomap(np, 1);
 
-	if (data->carte == CARTE_MCR3K_2G_DELAY)
+	if (device->minor == PCM_RETARD_MINOR)
 		len = PCM_NB_TXBD_DELAY;
 	else
 		len = PCM_NB_TXBD;
@@ -957,19 +1068,19 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 	data->rx_bd = cpm_dpram_addr(bds_ofs + (sizeof(*data->tx_bd) * len));
 	
 	/* Initialize parameter ram. */
-	out_be16(&data->pram->scc_rbase, (void*)data->rx_bd-cpm_dpram_addr(0));
-	out_be16(&data->pram->scc_tbase, (void*)data->tx_bd-cpm_dpram_addr(0));
-	out_8(&data->pram->scc_tfcr, CPMFCR_EB);
-	out_8(&data->pram->scc_rfcr, CPMFCR_EB);
-	out_be16(&data->pram->scc_mrblr, (NB_BYTE_BY_5_MS * data->nb_canal));
+//	out_be16(&data->pram->scc_rbase, (void*)data->rx_bd-cpm_dpram_addr(0));
+//	out_be16(&data->pram->scc_tbase, (void*)data->tx_bd-cpm_dpram_addr(0));
+//	out_8(&data->pram->scc_tfcr, CPMFCR_EB);
+//	out_8(&data->pram->scc_rfcr, CPMFCR_EB);
+//	out_be16(&data->pram->scc_mrblr, (NB_BYTE_BY_5_MS * data->nb_canal));
 	
-	cpm_command(data->command, CPM_CR_INIT_TRX);
-	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
-		out_be16(&data->cp_ades.cp_smc->smc_smcmr, 0);
-	else
-		out_be32(&data->cp_ades.cp_scc->scc_gsmrl, 0);
+//	cpm_command(data->command, CPM_CR_INIT_TRX);
+//	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
+//		out_be16(&data->cp_ades.cp_smc->smc_smcmr, 0);
+//	else
+//		out_be32(&data->cp_ades.cp_scc->scc_gsmrl, 0);
 
-	if (data->carte != CARTE_MCR3K_2G_DELAY) {
+	if (device->minor != PCM_RETARD_MINOR) {
 		/* remplissage du dernier buffer avec du silence */
 		data->fct.std.packet_repos = dma_alloc_coherent(dev, L1_CACHE_ALIGN(NB_BYTE_BY_MS * data->nb_canal), &dma_addr, GFP_KERNEL);
 		data->fct.std.phys_packet_repos = dma_addr;
@@ -1007,19 +1118,19 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 		data->ix_tx = 0;
 		data->nb_emis = 0;
 		for (i = 0; i < NB_CANAUX_RETARD; i++) {
-			data->fct.delay.ix_wr[i] = FIRST_TXBD_WRITE;
-			data->fct.delay.delay[i] = FIRST_TXBD_WRITE;	/* pour delai ecriture de 5ms */
+			data->fct.delay.delay[i] = FIRST_TXBD_WRITE - DELAY_READ;	/* pour delai ecriture de 5ms */
+			data->fct.delay.ix_wr[i] = data->fct.delay.delay[i];
 		}
 	}
 
-	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
-		setbits8(&data->cp_ades.cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
-		setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
-	}
-	else {
-		setbits16(&data->cp_ades.cp_scc->scc_sccm, UART_SCCM_TXE | UART_SCCM_TX);
-		setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_TXE | UART_SCCM_TX);
-	}
+//	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
+//		setbits8(&data->cp_ades.cp_smc->smc_smcm, SMCM_TXE | SMCM_TX);
+//		setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_TXE | SMCM_TX);
+//	}
+//	else {
+//		setbits16(&data->cp_ades.cp_scc->scc_sccm, UART_SCCM_TXE | UART_SCCM_TX);
+//		setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_TXE | UART_SCCM_TX);
+//	}
 
 	/* initialisation des descripteurs Rx */
 	for (i = 0; i < PCM_NB_RXBD; i++) {
@@ -1033,38 +1144,48 @@ static int __devinit tdm_probe(struct platform_device *ofdev)
 			out_be16(&ad_bd->cbd_sc, BD_SC_EMPTY | BD_SC_INTRPT | BD_SC_WRAP);
 	}
 	data->ix_rx = 0;
-	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
-		setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
-		out_be16(&data->cp_ades.cp_smc->smc_smcmr, smcr_mk_clen(15) | SMCMR_SM_TRANS);
-		setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_REN);
-		setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_TEN);
-	}
-	else {
-		setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
-		out_be32(&data->cp_ades.cp_scc->scc_gsmrh,
-			SCC_GSMRH_REVD | SCC_GSMRH_TRX | SCC_GSMRH_TTX | SCC_GSMRH_CDS | SCC_GSMRH_CTSS | SCC_GSMRH_CDP | SCC_GSMRH_CTSP);
-		out_be32(&data->cp_ades.cp_scc->scc_gsmrl, SCC_GSMRL_ENR | SCC_GSMRL_ENT);
-	}
+//	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2)) {
+//		setbits8(&data->cp_ades.cp_smc->smc_smce, SMCM_RX | SMCM_BSY);
+//		out_be16(&data->cp_ades.cp_smc->smc_smcmr, smcr_mk_clen(15) | SMCMR_SM_TRANS);
+//		setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_REN);
+//		setbits16(&data->cp_ades.cp_smc->smc_smcmr, SMCMR_TEN);
+//	}
+//	else {
+//		setbits16(&data->cp_ades.cp_scc->scc_scce, UART_SCCM_RX | UART_SCCM_BSY);
+//		out_be32(&data->cp_ades.cp_scc->scc_gsmrh,
+//			SCC_GSMRH_REVD | SCC_GSMRH_TRX | SCC_GSMRH_TTX | SCC_GSMRH_CDS | SCC_GSMRH_CTSS | SCC_GSMRH_CDP | SCC_GSMRH_CTSP);
+//		out_be32(&data->cp_ades.cp_scc->scc_gsmrl, SCC_GSMRL_ENR | SCC_GSMRL_ENT);
+//	}
 
-	if (device_create_file(infos, &dev_attr_stat))
-		goto err_unfile;
-	if (device_create_file(infos, &dev_attr_debug))
-		goto err_unfile;
+	if ((ret = device_create_file(infos, &dev_attr_stat)))
+		goto err_misc;
+	if ((ret = device_create_file(infos, &dev_attr_version))) {
+		device_remove_file(infos, &dev_attr_stat);
+		goto err_misc;
+	}
+	if ((ret = device_create_file(infos, &dev_attr_debug))) {
+		device_remove_file(infos, &dev_attr_stat);
+		device_remove_file(infos, &dev_attr_version);
+		goto err_misc;
+	}
 
 	dev_info(dev, "driver TDM %s added.\n", device->name);
 	
 	return 0;
 
-err_unfile:
-	device_remove_file(infos, &dev_attr_stat);
-	device_remove_file(infos, &dev_attr_debug);
+err_misc:
+	misc_deregister(data->device);
+	if (data->pram) iounmap(data->pram), data->pram = NULL;
+err_scc:
 	dev_set_drvdata(infos, NULL);
 	device_unregister(infos), data->infos = NULL;
 	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
 		iounmap(data->cp_ades.cp_smc), data->cp_ades.cp_smc = NULL;
 	else
 		iounmap(data->cp_ades.cp_scc), data->cp_ades.cp_scc = NULL;
+err_cpm:
 	dev_set_drvdata(dev, NULL);
+	iounmap(data->cpm), data->cpm = NULL;
 err:
 	if (data) {
 		kfree(data);
@@ -1079,19 +1200,19 @@ static int __devexit tdm_remove(struct platform_device *ofdev)
 	struct device *infos = data->infos;
 	
 	device_remove_file(infos, &dev_attr_stat);
+	device_remove_file(infos, &dev_attr_version);
 	device_remove_file(infos, &dev_attr_debug);
+	device_unregister(infos), data->infos = NULL;
+	dev_set_drvdata(infos, NULL);
 	if (data->irq_active)
 		free_irq(data->irq, data);
-	dev_set_drvdata(infos, NULL);
-	device_unregister(infos), data->infos = NULL;
 	if ((data->flags == TYPE_SMC1) || (data->flags == TYPE_SMC2))
 		iounmap(data->cp_ades.cp_smc), data->cp_ades.cp_smc = NULL;
 	else
 		iounmap(data->cp_ades.cp_scc), data->cp_ades.cp_scc = NULL;
-	if (data->nb_canal == NB_CANAUX_CODEC)
-		misc_deregister(&pcm_codec_miscdev);
-	else
-		misc_deregister(&pcm_e1_miscdev);
+	iounmap(data->pram), data->pram = NULL;
+	iounmap(data->cpm), data->cpm = NULL;
+	misc_deregister(data->device);
 	dev_set_drvdata(dev, NULL);
 	kfree(data);
 	

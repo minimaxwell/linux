@@ -341,13 +341,45 @@
 				"pres_umain_b",		// Presence µMain_b
 				"pres_ucasque_a",	// Presence µCasque_a
 				"pres_ucasque_b";	// Presence µCasque_b
+			names_nvcs = "tor_in_1",
+				"tor_in_2",		// by_pass
+				"tor_in_3",
+				"tor_in_4",
+				"tor_in_5",
+				"tor_in_6",
+				"tor_in_7",
+				"tor_in_8",
+				"tor_in_9",
+				"tor_in_10",
+				"tor_in_11",
+				"tor_out_1",		// Sortie Jour/Nuit
+				"tor_out_2",		// Sortie Alternat POUS
+				"tor_out_3",
+				"tor_out_4",
+				"tor_out_5",
+				"tor_out_6",
+				"none",
+				"none",
+				"alt_bp",		// Alternat BP
+				"tor_in_13",		// Alternat 1
+				"tor_in_14",		// Alternat 2
+				"alt_ucomb",		// Alternat Combine
+				"alt_umain_a",		// Alternat µMain_a
+				"alt_umain_b",		// Alternat µMain_b
+				"alt_ucasque_a",	// Alternat µCasque_a
+				"alt_ucasque_b",	// Alternat µCasque_b
+				"pres_ucomb",		// Presence Combine
+				"pres_umain_a",		// Presence µMain_a
+				"pres_umain_b",		// Presence µMain_b
+				"pres_ucasque_a",	// Presence µCasque_a
+				"pres_ucasque_b";	// Presence µCasque_b
 			codec = "Rec. In 1",
 				"Interco In 1",
 				"Rec. In 2",
 				"Interco In 2",
 				"Micro ITH",
-				"none",
-				"none",
+				"Audio OPT 1",
+				"Audio OPT 2",
 				"Micro Combine",
 				"Micro Casque_a",
 				"Micro Main_a",

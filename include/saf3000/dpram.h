@@ -47,7 +47,8 @@ extern int write_fifo_cmde(short *cmde);
 
 #define MSG_MANAGE			32	/* Msg 32 = message module MANAGE */
 #define MSG_CAS				33	/* Msg 33 = message module CAS */
+#define MSG_BSS				34	/* Msg 34 = message module BSS/GRS */
 	
-#define MSG_LAST_MSG			34
+#define MSG_LAST_MSG			35
 
 #endif /* __DPRAM_H__ */
