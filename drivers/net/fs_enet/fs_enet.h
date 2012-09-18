@@ -118,6 +118,15 @@ struct phy_info {
 #define ENET_RX_ALIGN  16
 #define ENET_RX_FRSIZE L1_CACHE_ALIGN(PKT_MAXBUF_SIZE + ENET_RX_ALIGN - 1)
 
+#define PHY0_LINK 0
+#define PHY1_LINK 1
+#define ACTIVE_LINK 2
+
+struct fs_notify_work {
+	struct work_struct notify_queue;
+	struct sysfs_dirent *sd;
+};
+
 struct fs_enet_private {
 	struct napi_struct napi;
 	struct device *dev;	/* pointer back to the device (must be initialized first) */
@@ -151,6 +160,7 @@ struct fs_enet_private {
 	struct phy_device *phydevs[2];
 	struct delayed_work link_queue;
 	struct work_struct arp_queue;
+	struct fs_notify_work notify_work[3];
 
 	int oldduplex, oldspeed, oldlink;	/* current settings */
 	int change_time;
