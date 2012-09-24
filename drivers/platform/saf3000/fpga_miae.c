@@ -39,6 +39,9 @@
 #include <saf3000/saf3000.h>
 #include <saf3000/fpgam.h>
 
+#include <linux/hwmon.h>
+#include <linux/hwmon-sysfs.h> 
+
 
 /*
  * 1.0 - 03/01/2012 - creation driver pour MIAE
@@ -51,6 +54,7 @@ struct fpga_data {
 	struct fpgam __iomem	*fpgam;
 	struct device		*dev;
 	struct device		*infos;
+	struct device		*hwmon_dev;
 	int			status;
 };
 static struct fpga_data *data;
@@ -398,6 +402,53 @@ static ssize_t fs_attr_config_show(struct device *dev, struct device_attribute *
 }
 static DEVICE_ATTR(config, S_IRUGO, fs_attr_config_show, NULL);
 
+static ssize_t show_alim_ext(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct fpga_data *data = dev_get_drvdata(dev);
+	struct fpgam *fpgam = data->fpgam;
+	
+	if (fpgam->fct_gen & 0x02)
+		 return sprintf(buf, "0\n");
+	else
+		 return sprintf(buf, "24\n");
+}
+
+static DEVICE_ATTR(in0_input, S_IRUGO, show_alim_ext, NULL);
+
+static ssize_t show_alim_alarm(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct fpga_data *data = dev_get_drvdata(dev);
+	struct fpgam *fpgam = data->fpgam;
+	
+	if (fpgam->fct_gen & 0x02)
+		 return sprintf(buf, "1\n");
+	else
+		 return sprintf(buf, "0\n");
+}
+
+static DEVICE_ATTR(in0_alarm, S_IRUGO, show_alim_alarm, NULL);	
+
+static ssize_t show_alim_label(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	return sprintf(buf, "Alimentation externe 24 Volts\n");
+}
+
+static DEVICE_ATTR(in0_label, S_IRUGO, show_alim_label, NULL);	
+
+static struct attribute *fpgam_attributes[] = {
+	&dev_attr_in0_input.attr,
+	&dev_attr_in0_alarm.attr,
+	&dev_attr_in0_label.attr,
+	NULL
+};
+
+static const struct attribute_group fpgam_group = {
+	.attrs = fpgam_attributes,
+};
+
 
 /* gestion de la suppression des attributs */
 static void fpga_m_free_attr(struct device *infos)
@@ -466,6 +517,7 @@ static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_devic
 	struct device *infos;
 	int _Result = 0;
 	struct fpgam *fpgam;
+	int err;
 
 	data = kzalloc(sizeof *data, GFP_KERNEL);
 	if (!data) {
@@ -609,6 +661,17 @@ static int __devinit fpga_m_probe(struct of_device *ofdev, const struct of_devic
 	_Result = device_create_file(infos, &dev_attr_config);
 	if (_Result) goto err_unfile;
 
+        /* Register sysfs hooks */
+        data->hwmon_dev = hwmon_device_register(dev);
+        if (IS_ERR(data->hwmon_dev)) {
+                err = PTR_ERR(data->hwmon_dev);
+                goto err_unfile;
+	}
+
+	err = sysfs_create_group(&dev->kobj, &fpgam_group);
+	if (err)
+                goto err_unfile;
+
 	dev_info(dev, "driver MIAE FPGA-M added.\n");
 
 	return 0;
@@ -632,6 +695,8 @@ static int __devexit fpga_m_remove(struct of_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);
 	struct device *infos = data->infos;
+
+	hwmon_device_unregister(data->hwmon_dev);
 
 	fpga_m_free_attr(infos);
 	iounmap(data->fpgam);
