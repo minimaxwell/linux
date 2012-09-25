@@ -411,7 +411,7 @@ static ssize_t show_alim_ext(struct device *dev, struct device_attribute *attr,
 	if (fpgam->fct_gen & 0x02)
 		 return sprintf(buf, "0\n");
 	else
-		 return sprintf(buf, "24\n");
+		 return sprintf(buf, "24000\n");
 }
 
 static DEVICE_ATTR(in0_input, S_IRUGO, show_alim_ext, NULL);

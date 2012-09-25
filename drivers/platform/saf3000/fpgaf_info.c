@@ -299,13 +299,13 @@ static ssize_t show_alim(struct device *dev, struct device_attribute *attr,
 	switch(nr) {
 	case 0:
 		if (fpga_f->alrm_in & 0x40)
-			return sprintf(buf, "5\n");
+			return sprintf(buf, "5000\n");
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 1:
 		if (fpga_f->alrm_in & 0x80)
-			return sprintf(buf, "12\n");
+			return sprintf(buf, "12000\n");
 		else
 			return sprintf(buf, "0\n");
 		break;
@@ -313,13 +313,13 @@ static ssize_t show_alim(struct device *dev, struct device_attribute *attr,
 		if (fpga_f->alrm_in & 0x10)
 			return sprintf(buf, "0\n");
 		else
-			return sprintf(buf, "48\n");
+			return sprintf(buf, "48000\n");
 		break;
 	case 3:
 		if (fpga_f->alrm_in & 0x20)
 			return sprintf(buf, "0\n");
 		else
-			return sprintf(buf, "48\n");
+			return sprintf(buf, "48000\n");
 		break;
 	}
 
