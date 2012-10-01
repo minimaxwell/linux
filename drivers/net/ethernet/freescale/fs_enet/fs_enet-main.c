@@ -809,6 +809,15 @@ static void fs_adjust_link(struct net_device *dev)
 }
 
 
+void fs_sysfs_notify(struct work_struct *work)
+{
+	struct fs_notify_work *notify =
+			container_of(work, struct fs_notify_work, notify_queue);
+
+	sysfs_notify_dirent(notify->sd);
+}
+
+
 void fs_send_gratuitous_arp(struct work_struct *work)
 {
 	struct fs_enet_private *fep =
@@ -848,6 +857,11 @@ void fs_link_switch(struct fs_enet_private *fep)
 			dev_err(fep->dev, "Switch to PHYA\n");
 		}
 
+		if (fep->phydevs[1]) {
+			/* Active phy has changed -> notify user space */
+			schedule_work(&fep->notify_work[ACTIVE_LINK].notify_queue);
+		}
+
 		spin_lock_irqsave(&fep->lock, flags);
 		fep->change_time = jiffies;
 		fep->phydev = phydev;
@@ -878,6 +892,11 @@ void fs_link_switch(struct fs_enet_private *fep)
 		phydev = fep->phydevs[0];
 		dev_err(fep->dev, "Switch to PHY A\n");
 		if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+	}
+
+	if (fep->phydevs[1]) {
+		/* Active phy has changed -> notify user space */
+		schedule_work(&fep->notify_work[ACTIVE_LINK].notify_queue);
 	}
 
 	spin_lock_irqsave(&fep->lock, flags);
@@ -1024,10 +1043,14 @@ void fs_link_monitor(struct work_struct *work)
 	if (fep->phydevs[0]->link != fep->phy_oldlinks[0]) {
 		changed_phydevs[nb_changed_phydevs++] = fep->phydevs[0];
 		fep->phy_oldlinks[0] = fep->phydevs[0]->link;
+		/* phyA link status has changed -> notify user space */
+		schedule_work(&fep->notify_work[PHY0_LINK].notify_queue);
 	} 
 	if (fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
 		changed_phydevs[nb_changed_phydevs++] = fep->phydevs[1];
 		fep->phy_oldlinks[1] = fep->phydevs[1]->link;
+		/* phyB link status has changed -> notify user space */
+		schedule_work(&fep->notify_work[PHY1_LINK].notify_queue);
 	}
 
 	/* If nothing has changed, exit */
@@ -1118,6 +1141,7 @@ static int fs_enet_open(struct net_device *dev)
 	int r;
 	int err;
 	int value;
+	int idx;
 
 	/* to initialize the fep->cur_rx,... */
 	/* not doing this, will cause a crash in fs_enet_rx_napi */
@@ -1164,6 +1188,8 @@ static int fs_enet_open(struct net_device *dev)
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
 	INIT_WORK(&fep->arp_queue, fs_send_gratuitous_arp);
+	for (idx=0; idx<3; idx++)
+		INIT_WORK(&fep->notify_work[idx].notify_queue, fs_sysfs_notify);
 	schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 
 	netif_start_queue(dev);
@@ -1656,6 +1682,14 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 	ret |= device_create_file(fep->dev, &dev_attr_mode);
 	if (ret)
 		goto out_remove_file;
+
+	fep->notify_work[PHY0_LINK].sd = 
+		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "phy0_link");
+	fep->notify_work[PHY1_LINK].sd = 
+		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "phy1_link");
+	fep->notify_work[ACTIVE_LINK].sd = 
+		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "active_link");
+
 	return 0;
 
 out_remove_file:

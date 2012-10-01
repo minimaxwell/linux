@@ -42,6 +42,10 @@
 #include <saf3000/saf3000.h>
 #include <saf3000/fpgaf.h>
 
+#include <linux/hwmon.h>
+#include <linux/hwmon-sysfs.h> 
+
+
 /*
  * driver FPGAF INFO
  */
@@ -51,6 +55,7 @@ struct fpgaf_info_data {
 	u16 *mezz;
 	struct device *dev;
 	struct device *infos;
+	struct device *hwmon_dev;
 };
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
@@ -254,6 +259,233 @@ static void fpgaf_led_alrm2_set(struct led_classdev *cdev, enum led_brightness b
 	}
 }
 
+
+static ssize_t show_fan(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+	
+	if (fpga_f->alrm_in & 0x08)
+		 return sprintf(buf, "0\n");
+	else
+		 return sprintf(buf, "1000\n");
+}
+
+static DEVICE_ATTR(fan1_input, S_IRUGO, show_fan, NULL);
+
+static ssize_t show_fan_alarm(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+	
+	if (fpga_f->alrm_in & 0x08)
+		 return sprintf(buf, "1\n");
+	else
+		 return sprintf(buf, "0\n");
+}
+
+static DEVICE_ATTR(fan1_alarm, S_IRUGO, show_fan_alarm, NULL);	
+
+static ssize_t show_alim(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
+	int nr = sensor_attr->index;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+
+	switch(nr) {
+	case 0:
+		if (fpga_f->alrm_in & 0x40)
+			return sprintf(buf, "5000\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	case 1:
+		if (fpga_f->alrm_in & 0x80)
+			return sprintf(buf, "12000\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	case 2:
+		if (fpga_f->alrm_in & 0x10)
+			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "48000\n");
+		break;
+	case 3:
+		if (fpga_f->alrm_in & 0x20)
+			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "48000\n");
+		break;
+	}
+
+	return -EINVAL;
+}
+
+#define show_in_offset(offset)				\
+static SENSOR_DEVICE_ATTR(in##offset##_input, S_IRUGO,		\
+		show_alim, NULL, offset);
+show_in_offset(0);
+show_in_offset(1);
+show_in_offset(2);
+show_in_offset(3);
+
+static ssize_t show_alarm(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
+	int nr = sensor_attr->index;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+
+	switch(nr) {
+	case 0:
+		if (fpga_f->alrm_in & 0x40)
+			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "1\n");
+		break;
+	case 1:
+		if (fpga_f->alrm_in & 0x80)
+			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "1\n");
+		break;
+	case 2:
+		if (fpga_f->alrm_in & 0x10)
+			return sprintf(buf, "1\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	case 3:
+		if (fpga_f->alrm_in & 0x20)
+			return sprintf(buf, "1\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	}
+
+	return -EINVAL;
+}
+
+
+static SENSOR_DEVICE_ATTR(in0_alarm, S_IRUGO, show_alarm, NULL, 0);
+static SENSOR_DEVICE_ATTR(in1_alarm, S_IRUGO, show_alarm, NULL, 1);
+static SENSOR_DEVICE_ATTR(in2_alarm, S_IRUGO, show_alarm, NULL, 2);
+static SENSOR_DEVICE_ATTR(in3_alarm, S_IRUGO, show_alarm, NULL, 3);
+
+static ssize_t show_label(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
+	int nr = sensor_attr->index;
+
+	switch(nr) {
+	case 0:
+		return sprintf(buf, "Alimentation 5 Volts\n");
+		break;
+	case 1:
+		return sprintf(buf, "Alimentation CBRAS\n");
+		break;
+	case 2:
+		return sprintf(buf, "Alimentation_1 48 Volts\n");
+		break;
+	case 3:
+		return sprintf(buf, "Alimentation_2 48 Volts\n");
+		break;
+	}
+
+	return -EINVAL;
+}
+
+
+static SENSOR_DEVICE_ATTR(in0_label, S_IRUGO, show_label, NULL, 0);
+static SENSOR_DEVICE_ATTR(in1_label, S_IRUGO, show_label, NULL, 1);
+static SENSOR_DEVICE_ATTR(in2_label, S_IRUGO, show_label, NULL, 2);
+static SENSOR_DEVICE_ATTR(in3_label, S_IRUGO, show_label, NULL, 3);
+
+static ssize_t show_intrusion(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
+	int nr = sensor_attr->index;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+
+	switch(nr) {
+	case 0:
+		if (fpga_f->alrm_in & 0x01)
+			return sprintf(buf, "1\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	case 1:
+		if (fpga_f->alrm_in & 0x02)
+			return sprintf(buf, "1\n");
+		else
+			return sprintf(buf, "0\n");
+		break;
+	}
+
+	return -EINVAL;
+}
+
+static ssize_t clear_intrusion(struct device *dev, struct device_attribute *attr,
+                const char *buf, size_t count)
+{
+	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
+	int nr = sensor_attr->index;
+	struct fpgaf_info_data *data = dev_get_drvdata(dev);
+	struct fpgaf *fpga_f = data->fpgaf;
+
+	switch(nr) {
+	case 0:
+		clrbits16(&fpga_f->alrm_in, 0x01);
+		return count;
+	case 1:
+		clrbits16(&fpga_f->alrm_in, 0x02);
+		return count;
+	}
+
+	return -EINVAL;
+}
+
+
+static SENSOR_DEVICE_ATTR(intrusion0_alarm, S_IRUGO | S_IWUSR, show_intrusion, 
+	clear_intrusion, 0);
+static SENSOR_DEVICE_ATTR(intrusion1_alarm, S_IRUGO | S_IWUSR, show_intrusion, 
+	clear_intrusion, 1);
+
+
+static struct attribute *fpgaf_attributes[] = {
+	&dev_attr_fan1_input.attr,
+	&dev_attr_fan1_alarm.attr,
+	&sensor_dev_attr_in0_input.dev_attr.attr,
+	&sensor_dev_attr_in1_input.dev_attr.attr,
+	&sensor_dev_attr_in2_input.dev_attr.attr,
+	&sensor_dev_attr_in3_input.dev_attr.attr,
+	&sensor_dev_attr_in0_alarm.dev_attr.attr,
+	&sensor_dev_attr_in1_alarm.dev_attr.attr,
+	&sensor_dev_attr_in2_alarm.dev_attr.attr,
+	&sensor_dev_attr_in3_alarm.dev_attr.attr,
+	&sensor_dev_attr_in0_label.dev_attr.attr,
+	&sensor_dev_attr_in1_label.dev_attr.attr,
+	&sensor_dev_attr_in2_label.dev_attr.attr,
+	&sensor_dev_attr_in3_label.dev_attr.attr,
+	&sensor_dev_attr_intrusion0_alarm.dev_attr.attr,
+	&sensor_dev_attr_intrusion1_alarm.dev_attr.attr,
+	NULL
+};
+
+static const struct attribute_group fpgaf_group = {
+	.attrs = fpgaf_attributes,
+};
+
+
 static enum led_brightness fpgaf_led_alrm2_get(struct led_classdev *cdev)
 {
 	struct device *dev = cdev->dev->parent;
@@ -280,7 +512,7 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 	struct device *infos;
 	struct fpgaf *fpgaf;
 	u16 *mezz;
-	int ret;
+	int err, ret;
 
 	match = of_match_device(fpgaf_info_match, &ofdev->dev);
 	if (!match)
@@ -330,9 +562,23 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 	led_classdev_register(dev, &fpgaf_led_alrm1);
 	led_classdev_register(dev, &fpgaf_led_alrm2);
 	dev_info(dev,"driver MCR3000_2G FPGAF INFO added.\n");
-	
+
+        /* Register sysfs hooks */
+        data->hwmon_dev = hwmon_device_register(dev);
+        if (IS_ERR(data->hwmon_dev)) {
+                err = PTR_ERR(data->hwmon_dev);
+                goto err_hwmon;
+	}
+
+	err = sysfs_create_group(&dev->kobj, &fpgaf_group);
+	if (err)
+                goto err_hwmon;
+
 	return 0;
 
+err_hwmon:
+	led_classdev_unregister(&fpgaf_led_alrm2);
+	led_classdev_unregister(&fpgaf_led_alrm1);
 err_unfile:
 	device_remove_file(dev, &dev_attr_version);
 	device_remove_file(infos, &dev_attr_addr);
@@ -359,6 +605,8 @@ static int __devexit fpgaf_info_remove(struct platform_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
 	struct device *infos = data->infos;
+
+	hwmon_device_unregister(data->hwmon_dev);
 	
 	led_classdev_unregister(&fpgaf_led_alrm2);
 	led_classdev_unregister(&fpgaf_led_alrm1);
