@@ -146,6 +146,8 @@ struct tdm_data {
 	unsigned long		packet_silence;
 	unsigned long		open;
 	unsigned long		time;
+	unsigned long		time_rec;
+	unsigned long		time_read;
 	union gest		fct;
 };
 
@@ -300,6 +302,7 @@ static irqreturn_t pcm_interrupt(s32 irq, void *context)
 			data->octet_recu = (NB_BYTE_BY_5_MS * data->nb_canal);
 			if (data->open)		/* si device /dev/pcm utilisé */
 				wake_up(&data->fct.std.read_wait);
+			data->time_rec = data->time;
 		}
 	}
 
@@ -574,6 +577,7 @@ static ssize_t pcm_read(struct file *file, char __user *buf, size_t count, loff_
 		}
 	}
 	data->octet_recu = 0;
+	data->time_read = data->time_rec;
 
 	return count;
 }
@@ -632,6 +636,7 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	}
 	if (nb_byte == (NB_BYTE_BY_5_MS * a_lire))
 		data->octet_recu = 0;	
+	data->time_read = data->time_rec;
 
 	return(nb_byte);
 }
@@ -702,6 +707,7 @@ static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 				case SAF3000_PCM_TIME: info = data->time; break;
 				case SAF3000_PCM_LOST: info = data->packet_lost; break;
 				case SAF3000_PCM_SILENT: info = data->packet_silence; break;
+				case SAF3000_PCM_READTIME: info = data->time_read; break;
 				default: ret = -ENOTTY; goto erreur; break;
 			}
 			ret = __copy_to_user((void*)arg, &info, _IOC_SIZE(cmd));

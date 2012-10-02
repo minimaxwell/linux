@@ -34,6 +34,7 @@ extern void gest_led_debug(int led, int cmde);
 #define SAF3000_PCM_SILENT_IDENT	2
 #define SAF3000_PCM_DELAY_EM_IDENT	3
 #define SAF3000_PCM_DELAY_REC_IDENT	4
+#define SAF3000_PCM_READTIME_IDENT	5
 
 /* pour lire le temps de fonctionnement en ms sur /dev/pcm... */
 #define SAF3000_PCM_TIME			_IOR(SAF3000_PCM_IOC_MAGIC, \
@@ -48,6 +49,11 @@ extern void gest_led_debug(int led, int cmde);
 /* pour lire le nombre de paquets silence de 1ms emis sur /dev/pcm... */
 #define SAF3000_PCM_SILENT			_IOR(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_SILENT_IDENT, \
+						unsigned long)
+
+/* pour lire le temps de la derniere lecture en ms sur /dev/pcm... */
+#define SAF3000_PCM_READTIME			_IOR(SAF3000_PCM_IOC_MAGIC, \
+						SAF3000_PCM_READTIME_IDENT, \
 						unsigned long)
 
 struct pose_delay {
