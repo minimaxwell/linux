@@ -312,10 +312,6 @@ static int at25_probe(struct spi_device *spi)
 	int			addrlen;
 
 	/* Chip description */
-	chip = spi->dev.platform_data;
-/*	if (!chip) {
-		chip = (struct spi_eeprom*)spi_get_device_id(spi)->driver_data;
-	}*/
 	if (!spi->dev.platform_data) {
 		if (np) {
 			u32 val;
@@ -452,7 +448,6 @@ static int __devexit at25_remove(struct spi_device *spi)
 
 static struct spi_device_id at25_ids[] = {
 	{"at25" , 0},
-	{"at25080" , INFO(1024, "at25080", 32, EE_ADDR2)},
 };
 
 static struct spi_driver at25_driver = {

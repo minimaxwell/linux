@@ -662,10 +662,13 @@
 					analog_rec = "3dB 3dB 3dB 4,5dB";
 				};
 				eeprom@3 {
-					compatible = "atmel,at25080", "cs,eeprom";
+					compatible = "atmel,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <3>;
 					spi-cs-high;
+					at25,byte-len = <1024>;
+					at25,addr-mode = <2>;
+					at25,page-size = <32>;
 				};
 				sicofi@4 {
 					compatible = "infineon,mcr3000-sicofi";
@@ -685,10 +688,13 @@
 					spi-cs-high;
 				};
 				eeprom@6 {
-					compatible = "atmel,at25080", "cs,eeprom";
+					compatible = "atmel,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
 					spi-cs-high;
+					at25,byte-len = <1024>;
+					at25,addr-mode = <2>;
+					at25,page-size = <32>;
 				};
 			};
 			

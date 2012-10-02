@@ -641,10 +641,13 @@
 					spi-troll;
 				};
 				eeprom@3 {
-					compatible = "atmel,at25080", "cs,eeprom";
+					compatible = "atmel,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <3>;
 					spi-cs-high;
+					at25,byte-len = <1024>;
+					at25,addr-mode = <2>;
+					at25,page-size = <32>;
 				};
 				pot2@4 {
 					compatible = "cs,mcr3000-pot2";
@@ -683,10 +686,13 @@
 					spi-bits = <16>;
 				};
 				eeprom@9 {
-					compatible = "atmel,at25080", "cs,eeprom";
+					compatible = "atmel,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <9>;
 					spi-cs-high;
+					at25,byte-len = <1024>;
+					at25,addr-mode = <2>;
+					at25,page-size = <32>;
 				};
 				
 			};

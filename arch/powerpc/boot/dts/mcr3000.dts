@@ -523,10 +523,13 @@
 					spi-cs-high;
 				};
 				eeprom@4 {
-					compatible = "atmel,at25080", "cs,eeprom";
+					compatible = "atmel,at25", "cs,eeprom";
 					spi-max-frequency = <1000000>;
 					reg = <4>;
 					spi-cs-high;
+					at25,byte-len = <1024>;
+					at25,addr-mode = <2>;
+					at25,page-size = <32>;
 				};
 				pot2@5 {
 					compatible = "cs,mcr3000-pot2";
