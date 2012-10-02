@@ -79,7 +79,7 @@
 #define PCM_NB_RXBD		2
 #define DELAY_READ		5	/* delai de lecture par defaut (5ms) */
 #define FIRST_TXBD_WRITE	10	/* delai pour ecriture (multiple de 5 et > DELAY_READ) */
-#define MAX_DELAY_MS		100	/* nombre de ms max (multiple de 5) */
+#define MAX_DELAY_MS		130	/* nombre de ms max (multiple de 5) */
 #define PCM_NB_TXBD_DELAY	(MAX_DELAY_MS + FIRST_TXBD_WRITE)
 
 #define TYPE_SCC1		1
