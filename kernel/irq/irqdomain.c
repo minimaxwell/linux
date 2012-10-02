@@ -740,7 +740,8 @@ unsigned int irq_linear_revmap(struct irq_domain *domain,
 	BUG_ON(domain->revmap_type != IRQ_DOMAIN_MAP_LINEAR);
 
 	/* Check revmap bounds; complain if exceeded */
-	if (WARN_ON(hwirq >= domain->revmap_data.linear.size))
+	/* 255 is a trick to allow UNDEF value in DTS */
+	if (hwirq == 255 || WARN_ON(hwirq >= domain->revmap_data.linear.size))
 		return 0;
 
 	return domain->revmap_data.linear.revmap[hwirq];
