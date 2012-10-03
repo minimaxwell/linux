@@ -161,105 +161,13 @@ typedef struct xfs_trans_header {
  * the amount of space needed to log the item it describes
  * once we get to commit processing (see xfs_trans_commit()).
  */
-typedef struct xfs_log_item_desc {
+struct xfs_log_item_desc {
 	struct xfs_log_item	*lid_item;
-	ushort		lid_size;
-	unsigned char	lid_flags;
-	unsigned char	lid_index;
-} xfs_log_item_desc_t;
+	struct list_head	lid_trans;
+	unsigned char		lid_flags;
+};
 
 #define XFS_LID_DIRTY		0x1
-#define XFS_LID_PINNED		0x2
-
-/*
- * This structure is used to maintain a chunk list of log_item_desc
- * structures. The free field is a bitmask indicating which descriptors
- * in this chunk's array are free.  The unused field is the first value
- * not used since this chunk was allocated.
- */
-#define	XFS_LIC_NUM_SLOTS	15
-typedef struct xfs_log_item_chunk {
-	struct xfs_log_item_chunk	*lic_next;
-	ushort				lic_free;
-	ushort				lic_unused;
-	xfs_log_item_desc_t		lic_descs[XFS_LIC_NUM_SLOTS];
-} xfs_log_item_chunk_t;
-
-#define	XFS_LIC_MAX_SLOT	(XFS_LIC_NUM_SLOTS - 1)
-#define	XFS_LIC_FREEMASK	((1 << XFS_LIC_NUM_SLOTS) - 1)
-
-
-/*
- * Initialize the given chunk.  Set the chunk's free descriptor mask
- * to indicate that all descriptors are free.  The caller gets to set
- * lic_unused to the right value (0 matches all free).  The
- * lic_descs.lid_index values are set up as each desc is allocated.
- */
-static inline void xfs_lic_init(xfs_log_item_chunk_t *cp)
-{
-	cp->lic_free = XFS_LIC_FREEMASK;
-}
-
-static inline void xfs_lic_init_slot(xfs_log_item_chunk_t *cp, int slot)
-{
-	cp->lic_descs[slot].lid_index = (unsigned char)(slot);
-}
-
-static inline int xfs_lic_vacancy(xfs_log_item_chunk_t *cp)
-{
-	return cp->lic_free & XFS_LIC_FREEMASK;
-}
-
-static inline void xfs_lic_all_free(xfs_log_item_chunk_t *cp)
-{
-	cp->lic_free = XFS_LIC_FREEMASK;
-}
-
-static inline int xfs_lic_are_all_free(xfs_log_item_chunk_t *cp)
-{
-	return ((cp->lic_free & XFS_LIC_FREEMASK) == XFS_LIC_FREEMASK);
-}
-
-static inline int xfs_lic_isfree(xfs_log_item_chunk_t *cp, int slot)
-{
-	return (cp->lic_free & (1 << slot));
-}
-
-static inline void xfs_lic_claim(xfs_log_item_chunk_t *cp, int slot)
-{
-	cp->lic_free &= ~(1 << slot);
-}
-
-static inline void xfs_lic_relse(xfs_log_item_chunk_t *cp, int slot)
-{
-	cp->lic_free |= 1 << slot;
-}
-
-static inline xfs_log_item_desc_t *
-xfs_lic_slot(xfs_log_item_chunk_t *cp, int slot)
-{
-	return &(cp->lic_descs[slot]);
-}
-
-static inline int xfs_lic_desc_to_slot(xfs_log_item_desc_t *dp)
-{
-	return (uint)dp->lid_index;
-}
-
-/*
- * Calculate the address of a chunk given a descriptor pointer:
- * dp - dp->lid_index give the address of the start of the lic_descs array.
- * From this we subtract the offset of the lic_descs field in a chunk.
- * All of this yields the address of the chunk, which is
- * cast to a chunk pointer.
- */
-static inline xfs_log_item_chunk_t *
-xfs_lic_desc_to_chunk(xfs_log_item_desc_t *dp)
-{
-	return (xfs_log_item_chunk_t*) \
-		(((xfs_caddr_t)((dp) - (dp)->lid_index)) - \
-		(xfs_caddr_t)(((xfs_log_item_chunk_t*)0)->lic_descs));
-}
 
 #define	XFS_TRANS_MAGIC		0x5452414E	/* 'TRAN' */
 /*
@@ -271,12 +179,12 @@ xfs_lic_desc_to_chunk(xfs_log_item_desc_t *dp)
 #define	XFS_TRANS_SYNC		0x08	/* make commit synchronous */
 #define XFS_TRANS_DQ_DIRTY	0x10	/* at least one dquot in trx dirty */
 #define XFS_TRANS_RESERVE	0x20    /* OK to use reserved data blocks */
+#define XFS_TRANS_FREEZE_PROT	0x40	/* Transaction has elevated writer
+					   count in superblock */
 
 /*
  * Values for call flags parameter.
  */
-#define	XFS_TRANS_NOSLEEP		0x1
-#define	XFS_TRANS_WAIT			0x2
 #define	XFS_TRANS_RELEASE_LOG_RES	0x4
 #define	XFS_TRANS_ABORT			0x8
 
@@ -387,8 +295,8 @@ xfs_lic_desc_to_chunk(xfs_log_item_desc_t *dp)
 #define	XFS_ALLOC_BTREE_REF	2
 #define	XFS_BMAP_BTREE_REF	2
 #define	XFS_DIR_BTREE_REF	2
+#define	XFS_INO_REF		2
 #define	XFS_ATTR_BTREE_REF	1
-#define	XFS_INO_REF		1
 #define	XFS_DQUOT_REF		1
 
 #ifdef __KERNEL__
@@ -419,7 +327,7 @@ typedef struct xfs_log_item {
 						 struct xfs_log_item *);
 							/* buffer item iodone */
 							/* callback func */
-	struct xfs_item_ops		*li_ops;	/* function list */
+	const struct xfs_item_ops	*li_ops;	/* function list */
 
 	/* delayed logging */
 	struct list_head		li_cil;		/* CIL pointers */
@@ -434,39 +342,33 @@ typedef struct xfs_log_item {
 	{ XFS_LI_IN_AIL,	"IN_AIL" }, \
 	{ XFS_LI_ABORTED,	"ABORTED" }
 
-typedef struct xfs_item_ops {
+struct xfs_item_ops {
 	uint (*iop_size)(xfs_log_item_t *);
 	void (*iop_format)(xfs_log_item_t *, struct xfs_log_iovec *);
 	void (*iop_pin)(xfs_log_item_t *);
-	void (*iop_unpin)(xfs_log_item_t *);
-	void (*iop_unpin_remove)(xfs_log_item_t *, struct xfs_trans *);
-	uint (*iop_trylock)(xfs_log_item_t *);
+	void (*iop_unpin)(xfs_log_item_t *, int remove);
+	uint (*iop_push)(struct xfs_log_item *, struct list_head *);
 	void (*iop_unlock)(xfs_log_item_t *);
 	xfs_lsn_t (*iop_committed)(xfs_log_item_t *, xfs_lsn_t);
-	void (*iop_push)(xfs_log_item_t *);
-	void (*iop_pushbuf)(xfs_log_item_t *);
 	void (*iop_committing)(xfs_log_item_t *, xfs_lsn_t);
-} xfs_item_ops_t;
+};
 
 #define IOP_SIZE(ip)		(*(ip)->li_ops->iop_size)(ip)
 #define IOP_FORMAT(ip,vp)	(*(ip)->li_ops->iop_format)(ip, vp)
 #define IOP_PIN(ip)		(*(ip)->li_ops->iop_pin)(ip)
-#define IOP_UNPIN(ip)		(*(ip)->li_ops->iop_unpin)(ip)
-#define IOP_UNPIN_REMOVE(ip,tp) (*(ip)->li_ops->iop_unpin_remove)(ip, tp)
-#define IOP_TRYLOCK(ip)		(*(ip)->li_ops->iop_trylock)(ip)
+#define IOP_UNPIN(ip, remove)	(*(ip)->li_ops->iop_unpin)(ip, remove)
+#define IOP_PUSH(ip, list)	(*(ip)->li_ops->iop_push)(ip, list)
 #define IOP_UNLOCK(ip)		(*(ip)->li_ops->iop_unlock)(ip)
 #define IOP_COMMITTED(ip, lsn)	(*(ip)->li_ops->iop_committed)(ip, lsn)
-#define IOP_PUSH(ip)		(*(ip)->li_ops->iop_push)(ip)
-#define IOP_PUSHBUF(ip)		(*(ip)->li_ops->iop_pushbuf)(ip)
 #define IOP_COMMITTING(ip, lsn) (*(ip)->li_ops->iop_committing)(ip, lsn)
 
 /*
- * Return values for the IOP_TRYLOCK() routines.
+ * Return values for the IOP_PUSH() routines.
  */
-#define	XFS_ITEM_SUCCESS	0
-#define	XFS_ITEM_PINNED		1
-#define	XFS_ITEM_LOCKED		2
-#define XFS_ITEM_PUSHBUF	3
+#define XFS_ITEM_SUCCESS	0
+#define XFS_ITEM_PINNED		1
+#define XFS_ITEM_LOCKED		2
+#define XFS_ITEM_FLUSHING	3
 
 /*
  * This is the type of function which can be given to xfs_trans_callback()
@@ -494,8 +396,6 @@ typedef struct xfs_trans {
 						 * transaction. */
 	struct xfs_mount	*t_mountp;	/* ptr to fs mount struct */
 	struct xfs_dquot_acct   *t_dqinfo;	/* acctg info for dquots */
-	xfs_trans_callback_t	t_callback;	/* transaction callback */
-	void			*t_callarg;	/* callback arg */
 	unsigned int		t_flags;	/* misc flags */
 	int64_t			t_icount_delta;	/* superblock icount change */
 	int64_t			t_ifree_delta;	/* superblock ifree change */
@@ -516,8 +416,7 @@ typedef struct xfs_trans {
 	int64_t			t_rblocks_delta;/* superblock rblocks change */
 	int64_t			t_rextents_delta;/* superblocks rextents chg */
 	int64_t			t_rextslog_delta;/* superblocks rextslog chg */
-	unsigned int		t_items_free;	/* log item descs free */
-	xfs_log_item_chunk_t	t_items;	/* first log item desc chunk */
+	struct list_head	t_items;	/* log item descriptors */
 	xfs_trans_header_t	t_header;	/* header for in-log trans */
 	struct list_head	t_busy;		/* list of busy extents */
 	unsigned long		t_pflags;	/* saved process flags state */
@@ -546,16 +445,56 @@ typedef struct xfs_trans {
  * XFS transaction mechanism exported interfaces.
  */
 xfs_trans_t	*xfs_trans_alloc(struct xfs_mount *, uint);
-xfs_trans_t	*_xfs_trans_alloc(struct xfs_mount *, uint, uint);
+xfs_trans_t	*_xfs_trans_alloc(struct xfs_mount *, uint, xfs_km_flags_t);
 xfs_trans_t	*xfs_trans_dup(xfs_trans_t *);
 int		xfs_trans_reserve(xfs_trans_t *, uint, uint, uint,
 				  uint, uint);
 void		xfs_trans_mod_sb(xfs_trans_t *, uint, int64_t);
-struct xfs_buf	*xfs_trans_get_buf(xfs_trans_t *, struct xfs_buftarg *, xfs_daddr_t,
-				   int, uint);
-int		xfs_trans_read_buf(struct xfs_mount *, xfs_trans_t *,
-				   struct xfs_buftarg *, xfs_daddr_t, int, uint,
-				   struct xfs_buf **);
+
+struct xfs_buf	*xfs_trans_get_buf_map(struct xfs_trans *tp,
+				       struct xfs_buftarg *target,
+				       struct xfs_buf_map *map, int nmaps,
+				       uint flags);
+
+static inline struct xfs_buf *
+xfs_trans_get_buf(
+	struct xfs_trans	*tp,
+	struct xfs_buftarg	*target,
+	xfs_daddr_t		blkno,
+	int			numblks,
+	uint			flags)
+{
+	struct xfs_buf_map	map = {
+		.bm_bn = blkno,
+		.bm_len = numblks,
+	};
+	return xfs_trans_get_buf_map(tp, target, &map, 1, flags);
+}
+
+int		xfs_trans_read_buf_map(struct xfs_mount *mp,
+				       struct xfs_trans *tp,
+				       struct xfs_buftarg *target,
+				       struct xfs_buf_map *map, int nmaps,
+				       xfs_buf_flags_t flags,
+				       struct xfs_buf **bpp);
+
+static inline int
+xfs_trans_read_buf(
+	struct xfs_mount	*mp,
+	struct xfs_trans	*tp,
+	struct xfs_buftarg	*target,
+	xfs_daddr_t		blkno,
+	int			numblks,
+	xfs_buf_flags_t		flags,
+	struct xfs_buf		**bpp)
+{
+	struct xfs_buf_map	map = {
+		.bm_bn = blkno,
+		.bm_len = numblks,
+	};
+	return xfs_trans_read_buf_map(mp, tp, target, &map, 1, flags, bpp);
+}
+
 struct xfs_buf	*xfs_trans_getsb(xfs_trans_t *, struct xfs_mount *, int);
 
 void		xfs_trans_brelse(xfs_trans_t *, struct xfs_buf *);
@@ -567,10 +506,8 @@ void		xfs_trans_inode_buf(xfs_trans_t *, struct xfs_buf *);
 void		xfs_trans_stale_inode_buf(xfs_trans_t *, struct xfs_buf *);
 void		xfs_trans_dquot_buf(xfs_trans_t *, struct xfs_buf *, uint);
 void		xfs_trans_inode_alloc_buf(xfs_trans_t *, struct xfs_buf *);
-int		xfs_trans_iget(struct xfs_mount *, xfs_trans_t *,
-			       xfs_ino_t , uint, uint, struct xfs_inode **);
-void		xfs_trans_ijoin(xfs_trans_t *, struct xfs_inode *, uint);
-void		xfs_trans_ihold(xfs_trans_t *, struct xfs_inode *);
+void		xfs_trans_ichgtime(struct xfs_trans *, struct xfs_inode *, int);
+void		xfs_trans_ijoin(struct xfs_trans *, struct xfs_inode *, uint);
 void		xfs_trans_log_buf(xfs_trans_t *, struct xfs_buf *, uint, uint);
 void		xfs_trans_log_inode(xfs_trans_t *, struct xfs_inode *, uint);
 struct xfs_efi_log_item	*xfs_trans_get_efi(xfs_trans_t *, uint);
@@ -586,15 +523,13 @@ void		xfs_trans_log_efd_extent(xfs_trans_t *,
 					 struct xfs_efd_log_item *,
 					 xfs_fsblock_t,
 					 xfs_extlen_t);
-int		_xfs_trans_commit(xfs_trans_t *,
-				  uint flags,
-				  int *);
-#define xfs_trans_commit(tp, flags)	_xfs_trans_commit(tp, flags, NULL)
+int		xfs_trans_commit(xfs_trans_t *, uint flags);
 void		xfs_trans_cancel(xfs_trans_t *, int);
 int		xfs_trans_ail_init(struct xfs_mount *);
 void		xfs_trans_ail_destroy(struct xfs_mount *);
 
 extern kmem_zone_t	*xfs_trans_zone;
+extern kmem_zone_t	*xfs_log_item_desc_zone;
 
 #endif	/* __KERNEL__ */
 

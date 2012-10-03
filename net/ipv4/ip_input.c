@@ -113,7 +113,8 @@
  *		2 of the License, or (at your option) any later version.
  */
 
-#include <asm/system.h>
+#define pr_fmt(fmt) "IPv4: " fmt
+
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -146,17 +147,16 @@
 #include <linux/netlink.h>
 
 /*
- *	Process Router Attention IP option
+ *	Process Router Attention IP option (RFC 2113)
  */
-int ip_call_ra_chain(struct sk_buff *skb)
+bool ip_call_ra_chain(struct sk_buff *skb)
 {
 	struct ip_ra_chain *ra;
 	u8 protocol = ip_hdr(skb)->protocol;
 	struct sock *last = NULL;
 	struct net_device *dev = skb->dev;
 
-	read_lock(&ip_ra_lock);
-	for (ra = ip_ra_chain; ra; ra = ra->next) {
+	for (ra = rcu_dereference(ip_ra_chain); ra; ra = rcu_dereference(ra->next)) {
 		struct sock *sk = ra->sk;
 
 		/* If socket is bound to an interface, only report
@@ -166,11 +166,9 @@ int ip_call_ra_chain(struct sk_buff *skb)
 		    (!sk->sk_bound_dev_if ||
 		     sk->sk_bound_dev_if == dev->ifindex) &&
 		    net_eq(sock_net(sk), dev_net(dev))) {
-			if (ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)) {
-				if (ip_defrag(skb, IP_DEFRAG_CALL_RA_CHAIN)) {
-					read_unlock(&ip_ra_lock);
-					return 1;
-				}
+			if (ip_is_fragment(ip_hdr(skb))) {
+				if (ip_defrag(skb, IP_DEFRAG_CALL_RA_CHAIN))
+					return true;
 			}
 			if (last) {
 				struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
@@ -183,11 +181,9 @@ int ip_call_ra_chain(struct sk_buff *skb)
 
 	if (last) {
 		raw_rcv(last, skb);
-		read_unlock(&ip_ra_lock);
-		return 1;
+		return true;
 	}
-	read_unlock(&ip_ra_lock);
-	return 0;
+	return false;
 }
 
 static int ip_local_deliver_finish(struct sk_buff *skb)
@@ -202,21 +198,19 @@ static int ip_local_deliver_finish(struct sk_buff *skb)
 	rcu_read_lock();
 	{
 		int protocol = ip_hdr(skb)->protocol;
-		int hash, raw;
 		const struct net_protocol *ipprot;
+		int raw;
 
 	resubmit:
 		raw = raw_local_deliver(skb, protocol);
 
-		hash = protocol & (MAX_INET_PROTOS - 1);
-		ipprot = rcu_dereference(inet_protos[hash]);
+		ipprot = rcu_dereference(inet_protos[protocol]);
 		if (ipprot != NULL) {
 			int ret;
 
 			if (!net_eq(net, &init_net) && !ipprot->netns_ok) {
-				if (net_ratelimit())
-					printk("%s: proto %d isn't netns-ready\n",
-						__func__, protocol);
+				net_info_ratelimited("%s: proto %d isn't netns-ready\n",
+						     __func__, protocol);
 				kfree_skb(skb);
 				goto out;
 			}
@@ -261,7 +255,7 @@ int ip_local_deliver(struct sk_buff *skb)
 	 *	Reassemble IP fragments.
 	 */
 
-	if (ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)) {
+	if (ip_is_fragment(ip_hdr(skb))) {
 		if (ip_defrag(skb, IP_DEFRAG_LOCAL_DELIVER))
 			return 0;
 	}
@@ -270,10 +264,10 @@ int ip_local_deliver(struct sk_buff *skb)
 		       ip_local_deliver_finish);
 }
 
-static inline int ip_rcv_options(struct sk_buff *skb)
+static inline bool ip_rcv_options(struct sk_buff *skb)
 {
 	struct ip_options *opt;
-	struct iphdr *iph;
+	const struct iphdr *iph;
 	struct net_device *dev = skb->dev;
 
 	/* It looks as overkill, because not all
@@ -298,55 +292,65 @@ static inline int ip_rcv_options(struct sk_buff *skb)
 	}
 
 	if (unlikely(opt->srr)) {
-		struct in_device *in_dev = in_dev_get(dev);
+		struct in_device *in_dev = __in_dev_get_rcu(dev);
+
 		if (in_dev) {
 			if (!IN_DEV_SOURCE_ROUTE(in_dev)) {
-				if (IN_DEV_LOG_MARTIANS(in_dev) &&
-				    net_ratelimit())
-					printk(KERN_INFO "source route option %pI4 -> %pI4\n",
-					       &iph->saddr, &iph->daddr);
-				in_dev_put(in_dev);
+				if (IN_DEV_LOG_MARTIANS(in_dev))
+					net_info_ratelimited("source route option %pI4 -> %pI4\n",
+							     &iph->saddr,
+							     &iph->daddr);
 				goto drop;
 			}
-
-			in_dev_put(in_dev);
 		}
 
 		if (ip_options_rcv_srr(skb))
 			goto drop;
 	}
 
-	return 0;
+	return false;
 drop:
-	return -1;
+	return true;
 }
+
+int sysctl_ip_early_demux __read_mostly = 1;
+EXPORT_SYMBOL(sysctl_ip_early_demux);
 
 static int ip_rcv_finish(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct rtable *rt;
 
+	if (sysctl_ip_early_demux && !skb_dst(skb)) {
+		const struct net_protocol *ipprot;
+		int protocol = iph->protocol;
+
+		ipprot = rcu_dereference(inet_protos[protocol]);
+		if (ipprot && ipprot->early_demux) {
+			ipprot->early_demux(skb);
+			/* must reload iph, skb->head might have changed */
+			iph = ip_hdr(skb);
+		}
+	}
+
 	/*
 	 *	Initialise the virtual path cache for the packet. It describes
 	 *	how the packet travels inside Linux networking.
 	 */
-	if (skb_dst(skb) == NULL) {
+	if (!skb_dst(skb)) {
 		int err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
 					       iph->tos, skb->dev);
 		if (unlikely(err)) {
-			if (err == -EHOSTUNREACH)
-				IP_INC_STATS_BH(dev_net(skb->dev),
-						IPSTATS_MIB_INADDRERRORS);
-			else if (err == -ENETUNREACH)
-				IP_INC_STATS_BH(dev_net(skb->dev),
-						IPSTATS_MIB_INNOROUTES);
+			if (err == -EXDEV)
+				NET_INC_STATS_BH(dev_net(skb->dev),
+						 LINUX_MIB_IPRPFILTER);
 			goto drop;
 		}
 	}
 
-#ifdef CONFIG_NET_CLS_ROUTE
+#ifdef CONFIG_IP_ROUTE_CLASSID
 	if (unlikely(skb_dst(skb)->tclassid)) {
-		struct ip_rt_acct *st = per_cpu_ptr(ip_rt_acct, smp_processor_id());
+		struct ip_rt_acct *st = this_cpu_ptr(ip_rt_acct);
 		u32 idx = skb_dst(skb)->tclassid;
 		st[idx&0xFF].o_packets++;
 		st[idx&0xFF].o_bytes += skb->len;
@@ -360,10 +364,10 @@ static int ip_rcv_finish(struct sk_buff *skb)
 
 	rt = skb_rtable(skb);
 	if (rt->rt_type == RTN_MULTICAST) {
-		IP_UPD_PO_STATS_BH(dev_net(rt->u.dst.dev), IPSTATS_MIB_INMCAST,
+		IP_UPD_PO_STATS_BH(dev_net(rt->dst.dev), IPSTATS_MIB_INMCAST,
 				skb->len);
 	} else if (rt->rt_type == RTN_BROADCAST)
-		IP_UPD_PO_STATS_BH(dev_net(rt->u.dst.dev), IPSTATS_MIB_INBCAST,
+		IP_UPD_PO_STATS_BH(dev_net(rt->dst.dev), IPSTATS_MIB_INBCAST,
 				skb->len);
 
 	return dst_input(skb);
@@ -378,7 +382,7 @@ drop:
  */
 int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, struct net_device *orig_dev)
 {
-	struct iphdr *iph;
+	const struct iphdr *iph;
 	u32 len;
 
 	/* When the interface is in promisc. mode, drop all the crap

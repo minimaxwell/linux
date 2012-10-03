@@ -36,13 +36,14 @@
 #include <linux/sched.h>		/* signal_pending() */
 #include <linux/pcieport_if.h>
 #include <linux/mutex.h>
+#include <linux/workqueue.h>
 
 #define MY_NAME	"pciehp"
 
-extern int pciehp_poll_mode;
+extern bool pciehp_poll_mode;
 extern int pciehp_poll_time;
-extern int pciehp_debug;
-extern int pciehp_force;
+extern bool pciehp_debug;
+extern bool pciehp_force;
 extern struct workqueue_struct *pciehp_wq;
 
 #define dbg(format, arg...)						\
@@ -148,10 +149,6 @@ int pciehp_get_attention_status(struct slot *slot, u8 *status);
 int pciehp_set_attention_status(struct slot *slot, u8 status);
 int pciehp_get_latch_status(struct slot *slot, u8 *status);
 int pciehp_get_adapter_status(struct slot *slot, u8 *status);
-int pciehp_get_max_link_speed(struct slot *slot, enum pci_bus_speed *speed);
-int pciehp_get_max_link_width(struct slot *slot, enum pcie_link_width *val);
-int pciehp_get_cur_link_speed(struct slot *slot, enum pci_bus_speed *speed);
-int pciehp_get_cur_link_width(struct slot *slot, enum pcie_link_width *val);
 int pciehp_query_power_fault(struct slot *slot);
 void pciehp_green_led_on(struct slot *slot);
 void pciehp_green_led_off(struct slot *slot);
@@ -176,19 +173,11 @@ static inline void pciehp_firmware_init(void)
 {
 	pciehp_acpi_slot_detection_init();
 }
-
-static inline int pciehp_get_hp_hw_control_from_firmware(struct pci_dev *dev)
-{
-	int retval;
-	u32 flags = (OSC_PCI_EXPRESS_NATIVE_HP_CONTROL |
-		     OSC_PCI_EXPRESS_CAP_STRUCTURE_CONTROL);
-	retval = acpi_get_hp_hw_control_from_firmware(dev, flags);
-	if (retval)
-		return retval;
-	return pciehp_acpi_slot_detection_check(dev);
-}
 #else
 #define pciehp_firmware_init()				do {} while (0)
-#define pciehp_get_hp_hw_control_from_firmware(dev) 	0
+static inline int pciehp_acpi_slot_detection_check(struct pci_dev *dev)
+{
+	return 0;
+}
 #endif 				/* CONFIG_ACPI */
 #endif				/* _PCIEHP_H */

@@ -29,8 +29,6 @@ int hdpvr_config_call(struct hdpvr_device *dev, uint value, u8 valbuf)
 	int ret;
 	char request_type = 0x38, snd_request = 0x01;
 
-	msleep(10);
-
 	mutex_lock(&dev->usbc_mutex);
 	dev->usbc_buf[0] = valbuf;
 	ret = usb_control_msg(dev->udev,
@@ -115,6 +113,8 @@ int get_input_lines_info(struct hdpvr_device *dev)
 			 "get input lines info returned: %d, %s\n", ret,
 			 print_buf);
 	}
+#else
+	(void)ret;	/* suppress compiler warning */
 #endif
 	lines = dev->usbc_buf[1] << 8 | dev->usbc_buf[0];
 	mutex_unlock(&dev->usbc_mutex);
@@ -170,8 +170,7 @@ int hdpvr_set_audio(struct hdpvr_device *dev, u8 input,
 		if (ret == 2)
 			ret = 0;
 	} else
-		ret = hdpvr_config_call(dev, CTRL_AUDIO_INPUT_VALUE,
-					dev->options.audio_input+1);
+		ret = hdpvr_config_call(dev, CTRL_AUDIO_INPUT_VALUE, input);
 error:
 	return ret;
 }

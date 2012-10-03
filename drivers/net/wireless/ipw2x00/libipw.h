@@ -66,16 +66,8 @@ extern u32 libipw_debug_level;
 do { if (libipw_debug_level & (level)) \
   printk(KERN_DEBUG "libipw: %c %s " fmt, \
          in_interrupt() ? 'I' : 'U', __func__ , ## args); } while (0)
-static inline bool libipw_ratelimit_debug(u32 level)
-{
-	return (libipw_debug_level & level) && net_ratelimit();
-}
 #else
 #define LIBIPW_DEBUG(level, fmt, args...) do {} while (0)
-static inline bool libipw_ratelimit_debug(u32 level)
-{
-	return false;
-}
 #endif				/* CONFIG_LIBIPW_DEBUG */
 
 /*
@@ -154,7 +146,7 @@ struct libipw_snap_hdr {
 	u8 ctrl;		/* always 0x03 */
 	u8 oui[P80211_OUI_LEN];	/* organizational universal id */
 
-} __attribute__ ((packed));
+} __packed;
 
 #define SNAP_SIZE sizeof(struct libipw_snap_hdr)
 
@@ -323,7 +315,7 @@ struct libipw_security {
 	u8 keys[WEP_KEYS][SCM_KEY_LEN];
 	u8 level;
 	u16 flags;
-} __attribute__ ((packed));
+} __packed;
 
 /*
 
@@ -347,7 +339,7 @@ struct libipw_hdr_1addr {
 	__le16 duration_id;
 	u8 addr1[ETH_ALEN];
 	u8 payload[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_hdr_2addr {
 	__le16 frame_ctl;
@@ -355,7 +347,7 @@ struct libipw_hdr_2addr {
 	u8 addr1[ETH_ALEN];
 	u8 addr2[ETH_ALEN];
 	u8 payload[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_hdr_3addr {
 	__le16 frame_ctl;
@@ -365,7 +357,7 @@ struct libipw_hdr_3addr {
 	u8 addr3[ETH_ALEN];
 	__le16 seq_ctl;
 	u8 payload[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_hdr_4addr {
 	__le16 frame_ctl;
@@ -376,7 +368,7 @@ struct libipw_hdr_4addr {
 	__le16 seq_ctl;
 	u8 addr4[ETH_ALEN];
 	u8 payload[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_hdr_3addrqos {
 	__le16 frame_ctl;
@@ -387,13 +379,13 @@ struct libipw_hdr_3addrqos {
 	__le16 seq_ctl;
 	u8 payload[0];
 	__le16 qos_ctl;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_info_element {
 	u8 id;
 	u8 len;
 	u8 data[0];
-} __attribute__ ((packed));
+} __packed;
 
 /*
  * These are the data types that can make up management packets
@@ -406,7 +398,7 @@ struct libipw_info_element {
 	u16 listen_interval;
 	struct {
 		u16 association_id:14, reserved:2;
-	} __attribute__ ((packed));
+	} __packed;
 	u32 time_stamp[2];
 	u16 reason;
 	u16 status;
@@ -419,7 +411,7 @@ struct libipw_auth {
 	__le16 status;
 	/* challenge */
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_channel_switch {
 	u8 id;
@@ -427,7 +419,7 @@ struct libipw_channel_switch {
 	u8 mode;
 	u8 channel;
 	u8 count;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_action {
 	struct libipw_hdr_3addr header;
@@ -441,12 +433,12 @@ struct libipw_action {
 		struct libipw_channel_switch channel_switch;
 
 	} format;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_disassoc {
 	struct libipw_hdr_3addr header;
 	__le16 reason;
-} __attribute__ ((packed));
+} __packed;
 
 /* Alias deauth for disassoc */
 #define libipw_deauth libipw_disassoc
@@ -455,7 +447,7 @@ struct libipw_probe_request {
 	struct libipw_hdr_3addr header;
 	/* SSID, supported rates */
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_probe_response {
 	struct libipw_hdr_3addr header;
@@ -465,7 +457,7 @@ struct libipw_probe_response {
 	/* SSID, supported rates, FH params, DS params,
 	 * CF params, IBSS params, TIM (if beacon), RSN */
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 /* Alias beacon for probe_response */
 #define libipw_beacon libipw_probe_response
@@ -476,7 +468,7 @@ struct libipw_assoc_request {
 	__le16 listen_interval;
 	/* SSID, supported rates, RSN */
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_reassoc_request {
 	struct libipw_hdr_3addr header;
@@ -484,7 +476,7 @@ struct libipw_reassoc_request {
 	__le16 listen_interval;
 	u8 current_ap[ETH_ALEN];
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_assoc_response {
 	struct libipw_hdr_3addr header;
@@ -493,7 +485,7 @@ struct libipw_assoc_response {
 	__le16 aid;
 	/* supported rates */
 	struct libipw_info_element info_element[0];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_txb {
 	u8 nr_frags;
@@ -555,19 +547,19 @@ struct libipw_qos_information_element {
 	u8 qui_subtype;
 	u8 version;
 	u8 ac_info;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_qos_ac_parameter {
 	u8 aci_aifsn;
 	u8 ecw_min_max;
 	__le16 tx_op_limit;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_qos_parameter_info {
 	struct libipw_qos_information_element info_element;
 	u8 reserved;
 	struct libipw_qos_ac_parameter ac_params_record[QOS_QUEUE_NUM];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_qos_parameters {
 	__le16 cw_min[QOS_QUEUE_NUM];
@@ -575,7 +567,7 @@ struct libipw_qos_parameters {
 	u8 aifs[QOS_QUEUE_NUM];
 	u8 flag[QOS_QUEUE_NUM];
 	__le16 tx_op_limit[QOS_QUEUE_NUM];
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_qos_data {
 	struct libipw_qos_parameters parameters;
@@ -588,74 +580,19 @@ struct libipw_qos_data {
 struct libipw_tim_parameters {
 	u8 tim_count;
 	u8 tim_period;
-} __attribute__ ((packed));
+} __packed;
 
 /*******************************************************/
-
-enum {				/* libipw_basic_report.map */
-	LIBIPW_BASIC_MAP_BSS = (1 << 0),
-	LIBIPW_BASIC_MAP_OFDM = (1 << 1),
-	LIBIPW_BASIC_MAP_UNIDENTIFIED = (1 << 2),
-	LIBIPW_BASIC_MAP_RADAR = (1 << 3),
-	LIBIPW_BASIC_MAP_UNMEASURED = (1 << 4),
-	/* Bits 5-7 are reserved */
-
-};
-struct libipw_basic_report {
-	u8 channel;
-	__le64 start_time;
-	__le16 duration;
-	u8 map;
-} __attribute__ ((packed));
-
-enum {				/* libipw_measurement_request.mode */
-	/* Bit 0 is reserved */
-	LIBIPW_MEASUREMENT_ENABLE = (1 << 1),
-	LIBIPW_MEASUREMENT_REQUEST = (1 << 2),
-	LIBIPW_MEASUREMENT_REPORT = (1 << 3),
-	/* Bits 4-7 are reserved */
-};
-
-enum {
-	LIBIPW_REPORT_BASIC = 0,	/* required */
-	LIBIPW_REPORT_CCA = 1,	/* optional */
-	LIBIPW_REPORT_RPI = 2,	/* optional */
-	/* 3-255 reserved */
-};
-
-struct libipw_measurement_params {
-	u8 channel;
-	__le64 start_time;
-	__le16 duration;
-} __attribute__ ((packed));
-
-struct libipw_measurement_request {
-	struct libipw_info_element ie;
-	u8 token;
-	u8 mode;
-	u8 type;
-	struct libipw_measurement_params params[0];
-} __attribute__ ((packed));
-
-struct libipw_measurement_report {
-	struct libipw_info_element ie;
-	u8 token;
-	u8 mode;
-	u8 type;
-	union {
-		struct libipw_basic_report basic[0];
-	} u;
-} __attribute__ ((packed));
 
 struct libipw_tpc_report {
 	u8 transmit_power;
 	u8 link_margin;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_channel_map {
 	u8 channel;
 	u8 map;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_ibss_dfs {
 	struct libipw_info_element ie;
@@ -668,14 +605,14 @@ struct libipw_csa {
 	u8 mode;
 	u8 channel;
 	u8 count;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_quiet {
 	u8 count;
 	u8 period;
 	u8 duration;
 	u8 offset;
-} __attribute__ ((packed));
+} __packed;
 
 struct libipw_network {
 	/* These entries are used to identify a unique network */
@@ -813,9 +750,6 @@ struct libipw_device {
 	/* WEP and other encryption related settings at the device level */
 	int open_wep;		/* Set to 1 to allow unencrypted frames */
 
-	int reset_on_keychange;	/* Set to 1 if the HW needs to be reset on
-				 * WEP key changes */
-
 	/* If the host performs {en,de}cryption, then set to 1 */
 	int host_encrypt;
 	int host_encrypt_msdu;
@@ -828,7 +762,6 @@ struct libipw_device {
 	int host_strip_iv_icv;
 
 	int host_open_frag;
-	int host_build_iv;
 	int ieee802_1x;		/* is IEEE 802.1X used */
 
 	/* WPA data */
@@ -869,7 +802,6 @@ struct libipw_device {
 			      struct libipw_security * sec);
 	netdev_tx_t (*hard_start_xmit) (struct libipw_txb * txb,
 					struct net_device * dev, int pri);
-	int (*reset_port) (struct net_device * dev);
 	int (*is_queue_full) (struct net_device * dev, int pri);
 
 	int (*handle_management) (struct net_device * dev,

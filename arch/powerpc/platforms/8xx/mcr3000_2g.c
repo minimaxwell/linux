@@ -14,7 +14,6 @@
 
 #include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/system.h>
 #include <asm/time.h>
 #include <asm/8xx_immap.h>
 #include <asm/cpm1.h>
@@ -34,34 +33,34 @@
  * Controlleur d'IRQ du FPGA Firmware 
  */
 static struct fpgaf *fpgaf_regs;
-static struct irq_host *fpgaf_pic_host;
+static struct irq_domain *fpgaf_pic_host;
 
-static void fpgaf_mask_irq(unsigned int irq)
+static void fpgaf_mask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	clrbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }
 
-static void fpgaf_unmask_irq(unsigned int irq)
+static void fpgaf_unmask_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	setbits16(&fpgaf_regs->it_mask, 1<<(15-vec));
 }
 
-static void fpgaf_end_irq(unsigned int irq)
+static void fpgaf_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irq_map[irq].hwirq;
+	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	clrbits16(&fpgaf_regs->it_ack, 1<<(15-vec));
 }
 
 static struct irq_chip fpgaf_pic = {
 	.name = "FPGAF PIC",
-	.mask = fpgaf_mask_irq,
-	.unmask = fpgaf_unmask_irq,
-	.eoi = fpgaf_end_irq,
+	.irq_mask = fpgaf_mask_irq,
+	.irq_unmask = fpgaf_unmask_irq,
+	.irq_eoi = fpgaf_end_irq,
 };
 
 int fpgaf_get_irq(void)
@@ -75,16 +74,16 @@ int fpgaf_get_irq(void)
 	return ret;
 }
 
-static int fpgaf_pic_host_map(struct irq_host *h, unsigned int virq, irq_hw_number_t hw)
+static int fpgaf_pic_host_map(struct irq_domain *h, unsigned int virq, irq_hw_number_t hw)
 {
 	pr_debug("fpgaf_pic_host_map(%d, 0x%lx)\n", virq, hw);
 
-	irq_to_desc(virq)->status |= IRQ_LEVEL;
-	set_irq_chip_and_handler(virq, &fpgaf_pic, handle_fasteoi_irq);
+	irq_set_status_flags(virq, IRQ_LEVEL);
+	irq_set_chip_and_handler(virq, &fpgaf_pic, handle_fasteoi_irq);
 	return 0;
 }
 
-static struct irq_host_ops fpgaf_pic_host_ops = {
+static struct irq_domain_ops fpgaf_pic_host_ops = {
 	.map = fpgaf_pic_host_map,
 };
 
@@ -116,9 +115,9 @@ int fpgaf_pic_init(void)
 		goto end;
 
 	/* Initialize the FPGAF interrupt controller. */
-	hwirq = (unsigned int)irq_map[irq].hwirq;
+	hwirq = (unsigned int)virq_to_hw(irq);
 
-	fpgaf_pic_host = irq_alloc_host(np, IRQ_HOST_MAP_LINEAR, 16, &fpgaf_pic_host_ops, 16);
+	fpgaf_pic_host = irq_domain_add_linear(np, 16, &fpgaf_pic_host_ops, NULL);
 	if (fpgaf_pic_host == NULL) {
 		printk(KERN_ERR "FPGAF PIC: failed to allocate irq host!\n");
 		irq = NO_IRQ;
@@ -133,14 +132,17 @@ end:
 void fpgaf_cascade(unsigned int irq, struct irq_desc *desc)
 {
 	int cascade_irq;
+	struct irq_chip *chip;
 
 	if ((cascade_irq = fpgaf_get_irq()) >= 0) {
 		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
 
 		generic_handle_irq(cascade_irq);
-		if (cdesc->chip->eoi) cdesc->chip->eoi(cascade_irq);
+		chip = irq_desc_get_chip(cdesc);
+		if (chip->irq_eoi) chip->irq_eoi(&cdesc->irq_data);
 	}
-	if (desc->chip->eoi) desc->chip->eoi(irq);
+	chip = irq_desc_get_chip(desc);
+	if (chip->irq_eoi) chip->irq_eoi(&desc->irq_data);
 }
 
 /*

@@ -23,7 +23,7 @@
 #include <linux/pmu.h>
 #include <linux/cpufreq.h>
 #include <linux/init.h>
-#include <linux/sysdev.h>
+#include <linux/device.h>
 #include <linux/hardirq.h>
 #include <asm/prom.h>
 #include <asm/machdep.h>
@@ -33,9 +33,9 @@
 #include <asm/sections.h>
 #include <asm/cputable.h>
 #include <asm/time.h>
-#include <asm/system.h>
 #include <asm/mpic.h>
 #include <asm/keylargo.h>
+#include <asm/switch_to.h>
 
 /* WARNING !!! This will cause calibrate_delay() to be called,
  * but this is an __init function ! So you MUST go edit
@@ -310,8 +310,12 @@ static int pmu_set_cpu_speed(int low_speed)
 	/* Restore low level PMU operations */
 	pmu_unlock();
 
-	/* Restore decrementer */
-	wakeup_decrementer();
+	/*
+	 * Restore decrementer; we'll take a decrementer interrupt
+	 * as soon as interrupts are re-enabled and the generic
+	 * clockevents code will reprogram it with the right value.
+	 */
+	set_dec(1);
 
 	/* Restore interrupts */
  	mpic_cpu_set_priority(pic_prio);
@@ -425,7 +429,7 @@ static u32 read_gpio(struct device_node *np)
 	return offset;
 }
 
-static int pmac_cpufreq_suspend(struct cpufreq_policy *policy, pm_message_t pmsg)
+static int pmac_cpufreq_suspend(struct cpufreq_policy *policy)
 {
 	/* Ok, this could be made a bit smarter, but let's be robust for now. We
 	 * always force a speed change to high speed before sleep, to make sure

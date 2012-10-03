@@ -41,7 +41,6 @@
 #define RF_MAXIMAG              0x02
 #define RF_AIROHA               0x03
 
-//#define RF_GCT5103              0x04
 #define RF_UW2451               0x05
 #define RF_MAXIMG               0x06
 #define RF_MAXIM2829            0x07 // RobertYu: 20041118
@@ -76,28 +75,28 @@
 
 /*---------------------  Export Functions  --------------------------*/
 
-BOOL IFRFbWriteEmbeded(DWORD_PTR dwIoBase, DWORD dwData);
-BOOL RFbSelectChannel(DWORD_PTR dwIoBase, BYTE byRFType, BYTE byChannel);
-BOOL RFbInit (
+bool IFRFbWriteEmbeded(unsigned long dwIoBase, unsigned long dwData);
+bool RFbSelectChannel(unsigned long dwIoBase, unsigned char byRFType, unsigned char byChannel);
+bool RFbInit (
     PSDevice  pDevice
     );
-BOOL RFvWriteWakeProgSyn(DWORD_PTR dwIoBase, BYTE byRFType, UINT uChannel);
-BOOL RFbSetPower(PSDevice pDevice, UINT uRATE, UINT uCH);
-BOOL RFbRawSetPower(
+bool RFvWriteWakeProgSyn(unsigned long dwIoBase, unsigned char byRFType, unsigned int uChannel);
+bool RFbSetPower(PSDevice pDevice, unsigned int uRATE, unsigned int uCH);
+bool RFbRawSetPower(
     PSDevice  pDevice,
-    BYTE      byPwr,
-    UINT      uRATE
+    unsigned char byPwr,
+    unsigned int uRATE
     );
 
 void
 RFvRSSITodBm(
     PSDevice pDevice,
-    BYTE     byCurrRSSI,
+    unsigned char byCurrRSSI,
     long    *pldBm
     );
 
 //{{ RobertYu: 20050104
-BOOL RFbAL7230SelectChannelPostProcess(DWORD_PTR dwIoBase, BYTE byOldChannel, BYTE byNewChannel);
+bool RFbAL7230SelectChannelPostProcess(unsigned long dwIoBase, unsigned char byOldChannel, unsigned char byNewChannel);
 //}} RobertYu
 
 #endif // __RF_H__

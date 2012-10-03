@@ -33,13 +33,8 @@
 #include <asm/pgtable.h>
 #include <asm/mmu.h>
 #include <asm/mmu_context.h>
-#include <asm/system.h>
 #include <linux/uaccess.h>
 #include <asm/exceptions.h>
-
-#if defined(CONFIG_KGDB)
-int debugger_kernel_faults = 1;
-#endif
 
 static unsigned long pte_misses;	/* updated by do_page_fault() */
 static unsigned long pte_errors;	/* updated by do_page_fault() */
@@ -52,7 +47,7 @@ static int store_updates_sp(struct pt_regs *regs)
 {
 	unsigned int inst;
 
-	if (get_user(inst, (unsigned int *)regs->pc))
+	if (get_user(inst, (unsigned int __user *)regs->pc))
 		return 0;
 	/* check for 1 in the rD field */
 	if (((inst >> 21) & 0x1f) != 1)
@@ -81,10 +76,6 @@ void bad_page_fault(struct pt_regs *regs, unsigned long address, int sig)
 	}
 
 	/* kernel has accessed a bad area */
-#if defined(CONFIG_KGDB)
-	if (debugger_kernel_faults)
-		debugger(regs);
-#endif
 	die("kernel access of bad area", regs, sig);
 }
 
@@ -101,6 +92,8 @@ void do_page_fault(struct pt_regs *regs, unsigned long address,
 	int code = SEGV_MAPERR;
 	int is_write = error_code & ESR_S;
 	int fault;
+	unsigned int flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE |
+					 (is_write ? FAULT_FLAG_WRITE : 0);
 
 	regs->ear = address;
 	regs->esr = error_code;
@@ -114,13 +107,6 @@ void do_page_fault(struct pt_regs *regs, unsigned long address,
 	/* for instr TLB miss and instr storage exception ESR_S is undefined */
 	if ((error_code & 0x13) == 0x13 || (error_code & 0x11) == 0x11)
 		is_write = 0;
-
-#if defined(CONFIG_KGDB)
-	if (debugger_fault_handler && regs->trap == 0x300) {
-		debugger_fault_handler(regs);
-		return;
-	}
-#endif /* CONFIG_KGDB */
 
 	if (unlikely(in_atomic() || !mm)) {
 		if (kernel_mode(regs))
@@ -154,6 +140,7 @@ void do_page_fault(struct pt_regs *regs, unsigned long address,
 		if (kernel_mode(regs) && !search_exception_tables(regs->pc))
 			goto bad_area_nosemaphore;
 
+retry:
 		down_read(&mm->mmap_sem);
 	}
 
@@ -226,8 +213,11 @@ good_area:
 	 * make sure we exit gracefully rather than endlessly redo
 	 * the fault.
 	 */
-survive:
-	fault = handle_mm_fault(mm, vma, address, is_write ? FAULT_FLAG_WRITE : 0);
+	fault = handle_mm_fault(mm, vma, address, flags);
+
+	if ((fault & VM_FAULT_RETRY) && fatal_signal_pending(current))
+		return;
+
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
@@ -235,11 +225,27 @@ survive:
 			goto do_sigbus;
 		BUG();
 	}
-	if (unlikely(fault & VM_FAULT_MAJOR))
-		current->maj_flt++;
-	else
-		current->min_flt++;
+
+	if (flags & FAULT_FLAG_ALLOW_RETRY) {
+		if (unlikely(fault & VM_FAULT_MAJOR))
+			current->maj_flt++;
+		else
+			current->min_flt++;
+		if (fault & VM_FAULT_RETRY) {
+			flags &= ~FAULT_FLAG_ALLOW_RETRY;
+
+			/*
+			 * No need to up_read(&mm->mmap_sem) as we would
+			 * have already released it in __lock_page_or_retry
+			 * in mm/filemap.c.
+			 */
+
+			goto retry;
+		}
+	}
+
 	up_read(&mm->mmap_sem);
+
 	/*
 	 * keep track of tlb+htab misses that are good addrs but
 	 * just need pte's created via handle_mm_fault()

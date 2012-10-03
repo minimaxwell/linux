@@ -422,7 +422,7 @@ int cachefiles_read_or_alloc_page(struct fscache_retrieval *op,
 	shift = PAGE_SHIFT - inode->i_sb->s_blocksize_bits;
 
 	op->op.flags &= FSCACHE_OP_KEEP_FLAGS;
-	op->op.flags |= FSCACHE_OP_FAST;
+	op->op.flags |= FSCACHE_OP_ASYNC;
 	op->op.processor = cachefiles_read_copier;
 
 	pagevec_init(&pagevec, 0);
@@ -729,7 +729,7 @@ int cachefiles_read_or_alloc_pages(struct fscache_retrieval *op,
 	pagevec_init(&pagevec, 0);
 
 	op->op.flags &= FSCACHE_OP_KEEP_FLAGS;
-	op->op.flags |= FSCACHE_OP_FAST;
+	op->op.flags |= FSCACHE_OP_ASYNC;
 	op->op.processor = cachefiles_read_copier;
 
 	INIT_LIST_HEAD(&backpages);
@@ -891,6 +891,7 @@ int cachefiles_write_page(struct fscache_storage *op, struct page *page)
 	struct cachefiles_cache *cache;
 	mm_segment_t old_fs;
 	struct file *file;
+	struct path path;
 	loff_t pos, eof;
 	size_t len;
 	void *data;
@@ -916,10 +917,9 @@ int cachefiles_write_page(struct fscache_storage *op, struct page *page)
 
 	/* write the page to the backing filesystem and let it store it in its
 	 * own time */
-	dget(object->backer);
-	mntget(cache->mnt);
-	file = dentry_open(object->backer, cache->mnt, O_RDWR,
-			   cache->cache_cred);
+	path.mnt = cache->mnt;
+	path.dentry = object->backer;
+	file = dentry_open(&path, O_RDWR | O_LARGEFILE, cache->cache_cred);
 	if (IS_ERR(file)) {
 		ret = PTR_ERR(file);
 	} else {

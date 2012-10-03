@@ -200,6 +200,7 @@ xprt_rdma_connect_worker(struct work_struct *work)
 	int rc = 0;
 
 	if (!xprt->shutdown) {
+		current->flags |= PF_FSTRANS;
 		xprt_clear_connected(xprt);
 
 		dprintk("RPC:       %s: %sconnect\n", __func__,
@@ -212,10 +213,10 @@ xprt_rdma_connect_worker(struct work_struct *work)
 
 out:
 	xprt_wake_pending_tasks(xprt, rc);
-
 out_clear:
 	dprintk("RPC:       %s: exit\n", __func__);
 	xprt_clear_connecting(xprt);
+	current->flags &= ~PF_FSTRANS;
 }
 
 /*
@@ -237,8 +238,7 @@ xprt_rdma_destroy(struct rpc_xprt *xprt)
 
 	dprintk("RPC:       %s: called\n", __func__);
 
-	cancel_delayed_work(&r_xprt->rdma_connect);
-	flush_scheduled_work();
+	cancel_delayed_work_sync(&r_xprt->rdma_connect);
 
 	xprt_clear_connected(xprt);
 
@@ -251,9 +251,7 @@ xprt_rdma_destroy(struct rpc_xprt *xprt)
 
 	xprt_rdma_free_addresses(xprt);
 
-	kfree(xprt->slot);
-	xprt->slot = NULL;
-	kfree(xprt);
+	xprt_free(xprt);
 
 	dprintk("RPC:       %s: returning\n", __func__);
 
@@ -285,20 +283,12 @@ xprt_setup_rdma(struct xprt_create *args)
 		return ERR_PTR(-EBADF);
 	}
 
-	xprt = kzalloc(sizeof(struct rpcrdma_xprt), GFP_KERNEL);
+	xprt = xprt_alloc(args->net, sizeof(struct rpcrdma_xprt),
+			xprt_rdma_slot_table_entries,
+			xprt_rdma_slot_table_entries);
 	if (xprt == NULL) {
 		dprintk("RPC:       %s: couldn't allocate rpcrdma_xprt\n",
 			__func__);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	xprt->max_reqs = xprt_rdma_slot_table_entries;
-	xprt->slot = kcalloc(xprt->max_reqs,
-				sizeof(struct rpc_rqst), GFP_KERNEL);
-	if (xprt->slot == NULL) {
-		dprintk("RPC:       %s: couldn't allocate %d slots\n",
-			__func__, xprt->max_reqs);
-		kfree(xprt);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -410,8 +400,7 @@ out3:
 out2:
 	rpcrdma_ia_close(&new_xprt->rx_ia);
 out1:
-	kfree(xprt->slot);
-	kfree(xprt);
+	xprt_free(xprt);
 	return ERR_PTR(rc);
 }
 
@@ -460,14 +449,13 @@ xprt_rdma_connect(struct rpc_task *task)
 	} else {
 		schedule_delayed_work(&r_xprt->rdma_connect, 0);
 		if (!RPC_IS_ASYNC(task))
-			flush_scheduled_work();
+			flush_delayed_work(&r_xprt->rdma_connect);
 	}
 }
 
 static int
-xprt_rdma_reserve_xprt(struct rpc_task *task)
+xprt_rdma_reserve_xprt(struct rpc_xprt *xprt, struct rpc_task *task)
 {
-	struct rpc_xprt *xprt = task->tk_xprt;
 	struct rpcrdma_xprt *r_xprt = rpcx_to_rdmax(xprt);
 	int credits = atomic_read(&r_xprt->rx_buf.rb_credits);
 
@@ -479,7 +467,7 @@ xprt_rdma_reserve_xprt(struct rpc_task *task)
 		BUG_ON(r_xprt->rx_buf.rb_cwndscale <= 0);
 	}
 	xprt->cwnd = credits * r_xprt->rx_buf.rb_cwndscale;
-	return xprt_reserve_xprt_cong(task);
+	return xprt_reserve_xprt_cong(xprt, task);
 }
 
 /*
@@ -725,6 +713,7 @@ static void xprt_rdma_print_stats(struct rpc_xprt *xprt, struct seq_file *seq)
 static struct rpc_xprt_ops xprt_rdma_procs = {
 	.reserve_xprt		= xprt_rdma_reserve_xprt,
 	.release_xprt		= xprt_release_xprt_cong, /* sunrpc/xprt.c */
+	.alloc_slot		= xprt_alloc_slot,
 	.release_request	= xprt_release_rqst_cong,       /* ditto */
 	.set_retrans_timeout	= xprt_set_retrans_timeout_def, /* ditto */
 	.rpcbind		= rpcb_getport_async,	/* sunrpc/rpcb_clnt.c */

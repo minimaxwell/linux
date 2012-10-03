@@ -1,8 +1,17 @@
+/*
+ * Many of the syscalls used in this file expect some of the arguments
+ * to be __user pointers not __kernel pointers.  To limit the sparse
+ * noise, turn off sparse checking for this file.
+ */
+#ifdef __CHECKER__
+#undef __CHECKER__
+#warning "Sparse checking disabled for this file"
+#endif
+
 #include <linux/unistd.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/minix_fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/romfs_fs.h>
 #include <linux/initrd.h>
 #include <linux/sched.h>
@@ -24,10 +33,11 @@ static int __init no_initrd(char *str)
 
 __setup("noinitrd", no_initrd);
 
-static int __init do_linuxrc(void * shell)
+static int __init do_linuxrc(void *_shell)
 {
-	static char *argv[] = { "linuxrc", NULL, };
-	extern char * envp_init[];
+	static const char *argv[] = { "linuxrc", NULL, };
+	extern const char *envp_init[];
+	const char *shell = _shell;
 
 	sys_close(old_fd);sys_close(root_fd);
 	sys_setsid();

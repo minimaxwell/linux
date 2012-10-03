@@ -73,7 +73,6 @@
 #include <linux/serial.h>
 
 
-#define DRIVER_VERSION			"1.2"
 #define MOD_AUTHOR			"Option Wireless"
 #define MOD_DESCRIPTION			"USB High Speed Option driver"
 #define MOD_LICENSE			"GPL"
@@ -106,13 +105,6 @@
 #define HSO_SERIAL_TTY_MINORS		256
 
 #define MAX_RX_URBS			2
-
-static inline struct hso_serial *get_serial_by_tty(struct tty_struct *tty)
-{
-	if (tty)
-		return tty->driver_data;
-	return NULL;
-}
 
 /*****************************************************************************/
 /* Debugging functions                                                       */
@@ -211,7 +203,7 @@ struct hso_serial_state_notification {
 	u16 wIndex;
 	u16 wLength;
 	u16 UART_state_bitmap;
-} __attribute__((packed));
+} __packed;
 
 struct hso_tiocmget {
 	struct mutex mutex;
@@ -256,9 +248,8 @@ struct hso_serial {
 	u8 dtr_state;
 	unsigned tx_urb_used:1;
 
+	struct tty_port port;
 	/* from usb_serial_port */
-	struct tty_struct *tty;
-	int open_count;
 	spinlock_t serial_lock;
 
 	int (*write_data) (struct hso_serial *serial);
@@ -325,7 +316,7 @@ struct hso_device {
 /* Prototypes                                                                */
 /*****************************************************************************/
 /* Serial driver functions */
-static int hso_serial_tiocmset(struct tty_struct *tty, struct file *file,
+static int hso_serial_tiocmset(struct tty_struct *tty,
 			       unsigned int set, unsigned int clear);
 static void ctrl_callback(struct urb *urb);
 static int put_rxbuf_data(struct urb *urb, struct hso_serial *serial);
@@ -401,7 +392,7 @@ static int disable_net;
 /* driver info */
 static const char driver_name[] = "hso";
 static const char tty_filename[] = "ttyHS";
-static const char *version = __FILE__ ": " DRIVER_VERSION " " MOD_AUTHOR;
+static const char *version = __FILE__ ": " MOD_AUTHOR;
 /* the usb driver itself (registered in hso_init) */
 static struct usb_driver hso_driver;
 /* serial structures */
@@ -478,6 +469,7 @@ static const struct usb_device_id hso_ids[] = {
 	{USB_DEVICE(0x0af0, 0x8600)},
 	{USB_DEVICE(0x0af0, 0x8800)},
 	{USB_DEVICE(0x0af0, 0x8900)},
+	{USB_DEVICE(0x0af0, 0x9000)},
 	{USB_DEVICE(0x0af0, 0xd035)},
 	{USB_DEVICE(0x0af0, 0xd055)},
 	{USB_DEVICE(0x0af0, 0xd155)},
@@ -843,17 +835,7 @@ static netdev_tx_t hso_net_start_xmit(struct sk_buff *skb,
 	return NETDEV_TX_OK;
 }
 
-static void hso_get_drvinfo(struct net_device *net, struct ethtool_drvinfo *info)
-{
-	struct hso_net *odev = netdev_priv(net);
-
-	strncpy(info->driver, driver_name, ETHTOOL_BUSINFO_LEN);
-	strncpy(info->version, DRIVER_VERSION, ETHTOOL_BUSINFO_LEN);
-	usb_make_path(odev->parent->usb, info->bus_info, sizeof info->bus_info);
-}
-
 static const struct ethtool_ops ops = {
-	.get_drvinfo = hso_get_drvinfo,
 	.get_link = ethtool_op_get_link
 };
 
@@ -968,10 +950,6 @@ static void packetizeRx(struct hso_net *odev, unsigned char *ip_pkt,
 				/* Packet is complete. Inject into stack. */
 				/* We have IP packet here */
 				odev->skb_rx_buf->protocol = cpu_to_be16(ETH_P_IP);
-				/* don't check it */
-				odev->skb_rx_buf->ip_summed =
-					CHECKSUM_UNNECESSARY;
-
 				skb_reset_mac_header(odev->skb_rx_buf);
 
 				/* Ship it off to the kernel */
@@ -1011,6 +989,18 @@ static void packetizeRx(struct hso_net *odev, unsigned char *ip_pkt,
 	}
 }
 
+static void fix_crc_bug(struct urb *urb, __le16 max_packet_size)
+{
+	static const u8 crc_check[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
+	u32 rest = urb->actual_length % le16_to_cpu(max_packet_size);
+
+	if (((rest == 5) || (rest == 6)) &&
+	    !memcmp(((u8 *)urb->transfer_buffer) + urb->actual_length - 4,
+		    crc_check, 4)) {
+		urb->actual_length -= 4;
+	}
+}
+
 /* Moving data from usb to kernel (in interrupt state) */
 static void read_bulk_callback(struct urb *urb)
 {
@@ -1039,17 +1029,8 @@ static void read_bulk_callback(struct urb *urb)
 		return;
 	}
 
-	if (odev->parent->port_spec & HSO_INFO_CRC_BUG) {
-		u32 rest;
-		u8 crc_check[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
-		rest = urb->actual_length %
-			le16_to_cpu(odev->in_endp->wMaxPacketSize);
-		if (((rest == 5) || (rest == 6)) &&
-		    !memcmp(((u8 *) urb->transfer_buffer) +
-			    urb->actual_length - 4, crc_check, 4)) {
-			urb->actual_length -= 4;
-		}
-	}
+	if (odev->parent->port_spec & HSO_INFO_CRC_BUG)
+		fix_crc_bug(urb, odev->in_endp->wMaxPacketSize);
 
 	/* do we even have a packet? */
 	if (urb->actual_length) {
@@ -1125,7 +1106,7 @@ static void hso_init_termios(struct ktermios *termios)
 static void _hso_serial_set_termios(struct tty_struct *tty,
 				    struct ktermios *old)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	struct ktermios *termios;
 
 	if (!serial) {
@@ -1201,7 +1182,7 @@ static void put_rxbuf_data_and_resubmit_ctrl_urb(struct hso_serial *serial)
 	struct urb *urb;
 
 	urb = serial->rx_urb[0];
-	if (serial->open_count > 0) {
+	if (serial->port.count > 0) {
 		count = put_rxbuf_data(urb, serial);
 		if (count == -1)
 			return;
@@ -1237,22 +1218,12 @@ static void hso_std_serial_read_bulk_callback(struct urb *urb)
 	DUMP1(urb->transfer_buffer, urb->actual_length);
 
 	/* Anyone listening? */
-	if (serial->open_count == 0)
+	if (serial->port.count == 0)
 		return;
 
 	if (status == 0) {
-		if (serial->parent->port_spec & HSO_INFO_CRC_BUG) {
-			u32 rest;
-			u8 crc_check[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
-			rest =
-			    urb->actual_length %
-			    le16_to_cpu(serial->in_endp->wMaxPacketSize);
-			if (((rest == 5) || (rest == 6)) &&
-			    !memcmp(((u8 *) urb->transfer_buffer) +
-				    urb->actual_length - 4, crc_check, 4)) {
-				urb->actual_length -= 4;
-			}
-		}
+		if (serial->parent->port_spec & HSO_INFO_CRC_BUG)
+			fix_crc_bug(urb, serial->in_endp->wMaxPacketSize);
 		/* Valid data, handle RX data */
 		spin_lock(&serial->serial_lock);
 		serial->rx_urb_filled[hso_urb_to_index(serial, urb)] = 1;
@@ -1289,7 +1260,7 @@ static void hso_unthrottle_tasklet(struct hso_serial *serial)
 
 static	void hso_unthrottle(struct tty_struct *tty)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 
 	tasklet_hi_schedule(&serial->unthrottle_tasklet);
 }
@@ -1325,15 +1296,12 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 	kref_get(&serial->parent->ref);
 
 	/* setup */
-	spin_lock_irq(&serial->serial_lock);
 	tty->driver_data = serial;
-	tty_kref_put(serial->tty);
-	serial->tty = tty_kref_get(tty);
-	spin_unlock_irq(&serial->serial_lock);
+	tty_port_tty_set(&serial->port, tty);
 
 	/* check for port already opened, if not set the termios */
-	serial->open_count++;
-	if (serial->open_count == 1) {
+	serial->port.count++;
+	if (serial->port.count == 1) {
 		serial->rx_state = RX_IDLE;
 		/* Force default termio settings */
 		_hso_serial_set_termios(tty, NULL);
@@ -1345,7 +1313,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 		result = hso_start_serial_device(serial->parent, GFP_KERNEL);
 		if (result) {
 			hso_stop_serial_device(serial->parent);
-			serial->open_count--;
+			serial->port.count--;
 			kref_put(&serial->parent->ref, hso_serial_ref_free);
 		}
 	} else {
@@ -1356,7 +1324,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 
 	/* done */
 	if (result)
-		hso_serial_tiocmset(tty, NULL, TIOCM_RTS | TIOCM_DTR, 0);
+		hso_serial_tiocmset(tty, TIOCM_RTS | TIOCM_DTR, 0);
 err_out:
 	mutex_unlock(&serial->parent->mutex);
 	return result;
@@ -1382,17 +1350,11 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 
 	/* reset the rts and dtr */
 	/* do the actual close */
-	serial->open_count--;
+	serial->port.count--;
 
-	if (serial->open_count <= 0) {
-		serial->open_count = 0;
-		spin_lock_irq(&serial->serial_lock);
-		if (serial->tty == tty) {
-			serial->tty->driver_data = NULL;
-			serial->tty = NULL;
-			tty_kref_put(tty);
-		}
-		spin_unlock_irq(&serial->serial_lock);
+	if (serial->port.count <= 0) {
+		serial->port.count = 0;
+		tty_port_tty_set(&serial->port, NULL);
 		if (!usb_gone)
 			hso_stop_serial_device(serial->parent);
 		tasklet_kill(&serial->unthrottle_tasklet);
@@ -1411,7 +1373,7 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 static int hso_serial_write(struct tty_struct *tty, const unsigned char *buf,
 			    int count)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	int space, tx_bytes;
 	unsigned long flags;
 
@@ -1443,7 +1405,7 @@ out:
 /* how much room is there for writing */
 static int hso_serial_write_room(struct tty_struct *tty)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	int room;
 	unsigned long flags;
 
@@ -1458,7 +1420,7 @@ static int hso_serial_write_room(struct tty_struct *tty)
 /* setup the term */
 static void hso_serial_set_termios(struct tty_struct *tty, struct ktermios *old)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	unsigned long flags;
 
 	if (old)
@@ -1467,7 +1429,7 @@ static void hso_serial_set_termios(struct tty_struct *tty, struct ktermios *old)
 
 	/* the actual setup */
 	spin_lock_irqsave(&serial->serial_lock, flags);
-	if (serial->open_count)
+	if (serial->port.count)
 		_hso_serial_set_termios(tty, old);
 	else
 		tty->termios = old;
@@ -1479,7 +1441,7 @@ static void hso_serial_set_termios(struct tty_struct *tty, struct ktermios *old)
 /* how many characters in the buffer */
 static int hso_serial_chars_in_buffer(struct tty_struct *tty)
 {
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	int chars;
 	unsigned long flags;
 
@@ -1646,14 +1608,14 @@ hso_wait_modem_status(struct hso_serial *serial, unsigned long arg)
  * NB: both 1->0 and 0->1 transitions are counted except for
  *     RI where only 0->1 is counted.
  */
-static int hso_get_count(struct hso_serial *serial,
-			  struct serial_icounter_struct __user *icnt)
+static int hso_get_count(struct tty_struct *tty,
+		  struct serial_icounter_struct *icount)
 {
-	struct serial_icounter_struct icount;
 	struct uart_icount cnow;
+	struct hso_serial *serial = tty->driver_data;
 	struct hso_tiocmget  *tiocmget = serial->tiocmget;
 
-	memset(&icount, 0, sizeof(struct serial_icounter_struct));
+	memset(icount, 0, sizeof(struct serial_icounter_struct));
 
 	if (!tiocmget)
 		 return -ENOENT;
@@ -1661,26 +1623,26 @@ static int hso_get_count(struct hso_serial *serial,
 	memcpy(&cnow, &tiocmget->icount, sizeof(struct uart_icount));
 	spin_unlock_irq(&serial->serial_lock);
 
-	icount.cts         = cnow.cts;
-	icount.dsr         = cnow.dsr;
-	icount.rng         = cnow.rng;
-	icount.dcd         = cnow.dcd;
-	icount.rx          = cnow.rx;
-	icount.tx          = cnow.tx;
-	icount.frame       = cnow.frame;
-	icount.overrun     = cnow.overrun;
-	icount.parity      = cnow.parity;
-	icount.brk         = cnow.brk;
-	icount.buf_overrun = cnow.buf_overrun;
+	icount->cts         = cnow.cts;
+	icount->dsr         = cnow.dsr;
+	icount->rng         = cnow.rng;
+	icount->dcd         = cnow.dcd;
+	icount->rx          = cnow.rx;
+	icount->tx          = cnow.tx;
+	icount->frame       = cnow.frame;
+	icount->overrun     = cnow.overrun;
+	icount->parity      = cnow.parity;
+	icount->brk         = cnow.brk;
+	icount->buf_overrun = cnow.buf_overrun;
 
-	return copy_to_user(icnt, &icount, sizeof(icount)) ? -EFAULT : 0;
+	return 0;
 }
 
 
-static int hso_serial_tiocmget(struct tty_struct *tty, struct file *file)
+static int hso_serial_tiocmget(struct tty_struct *tty)
 {
 	int retval;
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 	struct hso_tiocmget  *tiocmget;
 	u16 UART_state_bitmap;
 
@@ -1708,13 +1670,13 @@ static int hso_serial_tiocmget(struct tty_struct *tty, struct file *file)
 	return retval;
 }
 
-static int hso_serial_tiocmset(struct tty_struct *tty, struct file *file,
+static int hso_serial_tiocmset(struct tty_struct *tty,
 			       unsigned int set, unsigned int clear)
 {
 	int val = 0;
 	unsigned long flags;
 	int if_num;
-	struct hso_serial *serial = get_serial_by_tty(tty);
+	struct hso_serial *serial = tty->driver_data;
 
 	/* sanity check */
 	if (!serial) {
@@ -1751,11 +1713,10 @@ static int hso_serial_tiocmset(struct tty_struct *tty, struct file *file,
 			       USB_CTRL_SET_TIMEOUT);
 }
 
-static int hso_serial_ioctl(struct tty_struct *tty, struct file *file,
+static int hso_serial_ioctl(struct tty_struct *tty,
 			    unsigned int cmd, unsigned long arg)
 {
-	struct hso_serial *serial =  get_serial_by_tty(tty);
-	void __user *uarg = (void __user *)arg;
+	struct hso_serial *serial = tty->driver_data;
 	int ret = 0;
 	D4("IOCTL cmd: %d, arg: %ld", cmd, arg);
 
@@ -1764,10 +1725,6 @@ static int hso_serial_ioctl(struct tty_struct *tty, struct file *file,
 	switch (cmd) {
 	case TIOCMIWAIT:
 		ret = hso_wait_modem_status(serial, arg);
-		break;
-
-	case TIOCGICOUNT:
-		ret = hso_get_count(serial, uarg);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -1931,7 +1888,7 @@ static void intr_callback(struct urb *urb)
 				D1("Pending read interrupt on port %d\n", i);
 				spin_lock(&serial->serial_lock);
 				if (serial->rx_state == RX_IDLE &&
-					serial->open_count > 0) {
+					serial->port.count > 0) {
 					/* Setup and send a ctrl req read on
 					 * port i */
 					if (!serial->rx_urb_filled[0]) {
@@ -1980,14 +1937,13 @@ static void hso_std_serial_write_bulk_callback(struct urb *urb)
 
 	spin_lock(&serial->serial_lock);
 	serial->tx_urb_used = 0;
-	tty = tty_kref_get(serial->tty);
 	spin_unlock(&serial->serial_lock);
 	if (status) {
 		handle_usb_error(status, __func__, serial->parent);
-		tty_kref_put(tty);
 		return;
 	}
 	hso_put_activity(serial->parent);
+	tty = tty_port_tty_get(&serial->port);
 	if (tty) {
 		tty_wakeup(tty);
 		tty_kref_put(tty);
@@ -2027,7 +1983,6 @@ static void ctrl_callback(struct urb *urb)
 	struct hso_serial *serial = urb->context;
 	struct usb_ctrlrequest *req;
 	int status = urb->status;
-	struct tty_struct *tty;
 
 	/* sanity check */
 	if (!serial)
@@ -2035,11 +1990,9 @@ static void ctrl_callback(struct urb *urb)
 
 	spin_lock(&serial->serial_lock);
 	serial->tx_urb_used = 0;
-	tty = tty_kref_get(serial->tty);
 	spin_unlock(&serial->serial_lock);
 	if (status) {
 		handle_usb_error(status, __func__, serial->parent);
-		tty_kref_put(tty);
 		return;
 	}
 
@@ -2057,13 +2010,15 @@ static void ctrl_callback(struct urb *urb)
 		put_rxbuf_data_and_resubmit_ctrl_urb(serial);
 		spin_unlock(&serial->serial_lock);
 	} else {
+		struct tty_struct *tty = tty_port_tty_get(&serial->port);
 		hso_put_activity(serial->parent);
-		if (tty)
+		if (tty) {
 			tty_wakeup(tty);
+			tty_kref_put(tty);
+		}
 		/* response to a write command */
 		hso_kick_transmit(serial);
 	}
-	tty_kref_put(tty);
 }
 
 /* handle RX data for serial port */
@@ -2079,8 +2034,7 @@ static int put_rxbuf_data(struct urb *urb, struct hso_serial *serial)
 		return -2;
 	}
 
-	/* All callers to put_rxbuf_data hold serial_lock */
-	tty = tty_kref_get(serial->tty);
+	tty = tty_port_tty_get(&serial->port);
 
 	/* Push data to tty */
 	if (tty) {
@@ -2100,12 +2054,12 @@ static int put_rxbuf_data(struct urb *urb, struct hso_serial *serial)
 			write_length_remaining -= curr_write_len;
 			tty_flip_buffer_push(tty);
 		}
+		tty_kref_put(tty);
 	}
 	if (write_length_remaining == 0) {
 		serial->curr_rx_urb_offset = 0;
 		serial->rx_urb_filled[hso_urb_to_index(serial, urb)] = 0;
 	}
-	tty_kref_put(tty);
 	return write_length_remaining;
 }
 
@@ -2346,6 +2300,7 @@ static int hso_serial_common_create(struct hso_serial *serial, int num_urbs,
 	serial->minor = minor;
 	serial->magic = HSO_SERIAL_MAGIC;
 	spin_lock_init(&serial->serial_lock);
+	tty_port_init(&serial->port);
 	serial->num_rx_urbs = num_urbs;
 
 	/* RX, allocate urb and initialize */
@@ -2447,10 +2402,8 @@ static void hso_free_net_device(struct hso_device *hso_dev)
 
 	remove_net_device(hso_net->parent);
 
-	if (hso_net->net) {
+	if (hso_net->net)
 		unregister_netdev(hso_net->net);
-		free_netdev(hso_net->net);
-	}
 
 	/* start freeing */
 	for (i = 0; i < MUX_BULK_RX_BUF_COUNT; i++) {
@@ -2461,6 +2414,9 @@ static void hso_free_net_device(struct hso_device *hso_dev)
 	usb_free_urb(hso_net->mux_bulk_tx_urb);
 	kfree(hso_net->mux_bulk_tx_buf);
 	hso_net->mux_bulk_tx_buf = NULL;
+
+	if (hso_net->net)
+		free_netdev(hso_net->net);
 
 	kfree(hso_dev);
 }
@@ -2654,15 +2610,15 @@ exit:
 
 static void hso_free_tiomget(struct hso_serial *serial)
 {
-	struct hso_tiocmget *tiocmget = serial->tiocmget;
+	struct hso_tiocmget *tiocmget;
+	if (!serial)
+		return;
+	tiocmget = serial->tiocmget;
 	if (tiocmget) {
-		if (tiocmget->urb) {
-			usb_free_urb(tiocmget->urb);
-			tiocmget->urb = NULL;
-		}
+		usb_free_urb(tiocmget->urb);
+		tiocmget->urb = NULL;
 		serial->tiocmget = NULL;
 		kfree(tiocmget);
-
 	}
 }
 
@@ -3008,12 +2964,14 @@ static int hso_probe(struct usb_interface *interface,
 
 	case HSO_INTF_BULK:
 		/* It's a regular bulk interface */
-		if (((port_spec & HSO_PORT_MASK) == HSO_PORT_NETWORK) &&
-		    !disable_net)
-			hso_dev = hso_create_net_device(interface, port_spec);
-		else
+		if ((port_spec & HSO_PORT_MASK) == HSO_PORT_NETWORK) {
+			if (!disable_net)
+				hso_dev =
+				    hso_create_net_device(interface, port_spec);
+		} else {
 			hso_dev =
 			    hso_create_bulk_serial_device(interface, port_spec);
+		}
 		if (!hso_dev)
 			goto exit;
 		break;
@@ -3121,7 +3079,7 @@ static int hso_resume(struct usb_interface *iface)
 	/* Start all serial ports */
 	for (i = 0; i < HSO_SERIAL_TTY_MINORS; i++) {
 		if (serial_table[i] && (serial_table[i]->interface == iface)) {
-			if (dev2ser(serial_table[i])->open_count) {
+			if (dev2ser(serial_table[i])->port.count) {
 				result =
 				    hso_start_serial_device(serial_table[i], GFP_NOIO);
 				hso_kick_transmit(dev2ser(serial_table[i]));
@@ -3195,13 +3153,12 @@ static void hso_free_interface(struct usb_interface *interface)
 		if (serial_table[i] &&
 		    (serial_table[i]->interface == interface)) {
 			hso_dev = dev2ser(serial_table[i]);
-			spin_lock_irq(&hso_dev->serial_lock);
-			tty = tty_kref_get(hso_dev->tty);
-			spin_unlock_irq(&hso_dev->serial_lock);
-			if (tty)
+			tty = tty_port_tty_get(&hso_dev->port);
+			if (tty) {
 				tty_hangup(tty);
+				tty_kref_put(tty);
+			}
 			mutex_lock(&hso_dev->parent->mutex);
-			tty_kref_put(tty);
 			hso_dev->parent->usb_gone = 1;
 			mutex_unlock(&hso_dev->parent->mutex);
 			kref_put(&serial_table[i]->ref, hso_serial_ref_free);
@@ -3301,6 +3258,7 @@ static const struct tty_operations hso_serial_ops = {
 	.chars_in_buffer = hso_serial_chars_in_buffer,
 	.tiocmget = hso_serial_tiocmget,
 	.tiocmset = hso_serial_tiocmset,
+	.get_icount = hso_get_count,
 	.unthrottle = hso_unthrottle
 };
 
@@ -3313,6 +3271,7 @@ static struct usb_driver hso_driver = {
 	.resume = hso_resume,
 	.reset_resume = hso_resume,
 	.supports_autosuspend = 1,
+	.disable_hub_initiated_lpm = 1,
 };
 
 static int __init hso_init(void)
@@ -3334,8 +3293,6 @@ static int __init hso_init(void)
 		return -ENOMEM;
 
 	/* fill in all needed values */
-	tty_drv->magic = TTY_DRIVER_MAGIC;
-	tty_drv->owner = THIS_MODULE;
 	tty_drv->driver_name = driver_name;
 	tty_drv->name = tty_filename;
 
@@ -3344,7 +3301,6 @@ static int __init hso_init(void)
 		tty_drv->major = tty_major;
 
 	tty_drv->minor_start = 0;
-	tty_drv->num = HSO_SERIAL_TTY_MINORS;
 	tty_drv->type = TTY_DRIVER_TYPE_SERIAL;
 	tty_drv->subtype = SERIAL_TYPE_NORMAL;
 	tty_drv->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_DYNAMIC_DEV;
@@ -3357,7 +3313,7 @@ static int __init hso_init(void)
 	if (result) {
 		printk(KERN_ERR "%s - tty_register_driver failed(%d)\n",
 			__func__, result);
-		return result;
+		goto err_free_tty;
 	}
 
 	/* register this module as an usb driver */
@@ -3365,13 +3321,16 @@ static int __init hso_init(void)
 	if (result) {
 		printk(KERN_ERR "Could not register hso driver? error: %d\n",
 			result);
-		/* cleanup serial interface */
-		tty_unregister_driver(tty_drv);
-		return result;
+		goto err_unreg_tty;
 	}
 
 	/* done */
 	return 0;
+err_unreg_tty:
+	tty_unregister_driver(tty_drv);
+err_free_tty:
+	put_tty_driver(tty_drv);
+	return result;
 }
 
 static void __exit hso_exit(void)
@@ -3379,6 +3338,7 @@ static void __exit hso_exit(void)
 	printk(KERN_INFO "hso: unloaded\n");
 
 	tty_unregister_driver(tty_drv);
+	put_tty_driver(tty_drv);
 	/* deregister the usb driver */
 	usb_deregister(&hso_driver);
 }
@@ -3390,7 +3350,6 @@ module_exit(hso_exit);
 MODULE_AUTHOR(MOD_AUTHOR);
 MODULE_DESCRIPTION(MOD_DESCRIPTION);
 MODULE_LICENSE(MOD_LICENSE);
-MODULE_INFO(Version, DRIVER_VERSION);
 
 /* change the debug level (eg: insmod hso.ko debug=0x04) */
 MODULE_PARM_DESC(debug, "Level of debug [0x01 | 0x02 | 0x04 | 0x08 | 0x10]");

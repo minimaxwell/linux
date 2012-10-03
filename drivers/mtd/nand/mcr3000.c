@@ -64,13 +64,11 @@ struct mcr3000_host
 /*
  * Define partitions for flash device
  */
-#ifdef CONFIG_MTD_PARTITIONS
 static struct mtd_partition partition_info[] = {
 	{.name		= "System",
 	 .size		= (MTDPART_SIZ_FULL),
 	 .offset	= (MTDPART_OFS_APPEND)}
 };
-#endif		//#ifdef CONFIG_MTD_PARTITIONS
 
 #define NUM_PARTITIONS 1
 
@@ -132,14 +130,12 @@ static int mcr3000_device_ready(struct mtd_info *mtd)
 	return (0);
 }
 
-#ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
-#endif
 
 /*
  * mcr3000_remove
  */
-static int __devexit mcr3000_remove(struct of_device *ofdev)
+static int __devexit mcr3000_remove(struct platform_device *ofdev)
 {
 	struct mcr3000_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
@@ -161,7 +157,7 @@ static int __devexit mcr3000_remove(struct of_device *ofdev)
 /*
  * mcr3000_probe
  */
-static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_device_id *ofid)
+static int __devinit mcr3000_probe(struct platform_device *ofdev)
 {
 	struct mcr3000_host *host;
 	struct mtd_info *mtd;
@@ -268,21 +264,7 @@ static int __devinit mcr3000_probe(struct of_device *ofdev, const struct of_devi
 		goto GPIO_ERROR;
 	}
 
-#ifdef CONFIG_MTD_PARTITIONS
-	num_partitions = parse_mtd_partitions(mtd, part_probes, &partitions, 0);
-	if (num_partitions < 0) {
-		dev_err(&ofdev->dev, "partitions undeclared\n");
-		res = num_partitions;
-		goto PARTITION_ERROR;
-	}
-#endif
-	if (num_partitions == 0) {
-		partitions 	= partition_info;
-		num_partitions 	= NUM_PARTITIONS;
-		dev_notice(&ofdev->dev, "Using static partition definition\n");
-	}
-	
-	if (add_mtd_partitions(mtd, partitions, num_partitions)) {
+	if (mtd_device_parse_register(mtd, part_probes, 0, partitions, num_partitions)) {
 		dev_err(&ofdev->dev, "unable to add mtd partition\n");
 		res = -EINVAL;
 		goto PARTITION_ERROR;
@@ -327,7 +309,7 @@ MODULE_DEVICE_TABLE(of, mcr3000_match);
 /*
  * driver device registration
  */
-static struct of_platform_driver mcr3000_driver = {
+static struct platform_driver mcr3000_driver = {
 	.probe		= mcr3000_probe,
 	.remove		= __devexit_p(mcr3000_remove),
 	.driver		=
@@ -343,7 +325,7 @@ static struct of_platform_driver mcr3000_driver = {
  */
 int __init mcr3000_init (void)
 {
-	return of_register_platform_driver(&mcr3000_driver);
+	return platform_driver_register(&mcr3000_driver);
 }
 
 /*
@@ -351,7 +333,7 @@ int __init mcr3000_init (void)
  */
 static void __exit mcr3000_cleanup(void)
 {
-	of_unregister_platform_driver(&mcr3000_driver);
+	platform_driver_unregister(&mcr3000_driver);
 }
 
 module_init(mcr3000_init);

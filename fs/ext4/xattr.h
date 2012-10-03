@@ -27,7 +27,9 @@ struct ext4_xattr_header {
 	__le32	h_refcount;	/* reference count */
 	__le32	h_blocks;	/* number of disk blocks used */
 	__le32	h_hash;		/* hash value of all attributes */
-	__u32	h_reserved[4];	/* zero right now */
+	__le32	h_checksum;	/* crc32c(uuid+id+xattrblock) */
+				/* id = inum if refcount=1, blknum otherwise */
+	__u32	h_reserved[3];	/* zero right now */
 };
 
 struct ext4_xattr_ibody_header {
@@ -83,8 +85,8 @@ extern void ext4_xattr_put_super(struct super_block *);
 extern int ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
 			    struct ext4_inode *raw_inode, handle_t *handle);
 
-extern int init_ext4_xattr(void);
-extern void exit_ext4_xattr(void);
+extern int __init ext4_init_xattr(void);
+extern void ext4_exit_xattr(void);
 
 extern const struct xattr_handler *ext4_xattr_handlers[];
 
@@ -121,14 +123,14 @@ ext4_xattr_put_super(struct super_block *sb)
 {
 }
 
-static inline int
-init_ext4_xattr(void)
+static __init inline int
+ext4_init_xattr(void)
 {
 	return 0;
 }
 
 static inline void
-exit_ext4_xattr(void)
+ext4_exit_xattr(void)
 {
 }
 
@@ -145,10 +147,10 @@ ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
 
 #ifdef CONFIG_EXT4_FS_SECURITY
 extern int ext4_init_security(handle_t *handle, struct inode *inode,
-				struct inode *dir);
+			      struct inode *dir, const struct qstr *qstr);
 #else
 static inline int ext4_init_security(handle_t *handle, struct inode *inode,
-				struct inode *dir)
+				     struct inode *dir, const struct qstr *qstr)
 {
 	return 0;
 }

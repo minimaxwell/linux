@@ -65,13 +65,11 @@ struct cmpc885_host
 /*
  * Define partitions for flash device
  */
-#ifdef CONFIG_MTD_PARTITIONS
 static struct mtd_partition partition_info[] = {
 	{.name		= "System",
 	 .size		= (MTDPART_SIZ_FULL),
 	 .offset	= (MTDPART_OFS_APPEND)}
 };
-#endif		//#ifdef CONFIG_MTD_PARTITIONS
 
 #define NUM_PARTITIONS 1
 
@@ -133,20 +131,18 @@ static int cmpc885_device_ready(struct mtd_info *mtd)
 	return (0);
 }
 
-#ifdef CONFIG_MTD_PARTITIONS
 /* un peu tordu comme facon de faire, il faut trouver mieux */
 #ifndef CONFIG_MTD_NAND_MCR3000
 const char *part_probes[] = { "cmdlinepart", NULL };
 #else
 extern const char *part_probes[];
 #endif
-#endif
 
 
 /*
  * cmpc885_remove
  */
-static int __devexit cmpc885_remove(struct of_device *ofdev)
+static int __devexit cmpc885_remove(struct platform_device *ofdev)
 {
 	struct cmpc885_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
@@ -168,7 +164,7 @@ static int __devexit cmpc885_remove(struct of_device *ofdev)
 /*
  * cmpc885_probe
  */
-static int __devinit cmpc885_probe(struct of_device *ofdev, const struct of_device_id *ofid)
+static int __devinit cmpc885_probe(struct platform_device *ofdev)
 {
 	struct cmpc885_host *host;
 	struct mtd_info *mtd;
@@ -275,21 +271,7 @@ static int __devinit cmpc885_probe(struct of_device *ofdev, const struct of_devi
 		goto GPIO_ERROR;
 	}
 
-#ifdef CONFIG_MTD_PARTITIONS
-	num_partitions = parse_mtd_partitions(mtd, part_probes, &partitions, 0);
-	if (num_partitions < 0) {
-		dev_err(&ofdev->dev, "partitions undeclared\n");
-		res = num_partitions;
-		goto PARTITION_ERROR;
-	}
-#endif
-	if (num_partitions == 0) {
-		partitions 	= partition_info;
-		num_partitions 	= NUM_PARTITIONS;
-		dev_notice(&ofdev->dev, "Using static partition definition\n");
-	}
-	
-	if (add_mtd_partitions(mtd, partitions, num_partitions)) {
+	if (mtd_device_parse_register(mtd, part_probes, 0, partitions, num_partitions)) {
 		dev_err(&ofdev->dev, "unable to add mtd partition\n");
 		res = -EINVAL;
 		goto PARTITION_ERROR;
@@ -335,7 +317,7 @@ MODULE_DEVICE_TABLE(of, cmpc885_match);
 /*
  * driver device registration
  */
-static struct of_platform_driver cmpc885_driver = {
+static struct platform_driver cmpc885_driver = {
 	.probe		= cmpc885_probe,
 	.remove		= __devexit_p(cmpc885_remove),
 	.driver		=
@@ -351,7 +333,7 @@ static struct of_platform_driver cmpc885_driver = {
  */
 int __init cmpc885_init (void)
 {
-	return of_register_platform_driver(&cmpc885_driver);
+	return platform_driver_register(&cmpc885_driver);
 }
 
 /*
@@ -359,7 +341,7 @@ int __init cmpc885_init (void)
  */
 static void __exit cmpc885_cleanup(void)
 {
-	of_unregister_platform_driver(&cmpc885_driver);
+	platform_driver_unregister(&cmpc885_driver);
 }
 
 module_init(cmpc885_init);

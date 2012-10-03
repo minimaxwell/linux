@@ -30,8 +30,10 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 #include <asm/fpu.h>
+#include <asm/switch_to.h>
 
 struct task_struct *last_task_used_math = NULL;
+struct pt_regs fake_swapper_regs = { 0, };
 
 void show_regs(struct pt_regs *regs)
 {
@@ -285,7 +287,7 @@ void show_regs(struct pt_regs *regs)
 /*
  * Create a kernel thread
  */
-ATTRIB_NORET void kernel_thread_helper(void *arg, int (*fn)(void *))
+__noreturn void kernel_thread_helper(void *arg, int (*fn)(void *))
 {
 	do_exit(fn(arg));
 }
@@ -483,7 +485,7 @@ asmlinkage int sys_vfork(unsigned long r2, unsigned long r3,
 /*
  * sys_execve() executes a new program.
  */
-asmlinkage int sys_execve(char *ufilename, char **uargv,
+asmlinkage int sys_execve(const char *ufilename, char **uargv,
 			  char **uenvp, unsigned long r5,
 			  unsigned long r6, unsigned long r7,
 			  struct pt_regs *pregs)
@@ -497,8 +499,8 @@ asmlinkage int sys_execve(char *ufilename, char **uargv,
 		goto out;
 
 	error = do_execve(filename,
-			  (char __user * __user *)uargv,
-			  (char __user * __user *)uenvp,
+			  (const char __user *const __user *)uargv,
+			  (const char __user *const __user *)uenvp,
 			  pregs);
 	putname(filename);
 out:

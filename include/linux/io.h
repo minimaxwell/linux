@@ -29,10 +29,10 @@ void __iowrite64_copy(void __iomem *to, const void *from, size_t count);
 
 #ifdef CONFIG_MMU
 int ioremap_page_range(unsigned long addr, unsigned long end,
-		       unsigned long phys_addr, pgprot_t prot);
+		       phys_addr_t phys_addr, pgprot_t prot);
 #else
 static inline int ioremap_page_range(unsigned long addr, unsigned long end,
-				     unsigned long phys_addr, pgprot_t prot)
+				     phys_addr_t phys_addr, pgprot_t prot)
 {
 	return 0;
 }
@@ -66,5 +66,14 @@ void devm_iounmap(struct device *dev, void __iomem *addr);
 int check_signature(const volatile void __iomem *io_addr,
 			const unsigned char *signature, int length);
 void devm_ioremap_release(struct device *dev, void *res);
+
+/*
+ * Some systems do not have legacy ISA devices.
+ * /dev/port is not a valid interface on these systems.
+ * So for those archs, <asm/io.h> should define the following symbol.
+ */
+#ifndef arch_has_dev_port
+#define arch_has_dev_port()     (1)
+#endif
 
 #endif /* _LINUX_IO_H */

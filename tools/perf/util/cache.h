@@ -23,6 +23,7 @@ extern int perf_config(config_fn_t fn, void *);
 extern int perf_config_int(const char *, const char *);
 extern int perf_config_bool(const char *, const char *);
 extern int config_error_nonbool(const char *);
+extern const char *perf_config_dirname(const char *, const char *);
 
 /* pager.c */
 extern void setup_pager(void);
@@ -32,16 +33,39 @@ extern int pager_use_color;
 
 extern int use_browser;
 
-#ifdef NO_NEWT_SUPPORT
-static inline void setup_browser(void)
+#if defined(NO_NEWT_SUPPORT) && defined(NO_GTK2_SUPPORT)
+static inline void setup_browser(bool fallback_to_pager)
 {
-	setup_pager();
+	if (fallback_to_pager)
+		setup_pager();
 }
 static inline void exit_browser(bool wait_for_ok __used) {}
 #else
-void setup_browser(void);
+void setup_browser(bool fallback_to_pager);
 void exit_browser(bool wait_for_ok);
+
+#ifdef NO_NEWT_SUPPORT
+static inline int ui__init(void)
+{
+	return -1;
+}
+static inline void ui__exit(bool wait_for_ok __used) {}
+#else
+int ui__init(void);
+void ui__exit(bool wait_for_ok);
 #endif
+
+#ifdef NO_GTK2_SUPPORT
+static inline int perf_gtk__init(void)
+{
+	return -1;
+}
+static inline void perf_gtk__exit(bool wait_for_ok __used) {}
+#else
+int perf_gtk__init(void);
+void perf_gtk__exit(bool wait_for_ok);
+#endif
+#endif /* NO_NEWT_SUPPORT && NO_GTK2_SUPPORT */
 
 char *alias_lookup(const char *alias);
 int split_cmdline(char *cmdline, const char ***argv);
@@ -81,6 +105,8 @@ extern char *perf_path(const char *fmt, ...) __attribute__((format (printf, 1, 2
 extern char *perf_pathdup(const char *fmt, ...)
 	__attribute__((format (printf, 1, 2)));
 
+#ifdef NO_STRLCPY
 extern size_t strlcpy(char *dest, const char *src, size_t size);
+#endif
 
 #endif /* __PERF_CACHE_H */

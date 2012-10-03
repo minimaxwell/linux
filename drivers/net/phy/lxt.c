@@ -7,10 +7,6 @@
  *
  * Copyright (c) 2004 Freescale Semiconductor, Inc.
  *
- * Copyright (c) 2010 CSSI
- *
- * Added support for LXT973
- *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
  * Free Software Foundation;  either version 2 of the  License, or (at your
@@ -58,7 +54,7 @@
 #define MII_LXT971_ISR		19  /* Interrupt Status Register */
 
 /* register definitions for the 973 */
-#define MII_LXT973_PCR 16 /* Port Configuration Register */
+#define MII_LXT973_PCR		16 /* Port Configuration Register */
 #define PCR_FIBER_SELECT 1
 #define MII_LXT973_SFR		27  /* Special Function Register */
 
@@ -133,17 +129,9 @@ static int lxt971_config_intr(struct phy_device *phydev)
 	return err;
 }
 
-/**
- * ERRATA on LXT973
- *
- * Item 4: MDIO Interface and Repeated Polling
- * Problem: Repeated polling of odd-numbered registers via the MDIO interface randomly returns the
- * 	contents of the previous even register.
- * Implication: Managed applications may not obtain the correct register contents when a particular
- * 	register is monitored for device status.
- * Workaround: None.
- * Status: This erratum has been previously fixed (in rev A3)
- *
+/*
+ * A2 version of LXT973 chip has an ERRATA: it randomly return the contents
+ * of the previous even register when you read a odd register regularly
  */
 
 static int lxt973a2_update_link(struct phy_device *phydev)
@@ -161,11 +149,11 @@ static int lxt973a2_update_link(struct phy_device *phydev)
 	control = phy_read(phydev, MII_BMCR);
 	if (control < 0)
 		return control;
-	
+
 	do {
 		/* Read link and autonegotiation status */
 		status = phy_read(phydev, MII_BMSR);
-	} while (status>=0 && retry-- && status == control);
+	} while (status >= 0 && retry-- && status == control);
 
 	if (status < 0)
 		return status;
@@ -185,27 +173,28 @@ int lxt973a2_read_status(struct phy_device *phydev)
 	int lpa;
 	int lpagb = 0;
 
-	/* Update the link, but return if there
-	 * was an error */
+	/* Update the link, but return if there was an error */
 	err = lxt973a2_update_link(phydev);
 	if (err)
 		return err;
 
 	if (AUTONEG_ENABLE == phydev->autoneg) {
 		int retry = 1;
-		
+
 		adv = phy_read(phydev, MII_ADVERTISE);
 
 		if (adv < 0)
 			return adv;
-		
+
 		do {
 			lpa = phy_read(phydev, MII_LPA);
 
 			if (lpa < 0)
 				return lpa;
 
-			/* If both registers are equal, it is suspect but not impossible, hence a new try */	
+			/* If both registers are equal, it is suspect but not
+			* impossible, hence a new try
+			*/
 		} while (lpa == adv && retry--);
 
 		lpa &= adv;
@@ -221,19 +210,20 @@ int lxt973a2_read_status(struct phy_device *phydev)
 				phydev->duplex = DUPLEX_FULL;
 		} else if (lpa & (LPA_100FULL | LPA_100HALF)) {
 			phydev->speed = SPEED_100;
-			
+
 			if (lpa & LPA_100FULL)
 				phydev->duplex = DUPLEX_FULL;
 		} else
 			if (lpa & LPA_10FULL)
 				phydev->duplex = DUPLEX_FULL;
 
-		if (phydev->duplex == DUPLEX_FULL){
+		if (phydev->duplex == DUPLEX_FULL) {
 			phydev->pause = lpa & LPA_PAUSE_CAP ? 1 : 0;
 			phydev->asym_pause = lpa & LPA_PAUSE_ASYM ? 1 : 0;
 		}
 	} else {
 		int bmcr = phy_read(phydev, MII_BMCR);
+
 		if (bmcr < 0)
 			return bmcr;
 
@@ -257,17 +247,20 @@ int lxt973a2_read_status(struct phy_device *phydev)
 
 static int lxt973_read_status(struct phy_device *phydev)
 {
-	return (int)phydev->priv&PHYDEV_PRIV_REVA2 ? lxt973a2_read_status(phydev) : genphy_read_status(phydev);
+	return (int)phydev->priv&PHYDEV_PRIV_REVA2 ?
+			lxt973a2_read_status(phydev) :
+			genphy_read_status(phydev);
 }
 
 static int lxt973_probe(struct phy_device *phydev)
 {
 	int val = phy_read(phydev, MII_LXT973_PCR);
 	int priv = 0;
-	
+
 	phydev->priv = NULL;
-	
-	if (val<0) return val;
+
+	if (val < 0)
+		return val;
 
 	if (val & PCR_FIBER_SELECT) {
 		/*
@@ -282,24 +275,27 @@ static int lxt973_probe(struct phy_device *phydev)
 		priv |= PHYDEV_PRIV_FIBER;
 	}
 	val = phy_read(phydev, MII_PHYSID2);
-	
-	if (val<0) return val;
-	
+
+	if (val < 0)
+		return val;
+
 	if ((val & 0xf) == 0) { /* rev A2 */
 		dev_info(&phydev->dev, " LXT973 revision A2 has bugs\n");
 		priv |= PHYDEV_PRIV_REVA2;
 	}
-	phydev->priv = (void*)priv;
+	phydev->priv = (void *)priv;
 	return 0;
 }
 
 static int lxt973_config_aneg(struct phy_device *phydev)
 {
 	/* Do nothing if port is in fiber mode. */
-	return (int)phydev->priv&PHYDEV_PRIV_FIBER ? 0 : genphy_config_aneg(phydev);
+	return (int)phydev->priv&PHYDEV_PRIV_FIBER ?
+			0 : genphy_config_aneg(phydev);
 }
 
-static struct phy_driver lxt970_driver = {
+static struct phy_driver lxt97x_driver[] = {
+{
 	.phy_id		= 0x78100000,
 	.name		= "LXT970",
 	.phy_id_mask	= 0xfffffff0,
@@ -310,10 +306,8 @@ static struct phy_driver lxt970_driver = {
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= lxt970_ack_interrupt,
 	.config_intr	= lxt970_config_intr,
-	.driver 	= { .owner = THIS_MODULE,},
-};
-
-static struct phy_driver lxt971_driver = {
+	.driver		= { .owner = THIS_MODULE,},
+}, {
 	.phy_id		= 0x001378e0,
 	.name		= "LXT971",
 	.phy_id_mask	= 0xfffffff0,
@@ -323,10 +317,8 @@ static struct phy_driver lxt971_driver = {
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= lxt971_ack_interrupt,
 	.config_intr	= lxt971_config_intr,
-	.driver 	= { .owner = THIS_MODULE,},
-};
-
-static struct phy_driver lxt973_driver = {
+	.driver		= { .owner = THIS_MODULE,},
+}, {
 	.phy_id		= 0x00137a10,
 	.name		= "LXT973",
 	.phy_id_mask	= 0xfffffff0,
@@ -338,45 +330,25 @@ static struct phy_driver lxt973_driver = {
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
 	.isolate	= genphy_isolate,
-	.driver 	= { .owner = THIS_MODULE,},
-};
+	.driver		= { .owner = THIS_MODULE,},
+} };
 
 static int __init lxt_init(void)
 {
-	int ret;
-
-	ret = phy_driver_register(&lxt970_driver);
-	if (ret)
-		goto err1;
-
-	ret = phy_driver_register(&lxt971_driver);
-	if (ret)
-		goto err2;
-
-	ret = phy_driver_register(&lxt973_driver);
-	if (ret)
-		goto err3;
-	return 0;
-
- err3:
-	phy_driver_unregister(&lxt971_driver);
- err2:
-	phy_driver_unregister(&lxt970_driver);
- err1:
-	return ret;
+	return phy_drivers_register(lxt97x_driver,
+		ARRAY_SIZE(lxt97x_driver));
 }
 
 static void __exit lxt_exit(void)
 {
-	phy_driver_unregister(&lxt970_driver);
-	phy_driver_unregister(&lxt971_driver);
-	phy_driver_unregister(&lxt973_driver);
+	phy_drivers_unregister(lxt97x_driver,
+		ARRAY_SIZE(lxt97x_driver));
 }
 
 module_init(lxt_init);
 module_exit(lxt_exit);
- 
-static struct mdio_device_id lxt_tbl[] = {
+
+static struct mdio_device_id __maybe_unused lxt_tbl[] = {
 	{ 0x78100000, 0xfffffff0 },
 	{ 0x001378e0, 0xfffffff0 },
 	{ 0x00137a10, 0xfffffff0 },

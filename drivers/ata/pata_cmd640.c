@@ -161,6 +161,17 @@ static int cmd640_port_start(struct ata_port *ap)
 	return 0;
 }
 
+static bool cmd640_sff_irq_check(struct ata_port *ap)
+{
+	struct pci_dev *pdev	= to_pci_dev(ap->host->dev);
+	int irq_reg		= ap->port_no ? ARTIM23 : CFR;
+	u8  irq_stat, irq_mask	= ap->port_no ? 0x10 : 0x04;
+
+	pci_read_config_byte(pdev, irq_reg, &irq_stat);
+
+	return irq_stat & irq_mask;
+}
+
 static struct scsi_host_template cmd640_sht = {
 	ATA_PIO_SHT(DRV_NAME),
 };
@@ -169,6 +180,7 @@ static struct ata_port_operations cmd640_port_ops = {
 	.inherits	= &ata_sff_port_ops,
 	/* In theory xfer_noirq is not needed once we kill the prefetcher */
 	.sff_data_xfer	= ata_sff_data_xfer_noirq,
+	.sff_irq_check	= cmd640_sff_irq_check,
 	.qc_issue	= cmd640_qc_issue,
 	.cable_detect	= ata_cable_40wire,
 	.set_piomode	= cmd640_set_piomode,
@@ -251,21 +263,10 @@ static struct pci_driver cmd640_pci_driver = {
 #endif
 };
 
-static int __init cmd640_init(void)
-{
-	return pci_register_driver(&cmd640_pci_driver);
-}
-
-static void __exit cmd640_exit(void)
-{
-	pci_unregister_driver(&cmd640_pci_driver);
-}
+module_pci_driver(cmd640_pci_driver);
 
 MODULE_AUTHOR("Alan Cox");
 MODULE_DESCRIPTION("low-level driver for CMD640 PATA controllers");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pci, cmd640);
 MODULE_VERSION(DRV_VERSION);
-
-module_init(cmd640_init);
-module_exit(cmd640_exit);

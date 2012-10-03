@@ -17,6 +17,7 @@
  * Authors:
  *   Yaozu (Eddie) Dong <Eddie.dong@intel.com>
  *
+ * Copyright 2010 Red Hat, Inc. and/or its affiliates.
  */
 
 #include <linux/kvm_host.h>
@@ -32,26 +33,12 @@
 
 #include "ioapic.h"
 
-static inline int kvm_irq_line_state(unsigned long *irq_state,
-				     int irq_source_id, int level)
-{
-	/* Logical OR for level trig interrupt */
-	if (level)
-		set_bit(irq_source_id, irq_state);
-	else
-		clear_bit(irq_source_id, irq_state);
-
-	return !!(*irq_state);
-}
-
 static int kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
 			   struct kvm *kvm, int irq_source_id, int level)
 {
 #ifdef CONFIG_X86
 	struct kvm_pic *pic = pic_irqchip(kvm);
-	level = kvm_irq_line_state(&pic->irq_states[e->irqchip.pin],
-				   irq_source_id, level);
-	return kvm_pic_set_irq(pic, e->irqchip.pin, level);
+	return kvm_pic_set_irq(pic, e->irqchip.pin, irq_source_id, level);
 #else
 	return -1;
 #endif
@@ -61,10 +48,7 @@ static int kvm_set_ioapic_irq(struct kvm_kernel_irq_routing_entry *e,
 			      struct kvm *kvm, int irq_source_id, int level)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
-	level = kvm_irq_line_state(&ioapic->irq_states[e->irqchip.pin],
-				   irq_source_id, level);
-
-	return kvm_ioapic_set_irq(ioapic, e->irqchip.pin, level);
+	return kvm_ioapic_set_irq(ioapic, e->irqchip.pin, irq_source_id, level);
 }
 
 inline static bool kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
@@ -99,7 +83,7 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 			if (r < 0)
 				r = 0;
 			r += kvm_apic_set_irq(vcpu, irq);
-		} else {
+		} else if (kvm_lapic_enabled(vcpu)) {
 			if (!lowest)
 				lowest = vcpu;
 			else if (kvm_apic_compare_prio(vcpu, lowest) < 0)
@@ -113,8 +97,8 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 	return r;
 }
 
-static int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
-		       struct kvm *kvm, int irq_source_id, int level)
+int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
+		struct kvm *kvm, int irq_source_id, int level)
 {
 	struct kvm_lapic_irq irq;
 
@@ -135,6 +119,20 @@ static int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
 
 	/* TODO Deal with RH bit of MSI message address */
 	return kvm_irq_delivery_to_apic(kvm, NULL, &irq);
+}
+
+int kvm_send_userspace_msi(struct kvm *kvm, struct kvm_msi *msi)
+{
+	struct kvm_kernel_irq_routing_entry route;
+
+	if (!irqchip_in_kernel(kvm) || msi->flags != 0)
+		return -EINVAL;
+
+	route.msi.address_lo = msi->address_lo;
+	route.msi.address_hi = msi->address_hi;
+	route.msi.data = msi->data;
+
+	return kvm_set_msi(&route, kvm, KVM_USERSPACE_IRQ_SOURCE_ID, 1);
 }
 
 /*
@@ -234,8 +232,6 @@ unlock:
 
 void kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id)
 {
-	int i;
-
 	ASSERT(irq_source_id != KVM_USERSPACE_IRQ_SOURCE_ID);
 
 	mutex_lock(&kvm->irq_lock);
@@ -248,14 +244,10 @@ void kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id)
 	if (!irqchip_in_kernel(kvm))
 		goto unlock;
 
-	for (i = 0; i < KVM_IOAPIC_NUM_PINS; i++) {
-		clear_bit(irq_source_id, &kvm->arch.vioapic->irq_states[i]);
-		if (i >= 16)
-			continue;
+	kvm_ioapic_clear_all(kvm->arch.vioapic, irq_source_id);
 #ifdef CONFIG_X86
-		clear_bit(irq_source_id, &pic_irqchip(kvm)->irq_states[i]);
+	kvm_pic_clear_all(pic_irqchip(kvm), irq_source_id);
 #endif
-	}
 unlock:
 	mutex_unlock(&kvm->irq_lock);
 }
@@ -278,15 +270,19 @@ void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 	synchronize_rcu();
 }
 
-void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask)
+void kvm_fire_mask_notifiers(struct kvm *kvm, unsigned irqchip, unsigned pin,
+			     bool mask)
 {
 	struct kvm_irq_mask_notifier *kimn;
 	struct hlist_node *n;
+	int gsi;
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(kimn, n, &kvm->mask_notifier_list, link)
-		if (kimn->irq == irq)
-			kimn->func(kimn, mask);
+	gsi = rcu_dereference(kvm->irq_routing)->chip[irqchip][pin];
+	if (gsi != -1)
+		hlist_for_each_entry_rcu(kimn, n, &kvm->mask_notifier_list, link)
+			if (kimn->irq == gsi)
+				kimn->func(kimn, mask);
 	rcu_read_unlock();
 }
 
@@ -313,6 +309,7 @@ static int setup_routing_entry(struct kvm_irq_routing_table *rt,
 	 */
 	hlist_for_each_entry(ei, n, &rt->map[ue->gsi], link)
 		if (ei->type == KVM_IRQ_ROUTING_MSI ||
+		    ue->type == KVM_IRQ_ROUTING_MSI ||
 		    ue->u.irqchip.irqchip == ei->irqchip.irqchip)
 			return r;
 
@@ -404,8 +401,9 @@ int kvm_set_irq_routing(struct kvm *kvm,
 
 	mutex_lock(&kvm->irq_lock);
 	old = kvm->irq_routing;
-	rcu_assign_pointer(kvm->irq_routing, new);
+	kvm_irq_routing_update(kvm, new);
 	mutex_unlock(&kvm->irq_lock);
+
 	synchronize_rcu();
 
 	new = old;

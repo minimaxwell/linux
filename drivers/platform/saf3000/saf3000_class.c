@@ -7,6 +7,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/module.h>
 
 static struct class *saf3000_class = NULL;
 

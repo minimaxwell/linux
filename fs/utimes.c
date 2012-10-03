@@ -95,7 +95,7 @@ static int utimes_common(struct path *path, struct timespec *times)
                 if (IS_IMMUTABLE(inode))
 			goto mnt_drop_write_and_out;
 
-		if (!is_owner_or_cap(inode)) {
+		if (!inode_owner_or_capable(inode)) {
 			error = inode_permission(inode, MAY_WRITE);
 			if (error)
 				goto mnt_drop_write_and_out;
@@ -126,7 +126,8 @@ out:
  * must be owner or have write permission.
  * Else, update from *times, must be owner or super user.
  */
-long do_utimes(int dfd, char __user *filename, struct timespec *times, int flags)
+long do_utimes(int dfd, const char __user *filename, struct timespec *times,
+	       int flags)
 {
 	int error = -EINVAL;
 
@@ -139,18 +140,19 @@ long do_utimes(int dfd, char __user *filename, struct timespec *times, int flags
 		goto out;
 
 	if (filename == NULL && dfd != AT_FDCWD) {
+		int fput_needed;
 		struct file *file;
 
 		if (flags & AT_SYMLINK_NOFOLLOW)
 			goto out;
 
-		file = fget(dfd);
+		file = fget_light(dfd, &fput_needed);
 		error = -EBADF;
 		if (!file)
 			goto out;
 
 		error = utimes_common(&file->f_path, times);
-		fput(file);
+		fput_light(file, fput_needed);
 	} else {
 		struct path path;
 		int lookup_flags = 0;
@@ -170,7 +172,7 @@ out:
 	return error;
 }
 
-SYSCALL_DEFINE4(utimensat, int, dfd, char __user *, filename,
+SYSCALL_DEFINE4(utimensat, int, dfd, const char __user *, filename,
 		struct timespec __user *, utimes, int, flags)
 {
 	struct timespec tstimes[2];
@@ -188,7 +190,7 @@ SYSCALL_DEFINE4(utimensat, int, dfd, char __user *, filename,
 	return do_utimes(dfd, filename, utimes ? tstimes : NULL, flags);
 }
 
-SYSCALL_DEFINE3(futimesat, int, dfd, char __user *, filename,
+SYSCALL_DEFINE3(futimesat, int, dfd, const char __user *, filename,
 		struct timeval __user *, utimes)
 {
 	struct timeval times[2];

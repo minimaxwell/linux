@@ -167,9 +167,10 @@ int write_fifo_cmde(short *cmde)
 }
 EXPORT_SYMBOL(write_fifo_cmde);
 
-
-static int __devinit messagerie_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id messagerie_dsp_match[];
+static int __devinit messagerie_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct messagerie_data *data;
@@ -177,6 +178,10 @@ static int __devinit messagerie_probe(struct of_device *ofdev, const struct of_d
 	struct device *info;
 	int ret;
 
+	match = of_match_device(messagerie_dsp_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
@@ -223,28 +228,28 @@ err:
 }
 
 
-static int __devexit messagerie_remove(struct of_device *ofdev)
+static int __devexit messagerie_remove(struct platform_device *ofdev)
 {
 	return 0;
 }
 
 
 /* informations d'exploitation de la messagerie DSP */
-static const struct of_device_id messagerie_dsp[] = {
+static const struct of_device_id messagerie_dsp_match[] = {
 	{
 		.compatible = "s3k,mcr3000-msg-dsp",
 	},
 	{},
 };
-MODULE_DEVICE_TABLE(of, messagerie_dsp);
+MODULE_DEVICE_TABLE(of, messagerie_dsp_match);
 
-static struct of_platform_driver messagerie_driver = {
+static struct platform_driver messagerie_driver = {
 	.probe		= messagerie_probe,
 	.remove		= __devexit_p(messagerie_remove),
 	.driver		= {
 		.name	= "messagerie",
 		.owner	= THIS_MODULE,
-		.of_match_table	= messagerie_dsp,
+		.of_match_table	= messagerie_dsp_match,
 	},
 };
 
@@ -252,7 +257,7 @@ static struct of_platform_driver messagerie_driver = {
 static int __init messagerie_init(void)
 {
 	int ret;
-	ret = of_register_platform_driver(&messagerie_driver);
+	ret = platform_driver_register(&messagerie_driver);
 	return ret;
 }
 module_init(messagerie_init);
@@ -260,7 +265,7 @@ module_init(messagerie_init);
 /* routine de dechargement du driver messagerie DSP */
 static void __exit messagerie_exit(void)
 {
-	of_unregister_platform_driver(&messagerie_driver);
+	platform_driver_unregister(&messagerie_driver);
 }
 module_exit(messagerie_exit);
 

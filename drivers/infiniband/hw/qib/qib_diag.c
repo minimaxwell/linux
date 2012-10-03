@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2010 QLogic Corporation. All rights reserved.
- * Copyright (c) 2006, 2007, 2008, 2009 QLogic Corporation. All rights reserved.
+ * Copyright (c) 2012 Intel Corporation. All rights reserved.
+ * Copyright (c) 2006 - 2012 QLogic Corporation. All rights reserved.
  * Copyright (c) 2003, 2004, 2005, 2006 PathScale, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -46,11 +46,15 @@
 #include <linux/pci.h>
 #include <linux/poll.h>
 #include <linux/vmalloc.h>
+#include <linux/export.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 
 #include "qib.h"
 #include "qib_common.h"
+
+#undef pr_fmt
+#define pr_fmt(fmt) QIB_DRV_NAME ": " fmt
 
 /*
  * Each client that opens the diag device must read then write
@@ -136,7 +140,8 @@ static const struct file_operations diag_file_ops = {
 	.write = qib_diag_write,
 	.read = qib_diag_read,
 	.open = qib_diag_open,
-	.release = qib_diag_release
+	.release = qib_diag_release,
+	.llseek = default_llseek,
 };
 
 static atomic_t diagpkt_count = ATOMIC_INIT(0);
@@ -149,6 +154,7 @@ static ssize_t qib_diagpkt_write(struct file *fp, const char __user *data,
 static const struct file_operations diagpkt_file_ops = {
 	.owner = THIS_MODULE,
 	.write = qib_diagpkt_write,
+	.llseek = noop_llseek,
 };
 
 int qib_diag_add(struct qib_devdata *dd)
@@ -595,8 +601,8 @@ static ssize_t qib_diagpkt_write(struct file *fp,
 	}
 	tmpbuf = vmalloc(plen);
 	if (!tmpbuf) {
-		qib_devinfo(dd->pcidev, "Unable to allocate tmp buffer, "
-			 "failing\n");
+		qib_devinfo(dd->pcidev,
+			"Unable to allocate tmp buffer, failing\n");
 		ret = -ENOMEM;
 		goto bail;
 	}
@@ -690,7 +696,7 @@ int qib_register_observer(struct qib_devdata *dd,
 	ret = -ENOMEM;
 	olp = vmalloc(sizeof *olp);
 	if (!olp) {
-		printk(KERN_ERR QIB_DRV_NAME ": vmalloc for observer failed\n");
+		pr_err("vmalloc for observer failed\n");
 		goto bail;
 	}
 	if (olp) {

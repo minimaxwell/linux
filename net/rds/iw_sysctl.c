@@ -55,7 +55,7 @@ static unsigned long rds_iw_sysctl_max_unsig_bytes_max = ~0UL;
 
 unsigned int rds_iw_sysctl_flow_control = 1;
 
-ctl_table rds_iw_sysctl_table[] = {
+static ctl_table rds_iw_sysctl_table[] = {
 	{
 		.procname       = "max_send_wr",
 		.data		= &rds_iw_sysctl_max_send_wr,
@@ -109,23 +109,16 @@ ctl_table rds_iw_sysctl_table[] = {
 	{ }
 };
 
-static struct ctl_path rds_iw_sysctl_path[] = {
-	{ .procname = "net", },
-	{ .procname = "rds", },
-	{ .procname = "iw", },
-	{ }
-};
-
 void rds_iw_sysctl_exit(void)
 {
 	if (rds_iw_sysctl_hdr)
-		unregister_sysctl_table(rds_iw_sysctl_hdr);
+		unregister_net_sysctl_table(rds_iw_sysctl_hdr);
 }
 
-int __init rds_iw_sysctl_init(void)
+int rds_iw_sysctl_init(void)
 {
-	rds_iw_sysctl_hdr = register_sysctl_paths(rds_iw_sysctl_path, rds_iw_sysctl_table);
-	if (rds_iw_sysctl_hdr == NULL)
+	rds_iw_sysctl_hdr = register_net_sysctl(&init_net, "net/rds/iw", rds_iw_sysctl_table);
+	if (!rds_iw_sysctl_hdr)
 		return -ENOMEM;
 	return 0;
 }

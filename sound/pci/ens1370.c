@@ -22,7 +22,7 @@
 /* Power-Management-Code ( CONFIG_PM )
  * for ens1371 only ( FIXME )
  * derived from cs4281.c, atiixp.c and via82xx.c
- * using http://www.alsa-project.org/~iwai/writing-an-alsa-driver/c1540.htm
+ * using http://www.alsa-project.org/~tiwai/writing-an-alsa-driver/ 
  * by Kurt J. Bosch
  */
 
@@ -33,7 +33,7 @@
 #include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/gameport.h>
-#include <linux/moduleparam.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 
 #include <sound/core.h>
@@ -83,12 +83,12 @@ MODULE_SUPPORTED_DEVICE("{{Ensoniq,AudioPCI ES1371/73},"
 
 static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;	/* Index 0-MAX */
 static char *id[SNDRV_CARDS] = SNDRV_DEFAULT_STR;	/* ID for this card */
-static int enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE_PNP;	/* Enable switches */
+static bool enable[SNDRV_CARDS] = SNDRV_DEFAULT_ENABLE_PNP;	/* Enable switches */
 #ifdef SUPPORT_JOYSTICK
 #ifdef CHIP1371
 static int joystick_port[SNDRV_CARDS];
 #else
-static int joystick[SNDRV_CARDS];
+static bool joystick[SNDRV_CARDS];
 #endif
 #endif
 #ifdef CHIP1371
@@ -2033,9 +2033,10 @@ static void snd_ensoniq_chip_init(struct ensoniq *ensoniq)
 }
 
 #ifdef CONFIG_PM
-static int snd_ensoniq_suspend(struct pci_dev *pci, pm_message_t state)
+static int snd_ensoniq_suspend(struct device *dev)
 {
-	struct snd_card *card = pci_get_drvdata(pci);
+	struct pci_dev *pci = to_pci_dev(dev);
+	struct snd_card *card = dev_get_drvdata(dev);
 	struct ensoniq *ensoniq = card->private_data;
 	
 	snd_power_change_state(card, SNDRV_CTL_POWER_D3hot);
@@ -2058,13 +2059,14 @@ static int snd_ensoniq_suspend(struct pci_dev *pci, pm_message_t state)
 
 	pci_disable_device(pci);
 	pci_save_state(pci);
-	pci_set_power_state(pci, pci_choose_state(pci, state));
+	pci_set_power_state(pci, PCI_D3hot);
 	return 0;
 }
 
-static int snd_ensoniq_resume(struct pci_dev *pci)
+static int snd_ensoniq_resume(struct device *dev)
 {
-	struct snd_card *card = pci_get_drvdata(pci);
+	struct pci_dev *pci = to_pci_dev(dev);
+	struct snd_card *card = dev_get_drvdata(dev);
 	struct ensoniq *ensoniq = card->private_data;
 
 	pci_set_power_state(pci, PCI_D0);
@@ -2087,8 +2089,12 @@ static int snd_ensoniq_resume(struct pci_dev *pci)
 	snd_power_change_state(card, SNDRV_CTL_POWER_D0);
 	return 0;
 }
-#endif /* CONFIG_PM */
 
+static SIMPLE_DEV_PM_OPS(snd_ensoniq_pm, snd_ensoniq_suspend, snd_ensoniq_resume);
+#define SND_ENSONIQ_PM_OPS	&snd_ensoniq_pm
+#else
+#define SND_ENSONIQ_PM_OPS	NULL
+#endif /* CONFIG_PM */
 
 static int __devinit snd_ensoniq_create(struct snd_card *card,
 				     struct pci_dev *pci,
@@ -2120,7 +2126,7 @@ static int __devinit snd_ensoniq_create(struct snd_card *card,
 	}
 	ensoniq->port = pci_resource_start(pci, 0);
 	if (request_irq(pci->irq, snd_audiopci_interrupt, IRQF_SHARED,
-			"Ensoniq AudioPCI", ensoniq)) {
+			KBUILD_MODNAME, ensoniq)) {
 		snd_printk(KERN_ERR "unable to grab IRQ %d\n", pci->irq);
 		snd_ensoniq_free(ensoniq);
 		return -EBUSY;
@@ -2488,26 +2494,14 @@ static void __devexit snd_audiopci_remove(struct pci_dev *pci)
 	pci_set_drvdata(pci, NULL);
 }
 
-static struct pci_driver driver = {
-	.name = DRIVER_NAME,
+static struct pci_driver ens137x_driver = {
+	.name = KBUILD_MODNAME,
 	.id_table = snd_audiopci_ids,
 	.probe = snd_audiopci_probe,
 	.remove = __devexit_p(snd_audiopci_remove),
-#ifdef CONFIG_PM
-	.suspend = snd_ensoniq_suspend,
-	.resume = snd_ensoniq_resume,
-#endif
+	.driver = {
+		.pm = SND_ENSONIQ_PM_OPS,
+	},
 };
 	
-static int __init alsa_card_ens137x_init(void)
-{
-	return pci_register_driver(&driver);
-}
-
-static void __exit alsa_card_ens137x_exit(void)
-{
-	pci_unregister_driver(&driver);
-}
-
-module_init(alsa_card_ens137x_init)
-module_exit(alsa_card_ens137x_exit)
+module_pci_driver(ens137x_driver);

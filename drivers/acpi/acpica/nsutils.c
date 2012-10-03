@@ -6,7 +6,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2010, Intel Corp.
+ * Copyright (C) 2000 - 2012, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,108 +60,10 @@ acpi_name acpi_ns_find_parent_name(struct acpi_namespace_node *node_to_search);
 
 /*******************************************************************************
  *
- * FUNCTION:    acpi_ns_report_error
- *
- * PARAMETERS:  module_name         - Caller's module name (for error output)
- *              line_number         - Caller's line number (for error output)
- *              internal_name       - Name or path of the namespace node
- *              lookup_status       - Exception code from NS lookup
- *
- * RETURN:      None
- *
- * DESCRIPTION: Print warning message with full pathname
- *
- ******************************************************************************/
-
-void
-acpi_ns_report_error(const char *module_name,
-		     u32 line_number,
-		     const char *internal_name, acpi_status lookup_status)
-{
-	acpi_status status;
-	u32 bad_name;
-	char *name = NULL;
-
-	acpi_os_printf("ACPI Error (%s-%04d): ", module_name, line_number);
-
-	if (lookup_status == AE_BAD_CHARACTER) {
-
-		/* There is a non-ascii character in the name */
-
-		ACPI_MOVE_32_TO_32(&bad_name,
-				   ACPI_CAST_PTR(u32, internal_name));
-		acpi_os_printf("[0x%4.4X] (NON-ASCII)", bad_name);
-	} else {
-		/* Convert path to external format */
-
-		status = acpi_ns_externalize_name(ACPI_UINT32_MAX,
-						  internal_name, NULL, &name);
-
-		/* Print target name */
-
-		if (ACPI_SUCCESS(status)) {
-			acpi_os_printf("[%s]", name);
-		} else {
-			acpi_os_printf("[COULD NOT EXTERNALIZE NAME]");
-		}
-
-		if (name) {
-			ACPI_FREE(name);
-		}
-	}
-
-	acpi_os_printf(" Namespace lookup failure, %s\n",
-		       acpi_format_exception(lookup_status));
-}
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ns_report_method_error
- *
- * PARAMETERS:  module_name         - Caller's module name (for error output)
- *              line_number         - Caller's line number (for error output)
- *              Message             - Error message to use on failure
- *              prefix_node         - Prefix relative to the path
- *              Path                - Path to the node (optional)
- *              method_status       - Execution status
- *
- * RETURN:      None
- *
- * DESCRIPTION: Print warning message with full pathname
- *
- ******************************************************************************/
-
-void
-acpi_ns_report_method_error(const char *module_name,
-			    u32 line_number,
-			    const char *message,
-			    struct acpi_namespace_node *prefix_node,
-			    const char *path, acpi_status method_status)
-{
-	acpi_status status;
-	struct acpi_namespace_node *node = prefix_node;
-
-	acpi_os_printf("ACPI Error (%s-%04d): ", module_name, line_number);
-
-	if (path) {
-		status =
-		    acpi_ns_get_node(prefix_node, path, ACPI_NS_NO_UPSEARCH,
-				     &node);
-		if (ACPI_FAILURE(status)) {
-			acpi_os_printf("[Could not get node by pathname]");
-		}
-	}
-
-	acpi_ns_print_node_pathname(node, message);
-	acpi_os_printf(", %s\n", acpi_format_exception(method_status));
-}
-
-/*******************************************************************************
- *
  * FUNCTION:    acpi_ns_print_node_pathname
  *
- * PARAMETERS:  Node            - Object
- *              Message         - Prefix message
+ * PARAMETERS:  node            - Object
+ *              message         - Prefix message
  *
  * DESCRIPTION: Print an object's full namespace pathname
  *              Manages allocation/freeing of a pathname buffer
@@ -199,7 +101,7 @@ acpi_ns_print_node_pathname(struct acpi_namespace_node *node,
  *
  * FUNCTION:    acpi_ns_valid_root_prefix
  *
- * PARAMETERS:  Prefix          - Character to be checked
+ * PARAMETERS:  prefix          - Character to be checked
  *
  * RETURN:      TRUE if a valid prefix
  *
@@ -217,7 +119,7 @@ u8 acpi_ns_valid_root_prefix(char prefix)
  *
  * FUNCTION:    acpi_ns_valid_path_separator
  *
- * PARAMETERS:  Sep         - Character to be checked
+ * PARAMETERS:  sep         - Character to be checked
  *
  * RETURN:      TRUE if a valid path separator
  *
@@ -235,7 +137,7 @@ static u8 acpi_ns_valid_path_separator(char sep)
  *
  * FUNCTION:    acpi_ns_get_type
  *
- * PARAMETERS:  Node        - Parent Node to be examined
+ * PARAMETERS:  node        - Parent Node to be examined
  *
  * RETURN:      Type field from Node whose handle is passed
  *
@@ -259,7 +161,7 @@ acpi_object_type acpi_ns_get_type(struct acpi_namespace_node * node)
  *
  * FUNCTION:    acpi_ns_local
  *
- * PARAMETERS:  Type        - A namespace object type
+ * PARAMETERS:  type        - A namespace object type
  *
  * RETURN:      LOCAL if names must be found locally in objects of the
  *              passed type, 0 if enclosing scopes should be searched
@@ -287,7 +189,7 @@ u32 acpi_ns_local(acpi_object_type type)
  *
  * FUNCTION:    acpi_ns_get_internal_name_length
  *
- * PARAMETERS:  Info            - Info struct initialized with the
+ * PARAMETERS:  info            - Info struct initialized with the
  *                                external name pointer.
  *
  * RETURN:      None
@@ -358,7 +260,7 @@ void acpi_ns_get_internal_name_length(struct acpi_namestring_info *info)
  *
  * FUNCTION:    acpi_ns_build_internal_name
  *
- * PARAMETERS:  Info            - Info struct fully initialized
+ * PARAMETERS:  info            - Info struct fully initialized
  *
  * RETURN:      Status
  *
@@ -439,7 +341,7 @@ acpi_status acpi_ns_build_internal_name(struct acpi_namestring_info *info)
 
 		if (!acpi_ns_valid_path_separator(*external_name) &&
 		    (*external_name != 0)) {
-			return_ACPI_STATUS(AE_BAD_PARAMETER);
+			return_ACPI_STATUS(AE_BAD_PATHNAME);
 		}
 
 		/* Move on the next segment */
@@ -469,7 +371,7 @@ acpi_status acpi_ns_build_internal_name(struct acpi_namestring_info *info)
  * FUNCTION:    acpi_ns_internalize_name
  *
  * PARAMETERS:  *external_name          - External representation of name
- *              **Converted Name        - Where to return the resulting
+ *              **Converted name        - Where to return the resulting
  *                                        internal represention of the name
  *
  * RETURN:      Status
@@ -673,7 +575,7 @@ acpi_ns_externalize_name(u32 internal_name_length,
  *
  * FUNCTION:    acpi_ns_validate_handle
  *
- * PARAMETERS:  Handle          - Handle to be validated and typecast to a
+ * PARAMETERS:  handle          - Handle to be validated and typecast to a
  *                                namespace node.
  *
  * RETURN:      A pointer to a namespace node
@@ -749,7 +651,7 @@ void acpi_ns_terminate(void)
  *
  * FUNCTION:    acpi_ns_opens_scope
  *
- * PARAMETERS:  Type        - A valid namespace type
+ * PARAMETERS:  type        - A valid namespace type
  *
  * RETURN:      NEWSCOPE if the passed type "opens a name scope" according
  *              to the ACPI specification, else 0
@@ -775,14 +677,14 @@ u32 acpi_ns_opens_scope(acpi_object_type type)
  *
  * FUNCTION:    acpi_ns_get_node
  *
- * PARAMETERS:  *Pathname   - Name to be found, in external (ASL) format. The
+ * PARAMETERS:  *pathname   - Name to be found, in external (ASL) format. The
  *                            \ (backslash) and ^ (carat) prefixes, and the
  *                            . (period) to separate segments are supported.
  *              prefix_node  - Root of subtree to be searched, or NS_ALL for the
  *                            root of the name space.  If Name is fully
  *                            qualified (first s8 is '\'), the passed value
  *                            of Scope will not be accessed.
- *              Flags       - Used to indicate whether to perform upsearch or
+ *              flags       - Used to indicate whether to perform upsearch or
  *                            not.
  *              return_node - Where the Node is returned
  *
@@ -847,116 +749,3 @@ acpi_ns_get_node(struct acpi_namespace_node *prefix_node,
 	ACPI_FREE(internal_path);
 	return_ACPI_STATUS(status);
 }
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ns_get_parent_node
- *
- * PARAMETERS:  Node       - Current table entry
- *
- * RETURN:      Parent entry of the given entry
- *
- * DESCRIPTION: Obtain the parent entry for a given entry in the namespace.
- *
- ******************************************************************************/
-
-struct acpi_namespace_node *acpi_ns_get_parent_node(struct acpi_namespace_node
-						    *node)
-{
-	ACPI_FUNCTION_ENTRY();
-
-	if (!node) {
-		return (NULL);
-	}
-
-	/*
-	 * Walk to the end of this peer list. The last entry is marked with a flag
-	 * and the peer pointer is really a pointer back to the parent. This saves
-	 * putting a parent back pointer in each and every named object!
-	 */
-	while (!(node->flags & ANOBJ_END_OF_PEER_LIST)) {
-		node = node->peer;
-	}
-
-	return (node->peer);
-}
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ns_get_next_valid_node
- *
- * PARAMETERS:  Node       - Current table entry
- *
- * RETURN:      Next valid Node in the linked node list. NULL if no more valid
- *              nodes.
- *
- * DESCRIPTION: Find the next valid node within a name table.
- *              Useful for implementing NULL-end-of-list loops.
- *
- ******************************************************************************/
-
-struct acpi_namespace_node *acpi_ns_get_next_valid_node(struct
-							acpi_namespace_node
-							*node)
-{
-
-	/* If we are at the end of this peer list, return NULL */
-
-	if (node->flags & ANOBJ_END_OF_PEER_LIST) {
-		return NULL;
-	}
-
-	/* Otherwise just return the next peer */
-
-	return (node->peer);
-}
-
-#ifdef ACPI_OBSOLETE_FUNCTIONS
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ns_find_parent_name
- *
- * PARAMETERS:  *child_node            - Named Obj whose name is to be found
- *
- * RETURN:      The ACPI name
- *
- * DESCRIPTION: Search for the given obj in its parent scope and return the
- *              name segment, or "????" if the parent name can't be found
- *              (which "should not happen").
- *
- ******************************************************************************/
-
-acpi_name acpi_ns_find_parent_name(struct acpi_namespace_node * child_node)
-{
-	struct acpi_namespace_node *parent_node;
-
-	ACPI_FUNCTION_TRACE(ns_find_parent_name);
-
-	if (child_node) {
-
-		/* Valid entry.  Get the parent Node */
-
-		parent_node = acpi_ns_get_parent_node(child_node);
-		if (parent_node) {
-			ACPI_DEBUG_PRINT((ACPI_DB_EXEC,
-					  "Parent of %p [%4.4s] is %p [%4.4s]\n",
-					  child_node,
-					  acpi_ut_get_node_name(child_node),
-					  parent_node,
-					  acpi_ut_get_node_name(parent_node)));
-
-			if (parent_node->name.integer) {
-				return_VALUE((acpi_name) parent_node->name.
-					     integer);
-			}
-		}
-
-		ACPI_DEBUG_PRINT((ACPI_DB_EXEC,
-				  "Unable to find parent of %p (%4.4s)\n",
-				  child_node,
-				  acpi_ut_get_node_name(child_node)));
-	}
-
-	return_VALUE(ACPI_UNKNOWN_NAME);
-}
-#endif

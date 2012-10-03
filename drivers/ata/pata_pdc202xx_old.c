@@ -44,6 +44,27 @@ static void pdc202xx_exec_command(struct ata_port *ap,
 	ndelay(400);
 }
 
+static bool pdc202xx_irq_check(struct ata_port *ap)
+{
+	struct pci_dev *pdev	= to_pci_dev(ap->host->dev);
+	unsigned long master	= pci_resource_start(pdev, 4);
+	u8 sc1d			= inb(master + 0x1d);
+
+	if (ap->port_no) {
+		/*
+		 * bit 7: error, bit 6: interrupting,
+		 * bit 5: FIFO full, bit 4: FIFO empty
+		 */
+		return sc1d & 0x40;
+	} else	{
+		/*
+		 * bit 3: error, bit 2: interrupting,
+		 * bit 1: FIFO full, bit 0: FIFO empty
+		 */
+		return sc1d & 0x04;
+	}
+}
+
 /**
  *	pdc202xx_configure_piomode	-	set chip PIO timing
  *	@ap: ATA interface
@@ -282,6 +303,7 @@ static struct ata_port_operations pdc2024x_port_ops = {
 	.set_dmamode		= pdc202xx_set_dmamode,
 
 	.sff_exec_command	= pdc202xx_exec_command,
+	.sff_irq_check		= pdc202xx_irq_check,
 };
 
 static struct ata_port_operations pdc2026x_port_ops = {
@@ -297,6 +319,7 @@ static struct ata_port_operations pdc2026x_port_ops = {
 	.port_start		= pdc2026x_port_start,
 
 	.sff_exec_command	= pdc202xx_exec_command,
+	.sff_irq_check		= pdc202xx_irq_check,
 };
 
 static int pdc202xx_init_one(struct pci_dev *dev, const struct pci_device_id *id)
@@ -361,21 +384,10 @@ static struct pci_driver pdc202xx_pci_driver = {
 #endif
 };
 
-static int __init pdc202xx_init(void)
-{
-	return pci_register_driver(&pdc202xx_pci_driver);
-}
-
-static void __exit pdc202xx_exit(void)
-{
-	pci_unregister_driver(&pdc202xx_pci_driver);
-}
+module_pci_driver(pdc202xx_pci_driver);
 
 MODULE_AUTHOR("Alan Cox");
 MODULE_DESCRIPTION("low-level driver for Promise 2024x and 20262-20267");
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pci, pdc202xx);
 MODULE_VERSION(DRV_VERSION);
-
-module_init(pdc202xx_init);
-module_exit(pdc202xx_exit);

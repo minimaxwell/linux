@@ -28,8 +28,8 @@ extern unsigned int nf_conntrack_in(struct net *net,
 extern int nf_conntrack_init(struct net *net);
 extern void nf_conntrack_cleanup(struct net *net);
 
-extern int nf_conntrack_proto_init(void);
-extern void nf_conntrack_proto_fini(void);
+extern int nf_conntrack_proto_init(struct net *net);
+extern void nf_conntrack_proto_fini(struct net *net);
 
 extern bool
 nf_ct_get_tuple(const struct sk_buff *skb,
@@ -60,7 +60,7 @@ static inline int nf_conntrack_confirm(struct sk_buff *skb)
 	struct nf_conn *ct = (struct nf_conn *)skb->nfct;
 	int ret = NF_ACCEPT;
 
-	if (ct && ct != &nf_conntrack_untracked) {
+	if (ct && !nf_ct_is_untracked(ct)) {
 		if (!nf_ct_is_confirmed(ct))
 			ret = __nf_conntrack_confirm(skb);
 		if (likely(ret == NF_ACCEPT))

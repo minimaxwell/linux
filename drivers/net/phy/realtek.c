@@ -14,6 +14,7 @@
  *
  */
 #include <linux/phy.h>
+#include <linux/module.h>
 
 #define RTL821x_PHYSR		0x11
 #define RTL821x_PHYSR_DUPLEX	0x2000
@@ -64,11 +65,7 @@ static struct phy_driver rtl821x_driver = {
 
 static int __init realtek_init(void)
 {
-	int ret;
-
-	ret = phy_driver_register(&rtl821x_driver);
-
-	return ret;
+	return phy_driver_register(&rtl821x_driver);
 }
 
 static void __exit realtek_exit(void)
@@ -79,7 +76,7 @@ static void __exit realtek_exit(void)
 module_init(realtek_init);
 module_exit(realtek_exit);
 
-static struct mdio_device_id realtek_tbl[] = {
+static struct mdio_device_id __maybe_unused realtek_tbl[] = {
 	{ 0x001cc912, 0x001fffff },
 	{ }
 };

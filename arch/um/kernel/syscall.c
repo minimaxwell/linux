@@ -17,25 +17,25 @@
 
 long sys_fork(void)
 {
-	long ret;
-
-	current->thread.forking = 1;
-	ret = do_fork(SIGCHLD, UPT_SP(&current->thread.regs.regs),
+	return do_fork(SIGCHLD, UPT_SP(&current->thread.regs.regs),
 		      &current->thread.regs, 0, NULL, NULL);
-	current->thread.forking = 0;
-	return ret;
 }
 
 long sys_vfork(void)
 {
-	long ret;
-
-	current->thread.forking = 1;
-	ret = do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD,
+	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD,
 		      UPT_SP(&current->thread.regs.regs),
 		      &current->thread.regs, 0, NULL, NULL);
-	current->thread.forking = 0;
-	return ret;
+}
+
+long sys_clone(unsigned long clone_flags, unsigned long newsp,
+	       void __user *parent_tid, void __user *child_tid)
+{
+	if (!newsp)
+		newsp = UPT_SP(&current->thread.regs.regs);
+
+	return do_fork(clone_flags, newsp, &current->thread.regs, 0, parent_tid,
+		      child_tid);
 }
 
 long old_mmap(unsigned long addr, unsigned long len,
@@ -51,15 +51,17 @@ long old_mmap(unsigned long addr, unsigned long len,
 	return err;
 }
 
-int kernel_execve(const char *filename, char *const argv[], char *const envp[])
+int kernel_execve(const char *filename,
+		  const char *const argv[],
+		  const char *const envp[])
 {
 	mm_segment_t fs;
 	int ret;
 
 	fs = get_fs();
 	set_fs(KERNEL_DS);
-	ret = um_execve((char *)filename, (char __user *__user *)argv,
-			(char __user *__user *) envp);
+	ret = um_execve(filename, (const char __user *const __user *)argv,
+			(const char __user *const __user *) envp);
 	set_fs(fs);
 
 	return ret;

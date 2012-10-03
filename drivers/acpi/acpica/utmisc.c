@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2010, Intel Corp.
+ * Copyright (C) 2000 - 2012, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,84 +50,41 @@
 #define _COMPONENT          ACPI_UTILITIES
 ACPI_MODULE_NAME("utmisc")
 
-/*
- * Common suffix for messages
- */
-#define ACPI_COMMON_MSG_SUFFIX \
-	acpi_os_printf(" (%8.8X/%s-%u)\n", ACPI_CA_VERSION, module_name, line_number)
+#if defined ACPI_ASL_COMPILER || defined ACPI_EXEC_APP
 /*******************************************************************************
  *
- * FUNCTION:    acpi_ut_validate_exception
+ * FUNCTION:    ut_convert_backslashes
  *
- * PARAMETERS:  Status       - The acpi_status code to be formatted
+ * PARAMETERS:  pathname        - File pathname string to be converted
  *
- * RETURN:      A string containing the exception text. NULL if exception is
- *              not valid.
+ * RETURN:      Modifies the input Pathname
  *
- * DESCRIPTION: This function validates and translates an ACPI exception into
- *              an ASCII string.
+ * DESCRIPTION: Convert all backslashes (0x5C) to forward slashes (0x2F) within
+ *              the entire input file pathname string.
  *
  ******************************************************************************/
-const char *acpi_ut_validate_exception(acpi_status status)
+void ut_convert_backslashes(char *pathname)
 {
-	u32 sub_status;
-	const char *exception = NULL;
 
-	ACPI_FUNCTION_ENTRY();
-
-	/*
-	 * Status is composed of two parts, a "type" and an actual code
-	 */
-	sub_status = (status & ~AE_CODE_MASK);
-
-	switch (status & AE_CODE_MASK) {
-	case AE_CODE_ENVIRONMENTAL:
-
-		if (sub_status <= AE_CODE_ENV_MAX) {
-			exception = acpi_gbl_exception_names_env[sub_status];
-		}
-		break;
-
-	case AE_CODE_PROGRAMMER:
-
-		if (sub_status <= AE_CODE_PGM_MAX) {
-			exception = acpi_gbl_exception_names_pgm[sub_status];
-		}
-		break;
-
-	case AE_CODE_ACPI_TABLES:
-
-		if (sub_status <= AE_CODE_TBL_MAX) {
-			exception = acpi_gbl_exception_names_tbl[sub_status];
-		}
-		break;
-
-	case AE_CODE_AML:
-
-		if (sub_status <= AE_CODE_AML_MAX) {
-			exception = acpi_gbl_exception_names_aml[sub_status];
-		}
-		break;
-
-	case AE_CODE_CONTROL:
-
-		if (sub_status <= AE_CODE_CTRL_MAX) {
-			exception = acpi_gbl_exception_names_ctrl[sub_status];
-		}
-		break;
-
-	default:
-		break;
+	if (!pathname) {
+		return;
 	}
 
-	return (ACPI_CAST_PTR(const char, exception));
+	while (*pathname) {
+		if (*pathname == '\\') {
+			*pathname = '/';
+		}
+
+		pathname++;
+	}
 }
+#endif
 
 /*******************************************************************************
  *
  * FUNCTION:    acpi_ut_is_pci_root_bridge
  *
- * PARAMETERS:  Id              - The HID/CID in string format
+ * PARAMETERS:  id              - The HID/CID in string format
  *
  * RETURN:      TRUE if the Id is a match for a PCI/PCI-Express Root Bridge
  *
@@ -155,7 +112,7 @@ u8 acpi_ut_is_pci_root_bridge(char *id)
  *
  * FUNCTION:    acpi_ut_is_aml_table
  *
- * PARAMETERS:  Table               - An ACPI table
+ * PARAMETERS:  table               - An ACPI table
  *
  * RETURN:      TRUE if table contains executable AML; FALSE otherwise
  *
@@ -289,7 +246,7 @@ acpi_status acpi_ut_allocate_owner_id(acpi_owner_id * owner_id)
  *
  * FUNCTION:    acpi_ut_release_owner_id
  *
- * PARAMETERS:  owner_id_ptr        - Pointer to a previously allocated owner_iD
+ * PARAMETERS:  owner_id_ptr        - Pointer to a previously allocated owner_ID
  *
  * RETURN:      None. No error is returned because we are either exiting a
  *              control method or unloading a table. Either way, we would
@@ -312,7 +269,7 @@ void acpi_ut_release_owner_id(acpi_owner_id * owner_id_ptr)
 
 	*owner_id_ptr = 0;
 
-	/* Zero is not a valid owner_iD */
+	/* Zero is not a valid owner_ID */
 
 	if (owner_id == 0) {
 		ACPI_ERROR((AE_INFO, "Invalid OwnerId: 0x%2.2X", owner_id));
@@ -386,7 +343,7 @@ void acpi_ut_strupr(char *src_string)
  *
  * FUNCTION:    acpi_ut_print_string
  *
- * PARAMETERS:  String          - Null terminated ASCII string
+ * PARAMETERS:  string          - Null terminated ASCII string
  *              max_length      - Maximum output length
  *
  * RETURN:      None
@@ -472,7 +429,7 @@ void acpi_ut_print_string(char *string, u8 max_length)
  *
  * FUNCTION:    acpi_ut_dword_byte_swap
  *
- * PARAMETERS:  Value           - Value to be converted
+ * PARAMETERS:  value           - Value to be converted
  *
  * RETURN:      u32 integer with bytes swapped
  *
@@ -542,9 +499,9 @@ void acpi_ut_set_integer_width(u8 revision)
  *
  * FUNCTION:    acpi_ut_display_init_pathname
  *
- * PARAMETERS:  Type                - Object type of the node
+ * PARAMETERS:  type                - Object type of the node
  *              obj_handle          - Handle whose pathname will be displayed
- *              Path                - Additional path string to be appended.
+ *              path                - Additional path string to be appended.
  *                                      (NULL if no extra path)
  *
  * RETURN:      acpi_status
@@ -609,8 +566,8 @@ acpi_ut_display_init_pathname(u8 type,
  *
  * FUNCTION:    acpi_ut_valid_acpi_char
  *
- * PARAMETERS:  Char            - The character to be examined
- *              Position        - Byte position (0-3)
+ * PARAMETERS:  char            - The character to be examined
+ *              position        - Byte position (0-3)
  *
  * RETURN:      TRUE if the character is valid, FALSE otherwise
  *
@@ -645,7 +602,7 @@ u8 acpi_ut_valid_acpi_char(char character, u32 position)
  *
  * FUNCTION:    acpi_ut_valid_acpi_name
  *
- * PARAMETERS:  Name            - The name to be examined
+ * PARAMETERS:  name            - The name to be examined
  *
  * RETURN:      TRUE if the name is valid, FALSE otherwise
  *
@@ -676,7 +633,7 @@ u8 acpi_ut_valid_acpi_name(u32 name)
  *
  * FUNCTION:    acpi_ut_repair_name
  *
- * PARAMETERS:  Name            - The ACPI name to be repaired
+ * PARAMETERS:  name            - The ACPI name to be repaired
  *
  * RETURN:      Repaired version of the name
  *
@@ -710,8 +667,8 @@ acpi_name acpi_ut_repair_name(char *name)
  *
  * FUNCTION:    acpi_ut_strtoul64
  *
- * PARAMETERS:  String          - Null terminated string
- *              Base            - Radix of the string: 16 or ACPI_ANY_BASE;
+ * PARAMETERS:  string          - Null terminated string
+ *              base            - Radix of the string: 16 or ACPI_ANY_BASE;
  *                                ACPI_ANY_BASE means 'in behalf of to_integer'
  *              ret_integer     - Where the converted integer is returned
  *
@@ -760,7 +717,7 @@ acpi_status acpi_ut_strtoul64(char *string, u32 base, u64 * ret_integer)
 
 	if (to_integer_op) {
 		/*
-		 * Base equal to ACPI_ANY_BASE means 'to_integer operation case'.
+		 * Base equal to ACPI_ANY_BASE means 'ToInteger operation case'.
 		 * We need to determine if it is decimal or hexadecimal.
 		 */
 		if ((*string == '0') && (ACPI_TOLOWER(*(string + 1)) == 'x')) {
@@ -883,8 +840,8 @@ acpi_status acpi_ut_strtoul64(char *string, u32 base, u64 * ret_integer)
  *
  * FUNCTION:    acpi_ut_create_update_state_and_push
  *
- * PARAMETERS:  Object          - Object to be added to the new state
- *              Action          - Increment/Decrement
+ * PARAMETERS:  object          - Object to be added to the new state
+ *              action          - Increment/Decrement
  *              state_list      - List the state will be added to
  *
  * RETURN:      Status
@@ -924,7 +881,7 @@ acpi_ut_create_update_state_and_push(union acpi_operand_object *object,
  * PARAMETERS:  source_object       - The package to walk
  *              target_object       - Target object (if package is being copied)
  *              walk_callback       - Called once for each package element
- *              Context             - Passed to the callback function
+ *              context             - Passed to the callback function
  *
  * RETURN:      Status
  *
@@ -1043,161 +1000,4 @@ acpi_ut_walk_package_tree(union acpi_operand_object * source_object,
 	/* We should never get here */
 
 	return_ACPI_STATUS(AE_AML_INTERNAL);
-}
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_error, acpi_exception, acpi_warning, acpi_info
- *
- * PARAMETERS:  module_name         - Caller's module name (for error output)
- *              line_number         - Caller's line number (for error output)
- *              Format              - Printf format string + additional args
- *
- * RETURN:      None
- *
- * DESCRIPTION: Print message with module/line/version info
- *
- ******************************************************************************/
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_error(const char *module_name, u32 line_number, const char *format, ...)
-{
-	va_list args;
-
-	acpi_os_printf("ACPI Error: ");
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	ACPI_COMMON_MSG_SUFFIX;
-	va_end(args);
-}
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_exception(const char *module_name,
-	       u32 line_number, acpi_status status, const char *format, ...)
-{
-	va_list args;
-
-	acpi_os_printf("ACPI Exception: %s, ", acpi_format_exception(status));
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	ACPI_COMMON_MSG_SUFFIX;
-	va_end(args);
-}
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_warning(const char *module_name, u32 line_number, const char *format, ...)
-{
-	va_list args;
-
-	acpi_os_printf("ACPI Warning: ");
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	ACPI_COMMON_MSG_SUFFIX;
-	va_end(args);
-}
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_info(const char *module_name, u32 line_number, const char *format, ...)
-{
-	va_list args;
-
-	acpi_os_printf("ACPI: ");
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	acpi_os_printf("\n");
-	va_end(args);
-}
-
-ACPI_EXPORT_SYMBOL(acpi_error)
-ACPI_EXPORT_SYMBOL(acpi_exception)
-ACPI_EXPORT_SYMBOL(acpi_warning)
-ACPI_EXPORT_SYMBOL(acpi_info)
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ut_predefined_warning
- *
- * PARAMETERS:  module_name     - Caller's module name (for error output)
- *              line_number     - Caller's line number (for error output)
- *              Pathname        - Full pathname to the node
- *              node_flags      - From Namespace node for the method/object
- *              Format          - Printf format string + additional args
- *
- * RETURN:      None
- *
- * DESCRIPTION: Warnings for the predefined validation module. Messages are
- *              only emitted the first time a problem with a particular
- *              method/object is detected. This prevents a flood of error
- *              messages for methods that are repeatedly evaluated.
- *
-******************************************************************************/
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_ut_predefined_warning(const char *module_name,
-			   u32 line_number,
-			   char *pathname,
-			   u8 node_flags, const char *format, ...)
-{
-	va_list args;
-
-	/*
-	 * Warning messages for this method/object will be disabled after the
-	 * first time a validation fails or an object is successfully repaired.
-	 */
-	if (node_flags & ANOBJ_EVALUATED) {
-		return;
-	}
-
-	acpi_os_printf("ACPI Warning for %s: ", pathname);
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	ACPI_COMMON_MSG_SUFFIX;
-	va_end(args);
-}
-
-/*******************************************************************************
- *
- * FUNCTION:    acpi_ut_predefined_info
- *
- * PARAMETERS:  module_name     - Caller's module name (for error output)
- *              line_number     - Caller's line number (for error output)
- *              Pathname        - Full pathname to the node
- *              node_flags      - From Namespace node for the method/object
- *              Format          - Printf format string + additional args
- *
- * RETURN:      None
- *
- * DESCRIPTION: Info messages for the predefined validation module. Messages
- *              are only emitted the first time a problem with a particular
- *              method/object is detected. This prevents a flood of
- *              messages for methods that are repeatedly evaluated.
- *
- ******************************************************************************/
-
-void ACPI_INTERNAL_VAR_XFACE
-acpi_ut_predefined_info(const char *module_name,
-			u32 line_number,
-			char *pathname, u8 node_flags, const char *format, ...)
-{
-	va_list args;
-
-	/*
-	 * Warning messages for this method/object will be disabled after the
-	 * first time a validation fails or an object is successfully repaired.
-	 */
-	if (node_flags & ANOBJ_EVALUATED) {
-		return;
-	}
-
-	acpi_os_printf("ACPI Info for %s: ", pathname);
-
-	va_start(args, format);
-	acpi_os_vprintf(format, args);
-	ACPI_COMMON_MSG_SUFFIX;
-	va_end(args);
 }

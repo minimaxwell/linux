@@ -35,7 +35,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <linux/syscalls.h>
@@ -248,10 +248,11 @@ static ssize_t fs_attr_slot_show(struct device *dev, struct device_attribute *at
 }
 static DEVICE_ATTR(slot, S_IRUGO, fs_attr_slot_show, NULL);
 
-static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_id *match)
+static int __devinit fpga_probe(struct platform_device *ofdev)
 {
 	int ret;
 	int idx;
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	int ngpios = of_gpio_count(np);
@@ -261,6 +262,7 @@ static int __devinit fpga_probe(struct of_device *ofdev, const struct of_device_
 	struct device *infos = NULL;
 	struct device *loader;
 
+	match = of_match_device(ofdev->dev.driver->of_match_table, &ofdev->dev);
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
@@ -364,7 +366,7 @@ err:
 	return ret;
 }
 
-static int fpga_remove(struct of_device *ofdev)
+static int fpga_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct fpga_data *data = dev_get_drvdata(dev);
@@ -406,7 +408,7 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 	struct device *dev = &spi->dev;
 	struct device_node *np = dev->of_node;
 	struct of_device_id *pfpga_match;
-	struct of_platform_driver *pfpga_driver;
+	struct platform_driver *pfpga_driver;
 	const void *prop;
 	int l;
 	int ret;
@@ -436,7 +438,7 @@ static int __devinit fpga_spi_probe(struct spi_device *spi)
 	pfpga_driver->driver.owner = THIS_MODULE;
 	pfpga_driver->driver.of_match_table	= pfpga_match;
 
-	ret = of_register_platform_driver(pfpga_driver);
+	ret = platform_driver_register(pfpga_driver);
 	
 	if (ret) {
 		goto err3;
@@ -456,9 +458,9 @@ err1:
 static int __devexit fpga_spi_remove(struct spi_device *spi)
 {
 	struct device *dev = &spi->dev;
-	struct of_platform_driver *pfpga_driver = dev_get_drvdata(dev);
+	struct platform_driver *pfpga_driver = dev_get_drvdata(dev);
 
-	of_unregister_platform_driver(pfpga_driver);
+	platform_driver_unregister(pfpga_driver);
 	kfree(pfpga_driver->driver.of_match_table);
 	kfree(pfpga_driver);
 	return 0;

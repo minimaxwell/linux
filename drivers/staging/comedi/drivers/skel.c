@@ -39,28 +39,28 @@ Configuration Options:
  * The previous block comment is used to automatically generate
  * documentation in Comedi and Comedilib.  The fields:
  *
- * Driver: the name of the driver
- * Description: a short phrase describing the driver.  Don't list boards.
- * Devices: a full list of the boards that attempt to be supported by
- *   the driver.  Format is "(manufacturer) board name [comedi name]",
- *   where comedi_name is the name that is used to configure the board.
- *   See the comment near board_name: in the struct comedi_driver structure
- *   below.  If (manufacturer) or [comedi name] is missing, the previous
- *   value is used.
- * Author: you
- * Updated: date when the _documentation_ was last updated.  Use 'date -R'
- *   to get a value for this.
- * Status: a one-word description of the status.  Valid values are:
- *   works - driver works correctly on most boards supported, and
- *     passes comedi_test.
- *   unknown - unknown.  Usually put there by ds.
- *   experimental - may not work in any particular release.  Author
- *     probably wants assistance testing it.
- *   bitrotten - driver has not been update in a long time, probably
- *     doesn't work, and probably is missing support for significant
- *     Comedi interface features.
- *   untested - author probably wrote it "blind", and is believed to
- *     work, but no confirmation.
+ *  Driver: the name of the driver
+ *  Description: a short phrase describing the driver.  Don't list boards.
+ *  Devices: a full list of the boards that attempt to be supported by
+ *    the driver.  Format is "(manufacturer) board name [comedi name]",
+ *    where comedi_name is the name that is used to configure the board.
+ *    See the comment near board_name: in the struct comedi_driver structure
+ *    below.  If (manufacturer) or [comedi name] is missing, the previous
+ *    value is used.
+ *  Author: you
+ *  Updated: date when the _documentation_ was last updated.  Use 'date -R'
+ *    to get a value for this.
+ *  Status: a one-word description of the status.  Valid values are:
+ *    works - driver works correctly on most boards supported, and
+ *      passes comedi_test.
+ *    unknown - unknown.  Usually put there by ds.
+ *    experimental - may not work in any particular release.  Author
+ *      probably wants assistance testing it.
+ *    bitrotten - driver has not been update in a long time, probably
+ *      doesn't work, and probably is missing support for significant
+ *      Comedi interface features.
+ *    untested - author probably wrote it "blind", and is believed to
+ *      work, but no confirmation.
  *
  * These headers should be followed by a blank line, and any comments
  * you wish to say about the driver.  The comment area is the place
@@ -116,10 +116,9 @@ static const struct skel_board skel_boards[] = {
  * upstream. */
 #define PCI_VENDOR_ID_SKEL 0xdafe
 static DEFINE_PCI_DEVICE_TABLE(skel_pci_table) = {
-	{
-	PCI_VENDOR_ID_SKEL, 0x0100, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	PCI_VENDOR_ID_SKEL, 0x0200, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0}, {
-	0}
+	{ PCI_DEVICE(PCI_VENDOR_ID_SKEL, 0x0100) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_SKEL, 0x0200) },
+	{ 0 }
 };
 
 MODULE_DEVICE_TABLE(pci, skel_pci_table);
@@ -157,7 +156,7 @@ struct skel_private {
  * the device code.
  */
 static int skel_attach(struct comedi_device *dev, struct comedi_devconfig *it);
-static int skel_detach(struct comedi_device *dev);
+static void skel_detach(struct comedi_device *dev);
 static struct comedi_driver driver_skel = {
 	.driver_name = "dummy",
 	.module = THIS_MODULE,
@@ -211,6 +210,7 @@ static int skel_ns_to_timer(unsigned int *ns, int round);
 static int skel_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	struct comedi_subdevice *s;
+	int ret;
 
 	pr_info("comedi%d: skel: ", dev->minor);
 
@@ -234,12 +234,9 @@ static int skel_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	if (alloc_private(dev, sizeof(struct skel_private)) < 0)
 		return -ENOMEM;
 
-/*
- * Allocate the subdevice structures.  alloc_subdevice() is a
- * convenient macro defined in comedidev.h.
- */
-	if (alloc_subdevices(dev, 3) < 0)
-		return -ENOMEM;
+	ret = comedi_alloc_subdevices(dev, 3);
+	if (ret)
+		return ret;
 
 	s = dev->subdevices + 0;
 	/* dev->read_subdev=s; */
@@ -296,11 +293,8 @@ static int skel_attach(struct comedi_device *dev, struct comedi_devconfig *it)
  * allocated by _attach().  dev->private and dev->subdevices are
  * deallocated automatically by the core.
  */
-static int skel_detach(struct comedi_device *dev)
+static void skel_detach(struct comedi_device *dev)
 {
-	pr_info("comedi%d: skel: remove\n", dev->minor);
-
-	return 0;
 }
 
 /*
@@ -567,9 +561,6 @@ static int skel_dio_insn_bits(struct comedi_device *dev,
 			      struct comedi_subdevice *s,
 			      struct comedi_insn *insn, unsigned int *data)
 {
-	if (insn->n != 2)
-		return -EINVAL;
-
 	/* The insn data is a mask in data[0] and the new data
 	 * in data[1], each channel cooresponding to a bit. */
 	if (data[0]) {
@@ -586,7 +577,7 @@ static int skel_dio_insn_bits(struct comedi_device *dev,
 	 * it was a purely digital output subdevice */
 	/* data[1]=s->state; */
 
-	return 2;
+	return insn->n;
 }
 
 static int skel_dio_insn_config(struct comedi_device *dev,
@@ -620,12 +611,59 @@ static int skel_dio_insn_config(struct comedi_device *dev,
 	return insn->n;
 }
 
-/*
- * A convenient macro that defines init_module() and cleanup_module(),
- * as necessary.
- */
-COMEDI_INITCLEANUP(driver_skel);
-/* If you are writing a PCI driver you should use COMEDI_PCI_INITCLEANUP
- * instead.
- */
-/* COMEDI_PCI_INITCLEANUP(driver_skel, skel_pci_table) */
+#ifdef CONFIG_COMEDI_PCI_DRIVERS
+static int __devinit driver_skel_pci_probe(struct pci_dev *dev,
+					   const struct pci_device_id *ent)
+{
+	return comedi_pci_auto_config(dev, &driver_skel);
+}
+
+static void __devexit driver_skel_pci_remove(struct pci_dev *dev)
+{
+	comedi_pci_auto_unconfig(dev);
+}
+
+static struct pci_driver driver_skel_pci_driver = {
+	.id_table = skel_pci_table,
+	.probe = &driver_skel_pci_probe,
+	.remove = __devexit_p(&driver_skel_pci_remove)
+};
+
+static int __init driver_skel_init_module(void)
+{
+	int retval;
+
+	retval = comedi_driver_register(&driver_skel);
+	if (retval < 0)
+		return retval;
+
+	driver_skel_pci_driver.name = (char *)driver_skel.driver_name;
+	return pci_register_driver(&driver_skel_pci_driver);
+}
+
+static void __exit driver_skel_cleanup_module(void)
+{
+	pci_unregister_driver(&driver_skel_pci_driver);
+	comedi_driver_unregister(&driver_skel);
+}
+
+module_init(driver_skel_init_module);
+module_exit(driver_skel_cleanup_module);
+#else
+static int __init driver_skel_init_module(void)
+{
+	return comedi_driver_register(&driver_skel);
+}
+
+static void __exit driver_skel_cleanup_module(void)
+{
+	comedi_driver_unregister(&driver_skel);
+}
+
+module_init(driver_skel_init_module);
+module_exit(driver_skel_cleanup_module);
+#endif
+
+MODULE_AUTHOR("Comedi http://www.comedi.org");
+MODULE_DESCRIPTION("Comedi low-level driver");
+MODULE_LICENSE("GPL");

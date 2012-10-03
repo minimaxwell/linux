@@ -62,12 +62,6 @@
    comedi_do_insn(cf,&insn); // executing configuration
 */
 
-#ifdef _DEBUG_
-#define DEBUG(...);        printk(__VA_ARGS__);
-#else
-#define DEBUG(...)
-#endif
-
 #if !defined(TRUE)
 #define TRUE    (1)
 #endif
@@ -76,11 +70,7 @@
 #define FALSE   (0)
 #endif
 
-#if !defined(INLINE)
-#define INLINE static __inline
-#endif
-
-#include<linux/slab.h>
+#include <linux/slab.h>
 
 #define S626_SIZE 0x0200
 #define SIZEOF_ADDRESS_SPACE		0x0200
@@ -719,15 +709,6 @@
 #define STDMSK_CLKPOL		((uint16_t)(1 << STDBIT_CLKPOL))
 #define STDMSK_CLKMULT		((uint16_t)(3 << STDBIT_CLKMULT))
 #define STDMSK_CLKENAB		((uint16_t)(1 << STDBIT_CLKENAB))
-
-/* typedef struct indexCounter */
-/* { */
-/*   unsigned int ao; */
-/*   unsigned int ai; */
-/*   unsigned int digout; */
-/*   unsigned int digin; */
-/*   unsigned int enc; */
-/* }CallCounter; */
 
 struct bufferDMA {
 	dma_addr_t PhysicalBase;

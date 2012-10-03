@@ -1,4 +1,3 @@
-PERF-BUILD-OPTIONS
 PERF-CFLAGS
 PERF-GUI-VARS
 PERF-VERSION-FILE
@@ -18,3 +17,7 @@ perf-archive
 tags
 TAGS
 cscope*
+config.mak
+config.mak.autogen
+*-bison.*
+*-flex.*

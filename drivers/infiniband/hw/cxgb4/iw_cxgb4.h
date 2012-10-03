@@ -35,7 +35,7 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/idr.h>
-#include <linux/workqueue.h>
+#include <linux/completion.h>
 #include <linux/netdevice.h>
 #include <linux/sched.h>
 #include <linux/pci.h>
@@ -45,7 +45,6 @@
 #include <linux/kref.h>
 #include <linux/timer.h>
 #include <linux/io.h>
-#include <linux/kfifo.h>
 
 #include <asm/byteorder.h>
 
@@ -79,28 +78,22 @@ static inline void *cplhdr(struct sk_buff *skb)
 	return skb->data;
 }
 
-#define C4IW_WR_TO (10*HZ)
+#define C4IW_ID_TABLE_F_RANDOM 1       /* Pseudo-randomize the id's returned */
+#define C4IW_ID_TABLE_F_EMPTY  2       /* Table is initially empty */
 
-struct c4iw_wr_wait {
-	wait_queue_head_t wait;
-	int done;
-	int ret;
+struct c4iw_id_table {
+	u32 flags;
+	u32 start;              /* logical minimal id */
+	u32 last;               /* hint for find */
+	u32 max;
+	spinlock_t lock;
+	unsigned long *table;
 };
 
-static inline void c4iw_init_wr_wait(struct c4iw_wr_wait *wr_waitp)
-{
-	wr_waitp->ret = 0;
-	wr_waitp->done = 0;
-	init_waitqueue_head(&wr_waitp->wait);
-}
-
 struct c4iw_resource {
-	struct kfifo tpt_fifo;
-	spinlock_t tpt_fifo_lock;
-	struct kfifo qid_fifo;
-	spinlock_t qid_fifo_lock;
-	struct kfifo pdid_fifo;
-	spinlock_t pdid_fifo_lock;
+	struct c4iw_id_table tpt_table;
+	struct c4iw_id_table qid_table;
+	struct c4iw_id_table pdid_table;
 };
 
 struct c4iw_qid_list {
@@ -118,6 +111,27 @@ enum c4iw_rdev_flags {
 	T4_FATAL_ERROR = (1<<0),
 };
 
+struct c4iw_stat {
+	u64 total;
+	u64 cur;
+	u64 max;
+	u64 fail;
+};
+
+struct c4iw_stats {
+	struct mutex lock;
+	struct c4iw_stat qid;
+	struct c4iw_stat pd;
+	struct c4iw_stat stag;
+	struct c4iw_stat pbl;
+	struct c4iw_stat rqt;
+	struct c4iw_stat ocqp;
+	u64  db_full;
+	u64  db_empty;
+	u64  db_drop;
+	u64  db_state_transitions;
+};
+
 struct c4iw_rdev {
 	struct c4iw_resource resource;
 	unsigned long qpshift;
@@ -127,8 +141,12 @@ struct c4iw_rdev {
 	struct c4iw_dev_ucontext uctx;
 	struct gen_pool *pbl_pool;
 	struct gen_pool *rqt_pool;
+	struct gen_pool *ocqp_pool;
 	u32 flags;
 	struct cxgb4_lld_info lldi;
+	unsigned long oc_mw_pa;
+	void __iomem *oc_mw_kva;
+	struct c4iw_stats stats;
 };
 
 static inline int c4iw_fatal_error(struct c4iw_rdev *rdev)
@@ -141,6 +159,58 @@ static inline int c4iw_num_stags(struct c4iw_rdev *rdev)
 	return min((int)T4_MAX_NUM_STAG, (int)(rdev->lldi.vr->stag.size >> 5));
 }
 
+#define C4IW_WR_TO (10*HZ)
+
+struct c4iw_wr_wait {
+	struct completion completion;
+	int ret;
+};
+
+static inline void c4iw_init_wr_wait(struct c4iw_wr_wait *wr_waitp)
+{
+	wr_waitp->ret = 0;
+	init_completion(&wr_waitp->completion);
+}
+
+static inline void c4iw_wake_up(struct c4iw_wr_wait *wr_waitp, int ret)
+{
+	wr_waitp->ret = ret;
+	complete(&wr_waitp->completion);
+}
+
+static inline int c4iw_wait_for_reply(struct c4iw_rdev *rdev,
+				 struct c4iw_wr_wait *wr_waitp,
+				 u32 hwtid, u32 qpid,
+				 const char *func)
+{
+	unsigned to = C4IW_WR_TO;
+	int ret;
+
+	do {
+		ret = wait_for_completion_timeout(&wr_waitp->completion, to);
+		if (!ret) {
+			printk(KERN_ERR MOD "%s - Device %s not responding - "
+			       "tid %u qpid %u\n", func,
+			       pci_name(rdev->lldi.pdev), hwtid, qpid);
+			if (c4iw_fatal_error(rdev)) {
+				wr_waitp->ret = -EIO;
+				break;
+			}
+			to = to << 2;
+		}
+	} while (!ret);
+	if (wr_waitp->ret)
+		PDBG("%s: FW reply %d tid %u qpid %u\n",
+		     pci_name(rdev->lldi.pdev), wr_waitp->ret, hwtid, qpid);
+	return wr_waitp->ret;
+}
+
+enum db_state {
+	NORMAL = 0,
+	FLOW_CONTROL = 1,
+	RECOVERY = 2
+};
+
 struct c4iw_dev {
 	struct ib_device ibdev;
 	struct c4iw_rdev rdev;
@@ -149,10 +219,10 @@ struct c4iw_dev {
 	struct idr qpidr;
 	struct idr mmidr;
 	spinlock_t lock;
-	struct list_head entry;
-	struct delayed_work db_drop_task;
+	struct mutex db_mutex;
 	struct dentry *debugfs_root;
-	u8 registered;
+	enum db_state db_state;
+	int qpcnt;
 };
 
 static inline struct c4iw_dev *to_c4iw_dev(struct ib_device *ibdev)
@@ -180,29 +250,57 @@ static inline struct c4iw_mr *get_mhp(struct c4iw_dev *rhp, u32 mmid)
 	return idr_find(&rhp->mmidr, mmid);
 }
 
-static inline int insert_handle(struct c4iw_dev *rhp, struct idr *idr,
-				void *handle, u32 id)
+static inline int _insert_handle(struct c4iw_dev *rhp, struct idr *idr,
+				 void *handle, u32 id, int lock)
 {
 	int ret;
 	int newid;
 
 	do {
-		if (!idr_pre_get(idr, GFP_KERNEL))
+		if (!idr_pre_get(idr, lock ? GFP_KERNEL : GFP_ATOMIC))
 			return -ENOMEM;
-		spin_lock_irq(&rhp->lock);
+		if (lock)
+			spin_lock_irq(&rhp->lock);
 		ret = idr_get_new_above(idr, handle, id, &newid);
-		BUG_ON(newid != id);
-		spin_unlock_irq(&rhp->lock);
+		BUG_ON(!ret && newid != id);
+		if (lock)
+			spin_unlock_irq(&rhp->lock);
 	} while (ret == -EAGAIN);
 
 	return ret;
 }
 
+static inline int insert_handle(struct c4iw_dev *rhp, struct idr *idr,
+				void *handle, u32 id)
+{
+	return _insert_handle(rhp, idr, handle, id, 1);
+}
+
+static inline int insert_handle_nolock(struct c4iw_dev *rhp, struct idr *idr,
+				       void *handle, u32 id)
+{
+	return _insert_handle(rhp, idr, handle, id, 0);
+}
+
+static inline void _remove_handle(struct c4iw_dev *rhp, struct idr *idr,
+				   u32 id, int lock)
+{
+	if (lock)
+		spin_lock_irq(&rhp->lock);
+	idr_remove(idr, id);
+	if (lock)
+		spin_unlock_irq(&rhp->lock);
+}
+
 static inline void remove_handle(struct c4iw_dev *rhp, struct idr *idr, u32 id)
 {
-	spin_lock_irq(&rhp->lock);
-	idr_remove(idr, id);
-	spin_unlock_irq(&rhp->lock);
+	_remove_handle(rhp, idr, id, 1);
+}
+
+static inline void remove_handle_nolock(struct c4iw_dev *rhp,
+					 struct idr *idr, u32 id)
+{
+	_remove_handle(rhp, idr, id, 0);
 }
 
 struct c4iw_pd {
@@ -278,6 +376,7 @@ struct c4iw_cq {
 	struct c4iw_dev *rhp;
 	struct t4_cq cq;
 	spinlock_t lock;
+	spinlock_t comp_handler_lock;
 	atomic_t refcnt;
 	wait_queue_head_t wait;
 };
@@ -292,6 +391,7 @@ struct c4iw_mpa_attributes {
 	u8 recv_marker_enabled;
 	u8 xmit_marker_enabled;
 	u8 crc_enabled;
+	u8 enhanced_rdma_conn;
 	u8 version;
 	u8 p2p_type;
 };
@@ -318,6 +418,10 @@ struct c4iw_qp_attributes {
 	u8 is_terminate_local;
 	struct c4iw_mpa_attributes mpa_attr;
 	struct c4iw_ep *llp_stream_handle;
+	u8 layer_etype;
+	u8 ecode;
+	u16 sq_db_inc;
+	u16 rq_db_inc;
 };
 
 struct c4iw_qp {
@@ -327,6 +431,7 @@ struct c4iw_qp {
 	struct c4iw_qp_attributes attr;
 	struct t4_wq wq;
 	spinlock_t lock;
+	struct mutex mutex;
 	atomic_t refcnt;
 	wait_queue_head_t wait;
 	struct timer_list timer;
@@ -391,6 +496,8 @@ static inline void insert_mmap(struct c4iw_ucontext *ucontext,
 
 enum c4iw_qp_attr_mask {
 	C4IW_QP_ATTR_NEXT_STATE = 1 << 0,
+	C4IW_QP_ATTR_SQ_DB = 1<<1,
+	C4IW_QP_ATTR_RQ_DB = 1<<2,
 	C4IW_QP_ATTR_ENABLE_RDMA_READ = 1 << 7,
 	C4IW_QP_ATTR_ENABLE_RDMA_WRITE = 1 << 8,
 	C4IW_QP_ATTR_ENABLE_RDMA_BIND = 1 << 9,
@@ -444,6 +551,23 @@ static inline int c4iw_convert_state(enum ib_qp_state ib_state)
 	}
 }
 
+static inline int to_ib_qp_state(int c4iw_qp_state)
+{
+	switch (c4iw_qp_state) {
+	case C4IW_QP_STATE_IDLE:
+		return IB_QPS_INIT;
+	case C4IW_QP_STATE_RTS:
+		return IB_QPS_RTS;
+	case C4IW_QP_STATE_CLOSING:
+		return IB_QPS_SQD;
+	case C4IW_QP_STATE_TERMINATE:
+		return IB_QPS_SQE;
+	case C4IW_QP_STATE_ERROR:
+		return IB_QPS_ERR;
+	}
+	return IB_QPS_ERR;
+}
+
 static inline u32 c4iw_ib_to_tpt_access(int a)
 {
 	return (a & IB_ACCESS_REMOTE_WRITE ? FW_RI_MEM_ACCESS_REM_WRITE : 0) |
@@ -469,10 +593,17 @@ enum c4iw_mmid_state {
 #define MPA_KEY_REP "MPA ID Rep Frame"
 
 #define MPA_MAX_PRIVATE_DATA	256
+#define MPA_ENHANCED_RDMA_CONN	0x10
 #define MPA_REJECT		0x20
 #define MPA_CRC			0x40
 #define MPA_MARKERS		0x80
 #define MPA_FLAGS_MASK		0xE0
+
+#define MPA_V2_PEER2PEER_MODEL          0x8000
+#define MPA_V2_ZERO_LEN_FPDU_RTR        0x4000
+#define MPA_V2_RDMA_WRITE_RTR           0x8000
+#define MPA_V2_RDMA_READ_RTR            0x4000
+#define MPA_V2_IRD_ORD_MASK             0x3FFF
 
 #define c4iw_put_ep(ep) { \
 	PDBG("put_ep (via %s:%u) ep %p refcnt %d\n", __func__, __LINE__,  \
@@ -494,6 +625,11 @@ struct mpa_message {
 	u8 revision;
 	__be16 private_data_size;
 	u8 private_data[0];
+};
+
+struct mpa_v2_conn_params {
+	__be16 ird;
+	__be16 ord;
 };
 
 struct terminate_message {
@@ -548,7 +684,10 @@ enum c4iw_ddp_ecodes {
 
 enum c4iw_mpa_ecodes {
 	MPA_CRC_ERR		= 0x02,
-	MPA_MARKER_ERR		= 0x03
+	MPA_MARKER_ERR          = 0x03,
+	MPA_LOCAL_CATA          = 0x05,
+	MPA_INSUFF_IRD          = 0x06,
+	MPA_NOMATCH_RTR         = 0x07,
 };
 
 enum c4iw_ep_state {
@@ -579,12 +718,10 @@ struct c4iw_ep_common {
 	struct c4iw_dev *dev;
 	enum c4iw_ep_state state;
 	struct kref kref;
-	spinlock_t lock;
+	struct mutex mutex;
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
-	wait_queue_head_t waitq;
-	int rpl_done;
-	int rpl_err;
+	struct c4iw_wr_wait wr_wait;
 	unsigned long flags;
 };
 
@@ -619,7 +756,10 @@ struct c4iw_ep {
 	u16 plen;
 	u16 rss_qid;
 	u16 txq_idx;
+	u16 ctrlq_idx;
 	u8 tos;
+	u8 retry_with_mpa_v1;
+	u8 tried_with_mpa_v1;
 };
 
 static inline struct c4iw_ep *to_ep(struct iw_cm_id *cm_id)
@@ -641,20 +781,28 @@ static inline int compute_wscale(int win)
 	return wscale;
 }
 
+u32 c4iw_id_alloc(struct c4iw_id_table *alloc);
+void c4iw_id_free(struct c4iw_id_table *alloc, u32 obj);
+int c4iw_id_table_alloc(struct c4iw_id_table *alloc, u32 start, u32 num,
+			u32 reserved, u32 flags);
+void c4iw_id_table_free(struct c4iw_id_table *alloc);
+
 typedef int (*c4iw_handler_func)(struct c4iw_dev *dev, struct sk_buff *skb);
 
 int c4iw_ep_redirect(void *ctx, struct dst_entry *old, struct dst_entry *new,
 		     struct l2t_entry *l2t);
 void c4iw_put_qpid(struct c4iw_rdev *rdev, u32 qpid,
 		   struct c4iw_dev_ucontext *uctx);
-u32 c4iw_get_resource(struct kfifo *fifo, spinlock_t *lock);
-void c4iw_put_resource(struct kfifo *fifo, u32 entry, spinlock_t *lock);
+u32 c4iw_get_resource(struct c4iw_id_table *id_table);
+void c4iw_put_resource(struct c4iw_id_table *id_table, u32 entry);
 int c4iw_init_resource(struct c4iw_rdev *rdev, u32 nr_tpt, u32 nr_pdid);
 int c4iw_init_ctrl_qp(struct c4iw_rdev *rdev);
 int c4iw_pblpool_create(struct c4iw_rdev *rdev);
 int c4iw_rqtpool_create(struct c4iw_rdev *rdev);
+int c4iw_ocqp_pool_create(struct c4iw_rdev *rdev);
 void c4iw_pblpool_destroy(struct c4iw_rdev *rdev);
 void c4iw_rqtpool_destroy(struct c4iw_rdev *rdev);
+void c4iw_ocqp_pool_destroy(struct c4iw_rdev *rdev);
 void c4iw_destroy_resource(struct c4iw_resource *rscp);
 int c4iw_destroy_ctrl_qp(struct c4iw_rdev *rdev);
 int c4iw_register_device(struct c4iw_dev *dev);
@@ -715,11 +863,15 @@ struct ib_qp *c4iw_create_qp(struct ib_pd *pd,
 			     struct ib_udata *udata);
 int c4iw_ib_modify_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
 				 int attr_mask, struct ib_udata *udata);
+int c4iw_ib_query_qp(struct ib_qp *ibqp, struct ib_qp_attr *attr,
+		     int attr_mask, struct ib_qp_init_attr *init_attr);
 struct ib_qp *c4iw_get_qp(struct ib_device *dev, int qpn);
 u32 c4iw_rqtpool_alloc(struct c4iw_rdev *rdev, int size);
 void c4iw_rqtpool_free(struct c4iw_rdev *rdev, u32 addr, int size);
 u32 c4iw_pblpool_alloc(struct c4iw_rdev *rdev, int size);
 void c4iw_pblpool_free(struct c4iw_rdev *rdev, u32 addr, int size);
+u32 c4iw_ocqp_pool_alloc(struct c4iw_rdev *rdev, int size);
+void c4iw_ocqp_pool_free(struct c4iw_rdev *rdev, u32 addr, int size);
 int c4iw_ofld_send(struct c4iw_rdev *rdev, struct sk_buff *skb);
 void c4iw_flush_hw_cq(struct t4_cq *cq);
 void c4iw_count_rcqes(struct t4_cq *cq, struct t4_wq *wq, int *count);
@@ -729,7 +881,6 @@ int c4iw_flush_rq(struct t4_wq *wq, struct t4_cq *cq, int count);
 int c4iw_flush_sq(struct t4_wq *wq, struct t4_cq *cq, int count);
 int c4iw_ev_handler(struct c4iw_dev *rnicp, u32 qid);
 u16 c4iw_rqes_posted(struct c4iw_qp *qhp);
-int c4iw_post_zb_read(struct c4iw_qp *qhp);
 int c4iw_post_terminate(struct c4iw_qp *qhp, struct t4_cqe *err_cqe);
 u32 c4iw_get_cqid(struct c4iw_rdev *rdev, struct c4iw_dev_ucontext *uctx);
 void c4iw_put_cqid(struct c4iw_rdev *rdev, u32 qid,
@@ -742,5 +893,7 @@ void c4iw_ev_dispatch(struct c4iw_dev *dev, struct t4_cqe *err_cqe);
 extern struct cxgb4_client t4c_client;
 extern c4iw_handler_func c4iw_handlers[NUM_CPL_CMDS];
 extern int c4iw_max_read_depth;
+extern int db_fc_threshold;
+
 
 #endif

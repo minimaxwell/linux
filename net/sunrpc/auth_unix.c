@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/auth.h>
+#include <linux/user_namespace.h>
 
 #define NFS_NGROUPS	16
 
@@ -29,7 +30,6 @@ struct unx_cred {
 #endif
 
 static struct rpc_auth		unix_auth;
-static struct rpc_cred_cache	unix_cred_cache;
 static const struct rpc_credops	unix_credops;
 
 static struct rpc_auth *
@@ -79,8 +79,11 @@ unx_create_cred(struct rpc_auth *auth, struct auth_cred *acred, int flags)
 		groups = NFS_NGROUPS;
 
 	cred->uc_gid = acred->gid;
-	for (i = 0; i < groups; i++)
-		cred->uc_gids[i] = GROUP_AT(acred->group_info, i);
+	for (i = 0; i < groups; i++) {
+		gid_t gid;
+		gid = from_kgid(&init_user_ns, GROUP_AT(acred->group_info, i));
+		cred->uc_gids[i] = gid;
+	}
 	if (i < NFS_NGROUPS)
 		cred->uc_gids[i] = NOGROUP;
 
@@ -127,9 +130,15 @@ unx_match(struct auth_cred *acred, struct rpc_cred *rcred, int flags)
 		groups = acred->group_info->ngroups;
 	if (groups > NFS_NGROUPS)
 		groups = NFS_NGROUPS;
-	for (i = 0; i < groups ; i++)
-		if (cred->uc_gids[i] != GROUP_AT(acred->group_info, i))
+	for (i = 0; i < groups ; i++) {
+		gid_t gid;
+		gid = from_kgid(&init_user_ns, GROUP_AT(acred->group_info, i));
+		if (cred->uc_gids[i] != gid)
 			return 0;
+	}
+	if (groups < NFS_NGROUPS &&
+	    cred->uc_gids[groups] != NOGROUP)
+		return 0;
 	return 1;
 }
 
@@ -141,7 +150,7 @@ static __be32 *
 unx_marshal(struct rpc_task *task, __be32 *p)
 {
 	struct rpc_clnt	*clnt = task->tk_client;
-	struct unx_cred	*cred = container_of(task->tk_msg.rpc_cred, struct unx_cred, uc_base);
+	struct unx_cred	*cred = container_of(task->tk_rqstp->rq_cred, struct unx_cred, uc_base);
 	__be32		*base, *hold;
 	int		i;
 
@@ -174,7 +183,7 @@ unx_marshal(struct rpc_task *task, __be32 *p)
 static int
 unx_refresh(struct rpc_task *task)
 {
-	set_bit(RPCAUTH_CRED_UPTODATE, &task->tk_msg.rpc_cred->cr_flags);
+	set_bit(RPCAUTH_CRED_UPTODATE, &task->tk_rqstp->rq_cred->cr_flags);
 	return 0;
 }
 
@@ -197,15 +206,20 @@ unx_validate(struct rpc_task *task, __be32 *p)
 		printk("RPC: giant verf size: %u\n", size);
 		return NULL;
 	}
-	task->tk_msg.rpc_cred->cr_auth->au_rslack = (size >> 2) + 2;
+	task->tk_rqstp->rq_cred->cr_auth->au_rslack = (size >> 2) + 2;
 	p += (size >> 2);
 
 	return p;
 }
 
-void __init rpc_init_authunix(void)
+int __init rpc_init_authunix(void)
 {
-	spin_lock_init(&unix_cred_cache.lock);
+	return rpcauth_init_credcache(&unix_auth);
+}
+
+void rpc_destroy_authunix(void)
+{
+	rpcauth_destroy_credcache(&unix_auth);
 }
 
 const struct rpc_authops authunix_ops = {
@@ -219,17 +233,12 @@ const struct rpc_authops authunix_ops = {
 };
 
 static
-struct rpc_cred_cache	unix_cred_cache = {
-};
-
-static
 struct rpc_auth		unix_auth = {
 	.au_cslack	= UNX_WRITESLACK,
 	.au_rslack	= 2,			/* assume AUTH_NULL verf */
 	.au_ops		= &authunix_ops,
 	.au_flavor	= RPC_AUTH_UNIX,
 	.au_count	= ATOMIC_INIT(0),
-	.au_credcache	= &unix_cred_cache,
 };
 
 static

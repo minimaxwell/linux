@@ -114,7 +114,6 @@ void inet_frag_kill(struct inet_frag_queue *fq, struct inet_frags *f)
 		fq->last_in |= INET_FRAG_COMPLETE;
 	}
 }
-
 EXPORT_SYMBOL(inet_frag_kill);
 
 static inline void frag_kfree_skb(struct netns_frags *nf, struct inet_frags *f,
@@ -244,12 +243,12 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	if (q == NULL)
 		return NULL;
 
+	q->net = nf;
 	f->constructor(q, arg);
 	atomic_add(f->qsize, &nf->mem);
 	setup_timer(&q->timer, f->frag_expire, (unsigned long)q);
 	spin_lock_init(&q->lock);
 	atomic_set(&q->refcnt, 1);
-	q->net = nf;
 
 	return q;
 }

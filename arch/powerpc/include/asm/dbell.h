@@ -18,7 +18,10 @@
 #include <asm/ppc-opcode.h>
 
 #define PPC_DBELL_MSG_BRDCAST	(0x04000000)
-#define PPC_DBELL_TYPE(x)	(((x) & 0xf) << 28)
+#define PPC_DBELL_TYPE(x)	(((x) & 0xf) << (63-36))
+#define PPC_DBELL_TYPE_MASK	PPC_DBELL_TYPE(0xf)
+#define PPC_DBELL_LPID(x)	((x) << (63 - 49))
+#define PPC_DBELL_PIR_MASK	0x3fff
 enum ppc_dbell {
 	PPC_DBELL = 0,		/* doorbell */
 	PPC_DBELL_CRIT = 1,	/* critical doorbell */
@@ -27,10 +30,9 @@ enum ppc_dbell {
 	PPC_G_DBELL_MC = 4,	/* guest mcheck doorbell */
 };
 
-#ifdef CONFIG_SMP
-extern unsigned long dbell_smp_message[NR_CPUS];
-extern void smp_dbell_message_pass(int target, int msg);
-#endif
+extern void doorbell_cause_ipi(int cpu, unsigned long data);
+extern void doorbell_exception(struct pt_regs *regs);
+extern void doorbell_setup_this_cpu(void);
 
 static inline void ppc_msgsnd(enum ppc_dbell type, u32 flags, u32 tag)
 {

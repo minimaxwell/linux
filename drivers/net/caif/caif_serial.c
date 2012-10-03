@@ -4,8 +4,8 @@
  * License terms: GNU General Public License (GPL) version 2
  */
 
+#include <linux/hardirq.h>
 #include <linux/init.h>
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/types.h>
@@ -38,15 +38,15 @@ MODULE_ALIAS_LDISC(N_CAIF);
 /*This list is protected by the rtnl lock. */
 static LIST_HEAD(ser_list);
 
-static int ser_loop;
+static bool ser_loop;
 module_param(ser_loop, bool, S_IRUGO);
 MODULE_PARM_DESC(ser_loop, "Run in simulated loopback mode.");
 
-static int ser_use_stx = 1;
+static bool ser_use_stx = true;
 module_param(ser_use_stx, bool, S_IRUGO);
 MODULE_PARM_DESC(ser_use_stx, "STX enabled or not.");
 
-static int ser_use_fcs = 1;
+static bool ser_use_fcs = true;
 
 module_param(ser_use_fcs, bool, S_IRUGO);
 MODULE_PARM_DESC(ser_use_fcs, "FCS enabled or not.");
@@ -174,6 +174,7 @@ static void ldisc_receive(struct tty_struct *tty, const u8 *data,
 	struct ser_device *ser;
 	int ret;
 	u8 *p;
+
 	ser = tty->disc_data;
 
 	/*
@@ -221,6 +222,7 @@ static int handle_tx(struct ser_device *ser)
 	struct tty_struct *tty;
 	struct sk_buff *skb;
 	int tty_wr, len, room;
+
 	tty = ser->tty;
 	ser->tx_started = true;
 
@@ -259,7 +261,7 @@ static int handle_tx(struct ser_device *ser)
 		skb_pull(skb, tty_wr);
 		if (skb->len == 0) {
 			struct sk_buff *tmp = skb_dequeue(&ser->head);
-			BUG_ON(tmp != skb);
+			WARN_ON(tmp != skb);
 			if (in_interrupt())
 				dev_kfree_skb_irq(skb);
 			else
@@ -281,6 +283,7 @@ error:
 static int caif_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ser_device *ser;
+
 	BUG_ON(dev == NULL);
 	ser = netdev_priv(dev);
 
@@ -299,9 +302,10 @@ static int caif_xmit(struct sk_buff *skb, struct net_device *dev)
 static void ldisc_tx_wakeup(struct tty_struct *tty)
 {
 	struct ser_device *ser;
+
 	ser = tty->disc_data;
 	BUG_ON(ser == NULL);
-	BUG_ON(ser->tty != tty);
+	WARN_ON(ser->tty != tty);
 	handle_tx(ser);
 }
 
@@ -321,6 +325,9 @@ static int ldisc_open(struct tty_struct *tty)
 
 	sprintf(name, "cf%s", tty->name);
 	dev = alloc_netdev(sizeof(*ser), name, caifdev_setup);
+	if (!dev)
+		return -ENOMEM;
+
 	ser = netdev_priv(dev);
 	ser->tty = tty_kref_get(tty);
 	ser->dev = dev;
@@ -348,6 +355,7 @@ static void ldisc_close(struct tty_struct *tty)
 	struct ser_device *ser = tty->disc_data;
 	/* Remove may be called inside or outside of rtnl_lock */
 	int islocked = rtnl_is_locked();
+
 	if (!islocked)
 		rtnl_lock();
 	/* device is freed automagically by net-sysfs */
@@ -374,6 +382,7 @@ static struct tty_ldisc_ops caif_ldisc = {
 static int register_ldisc(void)
 {
 	int result;
+
 	result = tty_register_ldisc(N_CAIF, &caif_ldisc);
 	if (result < 0) {
 		pr_err("cannot register CAIF ldisc=%d err=%d\n", N_CAIF,
@@ -391,12 +400,12 @@ static const struct net_device_ops netdev_ops = {
 static void caifdev_setup(struct net_device *dev)
 {
 	struct ser_device *serdev = netdev_priv(dev);
+
 	dev->features = 0;
 	dev->netdev_ops = &netdev_ops;
 	dev->type = ARPHRD_CAIF;
 	dev->flags = IFF_POINTOPOINT | IFF_NOARP;
 	dev->mtu = CAIF_MAX_MTU;
-	dev->hard_header_len = CAIF_NEEDED_HEADROOM;
 	dev->tx_queue_len = 0;
 	dev->destructor = free_netdev;
 	skb_queue_head_init(&serdev->head);
@@ -410,8 +419,6 @@ static void caifdev_setup(struct net_device *dev)
 
 static int caif_net_open(struct net_device *dev)
 {
-	struct ser_device *ser;
-	ser = netdev_priv(dev);
 	netif_wake_queue(dev);
 	return 0;
 }
@@ -425,6 +432,7 @@ static int caif_net_close(struct net_device *dev)
 static int __init caif_ser_init(void)
 {
 	int ret;
+
 	ret = register_ldisc();
 	debugfsdir = debugfs_create_dir("caif_serial", NULL);
 	return ret;
@@ -435,6 +443,7 @@ static void __exit caif_ser_exit(void)
 	struct ser_device *ser = NULL;
 	struct list_head *node;
 	struct list_head *_tmp;
+
 	list_for_each_safe(node, _tmp, &ser_list) {
 		ser = list_entry(node, struct ser_device, node);
 		dev_close(ser->dev);

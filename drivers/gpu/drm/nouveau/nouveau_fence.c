@@ -27,182 +27,112 @@
 #include "drmP.h"
 #include "drm.h"
 
+#include <linux/ktime.h>
+#include <linux/hrtimer.h>
+
 #include "nouveau_drv.h"
+#include "nouveau_ramht.h"
+#include "nouveau_fence.h"
+#include "nouveau_software.h"
 #include "nouveau_dma.h"
 
-#define USE_REFCNT (dev_priv->card_type >= NV_10)
-
-struct nouveau_fence {
-	struct nouveau_channel *channel;
-	struct kref refcount;
-	struct list_head entry;
-
-	uint32_t sequence;
-	bool signalled;
-};
-
-static inline struct nouveau_fence *
-nouveau_fence(void *sync_obj)
+void
+nouveau_fence_context_del(struct nouveau_fence_chan *fctx)
 {
-	return (struct nouveau_fence *)sync_obj;
+	struct nouveau_fence *fence, *fnext;
+	spin_lock(&fctx->lock);
+	list_for_each_entry_safe(fence, fnext, &fctx->pending, head) {
+		if (fence->work)
+			fence->work(fence->priv, false);
+		fence->channel = NULL;
+		list_del(&fence->head);
+		nouveau_fence_unref(&fence);
+	}
+	spin_unlock(&fctx->lock);
 }
 
-static void
-nouveau_fence_del(struct kref *ref)
+void
+nouveau_fence_context_new(struct nouveau_fence_chan *fctx)
 {
-	struct nouveau_fence *fence =
-		container_of(ref, struct nouveau_fence, refcount);
-
-	kfree(fence);
+	INIT_LIST_HEAD(&fctx->pending);
+	spin_lock_init(&fctx->lock);
 }
 
 void
 nouveau_fence_update(struct nouveau_channel *chan)
 {
-	struct drm_nouveau_private *dev_priv = chan->dev->dev_private;
-	struct list_head *entry, *tmp;
-	struct nouveau_fence *fence;
-	uint32_t sequence;
+	struct drm_device *dev = chan->dev;
+	struct nouveau_fence_priv *priv = nv_engine(dev, NVOBJ_ENGINE_FENCE);
+	struct nouveau_fence_chan *fctx = chan->engctx[NVOBJ_ENGINE_FENCE];
+	struct nouveau_fence *fence, *fnext;
 
-	if (USE_REFCNT)
-		sequence = nvchan_rd32(chan, 0x48);
-	else
-		sequence = chan->fence.last_sequence_irq;
-
-	if (chan->fence.sequence_ack == sequence)
-		return;
-	chan->fence.sequence_ack = sequence;
-
-	list_for_each_safe(entry, tmp, &chan->fence.pending) {
-		fence = list_entry(entry, struct nouveau_fence, entry);
-
-		sequence = fence->sequence;
-		fence->signalled = true;
-		list_del(&fence->entry);
-		kref_put(&fence->refcount, nouveau_fence_del);
-
-		if (sequence == chan->fence.sequence_ack)
+	spin_lock(&fctx->lock);
+	list_for_each_entry_safe(fence, fnext, &fctx->pending, head) {
+		if (priv->read(chan) < fence->sequence)
 			break;
+
+		if (fence->work)
+			fence->work(fence->priv, true);
+		fence->channel = NULL;
+		list_del(&fence->head);
+		nouveau_fence_unref(&fence);
 	}
+	spin_unlock(&fctx->lock);
 }
 
 int
-nouveau_fence_new(struct nouveau_channel *chan, struct nouveau_fence **pfence,
-		  bool emit)
+nouveau_fence_emit(struct nouveau_fence *fence, struct nouveau_channel *chan)
 {
-	struct nouveau_fence *fence;
-	int ret = 0;
+	struct drm_device *dev = chan->dev;
+	struct nouveau_fence_priv *priv = nv_engine(dev, NVOBJ_ENGINE_FENCE);
+	struct nouveau_fence_chan *fctx = chan->engctx[NVOBJ_ENGINE_FENCE];
+	int ret;
 
-	fence = kzalloc(sizeof(*fence), GFP_KERNEL);
-	if (!fence)
-		return -ENOMEM;
-	kref_init(&fence->refcount);
-	fence->channel = chan;
+	fence->channel  = chan;
+	fence->timeout  = jiffies + (3 * DRM_HZ);
+	fence->sequence = ++fctx->sequence;
 
-	if (emit)
-		ret = nouveau_fence_emit(fence);
+	ret = priv->emit(fence);
+	if (!ret) {
+		kref_get(&fence->kref);
+		spin_lock(&fctx->lock);
+		list_add_tail(&fence->head, &fctx->pending);
+		spin_unlock(&fctx->lock);
+	}
 
-	if (ret)
-		nouveau_fence_unref((void *)&fence);
-	*pfence = fence;
 	return ret;
 }
 
-struct nouveau_channel *
-nouveau_fence_channel(struct nouveau_fence *fence)
-{
-	return fence ? fence->channel : NULL;
-}
-
-int
-nouveau_fence_emit(struct nouveau_fence *fence)
-{
-	struct drm_nouveau_private *dev_priv = fence->channel->dev->dev_private;
-	struct nouveau_channel *chan = fence->channel;
-	unsigned long flags;
-	int ret;
-
-	ret = RING_SPACE(chan, 2);
-	if (ret)
-		return ret;
-
-	if (unlikely(chan->fence.sequence == chan->fence.sequence_ack - 1)) {
-		spin_lock_irqsave(&chan->fence.lock, flags);
-		nouveau_fence_update(chan);
-		spin_unlock_irqrestore(&chan->fence.lock, flags);
-
-		BUG_ON(chan->fence.sequence ==
-		       chan->fence.sequence_ack - 1);
-	}
-
-	fence->sequence = ++chan->fence.sequence;
-
-	kref_get(&fence->refcount);
-	spin_lock_irqsave(&chan->fence.lock, flags);
-	list_add_tail(&fence->entry, &chan->fence.pending);
-	spin_unlock_irqrestore(&chan->fence.lock, flags);
-
-	BEGIN_RING(chan, NvSubSw, USE_REFCNT ? 0x0050 : 0x0150, 1);
-	OUT_RING(chan, fence->sequence);
-	FIRE_RING(chan);
-
-	return 0;
-}
-
-void
-nouveau_fence_unref(void **sync_obj)
-{
-	struct nouveau_fence *fence = nouveau_fence(*sync_obj);
-
-	if (fence)
-		kref_put(&fence->refcount, nouveau_fence_del);
-	*sync_obj = NULL;
-}
-
-void *
-nouveau_fence_ref(void *sync_obj)
-{
-	struct nouveau_fence *fence = nouveau_fence(sync_obj);
-
-	kref_get(&fence->refcount);
-	return sync_obj;
-}
-
 bool
-nouveau_fence_signalled(void *sync_obj, void *sync_arg)
+nouveau_fence_done(struct nouveau_fence *fence)
 {
-	struct nouveau_fence *fence = nouveau_fence(sync_obj);
-	struct nouveau_channel *chan = fence->channel;
-	unsigned long flags;
-
-	if (fence->signalled)
-		return true;
-
-	spin_lock_irqsave(&chan->fence.lock, flags);
-	nouveau_fence_update(chan);
-	spin_unlock_irqrestore(&chan->fence.lock, flags);
-	return fence->signalled;
+	if (fence->channel)
+		nouveau_fence_update(fence->channel);
+	return !fence->channel;
 }
 
 int
-nouveau_fence_wait(void *sync_obj, void *sync_arg, bool lazy, bool intr)
+nouveau_fence_wait(struct nouveau_fence *fence, bool lazy, bool intr)
 {
-	unsigned long timeout = jiffies + (3 * DRM_HZ);
+	unsigned long sleep_time = NSEC_PER_MSEC / 1000;
+	ktime_t t;
 	int ret = 0;
 
-	__set_current_state(intr ? TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE);
-
-	while (1) {
-		if (nouveau_fence_signalled(sync_obj, sync_arg))
-			break;
-
-		if (time_after_eq(jiffies, timeout)) {
+	while (!nouveau_fence_done(fence)) {
+		if (fence->timeout && time_after_eq(jiffies, fence->timeout)) {
 			ret = -EBUSY;
 			break;
 		}
 
-		if (lazy)
-			schedule_timeout(1);
+		__set_current_state(intr ? TASK_INTERRUPTIBLE :
+					   TASK_UNINTERRUPTIBLE);
+		if (lazy) {
+			t = ktime_set(0, sleep_time);
+			schedule_hrtimeout(&t, HRTIMER_MODE_REL);
+			sleep_time *= 2;
+			if (sleep_time > NSEC_PER_MSEC)
+				sleep_time = NSEC_PER_MSEC;
+		}
 
 		if (intr && signal_pending(current)) {
 			ret = -ERESTARTSYS;
@@ -211,52 +141,72 @@ nouveau_fence_wait(void *sync_obj, void *sync_arg, bool lazy, bool intr)
 	}
 
 	__set_current_state(TASK_RUNNING);
-
 	return ret;
 }
 
 int
-nouveau_fence_flush(void *sync_obj, void *sync_arg)
+nouveau_fence_sync(struct nouveau_fence *fence, struct nouveau_channel *chan)
 {
-	return 0;
+	struct drm_device *dev = chan->dev;
+	struct nouveau_fence_priv *priv = nv_engine(dev, NVOBJ_ENGINE_FENCE);
+	struct nouveau_channel *prev;
+	int ret = 0;
+
+	prev = fence ? nouveau_channel_get_unlocked(fence->channel) : NULL;
+	if (prev) {
+		if (unlikely(prev != chan && !nouveau_fence_done(fence))) {
+			ret = priv->sync(fence, prev, chan);
+			if (unlikely(ret))
+				ret = nouveau_fence_wait(fence, true, false);
+		}
+		nouveau_channel_put_unlocked(&prev);
+	}
+
+	return ret;
+}
+
+static void
+nouveau_fence_del(struct kref *kref)
+{
+	struct nouveau_fence *fence = container_of(kref, typeof(*fence), kref);
+	kfree(fence);
 }
 
 void
-nouveau_fence_handler(struct drm_device *dev, int channel)
+nouveau_fence_unref(struct nouveau_fence **pfence)
 {
-	struct drm_nouveau_private *dev_priv = dev->dev_private;
-	struct nouveau_channel *chan = NULL;
+	if (*pfence)
+		kref_put(&(*pfence)->kref, nouveau_fence_del);
+	*pfence = NULL;
+}
 
-	if (channel >= 0 && channel < dev_priv->engine.fifo.channels)
-		chan = dev_priv->fifos[channel];
-
-	if (chan) {
-		spin_lock_irq(&chan->fence.lock);
-		nouveau_fence_update(chan);
-		spin_unlock_irq(&chan->fence.lock);
-	}
+struct nouveau_fence *
+nouveau_fence_ref(struct nouveau_fence *fence)
+{
+	kref_get(&fence->kref);
+	return fence;
 }
 
 int
-nouveau_fence_init(struct nouveau_channel *chan)
+nouveau_fence_new(struct nouveau_channel *chan, struct nouveau_fence **pfence)
 {
-	INIT_LIST_HEAD(&chan->fence.pending);
-	spin_lock_init(&chan->fence.lock);
-	return 0;
-}
-
-void
-nouveau_fence_fini(struct nouveau_channel *chan)
-{
-	struct list_head *entry, *tmp;
 	struct nouveau_fence *fence;
+	int ret = 0;
 
-	list_for_each_safe(entry, tmp, &chan->fence.pending) {
-		fence = list_entry(entry, struct nouveau_fence, entry);
+	if (unlikely(!chan->engctx[NVOBJ_ENGINE_FENCE]))
+		return -ENODEV;
 
-		fence->signalled = true;
-		list_del(&fence->entry);
-		kref_put(&fence->refcount, nouveau_fence_del);
+	fence = kzalloc(sizeof(*fence), GFP_KERNEL);
+	if (!fence)
+		return -ENOMEM;
+	kref_init(&fence->kref);
+
+	if (chan) {
+		ret = nouveau_fence_emit(fence, chan);
+		if (ret)
+			nouveau_fence_unref(&fence);
 	}
-}
 
+	*pfence = fence;
+	return ret;
+}

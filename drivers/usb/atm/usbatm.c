@@ -81,11 +81,12 @@
 #include <linux/timer.h>
 #include <linux/wait.h>
 #include <linux/kthread.h>
+#include <linux/ratelimit.h>
 
 #ifdef VERBOSE_DEBUG
 static int usbatm_print_packet(const unsigned char *data, int len);
-#define PACKETDEBUG(arg...)	usbatm_print_packet (arg)
-#define vdbg(arg...)		dbg (arg)
+#define PACKETDEBUG(arg...)	usbatm_print_packet(arg)
+#define vdbg(arg...)		dev_dbg(arg)
 #else
 #define PACKETDEBUG(arg...)
 #define vdbg(arg...)
@@ -273,8 +274,7 @@ static void usbatm_complete(struct urb *urb)
 
 	if (unlikely(status) &&
 			(!(channel->usbatm->flags & UDSL_IGNORE_EILSEQ) ||
-			 status != -EILSEQ ))
-	{
+			 status != -EILSEQ)) {
 		if (status == -ESHUTDOWN)
 			return;
 
@@ -494,7 +494,7 @@ static unsigned int usbatm_write_cells(struct usbatm_data *instance,
 		ptr += data_len;
 		__skb_pull(skb, data_len);
 
-		if(!left)
+		if (!left)
 			continue;
 
 		memset(ptr, 0, left);
@@ -506,7 +506,7 @@ static unsigned int usbatm_write_cells(struct usbatm_data *instance,
 			trailer[2] = ctrl->len >> 8;
 			trailer[3] = ctrl->len;
 
-			ctrl->crc = ~ crc32_be(ctrl->crc, ptr, left - 4);
+			ctrl->crc = ~crc32_be(ctrl->crc, ptr, left - 4);
 
 			trailer[4] = ctrl->crc >> 24;
 			trailer[5] = ctrl->crc >> 16;
@@ -516,8 +516,7 @@ static unsigned int usbatm_write_cells(struct usbatm_data *instance,
 			target[3] |= 0x2;	/* adjust PTI */
 
 			ctrl->len = 0;		/* tag this skb finished */
-		}
-		else
+		} else
 			ctrl->crc = crc32_be(ctrl->crc, ptr, left);
 	}
 
@@ -670,8 +669,7 @@ static int usbatm_atm_send(struct atm_vcc *vcc, struct sk_buff *skb)
 	/* racy disconnection check - fine */
 	if (!instance || instance->disconnected) {
 #ifdef DEBUG
-		if (printk_ratelimit())
-			printk(KERN_DEBUG "%s: %s!\n", __func__, instance ? "disconnected" : "NULL instance");
+		printk_ratelimited(KERN_DEBUG "%s: %s!\n", __func__, instance ? "disconnected" : "NULL instance");
 #endif
 		err = -ENODEV;
 		goto fail;
@@ -716,7 +714,7 @@ static void usbatm_destroy_instance(struct kref *kref)
 {
 	struct usbatm_data *instance = container_of(kref, struct usbatm_data, refcount);
 
-	dbg("%s", __func__);
+	usb_dbg(instance, "%s\n", __func__);
 
 	tasklet_kill(&instance->rx_channel.tasklet);
 	tasklet_kill(&instance->tx_channel.tasklet);
@@ -726,14 +724,14 @@ static void usbatm_destroy_instance(struct kref *kref)
 
 static void usbatm_get_instance(struct usbatm_data *instance)
 {
-	dbg("%s", __func__);
+	usb_dbg(instance, "%s\n", __func__);
 
 	kref_get(&instance->refcount);
 }
 
 static void usbatm_put_instance(struct usbatm_data *instance)
 {
-	dbg("%s", __func__);
+	usb_dbg(instance, "%s\n", __func__);
 
 	kref_put(&instance->refcount, usbatm_destroy_instance);
 }
@@ -747,11 +745,10 @@ static void usbatm_atm_dev_close(struct atm_dev *atm_dev)
 {
 	struct usbatm_data *instance = atm_dev->dev_data;
 
-	dbg("%s", __func__);
-
 	if (!instance)
 		return;
 
+	usb_dbg(instance, "%s\n", __func__);
 	atm_dev->dev_data = NULL; /* catch bugs */
 	usbatm_put_instance(instance);	/* taken in usbatm_atm_init */
 }
@@ -761,10 +758,8 @@ static int usbatm_atm_proc_read(struct atm_dev *atm_dev, loff_t * pos, char *pag
 	struct usbatm_data *instance = atm_dev->dev_data;
 	int left = *pos;
 
-	if (!instance) {
-		dbg("%s: NULL instance!", __func__);
+	if (!instance)
 		return -ENODEV;
-	}
 
 	if (!left--)
 		return sprintf(page, "%s\n", instance->description);
@@ -806,10 +801,8 @@ static int usbatm_atm_open(struct atm_vcc *vcc)
 	int vci = vcc->vci;
 	short vpi = vcc->vpi;
 
-	if (!instance) {
-		dbg("%s: NULL data!", __func__);
+	if (!instance)
 		return -ENODEV;
-	}
 
 	atm_dbg(instance, "%s: vpi %hd, vci %d\n", __func__, vpi, vci);
 
@@ -886,10 +879,8 @@ static void usbatm_atm_close(struct atm_vcc *vcc)
 	struct usbatm_data *instance = vcc->dev->dev_data;
 	struct usbatm_vcc_data *vcc_data = vcc->dev_data;
 
-	if (!instance || !vcc_data) {
-		dbg("%s: NULL data!", __func__);
+	if (!instance || !vcc_data)
 		return;
-	}
 
 	atm_dbg(instance, "%s entered\n", __func__);
 
@@ -931,10 +922,8 @@ static int usbatm_atm_ioctl(struct atm_dev *atm_dev, unsigned int cmd,
 {
 	struct usbatm_data *instance = atm_dev->dev_data;
 
-	if (!instance || instance->disconnected) {
-		dbg("%s: %s!", __func__, instance ? "disconnected" : "NULL instance");
+	if (!instance || instance->disconnected)
 		return -ENODEV;
-	}
 
 	switch (cmd) {
 	case ATM_QUERYLOOP:
@@ -953,7 +942,9 @@ static int usbatm_atm_init(struct usbatm_data *instance)
 	 * condition: callbacks we register can be executed at once, before we have
 	 * initialized the struct atm_dev.  To protect against this, all callbacks
 	 * abort if atm_dev->dev_data is NULL. */
-	atm_dev = atm_dev_register(instance->driver_name, &usbatm_atm_devops, -1, NULL);
+	atm_dev = atm_dev_register(instance->driver_name,
+				   &instance->usb_intf->dev, &usbatm_atm_devops,
+				   -1, NULL);
 	if (!atm_dev) {
 		usb_err(instance, "%s: failed to register ATM device!\n", __func__);
 		return -1;
@@ -967,14 +958,6 @@ static int usbatm_atm_init(struct usbatm_data *instance)
 
 	/* temp init ATM device, set to 128kbit */
 	atm_dev->link_rate = 128 * 1000 / 424;
-
-	ret = sysfs_create_link(&atm_dev->class_dev.kobj,
-				&instance->usb_intf->dev.kobj, "device");
-	if (ret) {
-		atm_err(instance, "%s: sysfs_create_link failed: %d\n",
-					__func__, ret);
-		goto fail_sysfs;
-	}
 
 	if (instance->driver->atm_start && ((ret = instance->driver->atm_start(instance, atm_dev)) < 0)) {
 		atm_err(instance, "%s: atm_start failed: %d!\n", __func__, ret);
@@ -994,8 +977,6 @@ static int usbatm_atm_init(struct usbatm_data *instance)
 	return 0;
 
  fail:
-	sysfs_remove_link(&atm_dev->class_dev.kobj, "device");
- fail_sysfs:
 	instance->atm_dev = NULL;
 	atm_dev_deregister(atm_dev); /* usbatm_atm_dev_close will eventually be called */
 	return ret;
@@ -1146,7 +1127,7 @@ int usbatm_usb_probe(struct usb_interface *intf, const struct usb_device_id *id,
 	instance->tx_channel.endpoint = usb_sndbulkpipe(usb_dev, driver->bulk_out);
 
 	/* tx buffer size must be a positive multiple of the stride */
-	instance->tx_channel.buf_size = max (instance->tx_channel.stride,
+	instance->tx_channel.buf_size = max(instance->tx_channel.stride,
 			snd_buf_bytes - (snd_buf_bytes % instance->tx_channel.stride));
 
 	/* rx buffer size must be a positive multiple of the endpoint maxpacket */
@@ -1159,7 +1140,7 @@ int usbatm_usb_probe(struct usb_interface *intf, const struct usb_device_id *id,
 		goto fail_unbind;
 	}
 
-	num_packets = max (1U, (rcv_buf_bytes + maxpacket / 2) / maxpacket); /* round */
+	num_packets = max(1U, (rcv_buf_bytes + maxpacket / 2) / maxpacket); /* round */
 
 	if (num_packets * maxpacket > UDSL_MAX_BUF_SIZE)
 		num_packets--;
@@ -1262,7 +1243,7 @@ int usbatm_usb_probe(struct usb_interface *intf, const struct usb_device_id *id,
 		usb_free_urb(instance->urbs[i]);
 	}
 
-	kfree (instance);
+	kfree(instance);
 
 	return error;
 }
@@ -1331,7 +1312,6 @@ void usbatm_usb_disconnect(struct usb_interface *intf)
 
 	/* ATM finalize */
 	if (instance->atm_dev) {
-		sysfs_remove_link(&instance->atm_dev->class_dev.kobj, "device");
 		atm_dev_deregister(instance->atm_dev);
 		instance->atm_dev = NULL;
 	}
@@ -1347,8 +1327,6 @@ EXPORT_SYMBOL_GPL(usbatm_usb_disconnect);
 
 static int __init usbatm_usb_init(void)
 {
-	dbg("%s: driver version %s", __func__, DRIVER_VERSION);
-
 	if (sizeof(struct usbatm_control) > FIELD_SIZEOF(struct sk_buff, cb)) {
 		printk(KERN_ERR "%s unusable with this kernel!\n", usbatm_driver_name);
 		return -EIO;
@@ -1368,7 +1346,6 @@ module_init(usbatm_usb_init);
 
 static void __exit usbatm_usb_exit(void)
 {
-	dbg("%s", __func__);
 }
 module_exit(usbatm_usb_exit);
 
@@ -1390,9 +1367,8 @@ static int usbatm_print_packet(const unsigned char *data, int len)
 	for (i = 0; i < len;) {
 		buffer[0] = '\0';
 		sprintf(buffer, "%.3d :", i);
-		for (j = 0; (j < 16) && (i < len); j++, i++) {
+		for (j = 0; (j < 16) && (i < len); j++, i++)
 			sprintf(buffer, "%s %2.2x", buffer, data[i]);
-		}
 		dbg("%s", buffer);
 	}
 	return i;

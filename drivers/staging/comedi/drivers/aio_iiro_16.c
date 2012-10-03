@@ -2,7 +2,7 @@
 
     comedi/drivers/aio_iiro_16.c
 
-    Driver for Acces I/O Products PC-104 AIO-IIRO-16 Digital I/O board
+    Driver for Access I/O Products PC-104 AIO-IIRO-16 Digital I/O board
     Copyright (C) 2006 C&C Technologies, Inc.
 
     This program is free software; you can redistribute it and/or modify
@@ -23,10 +23,10 @@
 /*
 
 Driver: aio_iiro_16
-Description: Acces I/O Products PC-104 IIRO16 Relay And Isolated Input Board
+Description: Access I/O Products PC-104 IIRO16 Relay And Isolated Input Board
 Author: Zachary Ware <zach.ware@cctechnol.com>
 Devices:
- [Acces I/O] PC-104 AIO12-8
+ [Access I/O] PC-104 AIO12-8
 Status: experimental
 
 Configuration Options:
@@ -57,50 +57,47 @@ static const struct aio_iiro_16_board aio_iiro_16_boards[] = {
 	 .do_ = 16},
 };
 
-#define	thisboard	((const struct aio_iiro_16_board *) dev->board_ptr)
+static int aio_iiro_16_dio_insn_bits_write(struct comedi_device *dev,
+					   struct comedi_subdevice *s,
+					   struct comedi_insn *insn,
+					   unsigned int *data)
+{
+	if (data[0]) {
+		s->state &= ~data[0];
+		s->state |= data[0] & data[1];
+		outb(s->state & 0xff, dev->iobase + AIO_IIRO_16_RELAY_0_7);
+		outb((s->state >> 8) & 0xff,
+		     dev->iobase + AIO_IIRO_16_RELAY_8_15);
+	}
 
-struct aio_iiro_16_private {
-	int data;
-	struct pci_dev *pci_dev;
-	unsigned int ao_readback[2];
-};
+	data[1] = s->state;
 
-#define	devpriv	((struct aio_iiro_16_private *) dev->private)
-
-static int aio_iiro_16_attach(struct comedi_device *dev,
-			      struct comedi_devconfig *it);
-
-static int aio_iiro_16_detach(struct comedi_device *dev);
-
-static struct comedi_driver driver_aio_iiro_16 = {
-	.driver_name = "aio_iiro_16",
-	.module = THIS_MODULE,
-	.attach = aio_iiro_16_attach,
-	.detach = aio_iiro_16_detach,
-	.board_name = &aio_iiro_16_boards[0].name,
-	.offset = sizeof(struct aio_iiro_16_board),
-	.num_names = ARRAY_SIZE(aio_iiro_16_boards),
-};
+	return insn->n;
+}
 
 static int aio_iiro_16_dio_insn_bits_read(struct comedi_device *dev,
 					  struct comedi_subdevice *s,
 					  struct comedi_insn *insn,
-					  unsigned int *data);
+					  unsigned int *data)
+{
+	data[1] = 0;
+	data[1] |= inb(dev->iobase + AIO_IIRO_16_INPUT_0_7);
+	data[1] |= inb(dev->iobase + AIO_IIRO_16_INPUT_8_15) << 8;
 
-static int aio_iiro_16_dio_insn_bits_write(struct comedi_device *dev,
-					   struct comedi_subdevice *s,
-					   struct comedi_insn *insn,
-					   unsigned int *data);
+	return insn->n;
+}
 
 static int aio_iiro_16_attach(struct comedi_device *dev,
 			      struct comedi_devconfig *it)
 {
+	const struct aio_iiro_16_board *board = comedi_board(dev);
 	int iobase;
 	struct comedi_subdevice *s;
+	int ret;
 
 	printk(KERN_INFO "comedi%d: aio_iiro_16: ", dev->minor);
 
-	dev->board_name = thisboard->name;
+	dev->board_name = board->name;
 
 	iobase = it->options[0];
 
@@ -111,11 +108,9 @@ static int aio_iiro_16_attach(struct comedi_device *dev,
 
 	dev->iobase = iobase;
 
-	if (alloc_private(dev, sizeof(struct aio_iiro_16_private)) < 0)
-		return -ENOMEM;
-
-	if (alloc_subdevices(dev, 2) < 0)
-		return -ENOMEM;
+	ret = comedi_alloc_subdevices(dev, 2);
+	if (ret)
+		return ret;
 
 	s = dev->subdevices + 0;
 	s->type = COMEDI_SUBD_DIO;
@@ -138,50 +133,23 @@ static int aio_iiro_16_attach(struct comedi_device *dev,
 	return 1;
 }
 
-static int aio_iiro_16_detach(struct comedi_device *dev)
+static void aio_iiro_16_detach(struct comedi_device *dev)
 {
-	printk(KERN_INFO "comedi%d: aio_iiro_16: remove\n", dev->minor);
-
 	if (dev->iobase)
 		release_region(dev->iobase, AIO_IIRO_16_SIZE);
-
-	return 0;
 }
 
-static int aio_iiro_16_dio_insn_bits_write(struct comedi_device *dev,
-					   struct comedi_subdevice *s,
-					   struct comedi_insn *insn,
-					   unsigned int *data)
-{
-	if (insn->n != 2)
-		return -EINVAL;
+static struct comedi_driver aio_iiro_16_driver = {
+	.driver_name	= "aio_iiro_16",
+	.module		= THIS_MODULE,
+	.attach		= aio_iiro_16_attach,
+	.detach		= aio_iiro_16_detach,
+	.board_name	= &aio_iiro_16_boards[0].name,
+	.offset		= sizeof(struct aio_iiro_16_board),
+	.num_names	= ARRAY_SIZE(aio_iiro_16_boards),
+};
+module_comedi_driver(aio_iiro_16_driver);
 
-	if (data[0]) {
-		s->state &= ~data[0];
-		s->state |= data[0] & data[1];
-		outb(s->state & 0xff, dev->iobase + AIO_IIRO_16_RELAY_0_7);
-		outb((s->state >> 8) & 0xff,
-		     dev->iobase + AIO_IIRO_16_RELAY_8_15);
-	}
-
-	data[1] = s->state;
-
-	return 2;
-}
-
-static int aio_iiro_16_dio_insn_bits_read(struct comedi_device *dev,
-					  struct comedi_subdevice *s,
-					  struct comedi_insn *insn,
-					  unsigned int *data)
-{
-	if (insn->n != 2)
-		return -EINVAL;
-
-	data[1] = 0;
-	data[1] |= inb(dev->iobase + AIO_IIRO_16_INPUT_0_7);
-	data[1] |= inb(dev->iobase + AIO_IIRO_16_INPUT_8_15) << 8;
-
-	return 2;
-}
-
-COMEDI_INITCLEANUP(driver_aio_iiro_16);
+MODULE_AUTHOR("Comedi http://www.comedi.org");
+MODULE_DESCRIPTION("Comedi low-level driver");
+MODULE_LICENSE("GPL");

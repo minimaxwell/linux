@@ -39,7 +39,8 @@ MODULE_PARM_DESC(cidmode, "Call-ID mode");
 #define GIGASET_MODULENAME "usb_gigaset"
 #define GIGASET_DEVNAME    "ttyGU"
 
-#define IF_WRITEBUF 2000	/* arbitrary limit */
+/* length limit according to Siemens 3070usb-protokoll.doc ch. 2.1 */
+#define IF_WRITEBUF 264
 
 /* Values for the Gigaset M105 Data */
 #define USB_M105_VENDOR_ID	0x0681
@@ -123,6 +124,7 @@ static struct usb_driver gigaset_usb_driver = {
 	.reset_resume =	gigaset_resume,
 	.pre_reset =	gigaset_pre_reset,
 	.post_reset =	gigaset_resume,
+	.disable_hub_initiated_lpm = 1,
 };
 
 struct usb_cardstate {
@@ -183,7 +185,7 @@ static int set_value(struct cardstate *cs, u8 req, u16 val)
 		(unsigned)req, (unsigned)val);
 	r = usb_control_msg(udev, usb_sndctrlpipe(udev, 0), 0x12, 0x41,
 			    0xf /*?*/, 0, NULL, 0, 2000 /*?*/);
-			    /* no idea what this does */
+	/* no idea what this does */
 	if (r < 0) {
 		dev_err(&udev->dev, "error %d on request 0x12\n", -r);
 		return r;
@@ -364,7 +366,7 @@ static void gigaset_read_int_callback(struct urb *urb)
 			src = cs->hw.usb->rcvbuf;
 			if (unlikely(*src))
 				dev_warn(cs->dev,
-				    "%s: There was no leading 0, but 0x%02x!\n",
+					 "%s: There was no leading 0, but 0x%02x!\n",
 					 __func__, (unsigned) *src);
 			++src; /* skip leading 0x00 */
 			--numbytes;
@@ -464,7 +466,7 @@ static int send_cb(struct cardstate *cs, struct cmdbuf_t *cb)
 
 			usb_fill_bulk_urb(ucs->bulk_out_urb, ucs->udev,
 					  usb_sndbulkpipe(ucs->udev,
-					     ucs->bulk_out_endpointAddr & 0x0f),
+							  ucs->bulk_out_endpointAddr & 0x0f),
 					  cb->buf + cb->offset, count,
 					  gigaset_write_bulk_callback, cs);
 
@@ -493,29 +495,13 @@ static int send_cb(struct cardstate *cs, struct cmdbuf_t *cb)
 }
 
 /* Send command to device. */
-static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
-			     int len, struct tasklet_struct *wake_tasklet)
+static int gigaset_write_cmd(struct cardstate *cs, struct cmdbuf_t *cb)
 {
-	struct cmdbuf_t *cb;
 	unsigned long flags;
 
 	gigaset_dbg_buffer(cs->mstate != MS_LOCKED ?
-			     DEBUG_TRANSCMD : DEBUG_LOCKCMD,
-			   "CMD Transmit", len, buf);
-
-	if (len <= 0)
-		return 0;
-	cb = kmalloc(sizeof(struct cmdbuf_t) + len, GFP_ATOMIC);
-	if (!cb) {
-		dev_err(cs->dev, "%s: out of memory\n", __func__);
-		return -ENOMEM;
-	}
-
-	memcpy(cb->buf, buf, len);
-	cb->len = len;
-	cb->offset = 0;
-	cb->next = NULL;
-	cb->wake_tasklet = wake_tasklet;
+			   DEBUG_TRANSCMD : DEBUG_LOCKCMD,
+			   "CMD Transmit", cb->len, cb->buf);
 
 	spin_lock_irqsave(&cs->cmdlock, flags);
 	cb->prev = cs->lastcmdbuf;
@@ -523,9 +509,9 @@ static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
 		cs->lastcmdbuf->next = cb;
 	else {
 		cs->cmdbuf = cb;
-		cs->curlen = len;
+		cs->curlen = cb->len;
 	}
-	cs->cmdbytes += len;
+	cs->cmdbytes += cb->len;
 	cs->lastcmdbuf = cb;
 	spin_unlock_irqrestore(&cs->cmdlock, flags);
 
@@ -533,7 +519,7 @@ static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
 	if (cs->connected)
 		tasklet_schedule(&cs->write_tasklet);
 	spin_unlock_irqrestore(&cs->lock, flags);
-	return len;
+	return cb->len;
 }
 
 static int gigaset_write_room(struct cardstate *cs)
@@ -564,10 +550,9 @@ static int gigaset_brkchars(struct cardstate *cs, const unsigned char buf[6])
 			       0, 0, &buf, 6, 2000);
 }
 
-static int gigaset_freebcshw(struct bc_state *bcs)
+static void gigaset_freebcshw(struct bc_state *bcs)
 {
 	/* unused */
-	return 1;
 }
 
 /* Initialize the b-channel structure */
@@ -575,7 +560,7 @@ static int gigaset_initbcshw(struct bc_state *bcs)
 {
 	/* unused */
 	bcs->hw.usb = NULL;
-	return 1;
+	return 0;
 }
 
 static void gigaset_reinitbcshw(struct bc_state *bcs)
@@ -597,7 +582,7 @@ static int gigaset_initcshw(struct cardstate *cs)
 		kmalloc(sizeof(struct usb_cardstate), GFP_KERNEL);
 	if (!ucs) {
 		pr_err("out of memory\n");
-		return 0;
+		return -ENOMEM;
 	}
 
 	ucs->bchars[0] = 0;
@@ -612,7 +597,7 @@ static int gigaset_initcshw(struct cardstate *cs)
 	tasklet_init(&cs->write_tasklet,
 		     gigaset_modem_fill, (unsigned long) cs);
 
-	return 1;
+	return 0;
 }
 
 /* Send data from current skb to the device. */
@@ -710,7 +695,7 @@ static int gigaset_probe(struct usb_interface *interface,
 
 	dev_info(&udev->dev, "%s: Device matched ... !\n", __func__);
 
-	/* allocate memory for our device state and intialize it */
+	/* allocate memory for our device state and initialize it */
 	cs = gigaset_initcs(driver, 1, 1, 0, cidmode, GIGASET_MODULENAME);
 	if (!cs)
 		return -ENODEV;
@@ -781,9 +766,9 @@ static int gigaset_probe(struct usb_interface *interface,
 	if (startmode == SM_LOCKED)
 		cs->mstate = MS_LOCKED;
 
-	if (!gigaset_start(cs)) {
+	retval = gigaset_start(cs);
+	if (retval < 0) {
 		tasklet_kill(&cs->write_tasklet);
-		retval = -ENODEV;
 		goto error;
 	}
 	return 0;
@@ -909,12 +894,14 @@ static int __init usb_gigaset_init(void)
 {
 	int result;
 
-	/* allocate memory for our driver state and intialize it */
+	/* allocate memory for our driver state and initialize it */
 	driver = gigaset_initdriver(GIGASET_MINOR, GIGASET_MINORS,
 				    GIGASET_MODULENAME, GIGASET_DEVNAME,
 				    &ops, THIS_MODULE);
-	if (driver == NULL)
+	if (driver == NULL) {
+		result = -ENOMEM;
 		goto error;
+	}
 
 	/* register this driver with the USB subsystem */
 	result = usb_register(&gigaset_usb_driver);
@@ -930,7 +917,7 @@ error:
 	if (driver)
 		gigaset_freedriver(driver);
 	driver = NULL;
-	return -1;
+	return result;
 }
 
 /*

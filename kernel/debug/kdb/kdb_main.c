@@ -14,6 +14,7 @@
 #include <linux/ctype.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
+#include <linux/kmsg_dump.h>
 #include <linux/reboot.h>
 #include <linux/sched.h>
 #include <linux/sysrq.h>
@@ -78,11 +79,11 @@ static unsigned int kdb_continue_catastrophic;
 static kdbtab_t *kdb_commands;
 #define KDB_BASE_CMD_MAX 50
 static int kdb_max_commands = KDB_BASE_CMD_MAX;
-static kdbtab_t kdb_base_commands[50];
+static kdbtab_t kdb_base_commands[KDB_BASE_CMD_MAX];
 #define for_each_kdbcmd(cmd, num)					\
 	for ((cmd) = kdb_base_commands, (num) = 0;			\
 	     num < kdb_max_commands;					\
-	     num == KDB_BASE_CMD_MAX ? cmd = kdb_commands : cmd++, num++)
+	     num++, num == KDB_BASE_CMD_MAX ? cmd = kdb_commands : cmd++)
 
 typedef struct _kdbmsg {
 	int	km_diag;	/* kdb diagnostic */
@@ -138,17 +139,16 @@ static const int __nkdb_err = sizeof(kdbmsgs) / sizeof(kdbmsg_t);
 static char *__env[] = {
 #if defined(CONFIG_SMP)
  "PROMPT=[%d]kdb> ",
- "MOREPROMPT=[%d]more> ",
 #else
  "PROMPT=kdb> ",
- "MOREPROMPT=more> ",
 #endif
+ "MOREPROMPT=more> ",
  "RADIX=16",
  "MDCOUNT=8",			/* lines of md output */
- "BTARGS=9",			/* 9 possible args in bt */
  KDB_PLATFORM_ENV,
  "DTABCOUNT=30",
  "NOSECT=1",
+ (char *)0,
  (char *)0,
  (char *)0,
  (char *)0,
@@ -312,10 +312,29 @@ int kdbgetularg(const char *arg, unsigned long *value)
 
 	if (endp == arg) {
 		/*
-		 * Try base 16, for us folks too lazy to type the
+		 * Also try base 16, for us folks too lazy to type the
 		 * leading 0x...
 		 */
 		val = simple_strtoul(arg, &endp, 16);
+		if (endp == arg)
+			return KDB_BADINT;
+	}
+
+	*value = val;
+
+	return 0;
+}
+
+int kdbgetu64arg(const char *arg, u64 *value)
+{
+	char *endp;
+	u64 val;
+
+	val = simple_strtoull(arg, &endp, 0);
+
+	if (endp == arg) {
+
+		val = simple_strtoull(arg, &endp, 16);
 		if (endp == arg)
 			return KDB_BADINT;
 	}
@@ -422,9 +441,9 @@ static int kdb_check_regs(void)
  *	symbol name, and offset to the caller.
  *
  *	The argument may consist of a numeric value (decimal or
- *	hexidecimal), a symbol name, a register name (preceeded by the
+ *	hexidecimal), a symbol name, a register name (preceded by the
  *	percent sign), an environment variable with a numeric value
- *	(preceeded by a dollar sign) or a simple arithmetic expression
+ *	(preceded by a dollar sign) or a simple arithmetic expression
  *	consisting of a symbol name, +/-, and a numeric constant value
  *	(offset).
  * Parameters:
@@ -627,7 +646,7 @@ static int kdb_defcmd2(const char *cmdstr, const char *argv0)
 	}
 	if (!s->usable)
 		return KDB_NOTIMP;
-	s->command = kmalloc((s->count + 1) * sizeof(*(s->command)), GFP_KDB);
+	s->command = kzalloc((s->count + 1) * sizeof(*(s->command)), GFP_KDB);
 	if (!s->command) {
 		kdb_printf("Could not allocate new kdb_defcmd table for %s\n",
 			   cmdstr);
@@ -1108,7 +1127,7 @@ static int kdb_local(kdb_reason_t reason, int error, struct pt_regs *regs,
 		/* special case below */
 	} else {
 		kdb_printf("\nEntering kdb (current=0x%p, pid %d) ",
-			   kdb_current, kdb_current->pid);
+			   kdb_current, kdb_current ? kdb_current->pid : 0);
 #if defined(CONFIG_SMP)
 		kdb_printf("on processor %d ", raw_smp_processor_id());
 #endif
@@ -1216,18 +1235,6 @@ static int kdb_local(kdb_reason_t reason, int error, struct pt_regs *regs,
 		*cmdbuf = '\0';
 		*(cmd_hist[cmd_head]) = '\0';
 
-		if (KDB_FLAG(ONLY_DO_DUMP)) {
-			/* kdb is off but a catastrophic error requires a dump.
-			 * Take the dump and reboot.
-			 * Turn on logging so the kdb output appears in the log
-			 * buffer in the dump.
-			 */
-			const char *setargs[] = { "set", "LOGGING", "1" };
-			kdb_set(2, setargs);
-			kdb_reboot(0, NULL);
-			/*NOTREACHED*/
-		}
-
 do_full_getstr:
 #if defined(CONFIG_SMP)
 		snprintf(kdb_prompt_str, CMD_BUFLEN, kdbgetenv("PROMPT"),
@@ -1316,7 +1323,7 @@ void kdb_print_state(const char *text, int value)
  *	error		The hardware-defined error code
  *	reason2		kdb's current reason code.
  *			Initially error but can change
- *			acording to kdb state.
+ *			according to kdb state.
  *	db_result	Result code from break or debug point.
  *	regs		The exception frame at time of fault/breakpoint.
  *			should always be valid.
@@ -1367,7 +1374,7 @@ int kdb_main_loop(kdb_reason_t reason, kdb_reason_t reason2, int error,
 		}
 
 		if (result == KDB_CMD_KGDB) {
-			if (!(KDB_STATE(DOING_KGDB) || KDB_STATE(DOING_KGDB2)))
+			if (!KDB_STATE(DOING_KGDB))
 				kdb_printf("Entering please attach debugger "
 					   "or use $D#44+ or $3#33\n");
 			break;
@@ -1380,6 +1387,9 @@ int kdb_main_loop(kdb_reason_t reason, kdb_reason_t reason2, int error,
 	}
 	if (KDB_STATE(DOING_SS))
 		KDB_STATE_CLEAR(SSBPT);
+
+	/* Clean up any keyboard devices before leaving */
+	kdb_kbd_cleanup_state();
 
 	return result;
 }
@@ -1730,13 +1740,13 @@ static int kdb_go(int argc, const char **argv)
 	int nextarg;
 	long offset;
 
+	if (raw_smp_processor_id() != kdb_initial_cpu) {
+		kdb_printf("go must execute on the entry cpu, "
+			   "please use \"cpu %d\" and then execute go\n",
+			   kdb_initial_cpu);
+		return KDB_BADCPUNUM;
+	}
 	if (argc == 1) {
-		if (raw_smp_processor_id() != kdb_initial_cpu) {
-			kdb_printf("go <address> must be issued from the "
-				   "initial cpu, do cpu %d first\n",
-				   kdb_initial_cpu);
-			return KDB_ARGCOUNT;
-		}
 		nextarg = 1;
 		diag = kdbgetaddrarg(argc, argv, &nextarg,
 				     &addr, &offset, NULL);
@@ -1770,11 +1780,65 @@ static int kdb_go(int argc, const char **argv)
  */
 static int kdb_rd(int argc, const char **argv)
 {
-	int diag = kdb_check_regs();
-	if (diag)
-		return diag;
+	int len = kdb_check_regs();
+#if DBG_MAX_REG_NUM > 0
+	int i;
+	char *rname;
+	int rsize;
+	u64 reg64;
+	u32 reg32;
+	u16 reg16;
+	u8 reg8;
+
+	if (len)
+		return len;
+
+	for (i = 0; i < DBG_MAX_REG_NUM; i++) {
+		rsize = dbg_reg_def[i].size * 2;
+		if (rsize > 16)
+			rsize = 2;
+		if (len + strlen(dbg_reg_def[i].name) + 4 + rsize > 80) {
+			len = 0;
+			kdb_printf("\n");
+		}
+		if (len)
+			len += kdb_printf("  ");
+		switch(dbg_reg_def[i].size * 8) {
+		case 8:
+			rname = dbg_get_reg(i, &reg8, kdb_current_regs);
+			if (!rname)
+				break;
+			len += kdb_printf("%s: %02x", rname, reg8);
+			break;
+		case 16:
+			rname = dbg_get_reg(i, &reg16, kdb_current_regs);
+			if (!rname)
+				break;
+			len += kdb_printf("%s: %04x", rname, reg16);
+			break;
+		case 32:
+			rname = dbg_get_reg(i, &reg32, kdb_current_regs);
+			if (!rname)
+				break;
+			len += kdb_printf("%s: %08x", rname, reg32);
+			break;
+		case 64:
+			rname = dbg_get_reg(i, &reg64, kdb_current_regs);
+			if (!rname)
+				break;
+			len += kdb_printf("%s: %016llx", rname, reg64);
+			break;
+		default:
+			len += kdb_printf("%s: ??", dbg_reg_def[i].name);
+		}
+	}
+	kdb_printf("\n");
+#else
+	if (len)
+		return len;
 
 	kdb_dumpregs(kdb_current_regs);
+#endif
 	return 0;
 }
 
@@ -1782,32 +1846,67 @@ static int kdb_rd(int argc, const char **argv)
  * kdb_rm - This function implements the 'rm' (register modify)  command.
  *	rm register-name new-contents
  * Remarks:
- *	Currently doesn't allow modification of control or
- *	debug registers.
+ *	Allows register modification with the same restrictions as gdb
  */
 static int kdb_rm(int argc, const char **argv)
 {
+#if DBG_MAX_REG_NUM > 0
 	int diag;
-	int ind = 0;
-	unsigned long contents;
+	const char *rname;
+	int i;
+	u64 reg64;
+	u32 reg32;
+	u16 reg16;
+	u8 reg8;
 
 	if (argc != 2)
 		return KDB_ARGCOUNT;
 	/*
 	 * Allow presence or absence of leading '%' symbol.
 	 */
-	if (argv[1][0] == '%')
-		ind = 1;
+	rname = argv[1];
+	if (*rname == '%')
+		rname++;
 
-	diag = kdbgetularg(argv[2], &contents);
+	diag = kdbgetu64arg(argv[2], &reg64);
 	if (diag)
 		return diag;
 
 	diag = kdb_check_regs();
 	if (diag)
 		return diag;
+
+	diag = KDB_BADREG;
+	for (i = 0; i < DBG_MAX_REG_NUM; i++) {
+		if (strcmp(rname, dbg_reg_def[i].name) == 0) {
+			diag = 0;
+			break;
+		}
+	}
+	if (!diag) {
+		switch(dbg_reg_def[i].size * 8) {
+		case 8:
+			reg8 = reg64;
+			dbg_set_reg(i, &reg8, kdb_current_regs);
+			break;
+		case 16:
+			reg16 = reg64;
+			dbg_set_reg(i, &reg16, kdb_current_regs);
+			break;
+		case 32:
+			reg32 = reg64;
+			dbg_set_reg(i, &reg32, kdb_current_regs);
+			break;
+		case 64:
+			dbg_set_reg(i, &reg64, kdb_current_regs);
+			break;
+		}
+	}
+	return diag;
+#else
 	kdb_printf("ERROR: Register set currently not implemented\n");
-	return 0;
+    return 0;
+#endif
 }
 
 #if defined(CONFIG_MAGIC_SYSRQ)
@@ -1821,7 +1920,7 @@ static int kdb_sr(int argc, const char **argv)
 	if (argc != 1)
 		return KDB_ARGCOUNT;
 	kdb_trap_printk++;
-	__handle_sysrq(*argv[1], NULL, 0);
+	__handle_sysrq(*argv[1], false);
 	kdb_trap_printk--;
 
 	return 0;
@@ -1874,7 +1973,7 @@ static int kdb_lsmod(int argc, const char **argv)
 		kdb_printf("%-20s%8u  0x%p ", mod->name,
 			   mod->core_size, (void *)mod);
 #ifdef CONFIG_MODULE_UNLOAD
-		kdb_printf("%4d ", module_refcount(mod));
+		kdb_printf("%4ld ", module_refcount(mod));
 #endif
 		if (mod->state == MODULE_STATE_GOING)
 			kdb_printf(" (Unloading)");
@@ -1929,8 +2028,15 @@ static int kdb_env(int argc, const char **argv)
  */
 static int kdb_dmesg(int argc, const char **argv)
 {
-	char *syslog_data[4], *start, *end, c = '\0', *p;
-	int diag, logging, logsize, lines = 0, adjust = 0, n;
+	int diag;
+	int logging;
+	int lines = 0;
+	int adjust = 0;
+	int n = 0;
+	int skip = 0;
+	struct kmsg_dumper dumper = { .active = 1 };
+	size_t len;
+	char buf[201];
 
 	if (argc > 2)
 		return KDB_ARGCOUNT;
@@ -1953,22 +2059,10 @@ static int kdb_dmesg(int argc, const char **argv)
 		kdb_set(2, setargs);
 	}
 
-	/* syslog_data[0,1] physical start, end+1.  syslog_data[2,3]
-	 * logical start, end+1. */
-	kdb_syslog_data(syslog_data);
-	if (syslog_data[2] == syslog_data[3])
-		return 0;
-	logsize = syslog_data[1] - syslog_data[0];
-	start = syslog_data[2];
-	end = syslog_data[3];
-#define KDB_WRAP(p) (((p - syslog_data[0]) % logsize) + syslog_data[0])
-	for (n = 0, p = start; p < end; ++p) {
-		c = *KDB_WRAP(p);
-		if (c == '\n')
-			++n;
-	}
-	if (c != '\n')
-		++n;
+	kmsg_dump_rewind_nolock(&dumper);
+	while (kmsg_dump_get_line_nolock(&dumper, 1, NULL, 0, NULL))
+		n++;
+
 	if (lines < 0) {
 		if (adjust >= n)
 			kdb_printf("buffer only contains %d lines, nothing "
@@ -1976,21 +2070,11 @@ static int kdb_dmesg(int argc, const char **argv)
 		else if (adjust - lines >= n)
 			kdb_printf("buffer only contains %d lines, last %d "
 				   "lines printed\n", n, n - adjust);
-		if (adjust) {
-			for (; start < end && adjust; ++start) {
-				if (*KDB_WRAP(start) == '\n')
-					--adjust;
-			}
-			if (start < end)
-				++start;
-		}
-		for (p = start; p < end && lines; ++p) {
-			if (*KDB_WRAP(p) == '\n')
-				++lines;
-		}
-		end = p;
+		skip = adjust;
+		lines = abs(lines);
 	} else if (lines > 0) {
-		int skip = n - (adjust + lines);
+		skip = n - lines - adjust;
+		lines = abs(lines);
 		if (adjust >= n) {
 			kdb_printf("buffer only contains %d lines, "
 				   "nothing printed\n", n);
@@ -2001,35 +2085,24 @@ static int kdb_dmesg(int argc, const char **argv)
 			kdb_printf("buffer only contains %d lines, first "
 				   "%d lines printed\n", n, lines);
 		}
-		for (; start < end && skip; ++start) {
-			if (*KDB_WRAP(start) == '\n')
-				--skip;
-		}
-		for (p = start; p < end && lines; ++p) {
-			if (*KDB_WRAP(p) == '\n')
-				--lines;
-		}
-		end = p;
+	} else {
+		lines = n;
 	}
-	/* Do a line at a time (max 200 chars) to reduce protocol overhead */
-	c = '\n';
-	while (start != end) {
-		char buf[201];
-		p = buf;
-		if (KDB_FLAG(CMD_INTERRUPT))
-			return 0;
-		while (start < end && (c = *KDB_WRAP(start)) &&
-		       (p - buf) < sizeof(buf)-1) {
-			++start;
-			*p++ = c;
-			if (c == '\n')
-				break;
+
+	if (skip >= n || skip < 0)
+		return 0;
+
+	kmsg_dump_rewind_nolock(&dumper);
+	while (kmsg_dump_get_line_nolock(&dumper, 1, buf, sizeof(buf), &len)) {
+		if (skip) {
+			skip--;
+			continue;
 		}
-		*p = '\0';
-		kdb_printf("%s", buf);
+		if (!lines--)
+			break;
+
+		kdb_printf("%.*s\n", (int)len - 1, buf);
 	}
-	if (c != '\n')
-		kdb_printf("\n");
 
 	return 0;
 }
@@ -2253,7 +2326,7 @@ static int kdb_pid(int argc, const char **argv)
  */
 static int kdb_ll(int argc, const char **argv)
 {
-	int diag;
+	int diag = 0;
 	unsigned long addr;
 	long offset = 0;
 	unsigned long va;
@@ -2292,20 +2365,21 @@ static int kdb_ll(int argc, const char **argv)
 		char buf[80];
 
 		if (KDB_FLAG(CMD_INTERRUPT))
-			return 0;
+			goto out;
 
 		sprintf(buf, "%s " kdb_machreg_fmt "\n", command, va);
 		diag = kdb_parse(buf);
 		if (diag)
-			return diag;
+			goto out;
 
 		addr = va + linkoffset;
 		if (kdb_getword(&va, addr, sizeof(va)))
-			return 0;
+			goto out;
 	}
-	kfree(command);
 
-	return 0;
+out:
+	kfree(command);
+	return diag;
 }
 
 static int kdb_kgdb(int argc, const char **argv)
@@ -2440,6 +2514,7 @@ static void kdb_sysinfo(struct sysinfo *val)
  */
 static int kdb_summary(int argc, const char **argv)
 {
+	struct timespec now;
 	struct kdb_tm tm;
 	struct sysinfo val;
 
@@ -2454,7 +2529,8 @@ static int kdb_summary(int argc, const char **argv)
 	kdb_printf("domainname %s\n", init_uts_ns.name.domainname);
 	kdb_printf("ccversion  %s\n", __stringify(CCVERSION));
 
-	kdb_gmtime(&xtime, &tm);
+	now = __current_kernel_time();
+	kdb_gmtime(&now, &tm);
 	kdb_printf("date       %04d-%02d-%02d %02d:%02d:%02d "
 		   "tz_minuteswest %d\n",
 		1900+tm.tm_year, tm.tm_mon+1, tm.tm_mday,
@@ -2493,20 +2569,17 @@ static int kdb_summary(int argc, const char **argv)
  */
 static int kdb_per_cpu(int argc, const char **argv)
 {
-	char buf[256], fmtstr[64];
-	kdb_symtab_t symtab;
-	cpumask_t suppress = CPU_MASK_NONE;
-	int cpu, diag;
-	unsigned long addr, val, bytesperword = 0, whichcpu = ~0UL;
+	char fmtstr[64];
+	int cpu, diag, nextarg = 1;
+	unsigned long addr, symaddr, val, bytesperword = 0, whichcpu = ~0UL;
 
 	if (argc < 1 || argc > 3)
 		return KDB_ARGCOUNT;
 
-	snprintf(buf, sizeof(buf), "per_cpu__%s", argv[1]);
-	if (!kdbgetsymval(buf, &symtab)) {
-		kdb_printf("%s is not a per_cpu variable\n", argv[1]);
-		return KDB_BADADDR;
-	}
+	diag = kdbgetaddrarg(argc, argv, &nextarg, &symaddr, NULL, NULL);
+	if (diag)
+		return diag;
+
 	if (argc >= 2) {
 		diag = kdbgetularg(argv[2], &bytesperword);
 		if (diag)
@@ -2539,46 +2612,25 @@ static int kdb_per_cpu(int argc, const char **argv)
 #define KDB_PCU(cpu) 0
 #endif
 #endif
-
 	for_each_online_cpu(cpu) {
+		if (KDB_FLAG(CMD_INTERRUPT))
+			return 0;
+
 		if (whichcpu != ~0UL && whichcpu != cpu)
 			continue;
-		addr = symtab.sym_start + KDB_PCU(cpu);
+		addr = symaddr + KDB_PCU(cpu);
 		diag = kdb_getword(&val, addr, bytesperword);
 		if (diag) {
 			kdb_printf("%5d " kdb_bfd_vma_fmt0 " - unable to "
 				   "read, diag=%d\n", cpu, addr, diag);
 			continue;
 		}
-#ifdef	CONFIG_SMP
-		if (!val) {
-			cpu_set(cpu, suppress);
-			continue;
-		}
-#endif	/* CONFIG_SMP */
 		kdb_printf("%5d ", cpu);
 		kdb_md_line(fmtstr, addr,
 			bytesperword == KDB_WORD_SIZE,
 			1, bytesperword, 1, 1, 0);
 	}
-	if (cpus_weight(suppress) == 0)
-		return 0;
-	kdb_printf("Zero suppressed cpu(s):");
-	for (cpu = first_cpu(suppress); cpu < num_possible_cpus();
-	     cpu = next_cpu(cpu, suppress)) {
-		kdb_printf(" %d", cpu);
-		if (cpu == num_possible_cpus() - 1 ||
-		    next_cpu(cpu, suppress) != cpu + 1)
-			continue;
-		while (cpu < num_possible_cpus() &&
-		       next_cpu(cpu, suppress) == cpu + 1)
-			++cpu;
-		kdb_printf("-%d", cpu);
-	}
-	kdb_printf("\n");
-
 #undef KDB_PCU
-
 	return 0;
 }
 
@@ -2653,13 +2705,13 @@ int kdb_register_repeat(char *cmd,
 		}
 		if (kdb_commands) {
 			memcpy(new, kdb_commands,
-			       kdb_max_commands * sizeof(*new));
+			  (kdb_max_commands - KDB_BASE_CMD_MAX) * sizeof(*new));
 			kfree(kdb_commands);
 		}
 		memset(new + kdb_max_commands, 0,
 		       kdb_command_extend * sizeof(*new));
 		kdb_commands = new;
-		kp = kdb_commands + kdb_max_commands;
+		kp = kdb_commands + kdb_max_commands - KDB_BASE_CMD_MAX;
 		kdb_max_commands += kdb_command_extend;
 	}
 
@@ -2673,6 +2725,8 @@ int kdb_register_repeat(char *cmd,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(kdb_register_repeat);
+
 
 /*
  * kdb_register - Compatibility register function for commands that do
@@ -2695,6 +2749,7 @@ int kdb_register(char *cmd,
 	return kdb_register_repeat(cmd, func, usage, help, minlen,
 				   KDB_REPEAT_NONE);
 }
+EXPORT_SYMBOL_GPL(kdb_register);
 
 /*
  * kdb_unregister - This function is used to unregister a kernel
@@ -2713,7 +2768,7 @@ int kdb_unregister(char *cmd)
 	/*
 	 *  find the command.
 	 */
-	for (i = 0, kp = kdb_commands; i < kdb_max_commands; i++, kp++) {
+	for_each_kdbcmd(kp, i) {
 		if (kp->cmd_name && (strcmp(kp->cmd_name, cmd) == 0)) {
 			kp->cmd_name = NULL;
 			return 0;
@@ -2723,6 +2778,7 @@ int kdb_unregister(char *cmd)
 	/* Couldn't find it.  */
 	return 1;
 }
+EXPORT_SYMBOL_GPL(kdb_unregister);
 
 /* Initialize the kdb command table. */
 static void __init kdb_inittab(void)
@@ -2801,7 +2857,7 @@ static void __init kdb_inittab(void)
 	  "Send a signal to a process", 0, KDB_REPEAT_NONE);
 	kdb_register_repeat("summary", kdb_summary, "",
 	  "Summarize the system", 4, KDB_REPEAT_NONE);
-	kdb_register_repeat("per_cpu", kdb_per_cpu, "",
+	kdb_register_repeat("per_cpu", kdb_per_cpu, "<sym> [<bytes>] [<cpu>]",
 	  "Display per_cpu variables", 3, KDB_REPEAT_NONE);
 	kdb_register_repeat("grephelp", kdb_grep_help, "",
 	  "Display help on | grep", 0, KDB_REPEAT_NONE);
@@ -2823,7 +2879,7 @@ static void __init kdb_cmd_init(void)
 	}
 }
 
-/* Intialize kdb_printf, breakpoint tables and kdb state */
+/* Initialize kdb_printf, breakpoint tables and kdb state */
 void __init kdb_init(int lvl)
 {
 	static int kdb_init_lvl = KDB_NOT_INITIALIZED;

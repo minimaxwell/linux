@@ -6,10 +6,10 @@
 
 #include <linux/init.h>
 #include <linux/of_platform.h>
+#include <linux/proc_fs.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/system.h>
 #include <asm/time.h>
 #include <asm/8xx_immap.h>
 #include <asm/cpm1.h>
@@ -64,13 +64,13 @@ void __init cmpc885_pics_init(void)
 		if (!strcmp(model, "MCR3000_2G")) {
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
-				set_irq_chained_handler(irq, fpgaf_cascade);
+				irq_set_chained_handler(irq, fpgaf_cascade);
 		}
 		/* MIAE configuration */
 		if (!strcmp(model, "MIAE")) {
 			irq = fpgam_pic_init();
 			if (irq != NO_IRQ)
-				set_irq_chained_handler(irq, fpgam_cascade);
+				irq_set_chained_handler(irq, fpgam_cascade);
 		}
 
 		/* if CMPC885 configuration there nothing to do */

@@ -116,9 +116,7 @@ static struct smscore_registry_entry_t *smscore_find_registry(char *devpath)
 			return entry;
 		}
 	}
-	entry = (struct smscore_registry_entry_t *)
-			kmalloc(sizeof(struct smscore_registry_entry_t),
-				GFP_KERNEL);
+	entry = kmalloc(sizeof(struct smscore_registry_entry_t), GFP_KERNEL);
 	if (entry) {
 		entry->mode = default_mode;
 		strcpy(entry->devpath, devpath);
@@ -278,16 +276,13 @@ static void smscore_notify_clients(struct smscore_device_t *coredev)
 static int smscore_notify_callbacks(struct smscore_device_t *coredev,
 				    struct device *device, int arrival)
 {
-	struct list_head *next, *first;
+	struct smscore_device_notifyee_t *elem;
 	int rc = 0;
 
 	/* note: must be called under g_deviceslock */
 
-	first = &g_smscore_notifyees;
-
-	for (next = first->next; next != first; next = next->next) {
-		rc = ((struct smscore_device_notifyee_t *) next)->
-				hotplug(coredev, device, arrival);
+	list_for_each_entry(elem, &g_smscore_notifyees, entry) {
+		rc = elem->hotplug(coredev, device, arrival);
 		if (rc < 0)
 			break;
 	}
@@ -440,7 +435,7 @@ static int smscore_init_ir(struct smscore_device_t *coredev)
 	int rc;
 	void *buffer;
 
-	coredev->ir.input_dev = NULL;
+	coredev->ir.dev = NULL;
 	ir_io = sms_get_board(smscore_get_board_id(coredev))->board_cfg.ir;
 	if (ir_io) {/* only if IR port exist we use IR sub-module */
 		sms_info("IR loading");
@@ -942,29 +937,25 @@ static struct
 smscore_client_t *smscore_find_client(struct smscore_device_t *coredev,
 				      int data_type, int id)
 {
-	struct smscore_client_t *client = NULL;
-	struct list_head *next, *first;
+	struct list_head *first;
+	struct smscore_client_t *client;
 	unsigned long flags;
-	struct list_head *firstid, *nextid;
-
+	struct list_head *firstid;
+	struct smscore_idlist_t *client_id;
 
 	spin_lock_irqsave(&coredev->clientslock, flags);
 	first = &coredev->clients;
-	for (next = first->next;
-	     (next != first) && !client;
-	     next = next->next) {
-		firstid = &((struct smscore_client_t *)next)->idlist;
-		for (nextid = firstid->next;
-		     nextid != firstid;
-		     nextid = nextid->next) {
-			if ((((struct smscore_idlist_t *)nextid)->id == id) &&
-			    (((struct smscore_idlist_t *)nextid)->data_type == data_type ||
-			    (((struct smscore_idlist_t *)nextid)->data_type == 0))) {
-				client = (struct smscore_client_t *) next;
-				break;
-			}
+	list_for_each_entry(client, first, entry) {
+		firstid = &client->idlist;
+		list_for_each_entry(client_id, firstid, entry) {
+			if ((client_id->id == id) &&
+			    (client_id->data_type == data_type ||
+			    (client_id->data_type == 0)))
+				goto found;
 		}
 	}
+	client = NULL;
+found:
 	spin_unlock_irqrestore(&coredev->clientslock, flags);
 	return client;
 }
@@ -1100,31 +1091,26 @@ EXPORT_SYMBOL_GPL(smscore_onresponse);
  *
  * @return pointer to descriptor on success, NULL on error.
  */
-struct smscore_buffer_t *smscore_getbuffer(struct smscore_device_t *coredev)
+
+struct smscore_buffer_t *get_entry(struct smscore_device_t *coredev)
 {
 	struct smscore_buffer_t *cb = NULL;
 	unsigned long flags;
 
-	DEFINE_WAIT(wait);
-
 	spin_lock_irqsave(&coredev->bufferslock, flags);
-
-	/* This function must return a valid buffer, since the buffer list is
-	 * finite, we check that there is an available buffer, if not, we wait
-	 * until such buffer become available.
-	 */
-
-	prepare_to_wait(&coredev->buffer_mng_waitq, &wait, TASK_INTERRUPTIBLE);
-
-	if (list_empty(&coredev->buffers))
-		schedule();
-
-	finish_wait(&coredev->buffer_mng_waitq, &wait);
-
-	cb = (struct smscore_buffer_t *) coredev->buffers.next;
-	list_del(&cb->entry);
-
+	if (!list_empty(&coredev->buffers)) {
+		cb = (struct smscore_buffer_t *) coredev->buffers.next;
+		list_del(&cb->entry);
+	}
 	spin_unlock_irqrestore(&coredev->bufferslock, flags);
+	return cb;
+}
+
+struct smscore_buffer_t *smscore_getbuffer(struct smscore_device_t *coredev)
+{
+	struct smscore_buffer_t *cb = NULL;
+
+	wait_event(coredev->buffer_mng_waitq, (cb = get_entry(coredev)));
 
 	return cb;
 }
@@ -1154,7 +1140,7 @@ static int smscore_validate_client(struct smscore_device_t *coredev,
 
 	if (!client) {
 		sms_err("bad parameter.");
-		return -EFAULT;
+		return -EINVAL;
 	}
 	registered_client = smscore_find_client(coredev, data_type, id);
 	if (registered_client == client)
@@ -1297,7 +1283,7 @@ int smsclient_sendrequest(struct smscore_client_t *client,
 EXPORT_SYMBOL_GPL(smsclient_sendrequest);
 
 
-/* old GPIO managments implementation */
+/* old GPIO managements implementation */
 int smscore_configure_gpio(struct smscore_device_t *coredev, u32 pin,
 			   struct smscore_config_gpio *pinconfig)
 {
@@ -1511,8 +1497,7 @@ int smscore_gpio_set_level(struct smscore_device_t *coredev, u8 PinNum,
 		u32 msgData[3]; /* keep it 3 ! */
 	} *pMsg;
 
-	if ((NewLevel > 1) || (PinNum > MAX_GPIO_PIN_NUMBER) ||
-			(PinNum > MAX_GPIO_PIN_NUMBER))
+	if ((NewLevel > 1) || (PinNum > MAX_GPIO_PIN_NUMBER))
 		return -EINVAL;
 
 	totalLen = sizeof(struct SmsMsgHdr_ST) +

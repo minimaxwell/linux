@@ -49,23 +49,6 @@
 #define MULTI_ISA 0
 #endif /* Q40 */
 
-/* GG-II Zorro to ISA bridge */
-#ifdef CONFIG_GG2
-
-extern unsigned long gg2_isa_base;
-#define GG2_ISA_IO_B(ioaddr) (gg2_isa_base+1+((unsigned long)(ioaddr)*4))
-#define GG2_ISA_IO_W(ioaddr) (gg2_isa_base+  ((unsigned long)(ioaddr)*4))
-#define GG2_ISA_MEM_B(madr)  (gg2_isa_base+1+(((unsigned long)(madr)*4) & 0xfffff))
-#define GG2_ISA_MEM_W(madr)  (gg2_isa_base+  (((unsigned long)(madr)*4) & 0xfffff))
-
-#ifndef MULTI_ISA
-#define MULTI_ISA 0
-#else
-#undef MULTI_ISA
-#define MULTI_ISA 1
-#endif
-#endif /* GG2 */
-
 #ifdef CONFIG_AMIGA_PCMCIA
 #include <asm/amigayle.h>
 
@@ -82,15 +65,60 @@ extern unsigned long gg2_isa_base;
 
 
 
-#ifdef CONFIG_ISA
+#if defined(CONFIG_PCI) && defined(CONFIG_COLDFIRE)
+
+#define HAVE_ARCH_PIO_SIZE
+#define PIO_OFFSET	0
+#define PIO_MASK	0xffff
+#define PIO_RESERVED	0x10000
+
+u8 mcf_pci_inb(u32 addr);
+u16 mcf_pci_inw(u32 addr);
+u32 mcf_pci_inl(u32 addr);
+void mcf_pci_insb(u32 addr, u8 *buf, u32 len);
+void mcf_pci_insw(u32 addr, u16 *buf, u32 len);
+void mcf_pci_insl(u32 addr, u32 *buf, u32 len);
+
+void mcf_pci_outb(u8 v, u32 addr);
+void mcf_pci_outw(u16 v, u32 addr);
+void mcf_pci_outl(u32 v, u32 addr);
+void mcf_pci_outsb(u32 addr, const u8 *buf, u32 len);
+void mcf_pci_outsw(u32 addr, const u16 *buf, u32 len);
+void mcf_pci_outsl(u32 addr, const u32 *buf, u32 len);
+
+#define	inb	mcf_pci_inb
+#define	inb_p	mcf_pci_inb
+#define	inw	mcf_pci_inw
+#define	inw_p	mcf_pci_inw
+#define	inl	mcf_pci_inl
+#define	inl_p	mcf_pci_inl
+#define	insb	mcf_pci_insb
+#define	insw	mcf_pci_insw
+#define	insl	mcf_pci_insl
+
+#define	outb	mcf_pci_outb
+#define	outb_p	mcf_pci_outb
+#define	outw	mcf_pci_outw
+#define	outw_p	mcf_pci_outw
+#define	outl	mcf_pci_outl
+#define	outl_p	mcf_pci_outl
+#define	outsb	mcf_pci_outsb
+#define	outsw	mcf_pci_outsw
+#define	outsl	mcf_pci_outsl
+
+#define readb(addr)	in_8(addr)
+#define writeb(v, addr)	out_8((addr), (v))
+#define readw(addr)	in_le16(addr)
+#define writew(v, addr)	out_le16((addr), (v))
+
+#elif defined(CONFIG_ISA)
 
 #if MULTI_ISA == 0
 #undef MULTI_ISA
 #endif
 
 #define ISA_TYPE_Q40 (1)
-#define ISA_TYPE_GG2 (2)
-#define ISA_TYPE_AG  (3)
+#define ISA_TYPE_AG  (2)
 
 #if defined(CONFIG_Q40) && !defined(MULTI_ISA)
 #define ISA_TYPE ISA_TYPE_Q40
@@ -99,10 +127,6 @@ extern unsigned long gg2_isa_base;
 #if defined(CONFIG_AMIGA_PCMCIA) && !defined(MULTI_ISA)
 #define ISA_TYPE ISA_TYPE_AG
 #define ISA_SEX  1
-#endif
-#if defined(CONFIG_GG2) && !defined(MULTI_ISA)
-#define ISA_TYPE ISA_TYPE_GG2
-#define ISA_SEX  0
 #endif
 
 #ifdef MULTI_ISA
@@ -125,9 +149,6 @@ static inline u8 __iomem *isa_itb(unsigned long addr)
 #ifdef CONFIG_Q40
     case ISA_TYPE_Q40: return (u8 __iomem *)Q40_ISA_IO_B(addr);
 #endif
-#ifdef CONFIG_GG2
-    case ISA_TYPE_GG2: return (u8 __iomem *)GG2_ISA_IO_B(addr);
-#endif
 #ifdef CONFIG_AMIGA_PCMCIA
     case ISA_TYPE_AG: return (u8 __iomem *)AG_ISA_IO_B(addr);
 #endif
@@ -140,9 +161,6 @@ static inline u16 __iomem *isa_itw(unsigned long addr)
     {
 #ifdef CONFIG_Q40
     case ISA_TYPE_Q40: return (u16 __iomem *)Q40_ISA_IO_W(addr);
-#endif
-#ifdef CONFIG_GG2
-    case ISA_TYPE_GG2: return (u16 __iomem *)GG2_ISA_IO_W(addr);
 #endif
 #ifdef CONFIG_AMIGA_PCMCIA
     case ISA_TYPE_AG: return (u16 __iomem *)AG_ISA_IO_W(addr);
@@ -167,9 +185,6 @@ static inline u8 __iomem *isa_mtb(unsigned long addr)
 #ifdef CONFIG_Q40
     case ISA_TYPE_Q40: return (u8 __iomem *)Q40_ISA_MEM_B(addr);
 #endif
-#ifdef CONFIG_GG2
-    case ISA_TYPE_GG2: return (u8 __iomem *)GG2_ISA_MEM_B(addr);
-#endif
 #ifdef CONFIG_AMIGA_PCMCIA
     case ISA_TYPE_AG: return (u8 __iomem *)addr;
 #endif
@@ -182,9 +197,6 @@ static inline u16 __iomem *isa_mtw(unsigned long addr)
     {
 #ifdef CONFIG_Q40
     case ISA_TYPE_Q40: return (u16 __iomem *)Q40_ISA_MEM_W(addr);
-#endif
-#ifdef CONFIG_GG2
-    case ISA_TYPE_GG2: return (u16 __iomem *)GG2_ISA_MEM_W(addr);
 #endif
 #ifdef CONFIG_AMIGA_PCMCIA
     case ISA_TYPE_AG: return (u16 __iomem *)addr;
@@ -216,9 +228,6 @@ static inline void isa_delay(void)
     {
 #ifdef CONFIG_Q40
     case ISA_TYPE_Q40: isa_outb(0,0x80); break;
-#endif
-#ifdef CONFIG_GG2
-    case ISA_TYPE_GG2: break;
 #endif
 #ifdef CONFIG_AMIGA_PCMCIA
     case ISA_TYPE_AG: break;
@@ -287,9 +296,13 @@ static inline void isa_delay(void)
 #define outb(val,port)     ((void)0)
 #define outb_p(val,port)   ((void)0)
 #define inw(port)          0xffff
+#define inw_p(port)        0xffff
 #define outw(val,port)     ((void)0)
+#define outw_p(val,port)   ((void)0)
 #define inl(port)          0xffffffffUL
+#define inl_p(port)        0xffffffffUL
 #define outl(val,port)     ((void)0)
+#define outl_p(val,port)   ((void)0)
 
 #define insb(port,buf,nr)  ((void)0)
 #define outsb(port,buf,nr) ((void)0)
@@ -310,6 +323,13 @@ static inline void isa_delay(void)
 
 #define readl(addr)      in_le32(addr)
 #define writel(val,addr) out_le32((addr),(val))
+
+#define readsb(port, buf, nr)     raw_insb((port), (u8 *)(buf), (nr))
+#define readsw(port, buf, nr)     raw_insw((port), (u16 *)(buf), (nr))
+#define readsl(port, buf, nr)     raw_insl((port), (u32 *)(buf), (nr))
+#define writesb(port, buf, nr)    raw_outsb((port), (u8 *)(buf), (nr))
+#define writesw(port, buf, nr)    raw_outsw((port), (u16 *)(buf), (nr))
+#define writesl(port, buf, nr)    raw_outsl((port), (u32 *)(buf), (nr))
 
 #define mmiowb()
 
@@ -365,5 +385,7 @@ static inline void memcpy_toio(volatile void __iomem *dst, const void *src, int 
  * Convert a virtual cached pointer to an uncached pointer
  */
 #define xlate_dev_kmem_ptr(p)	p
+
+#define ioport_map(port, nr)	((void __iomem *)(port))
 
 #endif /* _IO_H */

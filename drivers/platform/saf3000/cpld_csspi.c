@@ -35,7 +35,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <sysdev/fsl_soc.h>
@@ -82,24 +82,27 @@ static void cpld_csspi_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id cpld_csspi_match[];
+static int __devinit cpld_csspi_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 
+	match = of_match_device(cpld_csspi_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	dev_info(dev,"driver for MCR3000 CPLD ChipSelects initialised\n");
 	
 	spin_lock_init(&cpld_csspi_lock);
 
 	mm_gc = &cpld_csspi_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = cpld_csspi_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 8;
 	gc->direction_input = cpld_csspi_dir_in;
 	gc->direction_output = cpld_csspi_dir_out;
@@ -109,7 +112,7 @@ static int __devinit cpld_csspi_probe(struct of_device *ofdev, const struct of_d
 	return of_mm_gpiochip_add(np, mm_gc);
 }
 
-static int __devexit cpld_csspi_remove(struct of_device *ofdev)
+static int __devexit cpld_csspi_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	
@@ -125,7 +128,7 @@ static const struct of_device_id cpld_csspi_match[] = {
 };
 MODULE_DEVICE_TABLE(of, cpld_csspi_match);
 
-static struct of_platform_driver cpld_csspi_driver = {
+static struct platform_driver cpld_csspi_driver = {
 	.probe		= cpld_csspi_probe,
 	.remove		= __devexit_p(cpld_csspi_remove),
 	.driver		= {
@@ -137,7 +140,7 @@ static struct of_platform_driver cpld_csspi_driver = {
 
 static int __init cpld_csspi_init(void)
 {
-	return of_register_platform_driver(&cpld_csspi_driver);
+	return platform_driver_register(&cpld_csspi_driver);
 }
 subsys_initcall(cpld_csspi_init);
 

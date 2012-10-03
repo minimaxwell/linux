@@ -32,6 +32,8 @@
  */
 #include <linux/highmem.h>
 #include <linux/gfp.h>
+#include <linux/cpu.h>
+#include <linux/export.h>
 
 #include "rds.h"
 
@@ -40,7 +42,8 @@ struct rds_page_remainder {
 	unsigned long	r_offset;
 };
 
-DEFINE_PER_CPU_SHARED_ALIGNED(struct rds_page_remainder, rds_page_remainders);
+static DEFINE_PER_CPU_SHARED_ALIGNED(struct rds_page_remainder,
+				     rds_page_remainders);
 
 /*
  * returns 0 on success or -errno on failure.
@@ -71,11 +74,12 @@ int rds_page_copy_user(struct page *page, unsigned long offset,
 }
 EXPORT_SYMBOL_GPL(rds_page_copy_user);
 
-/*
- * Message allocation uses this to build up regions of a message.
+/**
+ * rds_page_remainder_alloc - build up regions of a message.
  *
- * @bytes - the number of bytes needed.
- * @gfp - the waiting behaviour of the allocation
+ * @scat: Scatter list for message
+ * @bytes: the number of bytes needed.
+ * @gfp: the waiting behaviour of the allocation
  *
  * @gfp is always ored with __GFP_HIGHMEM.  Callers must be prepared to
  * kmap the pages, etc.
@@ -103,7 +107,7 @@ int rds_page_remainder_alloc(struct scatterlist *scat, unsigned long bytes,
 	/* jump straight to allocation if we're trying for a huge page */
 	if (bytes >= PAGE_SIZE) {
 		page = alloc_page(gfp);
-		if (page == NULL) {
+		if (!page) {
 			ret = -ENOMEM;
 		} else {
 			sg_set_page(scat, page, PAGE_SIZE, 0);
@@ -149,7 +153,7 @@ int rds_page_remainder_alloc(struct scatterlist *scat, unsigned long bytes,
 		rem = &per_cpu(rds_page_remainders, get_cpu());
 		local_irq_save(flags);
 
-		if (page == NULL) {
+		if (!page) {
 			ret = -ENOMEM;
 			break;
 		}
@@ -173,6 +177,7 @@ out:
 		 ret ? 0 : scat->length);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(rds_page_remainder_alloc);
 
 static int rds_page_remainder_cpu_notify(struct notifier_block *self,
 					 unsigned long action, void *hcpu)

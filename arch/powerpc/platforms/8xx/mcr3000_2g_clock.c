@@ -22,6 +22,7 @@
 #include <linux/clk.h>
 #include <linux/mutex.h>
 #include <linux/io.h>
+#include <linux/module.h>
 
 #include <linux/of_platform.h>
 #include <asm/clk_interface.h>

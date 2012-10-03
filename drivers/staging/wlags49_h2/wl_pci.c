@@ -23,7 +23,7 @@
  * software indicates your acceptance of these terms and conditions.  If you do
  * not agree with these terms and conditions, do not use the software.
  *
- * Copyright © 2003 Agere Systems Inc.
+ * Copyright Â© 2003 Agere Systems Inc.
  * All rights reserved.
  *
  * Redistribution and use in source or binary forms, with or without
@@ -44,7 +44,7 @@
  *
  * Disclaimer
  *
- * THIS SOFTWARE IS PROVIDED “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * THIS SOFTWARE IS PROVIDED Â“AS ISÂ” AND ANY EXPRESS OR IMPLIED WARRANTIES,
  * INCLUDING, BUT NOT LIMITED TO, INFRINGEMENT AND THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  ANY
  * USE, MODIFICATION OR DISTRIBUTION OF THIS SOFTWARE IS SOLELY AT THE USERS OWN
@@ -77,7 +77,6 @@
 #include <linux/interrupt.h>
 #include <linux/in.h>
 #include <linux/delay.h>
-#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/bitops.h>
@@ -112,14 +111,11 @@ extern dbg_info_t *DbgInfo;
 #endif  // DBG
 
 /* define the PCI device Table Cardname and id tables */
-enum hermes_pci_versions {
-	CH_Agere_Systems_Mini_PCI_V1 = 0,
-};
-
 static struct pci_device_id wl_pci_tbl[] __devinitdata = {
-	{ WL_LKM_PCI_VENDOR_ID, WL_LKM_PCI_DEVICE_ID_0, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CH_Agere_Systems_Mini_PCI_V1 },
-    { WL_LKM_PCI_VENDOR_ID, WL_LKM_PCI_DEVICE_ID_1, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CH_Agere_Systems_Mini_PCI_V1 },
-    { WL_LKM_PCI_VENDOR_ID, WL_LKM_PCI_DEVICE_ID_2, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CH_Agere_Systems_Mini_PCI_V1 },
+	{ PCI_DEVICE(PCI_VENDOR_ID_WL_LKM, PCI_DEVICE_ID_WL_LKM_0), },
+	{ PCI_DEVICE(PCI_VENDOR_ID_WL_LKM, PCI_DEVICE_ID_WL_LKM_1), },
+	{ PCI_DEVICE(PCI_VENDOR_ID_WL_LKM, PCI_DEVICE_ID_WL_LKM_2), },
+
 	{ }			/* Terminating entry */
 };
 
@@ -454,7 +450,7 @@ void __devexit wl_pci_remove(struct pci_dev *pdev)
         return;
     }
 
-    dev = (struct net_device *)pci_get_drvdata( pdev );
+    dev = pci_get_drvdata( pdev );
     if( dev == NULL ) {
         DBG_ERROR( DbgInfo, "Could not retrieve net_device structure\n" );
         return;
@@ -465,7 +461,7 @@ void __devexit wl_pci_remove(struct pci_dev *pdev)
     free_irq( dev->irq, dev );
 
 #ifdef ENABLE_DMA
-    wl_pci_dma_free( pdev, (struct wl_private *)dev->priv );
+    wl_pci_dma_free( pdev, dev->priv );
 #endif
 
     wl_device_dealloc( dev );
@@ -528,14 +524,16 @@ int wl_pci_setup( struct pci_dev *pdev )
     /* Make sure that space was allocated for our private adapter struct */
     if( dev->priv == NULL ) {
         DBG_ERROR( DbgInfo, "Private adapter struct was not allocated!!!\n" );
+	wl_device_dealloc(dev);
         DBG_LEAVE( DbgInfo );
         return -ENOMEM;
     }
 
 #ifdef ENABLE_DMA
     /* Allocate DMA Descriptors */
-    if( wl_pci_dma_alloc( pdev, (struct wl_private *)dev->priv ) < 0 ) {
+    if( wl_pci_dma_alloc( pdev, dev->priv ) < 0 ) {
         DBG_ERROR( DbgInfo, "Could not allocate DMA descriptor memory!!!\n" );
+	wl_device_dealloc(dev);
         DBG_LEAVE( DbgInfo );
         return -ENOMEM;
     }
@@ -565,12 +563,14 @@ int wl_pci_setup( struct pci_dev *pdev )
     result = request_irq(dev->irq, wl_isr, SA_SHIRQ, dev->name, dev);
     if( result ) {
         DBG_WARNING( DbgInfo, "Could not register ISR!!!\n" );
+	wl_remove(dev);
+	wl_device_dealloc(dev);
         DBG_LEAVE( DbgInfo );
         return result;
 	}
 
     /* Make sure interrupts are enabled properly for CardBus */
-    lp = (struct wl_private *)dev->priv;
+    lp = dev->priv;
 
     if( lp->hcfCtx.IFB_BusType == CFG_NIC_BUS_TYPE_CARDBUS ||
 	    lp->hcfCtx.IFB_BusType == CFG_NIC_BUS_TYPE_PCI 		) {

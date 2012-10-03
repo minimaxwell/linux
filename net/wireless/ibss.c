@@ -7,6 +7,7 @@
 #include <linux/etherdevice.h>
 #include <linux/if_arp.h>
 #include <linux/slab.h>
+#include <linux/export.h>
 #include <net/cfg80211.h>
 #include "wext-compat.h"
 #include "nl80211.h"
@@ -41,6 +42,7 @@ void __cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid)
 	cfg80211_hold_bss(bss_from_pub(bss));
 	wdev->current_bss = bss_from_pub(bss);
 
+	wdev->sme_state = CFG80211_SME_CONNECTED;
 	cfg80211_upload_connect_keys(wdev);
 
 	nl80211_send_ibss_bssid(wiphy_to_dev(wdev->wiphy), dev, bssid,
@@ -59,7 +61,7 @@ void cfg80211_ibss_joined(struct net_device *dev, const u8 *bssid, gfp_t gfp)
 	struct cfg80211_event *ev;
 	unsigned long flags;
 
-	CFG80211_DEV_WARN_ON(!wdev->ssid_len);
+	CFG80211_DEV_WARN_ON(wdev->sme_state != CFG80211_SME_CONNECTING);
 
 	ev = kzalloc(sizeof(*ev), gfp);
 	if (!ev)
@@ -88,16 +90,48 @@ int __cfg80211_join_ibss(struct cfg80211_registered_device *rdev,
 	if (wdev->ssid_len)
 		return -EALREADY;
 
+	if (!params->basic_rates) {
+		/*
+		* If no rates were explicitly configured,
+		* use the mandatory rate set for 11b or
+		* 11a for maximum compatibility.
+		*/
+		struct ieee80211_supported_band *sband =
+			rdev->wiphy.bands[params->channel->band];
+		int j;
+		u32 flag = params->channel->band == IEEE80211_BAND_5GHZ ?
+			IEEE80211_RATE_MANDATORY_A :
+			IEEE80211_RATE_MANDATORY_B;
+
+		for (j = 0; j < sband->n_bitrates; j++) {
+			if (sband->bitrates[j].flags & flag)
+				params->basic_rates |= BIT(j);
+		}
+	}
+
 	if (WARN_ON(wdev->connect_keys))
 		kfree(wdev->connect_keys);
 	wdev->connect_keys = connkeys;
 
+	wdev->ibss_fixed = params->channel_fixed;
 #ifdef CONFIG_CFG80211_WEXT
 	wdev->wext.ibss.channel = params->channel;
 #endif
+	wdev->sme_state = CFG80211_SME_CONNECTING;
+
+	err = cfg80211_can_use_chan(rdev, wdev, params->channel,
+				    params->channel_fixed
+				    ? CHAN_MODE_SHARED
+				    : CHAN_MODE_EXCLUSIVE);
+	if (err) {
+		wdev->connect_keys = NULL;
+		return err;
+	}
+
 	err = rdev->ops->join_ibss(&rdev->wiphy, dev, params);
 	if (err) {
 		wdev->connect_keys = NULL;
+		wdev->sme_state = CFG80211_SME_IDLE;
 		return err;
 	}
 
@@ -141,7 +175,7 @@ static void __cfg80211_clear_ibss(struct net_device *dev, bool nowext)
 	 */
 	if (rdev->ops->del_key)
 		for (i = 0; i < 6; i++)
-			rdev->ops->del_key(wdev->wiphy, dev, i, NULL);
+			rdev->ops->del_key(wdev->wiphy, dev, i, false, NULL);
 
 	if (wdev->current_bss) {
 		cfg80211_unhold_bss(wdev->current_bss);
@@ -149,6 +183,7 @@ static void __cfg80211_clear_ibss(struct net_device *dev, bool nowext)
 	}
 
 	wdev->current_bss = NULL;
+	wdev->sme_state = CFG80211_SME_IDLE;
 	wdev->ssid_len = 0;
 #ifdef CONFIG_CFG80211_WEXT
 	if (!nowext)
@@ -247,8 +282,10 @@ int cfg80211_ibss_wext_join(struct cfg80211_registered_device *rdev,
 	if (!netif_running(wdev->netdev))
 		return 0;
 
-	if (wdev->wext.keys)
+	if (wdev->wext.keys) {
 		wdev->wext.keys->def = wdev->wext.default_key;
+		wdev->wext.keys->defmgmt = wdev->wext.default_mgmt_key;
+	}
 
 	wdev->wext.ibss.privacy = wdev->wext.default_key != -1;
 
@@ -451,7 +488,7 @@ int cfg80211_ibss_wext_siwap(struct net_device *dev,
 
 	/* fixed already - and no change */
 	if (wdev->wext.ibss.bssid && bssid &&
-	    compare_ether_addr(bssid, wdev->wext.ibss.bssid) == 0)
+	    ether_addr_equal(bssid, wdev->wext.ibss.bssid))
 		return 0;
 
 	wdev_lock(wdev);

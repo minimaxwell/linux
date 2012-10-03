@@ -35,7 +35,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <sysdev/fsl_soc.h>
@@ -98,24 +98,27 @@ static void opx_gpio_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
 }
 
-static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id opx_gpio_match[];
+static int __devinit opx_gpio_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct of_mm_gpio_chip *mm_gc;
-	struct of_gpio_chip *of_gc;
 	struct gpio_chip *gc;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 
+	match = of_match_device(opx_gpio_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	dev_info(dev,"Initialisation GPIO OPx\n");
 	
 	spin_lock_init(&opx_gpio_lock);
 
 	mm_gc = &opx_gpio_mm_gc;
-	of_gc = &mm_gc->of_gc;
-	gc = &of_gc->gc;
+	gc = &mm_gc->gc;
 
 	mm_gc->save_regs = opx_gpio_save_regs;
-	of_gc->gpio_cells = 2;
 	gc->ngpio = 4;
 	gc->direction_input = opx_gpio_dir_in;
 	gc->direction_output = opx_gpio_dir_out;
@@ -125,7 +128,7 @@ static int __devinit opx_gpio_probe(struct of_device *ofdev, const struct of_dev
 	return of_mm_gpiochip_add(np, mm_gc);
 }
 
-static int __devexit opx_gpio_remove(struct of_device *ofdev)
+static int __devexit opx_gpio_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	
@@ -141,7 +144,7 @@ static const struct of_device_id opx_gpio_match[] = {
 };
 MODULE_DEVICE_TABLE(of, opx_gpio_match);
 
-static struct of_platform_driver opx_gpio_driver = {
+static struct platform_driver opx_gpio_driver = {
 	.probe		= opx_gpio_probe,
 	.remove		= __devexit_p(opx_gpio_remove),
 	.driver		= {
@@ -153,7 +156,7 @@ static struct of_platform_driver opx_gpio_driver = {
 
 static int __init opx_gpio_init(void)
 {
-	return of_register_platform_driver(&opx_gpio_driver);
+	return platform_driver_register(&opx_gpio_driver);
 }
 subsys_initcall(opx_gpio_init);
 

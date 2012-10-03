@@ -241,30 +241,13 @@ static void flush_send_queue(struct cardstate *cs)
  * return value:
  *	number of bytes queued, or error code < 0
  */
-static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
-			     int len, struct tasklet_struct *wake_tasklet)
+static int gigaset_write_cmd(struct cardstate *cs, struct cmdbuf_t *cb)
 {
-	struct cmdbuf_t *cb;
 	unsigned long flags;
 
 	gigaset_dbg_buffer(cs->mstate != MS_LOCKED ?
-				DEBUG_TRANSCMD : DEBUG_LOCKCMD,
-			   "CMD Transmit", len, buf);
-
-	if (len <= 0)
-		return 0;
-
-	cb = kmalloc(sizeof(struct cmdbuf_t) + len, GFP_ATOMIC);
-	if (!cb) {
-		dev_err(cs->dev, "%s: out of memory!\n", __func__);
-		return -ENOMEM;
-	}
-
-	memcpy(cb->buf, buf, len);
-	cb->len = len;
-	cb->offset = 0;
-	cb->next = NULL;
-	cb->wake_tasklet = wake_tasklet;
+			   DEBUG_TRANSCMD : DEBUG_LOCKCMD,
+			   "CMD Transmit", cb->len, cb->buf);
 
 	spin_lock_irqsave(&cs->cmdlock, flags);
 	cb->prev = cs->lastcmdbuf;
@@ -272,9 +255,9 @@ static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
 		cs->lastcmdbuf->next = cb;
 	else {
 		cs->cmdbuf = cb;
-		cs->curlen = len;
+		cs->curlen = cb->len;
 	}
-	cs->cmdbytes += len;
+	cs->cmdbytes += cb->len;
 	cs->lastcmdbuf = cb;
 	spin_unlock_irqrestore(&cs->cmdlock, flags);
 
@@ -282,7 +265,7 @@ static int gigaset_write_cmd(struct cardstate *cs, const unsigned char *buf,
 	if (cs->connected)
 		tasklet_schedule(&cs->write_tasklet);
 	spin_unlock_irqrestore(&cs->lock, flags);
-	return len;
+	return cb->len;
 }
 
 /*
@@ -357,17 +340,16 @@ static int gigaset_initbcshw(struct bc_state *bcs)
 {
 	/* unused */
 	bcs->hw.ser = NULL;
-	return 1;
+	return 0;
 }
 
 /*
  * Free B channel structure
  * Called by "gigaset_freebcs" in common.c
  */
-static int gigaset_freebcshw(struct bc_state *bcs)
+static void gigaset_freebcshw(struct bc_state *bcs)
 {
 	/* unused */
-	return 1;
 }
 
 /*
@@ -415,7 +397,7 @@ static int gigaset_initcshw(struct cardstate *cs)
 	scs = kzalloc(sizeof(struct ser_cardstate), GFP_KERNEL);
 	if (!scs) {
 		pr_err("out of memory\n");
-		return 0;
+		return -ENOMEM;
 	}
 	cs->hw.ser = scs;
 
@@ -427,13 +409,13 @@ static int gigaset_initcshw(struct cardstate *cs)
 		pr_err("error %d registering platform device\n", rc);
 		kfree(cs->hw.ser);
 		cs->hw.ser = NULL;
-		return 0;
+		return rc;
 	}
 	dev_set_drvdata(&cs->hw.ser->dev.dev, cs);
 
 	tasklet_init(&cs->write_tasklet,
 		     gigaset_modem_fill, (unsigned long) cs);
-	return 1;
+	return 0;
 }
 
 /*
@@ -457,7 +439,7 @@ static int gigaset_set_modem_ctrl(struct cardstate *cs, unsigned old_state,
 	if (!set && !clear)
 		return 0;
 	gig_dbg(DEBUG_IF, "tiocmset set %x clear %x", set, clear);
-	return tty->ops->tiocmset(tty, NULL, set, clear);
+	return tty->ops->tiocmset(tty, set, clear);
 }
 
 static int gigaset_baud_rate(struct cardstate *cs, unsigned cflag)
@@ -520,6 +502,7 @@ static int
 gigaset_tty_open(struct tty_struct *tty)
 {
 	struct cardstate *cs;
+	int rc;
 
 	gig_dbg(DEBUG_INIT, "Starting HLL for Gigaset M101");
 
@@ -530,10 +513,12 @@ gigaset_tty_open(struct tty_struct *tty)
 		return -ENODEV;
 	}
 
-	/* allocate memory for our device state and intialize it */
+	/* allocate memory for our device state and initialize it */
 	cs = gigaset_initcs(driver, 1, 1, 0, cidmode, GIGASET_MODULENAME);
-	if (!cs)
+	if (!cs) {
+		rc = -ENODEV;
 		goto error;
+	}
 
 	cs->dev = &cs->hw.ser->dev.dev;
 	cs->hw.ser->tty = tty;
@@ -547,7 +532,8 @@ gigaset_tty_open(struct tty_struct *tty)
 	 */
 	if (startmode == SM_LOCKED)
 		cs->mstate = MS_LOCKED;
-	if (!gigaset_start(cs)) {
+	rc = gigaset_start(cs);
+	if (rc < 0) {
 		tasklet_kill(&cs->write_tasklet);
 		goto error;
 	}
@@ -559,7 +545,7 @@ error:
 	gig_dbg(DEBUG_INIT, "Startup of HLL failed");
 	tty->disc_data = NULL;
 	gigaset_freecs(cs);
-	return -ENODEV;
+	return rc;
 }
 
 /*
@@ -788,10 +774,10 @@ static int __init ser_gigaset_init(void)
 		return rc;
 	}
 
-	/* allocate memory for our driver state and intialize it */
+	/* allocate memory for our driver state and initialize it */
 	driver = gigaset_initdriver(GIGASET_MINOR, GIGASET_MINORS,
-					  GIGASET_MODULENAME, GIGASET_DEVNAME,
-					  &ops, THIS_MODULE);
+				    GIGASET_MODULENAME, GIGASET_DEVNAME,
+				    &ops, THIS_MODULE);
 	if (!driver)
 		goto error;
 

@@ -33,7 +33,7 @@
 #include <net/tcp_states.h>
 #include <net/netns/hash.h>
 
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/byteorder.h>
 
 /* This is for all connections with a full identity, no wildcards.
@@ -245,7 +245,7 @@ static inline int inet_sk_listen_hashfn(const struct sock *sk)
 }
 
 /* Caller must disable local BH processing. */
-extern void __inet_inherit_port(struct sock *sk, struct sock *child);
+extern int __inet_inherit_port(struct sock *sk, struct sock *child);
 
 extern void inet_put_port(struct sock *sk);
 
@@ -379,10 +379,10 @@ static inline struct sock *__inet_lookup_skb(struct inet_hashinfo *hashinfo,
 					     const __be16 sport,
 					     const __be16 dport)
 {
-	struct sock *sk;
+	struct sock *sk = skb_steal_sock(skb);
 	const struct iphdr *iph = ip_hdr(skb);
 
-	if (unlikely(sk = skb_steal_sock(skb)))
+	if (sk)
 		return sk;
 	else
 		return __inet_lookup(dev_net(skb_dst(skb)->dev), hashinfo,

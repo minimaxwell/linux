@@ -20,6 +20,7 @@ struct inet_frag_queue {
 	atomic_t		refcnt;
 	struct timer_list	timer;      /* when will this queue expire? */
 	struct sk_buff		*fragments; /* list of received fragments */
+	struct sk_buff		*fragments_tail;
 	ktime_t			stamp;
 	int			len;        /* total length of orig datagram */
 	int			meat;
@@ -45,8 +46,7 @@ struct inet_frags {
 						void *arg);
 	void			(*destructor)(struct inet_frag_queue *);
 	void			(*skb_free)(struct sk_buff *);
-	int			(*match)(struct inet_frag_queue *q,
-						void *arg);
+	bool			(*match)(struct inet_frag_queue *q, void *arg);
 	void			(*frag_expire)(unsigned long data);
 };
 

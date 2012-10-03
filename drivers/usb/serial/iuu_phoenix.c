@@ -1,6 +1,8 @@
 /*
  * Infinity Unlimited USB Phoenix driver
  *
+ * Copyright (C) 2010 James Courtier-Dutton (James@superbug.co.uk)
+
  * Copyright (C) 2007 Alain Degreffe (eczema@ecze.com)
  *
  * Original code taken from iuutool (Copyright (C) 2006 Juan Carlos BorrÃ¡s)
@@ -32,15 +34,15 @@
 
 
 #ifdef CONFIG_USB_SERIAL_DEBUG
-static int debug = 1;
+static bool debug = 1;
 #else
-static int debug;
+static bool debug;
 #endif
 
 /*
  * Version Information
  */
-#define DRIVER_VERSION "v0.11"
+#define DRIVER_VERSION "v0.12"
 #define DRIVER_DESC "Infinity USB Unlimited Phoenix driver"
 
 static const struct usb_device_id id_table[] = {
@@ -49,21 +51,13 @@ static const struct usb_device_id id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, id_table);
 
-static struct usb_driver iuu_driver = {
-	.name = "iuu_phoenix",
-	.probe = usb_serial_probe,
-	.disconnect = usb_serial_disconnect,
-	.id_table = id_table,
-	.no_dynamic_id = 1,
-};
-
 /* turbo parameter */
 static int boost = 100;
 static int clockmode = 1;
 static int cdmode = 1;
 static int iuu_cardin;
 static int iuu_cardout;
-static int xmas;
+static bool xmas;
 static int vcc_default = 5;
 
 static void read_rxcmd_callback(struct urb *urb);
@@ -81,6 +75,9 @@ struct iuu_private {
 	u8 *dbgbuf;		/* debug buffer */
 	u8 len;
 	int vcc;		/* vcc (either 3 or 5 V) */
+	u32 baud;
+	u32 boost;
+	u32 clk;
 };
 
 
@@ -131,8 +128,6 @@ static void iuu_release(struct usb_serial *serial)
 	if (!port)
 		return;
 
-	dbg("%s", __func__);
-
 	if (priv) {
 		iuu_free_buf(priv);
 		dbg("%s - I will free all", __func__);
@@ -145,7 +140,7 @@ static void iuu_release(struct usb_serial *serial)
 	}
 }
 
-static int iuu_tiocmset(struct tty_struct *tty, struct file *file,
+static int iuu_tiocmset(struct tty_struct *tty,
 			unsigned int set, unsigned int clear)
 {
 	struct usb_serial_port *port = tty->driver_data;
@@ -157,13 +152,14 @@ static int iuu_tiocmset(struct tty_struct *tty, struct file *file,
 	    port->number, set, clear);
 
 	spin_lock_irqsave(&priv->lock, flags);
-	if (set & TIOCM_RTS)
-		priv->tiostatus = TIOCM_RTS;
 
-	if (!(set & TIOCM_RTS) && priv->tiostatus == TIOCM_RTS) {
+	if ((set & TIOCM_RTS) && !(priv->tiostatus == TIOCM_RTS)) {
 		dbg("%s TIOCMSET RESET called !!!", __func__);
 		priv->reset = 1;
 	}
+	if (set & TIOCM_RTS)
+		priv->tiostatus = TIOCM_RTS;
+
 	spin_unlock_irqrestore(&priv->lock, flags);
 	return 0;
 }
@@ -173,7 +169,7 @@ static int iuu_tiocmset(struct tty_struct *tty, struct file *file,
  * When no card , the reader respond with TIOCM_CD
  * This is known as CD autodetect mechanism
  */
-static int iuu_tiocmget(struct tty_struct *tty, struct file *file)
+static int iuu_tiocmget(struct tty_struct *tty)
 {
 	struct usb_serial_port *port = tty->driver_data;
 	struct iuu_private *priv = usb_get_serial_port_data(port);
@@ -192,8 +188,6 @@ static void iuu_rxcmd(struct urb *urb)
 	struct usb_serial_port *port = urb->context;
 	int result;
 	int status = urb->status;
-
-	dbg("%s - enter", __func__);
 
 	if (status) {
 		dbg("%s - status = %d", __func__, status);
@@ -216,7 +210,6 @@ static int iuu_reset(struct usb_serial_port *port, u8 wt)
 	struct iuu_private *priv = usb_get_serial_port_data(port);
 	int result;
 	char *buf_ptr = port->write_urb->transfer_buffer;
-	dbg("%s - enter", __func__);
 
 	/* Prepare the reset sequence */
 
@@ -249,8 +242,6 @@ static void iuu_update_status_callback(struct urb *urb)
 	struct iuu_private *priv = usb_get_serial_port_data(port);
 	u8 *st;
 	int status = urb->status;
-
-	dbg("%s - enter", __func__);
 
 	if (status) {
 		dbg("%s - status = %d", __func__, status);
@@ -294,8 +285,6 @@ static int iuu_status(struct usb_serial_port *port)
 {
 	int result;
 
-	dbg("%s - enter", __func__);
-
 	memset(port->write_urb->transfer_buffer, IUU_GET_STATE_REGISTER, 1);
 	usb_fill_bulk_urb(port->write_urb, port->serial->dev,
 			  usb_sndbulkpipe(port->serial->dev,
@@ -312,8 +301,6 @@ static int bulk_immediate(struct usb_serial_port *port, u8 *buf, u8 count)
 	int status;
 	struct usb_serial *serial = port->serial;
 	int actual = 0;
-
-	dbg("%s - enter", __func__);
 
 	/* send the data out the bulk port */
 
@@ -336,10 +323,7 @@ static int read_immediate(struct usb_serial_port *port, u8 *buf, u8 count)
 	struct usb_serial *serial = port->serial;
 	int actual = 0;
 
-	dbg("%s - enter", __func__);
-
 	/* send the data out the bulk port */
-
 	status =
 	    usb_bulk_msg(serial->dev,
 			 usb_rcvbulkpipe(serial->dev,
@@ -361,8 +345,6 @@ static int iuu_led(struct usb_serial_port *port, unsigned int R,
 	buf = kmalloc(8, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
-
-	dbg("%s - enter", __func__);
 
 	buf[0] = IUU_SET_LED;
 	buf[1] = R & 0xFF;
@@ -454,8 +436,6 @@ static int iuu_clk(struct usb_serial_port *port, int dwFrq)
 	unsigned int P = 0;
 	unsigned int P2 = 0;
 	int frq = (int)dwFrq;
-
-	dbg("%s - enter", __func__);
 
 	if (frq == 0) {
 		priv->buf[Count++] = IUU_UART_WRITE_I2C;
@@ -585,8 +565,6 @@ static int iuu_uart_flush(struct usb_serial_port *port)
 	u8 rxcmd = IUU_UART_RX;
 	struct iuu_private *priv = usb_get_serial_port_data(port);
 
-	dbg("%s - enter", __func__);
-
 	if (iuu_led(port, 0xF000, 0, 0, 0xFF) < 0)
 		return -EIO;
 
@@ -625,8 +603,6 @@ static void read_buf_callback(struct urb *urb)
 	struct tty_struct *tty;
 	int status = urb->status;
 
-	dbg("%s - status = %d", __func__, status);
-
 	if (status) {
 		if (status == -EPROTO) {
 			/* reschedule needed */
@@ -654,7 +630,6 @@ static int iuu_bulk_write(struct usb_serial_port *port)
 	int i;
 	int buf_len;
 	char *buf_ptr = port->write_urb->transfer_buffer;
-	dbg("%s - enter", __func__);
 
 	spin_lock_irqsave(&priv->lock, flags);
 	*buf_ptr++ = IUU_UART_ESC;
@@ -686,7 +661,6 @@ static int iuu_bulk_write(struct usb_serial_port *port)
 static int iuu_read_buf(struct usb_serial_port *port, int len)
 {
 	int result;
-	dbg("%s - enter", __func__);
 
 	usb_fill_bulk_urb(port->read_urb, port->serial->dev,
 			  usb_rcvbulkpipe(port->serial->dev,
@@ -707,8 +681,6 @@ static void iuu_uart_read_callback(struct urb *urb)
 	int len = 0;
 	unsigned char *data = urb->transfer_buffer;
 	priv->poll++;
-
-	dbg("%s - enter", __func__);
 
 	if (status) {
 		dbg("%s - status = %d", __func__, status);
@@ -766,7 +738,6 @@ static int iuu_uart_write(struct tty_struct *tty, struct usb_serial_port *port,
 {
 	struct iuu_private *priv = usb_get_serial_port_data(port);
 	unsigned long flags;
-	dbg("%s - enter", __func__);
 
 	if (count > 256)
 		return -ENOMEM;
@@ -787,8 +758,6 @@ static void read_rxcmd_callback(struct urb *urb)
 	int result;
 	int status = urb->status;
 
-	dbg("%s - status = %d", __func__, status);
-
 	if (status) {
 		/* error stop all */
 		return;
@@ -801,7 +770,6 @@ static void read_rxcmd_callback(struct urb *urb)
 			  iuu_uart_read_callback, port);
 	result = usb_submit_urb(port->read_urb, GFP_ATOMIC);
 	dbg("%s - submit result = %d", __func__, result);
-	return;
 }
 
 static int iuu_uart_on(struct usb_serial_port *port)
@@ -851,20 +819,24 @@ static int iuu_uart_off(struct usb_serial_port *port)
 	return status;
 }
 
-static int iuu_uart_baud(struct usb_serial_port *port, u32 baud,
+static int iuu_uart_baud(struct usb_serial_port *port, u32 baud_base,
 			 u32 *actual, u8 parity)
 {
 	int status;
+	u32 baud;
 	u8 *dataout;
 	u8 DataCount = 0;
 	u8 T1Frekvens = 0;
 	u8 T1reload = 0;
 	unsigned int T1FrekvensHZ = 0;
 
+	dbg("%s - enter baud_base=%d", __func__, baud_base);
 	dataout = kmalloc(sizeof(u8) * 5, GFP_KERNEL);
 
 	if (!dataout)
 		return -ENOMEM;
+	/*baud = (((priv->clk / 35) * baud_base) / 100000); */
+	baud = baud_base;
 
 	if (baud < 1200 || baud > 230400) {
 		kfree(dataout);
@@ -948,14 +920,19 @@ static void iuu_set_termios(struct tty_struct *tty,
 		struct usb_serial_port *port, struct ktermios *old_termios)
 {
 	const u32 supported_mask = CMSPAR|PARENB|PARODD;
-
+	struct iuu_private *priv = usb_get_serial_port_data(port);
 	unsigned int cflag = tty->termios->c_cflag;
 	int status;
 	u32 actual;
 	u32 parity;
 	int csize = CS7;
-	int baud = 9600;	/* Fixed for the moment */
+	int baud;
 	u32 newval = cflag & supported_mask;
+
+	/* Just use the ospeed. ispeed should be the same. */
+	baud = tty->termios->c_ospeed;
+
+	dbg("%s - enter c_ospeed or baud=%d", __func__, baud);
 
 	/* compute the parity parameter */
 	parity = 0;
@@ -976,15 +953,15 @@ static void iuu_set_termios(struct tty_struct *tty,
 
 	/* set it */
 	status = iuu_uart_baud(port,
-			(clockmode == 2) ? 16457 : 9600 * boost / 100,
+			baud * priv->boost / 100,
 			&actual, parity);
 
 	/* set the termios value to the real one, so the user now what has
 	 * changed. We support few fields so its easies to copy the old hw
 	 * settings back over and then adjust them
 	 */
- 	if (old_termios)
- 		tty_termios_copy_hw(tty->termios, old_termios);
+	if (old_termios)
+		tty_termios_copy_hw(tty->termios, old_termios);
 	if (status != 0)	/* Set failed - return old bits */
 		return;
 	/* Re-encode speed, parity and csize */
@@ -1001,8 +978,6 @@ static void iuu_close(struct usb_serial_port *port)
 	serial = port->serial;
 	if (!serial)
 		return;
-
-	dbg("%s - port %d", __func__, port->number);
 
 	iuu_uart_off(port);
 	if (serial->dev) {
@@ -1033,10 +1008,16 @@ static int iuu_open(struct tty_struct *tty, struct usb_serial_port *port)
 	struct usb_serial *serial = port->serial;
 	u8 *buf;
 	int result;
+	int baud;
 	u32 actual;
 	struct iuu_private *priv = usb_get_serial_port_data(port);
 
-	dbg("%s -  port %d", __func__, port->number);
+	baud = tty->termios->c_ospeed;
+	tty->termios->c_ispeed = baud;
+	/* Re-encode speed */
+	tty_encode_baud_rate(tty, baud, baud);
+
+	dbg("%s -  port %d, baud %d", __func__, port->number, baud);
 	usb_clear_halt(serial->dev, port->write_urb->pipe);
 	usb_clear_halt(serial->dev, port->read_urb->pipe);
 
@@ -1071,23 +1052,29 @@ static int iuu_open(struct tty_struct *tty, struct usb_serial_port *port)
 	iuu_uart_on(port);
 	if (boost < 100)
 		boost = 100;
+	priv->boost = boost;
+	priv->baud = baud;
 	switch (clockmode) {
 	case 2:		/*  3.680 Mhz */
+		priv->clk = IUU_CLK_3680000;
 		iuu_clk(port, IUU_CLK_3680000 * boost / 100);
 		result =
-		    iuu_uart_baud(port, 9600 * boost / 100, &actual,
+		    iuu_uart_baud(port, baud * boost / 100, &actual,
 				  IUU_PARITY_EVEN);
 		break;
 	case 3:		/*  6.00 Mhz */
 		iuu_clk(port, IUU_CLK_6000000 * boost / 100);
+		priv->clk = IUU_CLK_6000000;
+		/* Ratio of 6000000 to 3500000 for baud 9600 */
 		result =
 		    iuu_uart_baud(port, 16457 * boost / 100, &actual,
 				  IUU_PARITY_EVEN);
 		break;
 	default:		/*  3.579 Mhz */
 		iuu_clk(port, IUU_CLK_3579000 * boost / 100);
+		priv->clk = IUU_CLK_3579000;
 		result =
-		    iuu_uart_baud(port, 9600 * boost / 100, &actual,
+		    iuu_uart_baud(port, baud * boost / 100, &actual,
 				  IUU_PARITY_EVEN);
 	}
 
@@ -1141,15 +1128,14 @@ static int iuu_open(struct tty_struct *tty, struct usb_serial_port *port)
 			  port->write_urb->transfer_buffer, 1,
 			  read_rxcmd_callback, port);
 	result = usb_submit_urb(port->write_urb, GFP_KERNEL);
-
 	if (result) {
 		dev_err(&port->dev, "%s - failed submitting read urb,"
 			" error %d\n", __func__, result);
 		iuu_close(port);
-		return -EPROTO;
 	} else {
 		dbg("%s - rxcmd OK", __func__);
 	}
+
 	return result;
 }
 
@@ -1162,8 +1148,6 @@ static int iuu_vcc_set(struct usb_serial_port *port, unsigned int vcc)
 	buf = kmalloc(5, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
-
-	dbg("%s - enter", __func__);
 
 	buf[0] = IUU_SET_VCC;
 	buf[1] = vcc & 0xFF;
@@ -1225,15 +1209,11 @@ static DEVICE_ATTR(vcc_mode, S_IRUSR | S_IWUSR, show_vcc_mode,
 
 static int iuu_create_sysfs_attrs(struct usb_serial_port *port)
 {
-	dbg("%s", __func__);
-
 	return device_create_file(&port->dev, &dev_attr_vcc_mode);
 }
 
 static int iuu_remove_sysfs_attrs(struct usb_serial_port *port)
 {
-	dbg("%s", __func__);
-
 	device_remove_file(&port->dev, &dev_attr_vcc_mode);
 	return 0;
 }
@@ -1265,32 +1245,11 @@ static struct usb_serial_driver iuu_device = {
 	.release = iuu_release,
 };
 
-static int __init iuu_init(void)
-{
-	int retval;
-	retval = usb_serial_register(&iuu_device);
-	if (retval)
-		goto failed_usb_serial_register;
-	retval = usb_register(&iuu_driver);
-	if (retval)
-		goto failed_usb_register;
-	printk(KERN_INFO KBUILD_MODNAME ": " DRIVER_VERSION ":"
-	       DRIVER_DESC "\n");
-	return 0;
-failed_usb_register:
-	usb_serial_deregister(&iuu_device);
-failed_usb_serial_register:
-	return retval;
-}
+static struct usb_serial_driver * const serial_drivers[] = {
+	&iuu_device, NULL
+};
 
-static void __exit iuu_exit(void)
-{
-	usb_deregister(&iuu_driver);
-	usb_serial_deregister(&iuu_device);
-}
-
-module_init(iuu_init);
-module_exit(iuu_exit);
+module_usb_serial_driver(serial_drivers, id_table);
 
 MODULE_AUTHOR("Alain Degreffe eczema@ecze.com");
 

@@ -382,7 +382,7 @@ enum global_interrupt_config_register_bits {
 	Global_Int_Enable_Bit = 0x80000000
 };
 
-/* Offset of the GPCT chips from the base-adress of the card */
+/* Offset of the GPCT chips from the base-address of the card */
 /* First chip is at base-address + 0x00, etc. */
 static const unsigned GPCT_OFFSET[2] = { 0x0, 0x800 };
 
@@ -458,7 +458,7 @@ static inline const struct ni_660x_board *board(struct comedi_device *dev)
 
 static int ni_660x_attach(struct comedi_device *dev,
 			  struct comedi_devconfig *it);
-static int ni_660x_detach(struct comedi_device *dev);
+static void ni_660x_detach(struct comedi_device *dev);
 static void init_tio_chip(struct comedi_device *dev, int chipset);
 static void ni_660x_select_pfi_output(struct comedi_device *dev,
 				      unsigned pfi_channel,
@@ -471,7 +471,43 @@ static struct comedi_driver driver_ni_660x = {
 	.detach = ni_660x_detach,
 };
 
-COMEDI_PCI_INITCLEANUP(driver_ni_660x, ni_660x_pci_table);
+static int __devinit driver_ni_660x_pci_probe(struct pci_dev *dev,
+					      const struct pci_device_id *ent)
+{
+	return comedi_pci_auto_config(dev, &driver_ni_660x);
+}
+
+static void __devexit driver_ni_660x_pci_remove(struct pci_dev *dev)
+{
+	comedi_pci_auto_unconfig(dev);
+}
+
+static struct pci_driver driver_ni_660x_pci_driver = {
+	.id_table = ni_660x_pci_table,
+	.probe = &driver_ni_660x_pci_probe,
+	.remove = __devexit_p(&driver_ni_660x_pci_remove)
+};
+
+static int __init driver_ni_660x_init_module(void)
+{
+	int retval;
+
+	retval = comedi_driver_register(&driver_ni_660x);
+	if (retval < 0)
+		return retval;
+
+	driver_ni_660x_pci_driver.name = (char *)driver_ni_660x.driver_name;
+	return pci_register_driver(&driver_ni_660x_pci_driver);
+}
+
+static void __exit driver_ni_660x_cleanup_module(void)
+{
+	pci_unregister_driver(&driver_ni_660x_pci_driver);
+	comedi_driver_unregister(&driver_ni_660x);
+}
+
+module_init(driver_ni_660x_init_module);
+module_exit(driver_ni_660x_cleanup_module);
 
 static int ni_660x_find_device(struct comedi_device *dev, int bus, int slot);
 static int ni_660x_set_pfi_routing(struct comedi_device *dev, unsigned chan,
@@ -725,7 +761,7 @@ static inline void ni_660x_write_register(struct comedi_device *dev,
 					  unsigned chip_index, unsigned bits,
 					  enum NI_660x_Register reg)
 {
-	void *const write_address =
+	void __iomem *write_address =
 	    private(dev)->mite->daq_io_addr + GPCT_OFFSET[chip_index] +
 	    registerData[reg].offset;
 
@@ -748,7 +784,7 @@ static inline unsigned ni_660x_read_register(struct comedi_device *dev,
 					     unsigned chip_index,
 					     enum NI_660x_Register reg)
 {
-	void *const read_address =
+	void __iomem *read_address =
 	    private(dev)->mite->daq_io_addr + GPCT_OFFSET[chip_index] +
 	    registerData[reg].offset;
 
@@ -1057,10 +1093,9 @@ static int ni_660x_attach(struct comedi_device *dev,
 
 	printk(KERN_INFO " %s ", dev->board_name);
 
-	dev->n_subdevices = 2 + NI_660X_MAX_NUM_COUNTERS;
-
-	if (alloc_subdevices(dev, dev->n_subdevices) < 0)
-		return -ENOMEM;
+	ret = comedi_alloc_subdevices(dev, 2 + NI_660X_MAX_NUM_COUNTERS);
+	if (ret)
+		return ret;
 
 	s = dev->subdevices + 0;
 	/* Old GENERAL-PURPOSE COUNTER/TIME (GPCT) subdevice, no longer used */
@@ -1152,14 +1187,10 @@ static int ni_660x_attach(struct comedi_device *dev,
 	return 0;
 }
 
-static int ni_660x_detach(struct comedi_device *dev)
+static void ni_660x_detach(struct comedi_device *dev)
 {
-	printk(KERN_INFO "comedi%d: ni_660x: remove\n", dev->minor);
-
-	/* Free irq */
 	if (dev->irq)
 		free_irq(dev->irq, dev);
-
 	if (dev->private) {
 		if (private(dev)->counter_dev)
 			ni_gpct_device_destroy(private(dev)->counter_dev);
@@ -1168,7 +1199,6 @@ static int ni_660x_detach(struct comedi_device *dev)
 			mite_unsetup(private(dev)->mite);
 		}
 	}
-	return 0;
 }
 
 static int
@@ -1255,7 +1285,7 @@ static int ni_660x_dio_insn_bits(struct comedi_device *dev,
 	data[1] =
 	    (ni_660x_read_register(dev, 0,
 				   DIO32Input) >> base_bitfield_channel);
-	return 2;
+	return insn->n;
 }
 
 static void ni_660x_select_pfi_output(struct comedi_device *dev,
@@ -1382,6 +1412,10 @@ static int ni_660x_dio_insn_config(struct comedi_device *dev,
 	default:
 		return -EINVAL;
 		break;
-	};
+	}
 	return 0;
 }
+
+MODULE_AUTHOR("Comedi http://www.comedi.org");
+MODULE_DESCRIPTION("Comedi low-level driver");
+MODULE_LICENSE("GPL");

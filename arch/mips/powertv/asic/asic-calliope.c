@@ -28,7 +28,7 @@
 
 #define CALLIOPE_ADDR(x)	(CALLIOPE_IO_BASE + (x))
 
-const struct register_map calliope_register_map __initdata = {
+const struct register_map calliope_register_map __initconst = {
 	.eic_slow0_strt_add = {.phys = CALLIOPE_ADDR(0x800000)},
 	.eic_cfg_bits = {.phys = CALLIOPE_ADDR(0x800038)},
 	.eic_ready_status = {.phys = CALLIOPE_ADDR(0x80004c)},
@@ -77,7 +77,7 @@ const struct register_map calliope_register_map __initdata = {
 	.int_docsis_en = {.phys = CALLIOPE_ADDR(0xA028F4)},
 
 	.mips_pll_setup = {.phys = CALLIOPE_ADDR(0x980000)},
-	.usb_fs = {.phys = CALLIOPE_ADDR(0x980030)},
+	.fs432x4b4_usb_ctl = {.phys = CALLIOPE_ADDR(0x980030)},
 	.test_bus = {.phys = CALLIOPE_ADDR(0x9800CC)},
 	.crt_spare = {.phys = CALLIOPE_ADDR(0x9800d4)},
 	.usb2_ohci_int_mask = {.phys = CALLIOPE_ADDR(0x9A000c)},

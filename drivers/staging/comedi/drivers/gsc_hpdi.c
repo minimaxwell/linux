@@ -49,12 +49,9 @@ support could be added to this driver.
 #include "../comedidev.h"
 #include <linux/delay.h>
 
-#include "comedi_pci.h"
 #include "plx9080.h"
 #include "comedi_fc.h"
 
-static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it);
-static int hpdi_detach(struct comedi_device *dev);
 static void abort_dma(struct comedi_device *dev, unsigned int channel);
 static int hpdi_cmd(struct comedi_device *dev, struct comedi_subdevice *s);
 static int hpdi_cmd_test(struct comedi_device *dev, struct comedi_subdevice *s,
@@ -287,15 +284,6 @@ static const struct hpdi_board hpdi_boards[] = {
 #endif
 };
 
-static DEFINE_PCI_DEVICE_TABLE(hpdi_pci_table) = {
-	{
-	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9080, PCI_VENDOR_ID_PLX,
-		    0x2400, 0, 0, 0}, {
-	0}
-};
-
-MODULE_DEVICE_TABLE(pci, hpdi_pci_table);
-
 static inline struct hpdi_board *board(const struct comedi_device *dev)
 {
 	return (struct hpdi_board *)dev->board_ptr;
@@ -308,20 +296,28 @@ struct hpdi_private {
 	resource_size_t plx9080_phys_iobase;
 	resource_size_t hpdi_phys_iobase;
 	/*  base addresses (ioremapped) */
-	void *plx9080_iobase;
-	void *hpdi_iobase;
+	void __iomem *plx9080_iobase;
+	void __iomem *hpdi_iobase;
 	uint32_t *dio_buffer[NUM_DMA_BUFFERS];	/*  dma buffers */
-	dma_addr_t dio_buffer_phys_addr[NUM_DMA_BUFFERS];	/*  physical addresses of dma buffers */
-	struct plx_dma_desc *dma_desc;	/*  array of dma descriptors read by plx9080, allocated to get proper alignment */
-	dma_addr_t dma_desc_phys_addr;	/*  physical address of dma descriptor array */
+	/* physical addresses of dma buffers */
+	dma_addr_t dio_buffer_phys_addr[NUM_DMA_BUFFERS];
+	/* array of dma descriptors read by plx9080, allocated to get proper
+	 * alignment */
+	struct plx_dma_desc *dma_desc;
+	/* physical address of dma descriptor array */
+	dma_addr_t dma_desc_phys_addr;
 	unsigned int num_dma_descriptors;
-	uint32_t *desc_dio_buffer[NUM_DMA_DESCRIPTORS];	/*  pointer to start of buffers indexed by descriptor */
-	volatile unsigned int dma_desc_index;	/*  index of the dma descriptor that is currently being used */
+	/* pointer to start of buffers indexed by descriptor */
+	uint32_t *desc_dio_buffer[NUM_DMA_DESCRIPTORS];
+	/* index of the dma descriptor that is currently being used */
+	volatile unsigned int dma_desc_index;
 	unsigned int tx_fifo_size;
 	unsigned int rx_fifo_size;
 	volatile unsigned long dio_count;
-	volatile uint32_t bits[24];	/*  software copies of values written to hpdi registers */
-	volatile unsigned int block_size;	/*  number of bytes at which to generate COMEDI_CB_BLOCK events */
+	/* software copies of values written to hpdi registers */
+	volatile uint32_t bits[24];
+	/* number of bytes at which to generate COMEDI_CB_BLOCK events */
+	volatile unsigned int block_size;
 	unsigned dio_config_output:1;
 };
 
@@ -329,15 +325,6 @@ static inline struct hpdi_private *priv(struct comedi_device *dev)
 {
 	return dev->private;
 }
-
-static struct comedi_driver driver_hpdi = {
-	.driver_name = "gsc_hpdi",
-	.module = THIS_MODULE,
-	.attach = hpdi_attach,
-	.detach = hpdi_detach,
-};
-
-COMEDI_PCI_INITCLEANUP(driver_hpdi, hpdi_pci_table);
 
 static int dio_config_insn(struct comedi_device *dev,
 			   struct comedi_subdevice *s, struct comedi_insn *insn,
@@ -376,7 +363,7 @@ static void disable_plx_interrupts(struct comedi_device *dev)
 static void init_plx9080(struct comedi_device *dev)
 {
 	uint32_t bits;
-	void *plx_iobase = priv(dev)->plx9080_iobase;
+	void __iomem *plx_iobase = priv(dev)->plx9080_iobase;
 
 	/*  plx9080 dump */
 	DEBUG_PRINT(" plx interrupt status 0x%x\n",
@@ -443,9 +430,11 @@ static void init_plx9080(struct comedi_device *dev)
 static int setup_subdevices(struct comedi_device *dev)
 {
 	struct comedi_subdevice *s;
+	int ret;
 
-	if (alloc_subdevices(dev, 1) < 0)
-		return -ENOMEM;
+	ret = comedi_alloc_subdevices(dev, 1);
+	if (ret)
+		return ret;
 
 	s = dev->subdevices + 0;
 	/* analog input subdevice */
@@ -570,7 +559,8 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		return -ENOMEM;
 
 	pcidev = NULL;
-	for (i = 0; i < ARRAY_SIZE(hpdi_boards) && dev->board_ptr == NULL; i++) {
+	for (i = 0; i < ARRAY_SIZE(hpdi_boards) &&
+		    dev->board_ptr == NULL; i++) {
 		do {
 			pcidev = pci_get_subsys(PCI_VENDOR_ID_PLX,
 						hpdi_boards[i].device_id,
@@ -600,7 +590,7 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	       "gsc_hpdi: found %s on bus %i, slot %i\n", board(dev)->name,
 	       pcidev->bus->number, PCI_SLOT(pcidev->devfn));
 
-	if (comedi_pci_enable(pcidev, driver_hpdi.driver_name)) {
+	if (comedi_pci_enable(pcidev, dev->driver->driver_name)) {
 		printk(KERN_WARNING
 		       " failed enable PCI device and request regions\n");
 		return -EIO;
@@ -618,7 +608,7 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	/*  remap, won't work with 2.0 kernels but who cares */
 	priv(dev)->plx9080_iobase = ioremap(priv(dev)->plx9080_phys_iobase,
 					    pci_resource_len(pcidev,
-							     PLX9080_BADDRINDEX));
+					    PLX9080_BADDRINDEX));
 	priv(dev)->hpdi_iobase =
 	    ioremap(priv(dev)->hpdi_phys_iobase,
 		    pci_resource_len(pcidev, HPDI_BADDRINDEX));
@@ -634,7 +624,7 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 
 	/*  get irq */
 	if (request_irq(pcidev->irq, handle_interrupt, IRQF_SHARED,
-			driver_hpdi.driver_name, dev)) {
+			dev->driver->driver_name, dev)) {
 		printk(KERN_WARNING
 		       " unable to allocate irq %u\n", pcidev->irq);
 		return -EINVAL;
@@ -643,7 +633,7 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 
 	printk(KERN_WARNING " irq %u\n", dev->irq);
 
-	/*  alocate pci dma buffers */
+	/*  allocate pci dma buffers */
 	for (i = 0; i < NUM_DMA_BUFFERS; i++) {
 		priv(dev)->dio_buffer[i] =
 		    pci_alloc_consistent(priv(dev)->hw_dev, DMA_BUFFER_SIZE,
@@ -675,21 +665,19 @@ static int hpdi_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	return init_hpdi(dev);
 }
 
-static int hpdi_detach(struct comedi_device *dev)
+static void hpdi_detach(struct comedi_device *dev)
 {
 	unsigned int i;
-
-	printk(KERN_WARNING "comedi%d: gsc_hpdi: remove\n", dev->minor);
 
 	if (dev->irq)
 		free_irq(dev->irq, dev);
 	if ((priv(dev)) && (priv(dev)->hw_dev)) {
 		if (priv(dev)->plx9080_iobase) {
 			disable_plx_interrupts(dev);
-			iounmap((void *)priv(dev)->plx9080_iobase);
+			iounmap(priv(dev)->plx9080_iobase);
 		}
 		if (priv(dev)->hpdi_iobase)
-			iounmap((void *)priv(dev)->hpdi_iobase);
+			iounmap(priv(dev)->hpdi_iobase);
 		/*  free pci dma buffers */
 		for (i = 0; i < NUM_DMA_BUFFERS; i++) {
 			if (priv(dev)->dio_buffer[i])
@@ -713,7 +701,6 @@ static int hpdi_detach(struct comedi_device *dev)
 			comedi_pci_disable(priv(dev)->hw_dev);
 		pci_dev_put(priv(dev)->hw_dev);
 	}
-	return 0;
 }
 
 static int dio_config_block_size(struct comedi_device *dev, unsigned int *data)
@@ -769,7 +756,8 @@ static int di_cmd_test(struct comedi_device *dev, struct comedi_subdevice *s,
 	if (err)
 		return 1;
 
-	/* step 2: make sure trigger sources are unique and mutually compatible */
+	/* step 2: make sure trigger sources are unique and mutually
+	 * compatible */
 
 	/*  uniqueness check */
 	if (cmd->stop_src != TRIG_COUNT && cmd->stop_src != TRIG_NONE)
@@ -916,7 +904,7 @@ static void drain_dma_buffers(struct comedi_device *dev, unsigned int channel)
 	uint32_t next_transfer_addr;
 	int j;
 	int num_samples = 0;
-	void *pci_addr_reg;
+	void __iomem *pci_addr_reg;
 
 	if (channel)
 		pci_addr_reg =
@@ -985,7 +973,7 @@ static irqreturn_t handle_interrupt(int irq, void *d)
 		writel(hpdi_intr_status,
 		       priv(dev)->hpdi_iobase + INTERRUPT_STATUS_REG);
 	}
-	/*  spin lock makes sure noone else changes plx dma control reg */
+	/*  spin lock makes sure no one else changes plx dma control reg */
 	spin_lock_irqsave(&dev->spinlock, flags);
 	dma0_status = readb(priv(dev)->plx9080_iobase + PLX_DMA0_CS_REG);
 	if (plx_status & ICS_DMA0_A) {	/*  dma chan 0 interrupt */
@@ -999,7 +987,7 @@ static irqreturn_t handle_interrupt(int irq, void *d)
 	}
 	spin_unlock_irqrestore(&dev->spinlock, flags);
 
-	/*  spin lock makes sure noone else changes plx dma control reg */
+	/*  spin lock makes sure no one else changes plx dma control reg */
 	spin_lock_irqsave(&dev->spinlock, flags);
 	dma1_status = readb(priv(dev)->plx9080_iobase + PLX_DMA1_CS_REG);
 	if (plx_status & ICS_DMA1_A) {	/*  XXX *//*  dma chan 1 interrupt */
@@ -1066,3 +1054,40 @@ static int hpdi_cancel(struct comedi_device *dev, struct comedi_subdevice *s)
 
 	return 0;
 }
+
+static struct comedi_driver gsc_hpdi_driver = {
+	.driver_name	= "gsc_hpdi",
+	.module		= THIS_MODULE,
+	.attach		= hpdi_attach,
+	.detach		= hpdi_detach,
+};
+
+static int __devinit gsc_hpdi_pci_probe(struct pci_dev *dev,
+					const struct pci_device_id *ent)
+{
+	return comedi_pci_auto_config(dev, &gsc_hpdi_driver);
+}
+
+static void __devexit gsc_hpdi_pci_remove(struct pci_dev *dev)
+{
+	comedi_pci_auto_unconfig(dev);
+}
+
+static DEFINE_PCI_DEVICE_TABLE(gsc_hpdi_pci_table) = {
+	{ PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9080, PCI_VENDOR_ID_PLX,
+		    0x2400, 0, 0, 0},
+	{ 0 }
+};
+MODULE_DEVICE_TABLE(pci, gsc_hpdi_pci_table);
+
+static struct pci_driver gsc_hpdi_pci_driver = {
+	.name		= "gsc_hpdi",
+	.id_table	= gsc_hpdi_pci_table,
+	.probe		= gsc_hpdi_pci_probe,
+	.remove		= __devexit_p(gsc_hpdi_pci_remove)
+};
+module_comedi_pci_driver(gsc_hpdi_driver, gsc_hpdi_pci_driver);
+
+MODULE_AUTHOR("Comedi http://www.comedi.org");
+MODULE_DESCRIPTION("Comedi low-level driver");
+MODULE_LICENSE("GPL");

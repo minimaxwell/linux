@@ -34,7 +34,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <linux/leds.h>
@@ -301,8 +301,10 @@ static struct led_classdev cpld_led_pwr = {
 	.blink_set = cpld_cmpc_led_blink,
 };
 
-static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id cpld_cmpc_match[];
+static int __devinit cpld_cmpc_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct cpld_cmpc_data *data;
@@ -312,6 +314,10 @@ static int __devinit cpld_cmpc_probe(struct of_device *ofdev, const struct of_de
 	struct device *infos = NULL;
 	const char *model = "";
 
+	match = of_match_device(cpld_cmpc_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
@@ -384,7 +390,7 @@ err:
 	return ret;
 }
 
-static int __devexit cpld_cmpc_remove(struct of_device *ofdev)
+static int __devexit cpld_cmpc_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct cpld_cmpc_data *data = dev_get_drvdata(dev);
@@ -418,7 +424,7 @@ static const struct of_device_id cpld_cmpc_match[] = {
 };
 MODULE_DEVICE_TABLE(of, cpld_cmpc_match);
 
-static struct of_platform_driver cpld_cmpc_driver = {
+static struct platform_driver cpld_cmpc_driver = {
 	.probe		= cpld_cmpc_probe,
 	.remove		= __devexit_p(cpld_cmpc_remove),
 	.driver		= {
@@ -430,7 +436,7 @@ static struct of_platform_driver cpld_cmpc_driver = {
 
 static int __init cpld_cmpc_init(void)
 {
-	return of_register_platform_driver(&cpld_cmpc_driver);
+	return platform_driver_register(&cpld_cmpc_driver);
 }
 subsys_initcall(cpld_cmpc_init);
 

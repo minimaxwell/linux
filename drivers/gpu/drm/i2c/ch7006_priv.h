@@ -77,7 +77,7 @@ struct ch7006_state {
 };
 
 struct ch7006_priv {
-	struct ch7006_encoder_params *params;
+	struct ch7006_encoder_params params;
 	struct ch7006_mode *mode;
 
 	struct ch7006_state state;
@@ -95,6 +95,7 @@ struct ch7006_priv {
 	int flicker;
 	int scale;
 
+	int chip_version;
 	int last_dpms;
 };
 
@@ -110,7 +111,7 @@ extern struct ch7006_tv_norm_info ch7006_tv_norms[];
 extern struct ch7006_mode ch7006_modes[];
 
 struct ch7006_mode *ch7006_lookup_mode(struct drm_encoder *encoder,
-				       struct drm_display_mode *drm_mode);
+				       const struct drm_display_mode *drm_mode);
 
 void ch7006_setup_levels(struct drm_encoder *encoder);
 void ch7006_setup_subcarrier(struct drm_encoder *encoder);

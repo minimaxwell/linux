@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2010, Intel Corp.
+ * Copyright (C) 2000 - 2012, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,8 +53,8 @@ ACPI_MODULE_NAME("nsnames")
  *
  * FUNCTION:    acpi_ns_build_external_path
  *
- * PARAMETERS:  Node            - NS node whose pathname is needed
- *              Size            - Size of the pathname
+ * PARAMETERS:  node            - NS node whose pathname is needed
+ *              size            - Size of the pathname
  *              *name_buffer    - Where to return the pathname
  *
  * RETURN:      Status
@@ -93,7 +93,7 @@ acpi_ns_build_external_path(struct acpi_namespace_node *node,
 		/* Put the name into the buffer */
 
 		ACPI_MOVE_32_TO_32((name_buffer + index), &parent_node->name);
-		parent_node = acpi_ns_get_parent_node(parent_node);
+		parent_node = parent_node->parent;
 
 		/* Prefix name with the path separator */
 
@@ -120,7 +120,7 @@ acpi_ns_build_external_path(struct acpi_namespace_node *node,
  *
  * FUNCTION:    acpi_ns_get_external_pathname
  *
- * PARAMETERS:  Node            - Namespace node whose pathname is needed
+ * PARAMETERS:  node            - Namespace node whose pathname is needed
  *
  * RETURN:      Pointer to storage containing the fully qualified name of
  *              the node, In external format (name segments separated by path
@@ -168,7 +168,7 @@ char *acpi_ns_get_external_pathname(struct acpi_namespace_node *node)
  *
  * FUNCTION:    acpi_ns_get_pathname_length
  *
- * PARAMETERS:  Node        - Namespace node
+ * PARAMETERS:  node        - Namespace node
  *
  * RETURN:      Length of path, including prefix
  *
@@ -198,7 +198,7 @@ acpi_size acpi_ns_get_pathname_length(struct acpi_namespace_node *node)
 			return 0;
 		}
 		size += ACPI_PATH_SEGMENT_LENGTH;
-		next_node = acpi_ns_get_parent_node(next_node);
+		next_node = next_node->parent;
 	}
 
 	if (!size) {
@@ -214,7 +214,7 @@ acpi_size acpi_ns_get_pathname_length(struct acpi_namespace_node *node)
  *
  * PARAMETERS:  target_handle           - Handle of named object whose name is
  *                                        to be found
- *              Buffer                  - Where the pathname is returned
+ *              buffer                  - Where the pathname is returned
  *
  * RETURN:      Status, Buffer is filled with pathname if status is AE_OK
  *

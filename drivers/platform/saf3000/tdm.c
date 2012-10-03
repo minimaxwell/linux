@@ -35,7 +35,7 @@
 #include <linux/of.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
-#include <linux/of_spi.h>
+#include <linux/spi/spi.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
 #include <linux/leds.h>
@@ -641,11 +641,11 @@ static ssize_t pcm_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	return(nb_byte);
 }
 
-static int pcm_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
+static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
 	struct tdm_data *data = NULL;
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = iminor(file->f_path.dentry->d_inode);
 	
 	if (minor == PCM_CODEC_MINOR)
 		data = data_codec;
@@ -860,7 +860,7 @@ dev_info(data->dev, "Desactivation descripteurs (flag %d)\n", data->flags);
 
 static const struct file_operations pcm_delay_fops = {
 	.owner		= THIS_MODULE,
-	.ioctl		= pcm_ioctl,
+	.unlocked_ioctl		= pcm_ioctl,
 	.open		= pcm_open,
 	.release	= pcm_release,
 };
@@ -872,7 +872,7 @@ static const struct file_operations pcm_fops = {
 	.aio_write	= pcm_aio_write,
 	.read		= pcm_read,
 	.aio_read	= pcm_aio_read,
-	.ioctl		= pcm_ioctl,
+	.unlocked_ioctl		= pcm_ioctl,
 	.open		= pcm_open,
 	.release	= pcm_release,
 };
@@ -901,8 +901,10 @@ static struct miscdevice pcm_retard_miscdev = {
 	.fops	= &pcm_delay_fops,
 };
 
-static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_id *match)
+static const struct of_device_id tdm_match[];
+static int __devinit tdm_probe(struct platform_device *ofdev)
 {
+	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = dev->of_node;
 	struct class *class;
@@ -919,6 +921,10 @@ static int __devinit tdm_probe(struct of_device *ofdev, const struct of_device_i
 	const __be32 *info_ts = NULL;
 	struct miscdevice *device = NULL;
 
+	match = of_match_device(tdm_match, &ofdev->dev);
+	if (!match)
+		return -EINVAL;
+	
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
@@ -1193,7 +1199,7 @@ err:
 	return ret;
 }
 
-static int __devexit tdm_remove(struct of_device *ofdev)
+static int __devexit tdm_remove(struct platform_device *ofdev)
 {
 	struct device *dev = &ofdev->dev;
 	struct tdm_data *data = dev_get_drvdata(dev);
@@ -1231,7 +1237,7 @@ static const struct of_device_id tdm_match[] = {
 };
 MODULE_DEVICE_TABLE(of, tdm_match);
 
-static struct of_platform_driver tdm_driver = {
+static struct platform_driver tdm_driver = {
 	.probe		= tdm_probe,
 	.remove		= __devexit_p(tdm_remove),
 	.driver		= {
@@ -1243,7 +1249,7 @@ static struct of_platform_driver tdm_driver = {
 
 static int __init tdm_init(void)
 {
-	return of_register_platform_driver(&tdm_driver);
+	return platform_driver_register(&tdm_driver);
 }
 module_init(tdm_init);
 

@@ -45,6 +45,7 @@ struct l2tp_stats {
 	u64			rx_oos_packets;
 	u64			rx_errors;
 	u64			rx_cookie_discards;
+	struct u64_stats_sync	syncp;
 };
 
 struct l2tp_tunnel;
@@ -54,15 +55,15 @@ struct l2tp_tunnel;
  */
 struct l2tp_session_cfg {
 	enum l2tp_pwtype	pw_type;
-	unsigned		data_seq:2;	/* data sequencing level
+	unsigned int		data_seq:2;	/* data sequencing level
 						 * 0 => none, 1 => IP only,
 						 * 2 => all
 						 */
-	unsigned		recv_seq:1;	/* expect receive packets with
+	unsigned int		recv_seq:1;	/* expect receive packets with
 						 * sequence numbers? */
-	unsigned		send_seq:1;	/* send packets with sequence
+	unsigned int		send_seq:1;	/* send packets with sequence
 						 * numbers? */
-	unsigned		lns_mode:1;	/* behave as LNS? LAC enables
+	unsigned int		lns_mode:1;	/* behave as LNS? LAC enables
 						 * sequence numbers under
 						 * control of LNS. */
 	int			debug;		/* bitmask of debug message
@@ -107,21 +108,22 @@ struct l2tp_session {
 
 	char			name[32];	/* for logging */
 	char			ifname[IFNAMSIZ];
-	unsigned		data_seq:2;	/* data sequencing level
+	unsigned int		data_seq:2;	/* data sequencing level
 						 * 0 => none, 1 => IP only,
 						 * 2 => all
 						 */
-	unsigned		recv_seq:1;	/* expect receive packets with
+	unsigned int		recv_seq:1;	/* expect receive packets with
 						 * sequence numbers? */
-	unsigned		send_seq:1;	/* send packets with sequence
+	unsigned int		send_seq:1;	/* send packets with sequence
 						 * numbers? */
-	unsigned		lns_mode:1;	/* behave as LNS? LAC enables
+	unsigned int		lns_mode:1;	/* behave as LNS? LAC enables
 						 * sequence numbers under
 						 * control of LNS. */
 	int			debug;		/* bitmask of debug message
 						 * categories */
 	int			reorder_timeout; /* configured reorder timeout
 						  * (in jiffies) */
+	int			reorder_skip;	/* set if skip to next nr */
 	int			mtu;
 	int			mru;
 	enum l2tp_pwtype	pwtype;
@@ -150,6 +152,10 @@ struct l2tp_tunnel_cfg {
 	/* Used only for kernel-created sockets */
 	struct in_addr		local_ip;
 	struct in_addr		peer_ip;
+#if IS_ENABLED(CONFIG_IPV6)
+	struct in6_addr		*local_ip6;
+	struct in6_addr		*peer_ip6;
+#endif
 	u16			local_udp_port;
 	u16			peer_udp_port;
 	unsigned int		use_udp_checksums:1;
@@ -157,6 +163,7 @@ struct l2tp_tunnel_cfg {
 
 struct l2tp_tunnel {
 	int			magic;		/* Should be L2TP_TUNNEL_MAGIC */
+	struct rcu_head rcu;
 	rwlock_t		hlist_lock;	/* protect session_hlist */
 	struct hlist_head	session_hlist[L2TP_HASH_SIZE];
 						/* hashed list of sessions,
@@ -231,47 +238,14 @@ extern int l2tp_tunnel_create(struct net *net, int fd, int version, u32 tunnel_i
 extern int l2tp_tunnel_delete(struct l2tp_tunnel *tunnel);
 extern struct l2tp_session *l2tp_session_create(int priv_size, struct l2tp_tunnel *tunnel, u32 session_id, u32 peer_session_id, struct l2tp_session_cfg *cfg);
 extern int l2tp_session_delete(struct l2tp_session *session);
-extern void l2tp_tunnel_free(struct l2tp_tunnel *tunnel);
 extern void l2tp_session_free(struct l2tp_session *session);
 extern void l2tp_recv_common(struct l2tp_session *session, struct sk_buff *skb, unsigned char *ptr, unsigned char *optr, u16 hdrflags, int length, int (*payload_hook)(struct sk_buff *skb));
-extern int l2tp_udp_recv_core(struct l2tp_tunnel *tunnel, struct sk_buff *skb, int (*payload_hook)(struct sk_buff *skb));
 extern int l2tp_udp_encap_recv(struct sock *sk, struct sk_buff *skb);
 
-extern int l2tp_xmit_core(struct l2tp_session *session, struct sk_buff *skb, size_t data_len);
 extern int l2tp_xmit_skb(struct l2tp_session *session, struct sk_buff *skb, int hdr_len);
-extern void l2tp_tunnel_destruct(struct sock *sk);
-extern void l2tp_tunnel_closeall(struct l2tp_tunnel *tunnel);
-extern void l2tp_session_set_header_len(struct l2tp_session *session, int version);
 
 extern int l2tp_nl_register_ops(enum l2tp_pwtype pw_type, const struct l2tp_nl_cmd_ops *ops);
 extern void l2tp_nl_unregister_ops(enum l2tp_pwtype pw_type);
-
-/* Tunnel reference counts. Incremented per session that is added to
- * the tunnel.
- */
-static inline void l2tp_tunnel_inc_refcount_1(struct l2tp_tunnel *tunnel)
-{
-	atomic_inc(&tunnel->ref_count);
-}
-
-static inline void l2tp_tunnel_dec_refcount_1(struct l2tp_tunnel *tunnel)
-{
-	if (atomic_dec_and_test(&tunnel->ref_count))
-		l2tp_tunnel_free(tunnel);
-}
-#ifdef L2TP_REFCNT_DEBUG
-#define l2tp_tunnel_inc_refcount(_t) do { \
-		printk(KERN_DEBUG "l2tp_tunnel_inc_refcount: %s:%d %s: cnt=%d\n", __func__, __LINE__, (_t)->name, atomic_read(&_t->ref_count)); \
-		l2tp_tunnel_inc_refcount_1(_t);				\
-	} while (0)
-#define l2tp_tunnel_dec_refcount(_t) do { \
-		printk(KERN_DEBUG "l2tp_tunnel_dec_refcount: %s:%d %s: cnt=%d\n", __func__, __LINE__, (_t)->name, atomic_read(&_t->ref_count)); \
-		l2tp_tunnel_dec_refcount_1(_t);				\
-	} while (0)
-#else
-#define l2tp_tunnel_inc_refcount(t) l2tp_tunnel_inc_refcount_1(t)
-#define l2tp_tunnel_dec_refcount(t) l2tp_tunnel_dec_refcount_1(t)
-#endif
 
 /* Session reference counts. Incremented when code obtains a reference
  * to a session.
@@ -288,17 +262,36 @@ static inline void l2tp_session_dec_refcount_1(struct l2tp_session *session)
 }
 
 #ifdef L2TP_REFCNT_DEBUG
-#define l2tp_session_inc_refcount(_s) do { \
-		printk(KERN_DEBUG "l2tp_session_inc_refcount: %s:%d %s: cnt=%d\n", __func__, __LINE__, (_s)->name, atomic_read(&_s->ref_count)); \
-		l2tp_session_inc_refcount_1(_s);				\
-	} while (0)
-#define l2tp_session_dec_refcount(_s) do { \
-		printk(KERN_DEBUG "l2tp_session_dec_refcount: %s:%d %s: cnt=%d\n", __func__, __LINE__, (_s)->name, atomic_read(&_s->ref_count)); \
-		l2tp_session_dec_refcount_1(_s);				\
-	} while (0)
+#define l2tp_session_inc_refcount(_s)					\
+do {									\
+	pr_debug("l2tp_session_inc_refcount: %s:%d %s: cnt=%d\n",	\
+		 __func__, __LINE__, (_s)->name,			\
+		 atomic_read(&_s->ref_count));				\
+	l2tp_session_inc_refcount_1(_s);				\
+} while (0)
+#define l2tp_session_dec_refcount(_s)					\
+do {									\
+	pr_debug("l2tp_session_dec_refcount: %s:%d %s: cnt=%d\n",	\
+		 __func__, __LINE__, (_s)->name,			\
+		 atomic_read(&_s->ref_count));				\
+	l2tp_session_dec_refcount_1(_s);				\
+} while (0)
 #else
 #define l2tp_session_inc_refcount(s) l2tp_session_inc_refcount_1(s)
 #define l2tp_session_dec_refcount(s) l2tp_session_dec_refcount_1(s)
 #endif
+
+#define l2tp_printk(ptr, type, func, fmt, ...)				\
+do {									\
+	if (((ptr)->debug) & (type))					\
+		func(fmt, ##__VA_ARGS__);				\
+} while (0)
+
+#define l2tp_warn(ptr, type, fmt, ...)					\
+	l2tp_printk(ptr, type, pr_warn, fmt, ##__VA_ARGS__)
+#define l2tp_info(ptr, type, fmt, ...)					\
+	l2tp_printk(ptr, type, pr_info, fmt, ##__VA_ARGS__)
+#define l2tp_dbg(ptr, type, fmt, ...)					\
+	l2tp_printk(ptr, type, pr_debug, fmt, ##__VA_ARGS__)
 
 #endif /* _L2TP_CORE_H_ */

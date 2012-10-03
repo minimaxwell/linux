@@ -4,8 +4,9 @@
  *  Copyright (C) 1995  Linus Torvalds
  */
 
+#include <linux/stddef.h>
 #include <linux/kernel.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/time.h>
 #include <linux/mm.h>
 #include <linux/errno.h>
@@ -54,7 +55,6 @@ EXPORT_SYMBOL(vfs_readdir);
  * anyway. Thus the special "fillonedir()" function for that
  * case (the low-level handlers don't need to care about this).
  */
-#define NAME_OFFSET(de) ((int) ((de)->d_name - (char __user *) (de)))
 
 #ifdef __ARCH_WANT_OLD_READDIR
 
@@ -108,11 +108,11 @@ SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
 	int error;
 	struct file * file;
 	struct readdir_callback buf;
+	int fput_needed;
 
-	error = -EBADF;
-	file = fget(fd);
+	file = fget_light(fd, &fput_needed);
 	if (!file)
-		goto out;
+		return -EBADF;
 
 	buf.result = 0;
 	buf.dirent = dirent;
@@ -121,8 +121,7 @@ SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
 	if (buf.result)
 		error = buf.result;
 
-	fput(file);
-out:
+	fput_light(file, fput_needed);
 	return error;
 }
 
@@ -152,7 +151,8 @@ static int filldir(void * __buf, const char * name, int namlen, loff_t offset,
 	struct linux_dirent __user * dirent;
 	struct getdents_callback * buf = (struct getdents_callback *) __buf;
 	unsigned long d_ino;
-	int reclen = ALIGN(NAME_OFFSET(dirent) + namlen + 2, sizeof(long));
+	int reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,
+		sizeof(long));
 
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)
@@ -194,16 +194,15 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
 	struct file * file;
 	struct linux_dirent __user * lastdirent;
 	struct getdents_callback buf;
+	int fput_needed;
 	int error;
 
-	error = -EFAULT;
 	if (!access_ok(VERIFY_WRITE, dirent, count))
-		goto out;
+		return -EFAULT;
 
-	error = -EBADF;
-	file = fget(fd);
+	file = fget_light(fd, &fput_needed);
 	if (!file)
-		goto out;
+		return -EBADF;
 
 	buf.current_dir = dirent;
 	buf.previous = NULL;
@@ -220,8 +219,7 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
 		else
 			error = count - buf.count;
 	}
-	fput(file);
-out:
+	fput_light(file, fput_needed);
 	return error;
 }
 
@@ -237,7 +235,8 @@ static int filldir64(void * __buf, const char * name, int namlen, loff_t offset,
 {
 	struct linux_dirent64 __user *dirent;
 	struct getdents_callback64 * buf = (struct getdents_callback64 *) __buf;
-	int reclen = ALIGN(NAME_OFFSET(dirent) + namlen + 1, sizeof(u64));
+	int reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,
+		sizeof(u64));
 
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)
@@ -276,16 +275,15 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
 	struct file * file;
 	struct linux_dirent64 __user * lastdirent;
 	struct getdents_callback64 buf;
+	int fput_needed;
 	int error;
 
-	error = -EFAULT;
 	if (!access_ok(VERIFY_WRITE, dirent, count))
-		goto out;
+		return -EFAULT;
 
-	error = -EBADF;
-	file = fget(fd);
+	file = fget_light(fd, &fput_needed);
 	if (!file)
-		goto out;
+		return -EBADF;
 
 	buf.current_dir = dirent;
 	buf.previous = NULL;
@@ -303,7 +301,6 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
 		else
 			error = count - buf.count;
 	}
-	fput(file);
-out:
+	fput_light(file, fput_needed);
 	return error;
 }

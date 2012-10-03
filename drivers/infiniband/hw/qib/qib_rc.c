@@ -59,8 +59,7 @@ static void start_timer(struct qib_qp *qp)
 	qp->s_flags |= QIB_S_TIMER;
 	qp->s_timer.function = rc_timeout;
 	/* 4.096 usec. * (1 << qp->timeout) */
-	qp->s_timer.expires = jiffies +
-		usecs_to_jiffies((4096UL * (1UL << qp->timeout)) / 1000UL);
+	qp->s_timer.expires = jiffies + qp->timeout_jiffies;
 	add_timer(&qp->s_timer);
 }
 
@@ -96,7 +95,7 @@ static int qib_make_rc_ack(struct qib_ibdev *dev, struct qib_qp *qp,
 	case OP(RDMA_READ_RESPONSE_ONLY):
 		e = &qp->s_ack_queue[qp->s_tail_ack_queue];
 		if (e->rdma_sge.mr) {
-			atomic_dec(&e->rdma_sge.mr->refcount);
+			qib_put_mr(e->rdma_sge.mr);
 			e->rdma_sge.mr = NULL;
 		}
 		/* FALLTHROUGH */
@@ -134,7 +133,7 @@ static int qib_make_rc_ack(struct qib_ibdev *dev, struct qib_qp *qp,
 			/* Copy SGE state in case we need to resend */
 			qp->s_rdma_mr = e->rdma_sge.mr;
 			if (qp->s_rdma_mr)
-				atomic_inc(&qp->s_rdma_mr->refcount);
+				qib_get_mr(qp->s_rdma_mr);
 			qp->s_ack_rdma_sge.sge = e->rdma_sge;
 			qp->s_ack_rdma_sge.num_sge = 1;
 			qp->s_cur_sge = &qp->s_ack_rdma_sge;
@@ -173,7 +172,7 @@ static int qib_make_rc_ack(struct qib_ibdev *dev, struct qib_qp *qp,
 		qp->s_cur_sge = &qp->s_ack_rdma_sge;
 		qp->s_rdma_mr = qp->s_ack_rdma_sge.sge.mr;
 		if (qp->s_rdma_mr)
-			atomic_inc(&qp->s_rdma_mr->refcount);
+			qib_get_mr(qp->s_rdma_mr);
 		len = qp->s_ack_rdma_sge.sge.sge_length;
 		if (len > pmtu)
 			len = pmtu;
@@ -239,15 +238,15 @@ int qib_make_rc_req(struct qib_qp *qp)
 	u32 len;
 	u32 bth0;
 	u32 bth2;
-	u32 pmtu = ib_mtu_enum_to_int(qp->path_mtu);
+	u32 pmtu = qp->pmtu;
 	char newreq;
 	unsigned long flags;
 	int ret = 0;
 	int delta;
 
-	ohdr = &qp->s_hdr.u.oth;
+	ohdr = &qp->s_hdr->u.oth;
 	if (qp->remote_ah_attr.ah_flags & IB_AH_GRH)
-		ohdr = &qp->s_hdr.u.l.oth;
+		ohdr = &qp->s_hdr->u.l.oth;
 
 	/*
 	 * The lock is needed to synchronize between the sending tasklet,
@@ -272,13 +271,9 @@ int qib_make_rc_req(struct qib_qp *qp)
 			goto bail;
 		}
 		wqe = get_swqe_ptr(qp, qp->s_last);
-		while (qp->s_last != qp->s_acked) {
-			qib_send_complete(qp, wqe, IB_WC_SUCCESS);
-			if (++qp->s_last >= qp->s_size)
-				qp->s_last = 0;
-			wqe = get_swqe_ptr(qp, qp->s_last);
-		}
-		qib_send_complete(qp, wqe, IB_WC_WR_FLUSH_ERR);
+		qib_send_complete(qp, wqe, qp->s_last != qp->s_acked ?
+			IB_WC_SUCCESS : IB_WC_WR_FLUSH_ERR);
+		/* will get called again */
 		goto done;
 	}
 
@@ -868,7 +863,7 @@ done:
 
 /*
  * Back up requester to resend the last un-ACKed request.
- * The QP s_lock should be held and interrupts disabled.
+ * The QP r_lock and s_lock should be held and interrupts disabled.
  */
 static void qib_restart_rc(struct qib_qp *qp, u32 psn, int wait)
 {
@@ -911,7 +906,8 @@ static void rc_timeout(unsigned long arg)
 	struct qib_ibport *ibp;
 	unsigned long flags;
 
-	spin_lock_irqsave(&qp->s_lock, flags);
+	spin_lock_irqsave(&qp->r_lock, flags);
+	spin_lock(&qp->s_lock);
 	if (qp->s_flags & QIB_S_TIMER) {
 		ibp = to_iport(qp->ibqp.device, qp->port_num);
 		ibp->n_rc_timeouts++;
@@ -920,7 +916,8 @@ static void rc_timeout(unsigned long arg)
 		qib_restart_rc(qp, qp->s_last_psn + 1, 1);
 		qib_schedule_send(qp);
 	}
-	spin_unlock_irqrestore(&qp->s_lock, flags);
+	spin_unlock(&qp->s_lock);
+	spin_unlock_irqrestore(&qp->r_lock, flags);
 }
 
 /*
@@ -1003,7 +1000,8 @@ void qib_rc_send_complete(struct qib_qp *qp, struct qib_ib_header *hdr)
 	 * there are still requests that haven't been acked.
 	 */
 	if ((psn & IB_BTH_REQ_ACK) && qp->s_acked != qp->s_tail &&
-	    !(qp->s_flags & (QIB_S_TIMER | QIB_S_WAIT_RNR | QIB_S_WAIT_PSN)))
+	    !(qp->s_flags & (QIB_S_TIMER | QIB_S_WAIT_RNR | QIB_S_WAIT_PSN)) &&
+	    (ib_qib_state_ops[qp->state] & QIB_PROCESS_RECV_OK))
 		start_timer(qp);
 
 	while (qp->s_last != qp->s_acked) {
@@ -1014,7 +1012,7 @@ void qib_rc_send_complete(struct qib_qp *qp, struct qib_ib_header *hdr)
 		for (i = 0; i < wqe->wr.num_sge; i++) {
 			struct qib_sge *sge = &wqe->sg_list[i];
 
-			atomic_dec(&sge->mr->refcount);
+			qib_put_mr(sge->mr);
 		}
 		/* Post a send completion queue entry if requested. */
 		if (!(qp->s_flags & QIB_S_SIGNAL_REQ_WR) ||
@@ -1070,7 +1068,7 @@ static struct qib_swqe *do_rc_completion(struct qib_qp *qp,
 		for (i = 0; i < wqe->wr.num_sge; i++) {
 			struct qib_sge *sge = &wqe->sg_list[i];
 
-			atomic_dec(&sge->mr->refcount);
+			qib_put_mr(sge->mr);
 		}
 		/* Post a send completion queue entry if requested. */
 		if (!(qp->s_flags & QIB_S_SIGNAL_REQ_WR) ||
@@ -1405,6 +1403,7 @@ static void qib_rc_rcv_resp(struct qib_ibport *ibp,
 			    struct qib_ctxtdata *rcd)
 {
 	struct qib_swqe *wqe;
+	struct qib_pportdata *ppd = ppd_from_ibp(ibp);
 	enum ib_wc_status status;
 	unsigned long flags;
 	int diff;
@@ -1412,9 +1411,30 @@ static void qib_rc_rcv_resp(struct qib_ibport *ibp,
 	u32 aeth;
 	u64 val;
 
-	spin_lock_irqsave(&qp->s_lock, flags);
+	if (opcode != OP(RDMA_READ_RESPONSE_MIDDLE)) {
+		/*
+		 * If ACK'd PSN on SDMA busy list try to make progress to
+		 * reclaim SDMA credits.
+		 */
+		if ((qib_cmp24(psn, qp->s_sending_psn) >= 0) &&
+		    (qib_cmp24(qp->s_sending_psn, qp->s_sending_hpsn) <= 0)) {
 
-	/* Double check we can process this now that we hold the s_lock. */
+			/*
+			 * If send tasklet not running attempt to progress
+			 * SDMA queue.
+			 */
+			if (!(qp->s_flags & QIB_S_BUSY)) {
+				/* Acquire SDMA Lock */
+				spin_lock_irqsave(&ppd->sdma_lock, flags);
+				/* Invoke sdma make progress */
+				qib_sdma_make_progress(ppd);
+				/* Release SDMA Lock */
+				spin_unlock_irqrestore(&ppd->sdma_lock, flags);
+			}
+		}
+	}
+
+	spin_lock_irqsave(&qp->s_lock, flags);
 	if (!(ib_qib_state_ops[qp->state] & QIB_PROCESS_RECV_OK))
 		goto ack_done;
 
@@ -1494,9 +1514,7 @@ read_middle:
 		 * 4.096 usec. * (1 << qp->timeout)
 		 */
 		qp->s_flags |= QIB_S_TIMER;
-		mod_timer(&qp->s_timer, jiffies +
-			usecs_to_jiffies((4096UL * (1UL << qp->timeout)) /
-					 1000UL));
+		mod_timer(&qp->s_timer, jiffies + qp->timeout_jiffies);
 		if (qp->s_flags & QIB_S_WAIT_ACK) {
 			qp->s_flags &= ~QIB_S_WAIT_ACK;
 			qib_schedule_send(qp);
@@ -1661,9 +1679,6 @@ static int qib_rc_rcv_error(struct qib_other_headers *ohdr,
 	ibp->n_rc_dupreq++;
 
 	spin_lock_irqsave(&qp->s_lock, flags);
-	/* Double check we can process this now that we hold the s_lock. */
-	if (!(ib_qib_state_ops[qp->state] & QIB_PROCESS_RECV_OK))
-		goto unlock_done;
 
 	for (i = qp->r_head_ack_queue; ; i = prev) {
 		if (i == qp->s_tail_ack_queue)
@@ -1710,12 +1725,12 @@ static int qib_rc_rcv_error(struct qib_other_headers *ohdr,
 		 * same request.
 		 */
 		offset = ((psn - e->psn) & QIB_PSN_MASK) *
-			ib_mtu_enum_to_int(qp->path_mtu);
+			qp->pmtu;
 		len = be32_to_cpu(reth->length);
 		if (unlikely(offset + len != e->rdma_sge.sge_length))
 			goto unlock_done;
 		if (e->rdma_sge.mr) {
-			atomic_dec(&e->rdma_sge.mr->refcount);
+			qib_put_mr(e->rdma_sge.mr);
 			e->rdma_sge.mr = NULL;
 		}
 		if (len != 0) {
@@ -1854,7 +1869,7 @@ void qib_rc_rcv(struct qib_ctxtdata *rcd, struct qib_ib_header *hdr,
 	u32 psn;
 	u32 pad;
 	struct ib_wc wc;
-	u32 pmtu = ib_mtu_enum_to_int(qp->path_mtu);
+	u32 pmtu = qp->pmtu;
 	int diff;
 	struct ib_reth *reth;
 	unsigned long flags;
@@ -1870,16 +1885,11 @@ void qib_rc_rcv(struct qib_ctxtdata *rcd, struct qib_ib_header *hdr,
 	}
 
 	opcode = be32_to_cpu(ohdr->bth[0]);
-	spin_lock_irqsave(&qp->s_lock, flags);
 	if (qib_ruc_check_hdr(ibp, hdr, has_grh, qp, opcode))
-		goto sunlock;
-	spin_unlock_irqrestore(&qp->s_lock, flags);
+		return;
 
 	psn = be32_to_cpu(ohdr->bth[2]);
 	opcode >>= 24;
-
-	/* Prevent simultaneous processing after APM on different CPUs */
-	spin_lock(&qp->r_lock);
 
 	/*
 	 * Process responses (ACKs) before anything else.  Note that the
@@ -1891,14 +1901,14 @@ void qib_rc_rcv(struct qib_ctxtdata *rcd, struct qib_ib_header *hdr,
 	    opcode <= OP(ATOMIC_ACKNOWLEDGE)) {
 		qib_rc_rcv_resp(ibp, ohdr, data, tlen, qp, opcode, psn,
 				hdrsize, pmtu, rcd);
-		goto runlock;
+		return;
 	}
 
 	/* Compute 24 bits worth of difference. */
 	diff = qib_cmp24(psn, qp->r_psn);
 	if (unlikely(diff)) {
 		if (qib_rc_rcv_error(ohdr, data, qp, opcode, psn, diff, rcd))
-			goto runlock;
+			return;
 		goto send_ack;
 	}
 
@@ -1935,8 +1945,6 @@ void qib_rc_rcv(struct qib_ctxtdata *rcd, struct qib_ib_header *hdr,
 		 */
 		break;
 	}
-
-	memset(&wc, 0, sizeof wc);
 
 	if (qp->state == IB_QPS_RTR && !(qp->r_flags & QIB_R_COMM_EST)) {
 		qp->r_flags |= QIB_R_COMM_EST;
@@ -1990,16 +1998,19 @@ send_middle:
 			goto rnr_nak;
 		qp->r_rcv_len = 0;
 		if (opcode == OP(SEND_ONLY))
-			goto send_last;
-		/* FALLTHROUGH */
+			goto no_immediate_data;
+		/* FALLTHROUGH for SEND_ONLY_WITH_IMMEDIATE */
 	case OP(SEND_LAST_WITH_IMMEDIATE):
 send_last_imm:
 		wc.ex.imm_data = ohdr->u.imm_data;
 		hdrsize += 4;
 		wc.wc_flags = IB_WC_WITH_IMM;
-		/* FALLTHROUGH */
+		goto send_last;
 	case OP(SEND_LAST):
 	case OP(RDMA_WRITE_LAST):
+no_immediate_data:
+		wc.wc_flags = 0;
+		wc.ex.imm_data = 0;
 send_last:
 		/* Get the number of bytes the message was padded by. */
 		pad = (be32_to_cpu(ohdr->bth[0]) >> 20) & 3;
@@ -2013,11 +2024,7 @@ send_last:
 		if (unlikely(wc.byte_len > qp->r_len))
 			goto nack_inv;
 		qib_copy_sge(&qp->r_sge, data, tlen, 1);
-		while (qp->r_sge.num_sge) {
-			atomic_dec(&qp->r_sge.sge.mr->refcount);
-			if (--qp->r_sge.num_sge)
-				qp->r_sge.sge = *qp->r_sge.sg_list++;
-		}
+		qib_put_ss(&qp->r_sge);
 		qp->r_msn++;
 		if (!test_and_clear_bit(QIB_R_WRID_VALID, &qp->r_aflags))
 			break;
@@ -2032,6 +2039,11 @@ send_last:
 		wc.src_qp = qp->remote_qpn;
 		wc.slid = qp->remote_ah_attr.dlid;
 		wc.sl = qp->remote_ah_attr.sl;
+		/* zero fields that are N/A */
+		wc.vendor_err = 0;
+		wc.pkey_index = 0;
+		wc.dlid_path_bits = 0;
+		wc.port_num = 0;
 		/* Signal completion event if the solicited bit is set. */
 		qib_cq_enter(to_icq(qp->ibqp.recv_cq), &wc,
 			     (ohdr->bth[0] &
@@ -2070,13 +2082,16 @@ send_last:
 		if (opcode == OP(RDMA_WRITE_FIRST))
 			goto send_middle;
 		else if (opcode == OP(RDMA_WRITE_ONLY))
-			goto send_last;
+			goto no_immediate_data;
 		ret = qib_get_rwqe(qp, 1);
 		if (ret < 0)
 			goto nack_op_err;
 		if (!ret)
 			goto rnr_nak;
-		goto send_last_imm;
+		wc.ex.imm_data = ohdr->u.rc.imm_data;
+		hdrsize += 4;
+		wc.wc_flags = IB_WC_WITH_IMM;
+		goto send_last;
 
 	case OP(RDMA_READ_REQUEST): {
 		struct qib_ack_entry *e;
@@ -2090,9 +2105,6 @@ send_last:
 		if (next > QIB_MAX_RDMA_ATOMIC)
 			next = 0;
 		spin_lock_irqsave(&qp->s_lock, flags);
-		/* Double check we can process this while holding the s_lock. */
-		if (!(ib_qib_state_ops[qp->state] & QIB_PROCESS_RECV_OK))
-			goto srunlock;
 		if (unlikely(next == qp->s_tail_ack_queue)) {
 			if (!qp->s_ack_queue[next].sent)
 				goto nack_inv_unlck;
@@ -2100,7 +2112,7 @@ send_last:
 		}
 		e = &qp->s_ack_queue[qp->r_head_ack_queue];
 		if (e->opcode == OP(RDMA_READ_REQUEST) && e->rdma_sge.mr) {
-			atomic_dec(&e->rdma_sge.mr->refcount);
+			qib_put_mr(e->rdma_sge.mr);
 			e->rdma_sge.mr = NULL;
 		}
 		reth = &ohdr->u.rc.reth;
@@ -2146,7 +2158,7 @@ send_last:
 		qp->s_flags |= QIB_S_RESP_PENDING;
 		qib_schedule_send(qp);
 
-		goto srunlock;
+		goto sunlock;
 	}
 
 	case OP(COMPARE_SWAP):
@@ -2165,9 +2177,6 @@ send_last:
 		if (next > QIB_MAX_RDMA_ATOMIC)
 			next = 0;
 		spin_lock_irqsave(&qp->s_lock, flags);
-		/* Double check we can process this while holding the s_lock. */
-		if (!(ib_qib_state_ops[qp->state] & QIB_PROCESS_RECV_OK))
-			goto srunlock;
 		if (unlikely(next == qp->s_tail_ack_queue)) {
 			if (!qp->s_ack_queue[next].sent)
 				goto nack_inv_unlck;
@@ -2175,7 +2184,7 @@ send_last:
 		}
 		e = &qp->s_ack_queue[qp->r_head_ack_queue];
 		if (e->opcode == OP(RDMA_READ_REQUEST) && e->rdma_sge.mr) {
-			atomic_dec(&e->rdma_sge.mr->refcount);
+			qib_put_mr(e->rdma_sge.mr);
 			e->rdma_sge.mr = NULL;
 		}
 		ateth = &ohdr->u.atomic_eth;
@@ -2197,7 +2206,7 @@ send_last:
 			(u64) cmpxchg((u64 *) qp->r_sge.sge.vaddr,
 				      be64_to_cpu(ateth->compare_data),
 				      sdata);
-		atomic_dec(&qp->r_sge.sge.mr->refcount);
+		qib_put_mr(qp->r_sge.sge.mr);
 		qp->r_sge.num_sge = 0;
 		e->opcode = opcode;
 		e->sent = 0;
@@ -2213,7 +2222,7 @@ send_last:
 		qp->s_flags |= QIB_S_RESP_PENDING;
 		qib_schedule_send(qp);
 
-		goto srunlock;
+		goto sunlock;
 	}
 
 	default:
@@ -2227,7 +2236,7 @@ send_last:
 	/* Send an ACK if requested or required. */
 	if (psn & (1 << 31))
 		goto send_ack;
-	goto runlock;
+	return;
 
 rnr_nak:
 	qp->r_nak_state = IB_RNR_NAK | qp->r_min_rnr_timer;
@@ -2238,7 +2247,7 @@ rnr_nak:
 		atomic_inc(&qp->refcount);
 		list_add_tail(&qp->rspwait, &rcd->qp_wait_list);
 	}
-	goto runlock;
+	return;
 
 nack_op_err:
 	qib_rc_error(qp, IB_WC_LOC_QP_OP_ERR);
@@ -2250,7 +2259,7 @@ nack_op_err:
 		atomic_inc(&qp->refcount);
 		list_add_tail(&qp->rspwait, &rcd->qp_wait_list);
 	}
-	goto runlock;
+	return;
 
 nack_inv_unlck:
 	spin_unlock_irqrestore(&qp->s_lock, flags);
@@ -2264,7 +2273,7 @@ nack_inv:
 		atomic_inc(&qp->refcount);
 		list_add_tail(&qp->rspwait, &rcd->qp_wait_list);
 	}
-	goto runlock;
+	return;
 
 nack_acc_unlck:
 	spin_unlock_irqrestore(&qp->s_lock, flags);
@@ -2274,13 +2283,6 @@ nack_acc:
 	qp->r_ack_psn = qp->r_psn;
 send_ack:
 	qib_send_rc_ack(qp);
-runlock:
-	spin_unlock(&qp->r_lock);
-	return;
-
-srunlock:
-	spin_unlock_irqrestore(&qp->s_lock, flags);
-	spin_unlock(&qp->r_lock);
 	return;
 
 sunlock:

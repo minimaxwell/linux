@@ -11,6 +11,7 @@
  */
 
 #include <crypto/internal/aead.h>
+#include <linux/completion.h>
 #include <linux/ctype.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -47,6 +48,8 @@ struct cryptomgr_param {
 	char larval[CRYPTO_MAX_ALG_NAME];
 	char template[CRYPTO_MAX_ALG_NAME];
 
+	struct completion *completion;
+
 	u32 otype;
 	u32 omask;
 };
@@ -66,7 +69,7 @@ static int cryptomgr_probe(void *data)
 
 	tmpl = crypto_lookup_template(param->template);
 	if (!tmpl)
-		goto err;
+		goto out;
 
 	do {
 		if (tmpl->create) {
@@ -83,16 +86,10 @@ static int cryptomgr_probe(void *data)
 
 	crypto_tmpl_put(tmpl);
 
-	if (err)
-		goto err;
-
 out:
+	complete_all(param->completion);
 	kfree(param);
 	module_put_and_exit(0);
-
-err:
-	crypto_larval_error(param->larval, param->otype, param->omask);
-	goto out;
 }
 
 static int cryptomgr_schedule_probe(struct crypto_larval *larval)
@@ -192,9 +189,13 @@ static int cryptomgr_schedule_probe(struct crypto_larval *larval)
 
 	memcpy(param->larval, larval->alg.cra_name, CRYPTO_MAX_ALG_NAME);
 
+	param->completion = &larval->completion;
+
 	thread = kthread_run(cryptomgr_probe, param, "cryptomgr_probe");
 	if (IS_ERR(thread))
 		goto err_free_param;
+
+	wait_for_completion_interruptible(&larval->completion);
 
 	return NOTIFY_STOP;
 
@@ -206,12 +207,15 @@ err:
 	return NOTIFY_OK;
 }
 
-#ifdef CONFIG_CRYPTO_MANAGER_TESTS
 static int cryptomgr_test(void *data)
 {
 	struct crypto_test_param *param = data;
 	u32 type = param->type;
 	int err = 0;
+
+#ifdef CONFIG_CRYPTO_MANAGER_DISABLE_TESTS
+	goto skiptest;
+#endif
 
 	if (type & CRYPTO_ALG_TESTED)
 		goto skiptest;
@@ -267,7 +271,6 @@ err_put_module:
 err:
 	return NOTIFY_OK;
 }
-#endif /* CONFIG_CRYPTO_MANAGER_TESTS */
 
 static int cryptomgr_notify(struct notifier_block *this, unsigned long msg,
 			    void *data)
@@ -275,10 +278,8 @@ static int cryptomgr_notify(struct notifier_block *this, unsigned long msg,
 	switch (msg) {
 	case CRYPTO_MSG_ALG_REQUEST:
 		return cryptomgr_schedule_probe(data);
-#ifdef CONFIG_CRYPTO_MANAGER_TESTS
 	case CRYPTO_MSG_ALG_REGISTER:
 		return cryptomgr_schedule_test(data);
-#endif
 	}
 
 	return NOTIFY_DONE;

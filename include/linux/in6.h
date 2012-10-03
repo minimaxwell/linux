@@ -142,7 +142,7 @@ struct in6_flowlabel_req {
 /*
  *	IPv6 TLV options.
  */
-#define IPV6_TLV_PAD0		0
+#define IPV6_TLV_PAD1		0
 #define IPV6_TLV_PADN		1
 #define IPV6_TLV_ROUTERALERT	5
 #define IPV6_TLV_JUMBO		194
@@ -267,6 +267,11 @@ struct in6_flowlabel_req {
 
 /* RFC5082: Generalized Ttl Security Mechanism */
 #define IPV6_MINHOPCOUNT		73
+
+#define IPV6_ORIGDSTADDR        74
+#define IPV6_RECVORIGDSTADDR    IPV6_ORIGDSTADDR
+#define IPV6_TRANSPARENT        75
+#define IPV6_UNICAST_IF         76
 
 /*
  * Multicast Routing:

@@ -49,10 +49,6 @@ unsigned long rds_ib_sysctl_max_unsig_wrs = 16;
 static unsigned long rds_ib_sysctl_max_unsig_wr_min = 1;
 static unsigned long rds_ib_sysctl_max_unsig_wr_max = 64;
 
-unsigned long rds_ib_sysctl_max_unsig_bytes = (16 << 20);
-static unsigned long rds_ib_sysctl_max_unsig_bytes_min = 1;
-static unsigned long rds_ib_sysctl_max_unsig_bytes_max = ~0UL;
-
 /*
  * This sysctl does nothing.
  *
@@ -65,7 +61,7 @@ static unsigned long rds_ib_sysctl_max_unsig_bytes_max = ~0UL;
  */
 unsigned int rds_ib_sysctl_flow_control = 0;
 
-ctl_table rds_ib_sysctl_table[] = {
+static ctl_table rds_ib_sysctl_table[] = {
 	{
 		.procname       = "max_send_wr",
 		.data		= &rds_ib_sysctl_max_send_wr,
@@ -94,15 +90,6 @@ ctl_table rds_ib_sysctl_table[] = {
 		.extra2		= &rds_ib_sysctl_max_unsig_wr_max,
 	},
 	{
-		.procname       = "max_unsignaled_bytes",
-		.data		= &rds_ib_sysctl_max_unsig_bytes,
-		.maxlen         = sizeof(unsigned long),
-		.mode           = 0644,
-		.proc_handler   = proc_doulongvec_minmax,
-		.extra1		= &rds_ib_sysctl_max_unsig_bytes_min,
-		.extra2		= &rds_ib_sysctl_max_unsig_bytes_max,
-	},
-	{
 		.procname       = "max_recv_allocation",
 		.data		= &rds_ib_sysctl_max_recv_allocation,
 		.maxlen         = sizeof(unsigned long),
@@ -119,23 +106,16 @@ ctl_table rds_ib_sysctl_table[] = {
 	{ }
 };
 
-static struct ctl_path rds_ib_sysctl_path[] = {
-	{ .procname = "net", },
-	{ .procname = "rds", },
-	{ .procname = "ib", },
-	{ }
-};
-
 void rds_ib_sysctl_exit(void)
 {
 	if (rds_ib_sysctl_hdr)
-		unregister_sysctl_table(rds_ib_sysctl_hdr);
+		unregister_net_sysctl_table(rds_ib_sysctl_hdr);
 }
 
-int __init rds_ib_sysctl_init(void)
+int rds_ib_sysctl_init(void)
 {
-	rds_ib_sysctl_hdr = register_sysctl_paths(rds_ib_sysctl_path, rds_ib_sysctl_table);
-	if (rds_ib_sysctl_hdr == NULL)
+	rds_ib_sysctl_hdr = register_net_sysctl(&init_net, "net/rds/ib", rds_ib_sysctl_table);
+	if (!rds_ib_sysctl_hdr)
 		return -ENOMEM;
 	return 0;
 }

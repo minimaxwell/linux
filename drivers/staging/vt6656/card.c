@@ -66,7 +66,6 @@ static int          msglevel                =MSG_LEVEL_INFO;
 
 
 /*---------------------  Static Definitions -------------------------*/
-#define CB_TXPOWER_LEVEL            6
 
 /*---------------------  Static Classes  ----------------------------*/
 
@@ -91,15 +90,10 @@ const WORD cwRXBCNTSFOff[MAX_RATE] =
  *      uConnectionChannel  - Channel to be set
  *  Out:
  *      none
- *
- * Return Value: TRUE if succeeded; FALSE if failed.
- *
  */
-BOOL CARDbSetMediaChannel(void *pDeviceHandler, unsigned int uConnectionChannel)
+void CARDbSetMediaChannel(void *pDeviceHandler, unsigned int uConnectionChannel)
 {
 PSDevice            pDevice = (PSDevice) pDeviceHandler;
-BOOL                bResult = TRUE;
-
 
     if (pDevice->byBBType == BB_TYPE_11A) { // 15 ~ 38
         if ((uConnectionChannel < (CB_MAX_CHANNEL_24G+1)) || (uConnectionChannel > CB_MAX_CHANNEL))
@@ -140,7 +134,6 @@ BOOL                bResult = TRUE;
         RFbRawSetPower(pDevice, pDevice->abyCCKPwrTbl[uConnectionChannel-1], RATE_1M);
     }
     ControlvWriteByte(pDevice,MESSAGE_REQUEST_MACREG,MAC_REG_CHANNEL,(BYTE)(uConnectionChannel|0x80));
-    return(bResult);
 }
 
 /*
@@ -457,11 +450,10 @@ void CARDvSetRSPINF(void *pDeviceHandler, BYTE byBBType)
     abyData[14] = abySignal[3];
     abyData[15] = abyServ[3];
 
-    for(i=0;i<9;i++) {
-        abyData[16+i*2] = abyTxRate[i];
-        abyData[16+i*2+1] = abyRsvTime[i];
+    for (i = 0; i < 9; i++) {
+	abyData[16+i*2] = abyTxRate[i];
+	abyData[16+i*2+1] = abyRsvTime[i];
     }
-
 
     CONTROLnsRequestOut(pDevice,
                         MESSAGE_TYPE_WRITE,
@@ -608,7 +600,7 @@ BYTE ii;
  * Return Value: TRUE if succeeded; FALSE if failed.
  *
  */
-BOOL CARDbAddBasicRate(void *pDeviceHandler, WORD wRateIdx)
+void CARDbAddBasicRate(void *pDeviceHandler, WORD wRateIdx)
 {
 PSDevice    pDevice = (PSDevice) pDeviceHandler;
 WORD wRate = (WORD)(1<<wRateIdx);
@@ -617,8 +609,6 @@ WORD wRate = (WORD)(1<<wRateIdx);
 
     //Determines the highest basic rate.
     CARDvUpdateBasicTopRate(pDevice);
-
-    return(TRUE);
 }
 
 BOOL CARDbIsOFDMinBasicRate(void *pDeviceHandler)
@@ -1091,9 +1081,9 @@ CARDbChannelSwitch (
 
     if (byCount == 0) {
         pDevice->sMgmtObj.uCurrChannel = byNewChannel;
-        bResult = CARDbSetMediaChannel(pDevice, byNewChannel);
+	CARDbSetMediaChannel(pDevice, byNewChannel);
 
-        return(bResult);
+	return bResult;
     }
     pDevice->byChannelSwitchCount = byCount;
     pDevice->byNewChannel = byNewChannel;
@@ -1103,7 +1093,7 @@ CARDbChannelSwitch (
         //bResult=CARDbStopTxPacket(pDevice, PKT_TYPE_802_11_ALL);
         pDevice->bStopDataPkt = TRUE;
     }
-    return (bResult);
+	return bResult;
 }
 
 

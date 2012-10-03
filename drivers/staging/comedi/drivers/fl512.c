@@ -42,27 +42,6 @@ static const struct comedi_lrange range_fl512 = { 4, {
 						      }
 };
 
-static int fl512_attach(struct comedi_device *dev, struct comedi_devconfig *it);
-static int fl512_detach(struct comedi_device *dev);
-
-static struct comedi_driver driver_fl512 = {
-	.driver_name = "fl512",
-	.module = THIS_MODULE,
-	.attach = fl512_attach,
-	.detach = fl512_detach,
-};
-
-COMEDI_INITCLEANUP(driver_fl512);
-
-static int fl512_ai_insn(struct comedi_device *dev,
-			 struct comedi_subdevice *s, struct comedi_insn *insn,
-			 unsigned int *data);
-static int fl512_ao_insn(struct comedi_device *dev, struct comedi_subdevice *s,
-			 struct comedi_insn *insn, unsigned int *data);
-static int fl512_ao_insn_readback(struct comedi_device *dev,
-				  struct comedi_subdevice *s,
-				  struct comedi_insn *insn, unsigned int *data);
-
 /*
  * fl512_ai_insn : this is the analog input function
  */
@@ -129,12 +108,10 @@ static int fl512_ao_insn_readback(struct comedi_device *dev,
 	return n;
 }
 
-/*
- * start attach
- */
 static int fl512_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 {
 	unsigned long iobase;
+	int ret;
 
 	/* pointer to the subdevice: Analog in, Analog out,
 	   (not made ->and Digital IO) */
@@ -155,8 +132,9 @@ static int fl512_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	printk(KERN_DEBUG "malloc ok\n");
 #endif
 
-	if (alloc_subdevices(dev, 2) < 0)
-		return -ENOMEM;
+	ret = comedi_alloc_subdevices(dev, 2);
+	if (ret)
+		return ret;
 
 	/*
 	 * this if the definitions of the supdevices, 2 have been defined
@@ -198,10 +176,20 @@ static int fl512_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	return 1;
 }
 
-static int fl512_detach(struct comedi_device *dev)
+static void fl512_detach(struct comedi_device *dev)
 {
 	if (dev->iobase)
 		release_region(dev->iobase, FL512_SIZE);
-	printk(KERN_INFO "comedi%d: fl512: dummy i detach\n", dev->minor);
-	return 0;
 }
+
+static struct comedi_driver fl512_driver = {
+	.driver_name	= "fl512",
+	.module		= THIS_MODULE,
+	.attach		= fl512_attach,
+	.detach		= fl512_detach,
+};
+module_comedi_driver(fl512_driver);
+
+MODULE_AUTHOR("Comedi http://www.comedi.org");
+MODULE_DESCRIPTION("Comedi low-level driver");
+MODULE_LICENSE("GPL");

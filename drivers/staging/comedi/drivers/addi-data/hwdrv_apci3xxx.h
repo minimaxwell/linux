@@ -6,7 +6,7 @@
  *	D-77833 Ottersweier
  *	Tel: +19(0)7223/9493-0
  *	Fax: +49(0)7223/9493-92
- *	http://www.addi-data-com
+ *	http://www.addi-data.com
  *	info@addi-data.com
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -40,20 +40,6 @@ static const struct comedi_lrange range_apci3XXX_ai = { 8, {BIP_RANGE(10),
 						     UNI_RANGE(5),
 						     UNI_RANGE(2),
 						     UNI_RANGE(1)}
-};
-
-static const struct comedi_lrange range_apci3XXX_ttl = { 12, {BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1),
-						       BIP_RANGE(1)}
 };
 
 static const struct comedi_lrange range_apci3XXX_ao = { 2, {BIP_RANGE(10),

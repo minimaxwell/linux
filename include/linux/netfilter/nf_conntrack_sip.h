@@ -2,6 +2,8 @@
 #define __NF_CONNTRACK_SIP_H__
 #ifdef __KERNEL__
 
+#include <net/netfilter/nf_conntrack_expect.h>
+
 #define SIP_PORT	5060
 #define SIP_TIMEOUT	3600
 
@@ -89,6 +91,7 @@ enum sip_header_types {
 	SIP_HDR_VIA_TCP,
 	SIP_HDR_EXPIRES,
 	SIP_HDR_CONTENT_LENGTH,
+	SIP_HDR_CALL_ID,
 };
 
 enum sdp_header_types {
@@ -161,7 +164,7 @@ extern int ct_sip_parse_address_param(const struct nf_conn *ct, const char *dptr
 				      unsigned int dataoff, unsigned int datalen,
 				      const char *name,
 				      unsigned int *matchoff, unsigned int *matchlen,
-				      union nf_inet_addr *addr);
+				      union nf_inet_addr *addr, bool delim);
 extern int ct_sip_parse_numerical_param(const struct nf_conn *ct, const char *dptr,
 					unsigned int off, unsigned int datalen,
 					const char *name,

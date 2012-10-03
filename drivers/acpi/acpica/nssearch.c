@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2010, Intel Corp.
+ * Copyright (C) 2000 - 2012, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,7 +65,7 @@ acpi_ns_search_parent_tree(u32 target_name,
  *
  * PARAMETERS:  target_name     - Ascii ACPI name to search for
  *              parent_node     - Starting node where search will begin
- *              Type            - Object type to match
+ *              type            - Object type to match
  *              return_node     - Where the matched Named obj is returned
  *
  * RETURN:      Status
@@ -152,17 +152,6 @@ acpi_ns_search_one_scope(u32 target_name,
 			return_ACPI_STATUS(AE_OK);
 		}
 
-		/*
-		 * The last entry in the list points back to the parent,
-		 * so a flag is used to indicate the end-of-list
-		 */
-		if (node->flags & ANOBJ_END_OF_PEER_LIST) {
-
-			/* Searched entire list, we are done */
-
-			break;
-		}
-
 		/* Didn't match name, move on to the next peer object */
 
 		node = node->peer;
@@ -186,8 +175,8 @@ acpi_ns_search_one_scope(u32 target_name,
  * FUNCTION:    acpi_ns_search_parent_tree
  *
  * PARAMETERS:  target_name     - Ascii ACPI name to search for
- *              Node            - Starting node where search will begin
- *              Type            - Object type to match
+ *              node            - Starting node where search will begin
+ *              type            - Object type to match
  *              return_node     - Where the matched Node is returned
  *
  * RETURN:      Status
@@ -217,7 +206,7 @@ acpi_ns_search_parent_tree(u32 target_name,
 
 	ACPI_FUNCTION_TRACE(ns_search_parent_tree);
 
-	parent_node = acpi_ns_get_parent_node(node);
+	parent_node = node->parent;
 
 	/*
 	 * If there is no parent (i.e., we are at the root) or type is "local",
@@ -261,7 +250,7 @@ acpi_ns_search_parent_tree(u32 target_name,
 
 		/* Not found here, go up another level (until we reach the root) */
 
-		parent_node = acpi_ns_get_parent_node(parent_node);
+		parent_node = parent_node->parent;
 	}
 
 	/* Not found in parent tree */
@@ -275,11 +264,11 @@ acpi_ns_search_parent_tree(u32 target_name,
  *
  * PARAMETERS:  target_name         - Ascii ACPI name to search for (4 chars)
  *              walk_state          - Current state of the walk
- *              Node                - Starting node where search will begin
+ *              node                - Starting node where search will begin
  *              interpreter_mode    - Add names only in ACPI_MODE_LOAD_PASS_x.
  *                                    Otherwise,search only.
- *              Type                - Object type to match
- *              Flags               - Flags describing the search restrictions
+ *              type                - Object type to match
+ *              flags               - Flags describing the search restrictions
  *              return_node         - Where the Node is returned
  *
  * RETURN:      Status

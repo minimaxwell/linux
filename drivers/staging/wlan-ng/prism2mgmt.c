@@ -117,7 +117,7 @@ int prism2mgmt_scan(wlandevice_t *wlandev, void *msgp)
 {
 	int result = 0;
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_dot11req_scan_t *msg = msgp;
+	struct p80211msg_dot11req_scan *msg = msgp;
 	u16 roamingmode, word;
 	int i, timeout;
 	int istmpenable = 0;
@@ -213,8 +213,8 @@ int prism2mgmt_scan(wlandevice_t *wlandev, void *msgp)
 		u16 wordbuf[17];
 
 		result = hfa384x_drvr_setconfig16(hw,
-						  HFA384x_RID_CNFROAMINGMODE,
-						  HFA384x_ROAMMODE_HOSTSCAN_HOSTROAM);
+					HFA384x_RID_CNFROAMINGMODE,
+					HFA384x_ROAMMODE_HOSTSCAN_HOSTROAM);
 		if (result) {
 			printk(KERN_ERR
 			       "setconfig(ROAMINGMODE) failed. result=%d\n",
@@ -258,8 +258,8 @@ int prism2mgmt_scan(wlandevice_t *wlandev, void *msgp)
 		}
 		/* ibss options */
 		result = hfa384x_drvr_setconfig16(hw,
-						  HFA384x_RID_CREATEIBSS,
-						  HFA384x_CREATEIBSS_JOINCREATEIBSS);
+					HFA384x_RID_CREATEIBSS,
+					HFA384x_CREATEIBSS_JOINCREATEIBSS);
 		if (result) {
 			printk(KERN_ERR "Failed to set CREATEIBSS.\n");
 			msg->resultcode.data =
@@ -361,13 +361,13 @@ exit:
 int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 {
 	int result = 0;
-	p80211msg_dot11req_scan_results_t *req;
+	struct p80211msg_dot11req_scan_results *req;
 	hfa384x_t *hw = wlandev->priv;
 	hfa384x_HScanResultSub_t *item = NULL;
 
 	int count;
 
-	req = (p80211msg_dot11req_scan_results_t *) msgp;
+	req = (struct p80211msg_dot11req_scan_results *) msgp;
 
 	req->resultcode.status = P80211ENUM_msgitem_status_data_ok;
 
@@ -380,8 +380,8 @@ int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 	}
 
 	count = (hw->scanresults->framelen - 3) / 32;
-	if (count > 32)
-		count = 32;
+	if (count > HFA384x_SCANRESULT_MAX)
+		count = HFA384x_SCANRESULT_MAX;
 
 	if (req->bssindex.data >= count) {
 		pr_debug("requested index (%d) out of range (%d)\n",
@@ -406,6 +406,7 @@ int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 	/* SSID */
 	req->ssid.status = P80211ENUM_msgitem_status_data_ok;
 	req->ssid.data.len = le16_to_cpu(item->ssid.len);
+	req->ssid.data.len = min_t(u16, req->ssid.data.len, WLAN_BSSID_LEN);
 	memcpy(req->ssid.data.data, item->ssid.data, req->ssid.data.len);
 
 	/* supported rates */
@@ -416,7 +417,8 @@ int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 #define REQBASICRATE(N) \
 	if ((count >= N) && DOT11_RATE5_ISBASIC_GET(item->supprates[(N)-1])) { \
 		req->basicrate ## N .data = item->supprates[(N)-1]; \
-		req->basicrate ## N .status = P80211ENUM_msgitem_status_data_ok; \
+		req->basicrate ## N .status = \
+			P80211ENUM_msgitem_status_data_ok; \
 	}
 
 	REQBASICRATE(1);
@@ -431,7 +433,8 @@ int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 #define REQSUPPRATE(N) \
 	if (count >= N) { \
 		req->supprate ## N .data = item->supprates[(N)-1]; \
-		req->supprate ## N .status = P80211ENUM_msgitem_status_data_ok; \
+		req->supprate ## N .status = \
+			P80211ENUM_msgitem_status_data_ok; \
 	}
 
 	REQSUPPRATE(1);
@@ -463,6 +466,8 @@ int prism2mgmt_scan_results(wlandevice_t *wlandev, void *msgp)
 
 	/* capinfo bits */
 	count = le16_to_cpu(item->capinfo);
+	req->capinfo.status = P80211ENUM_msgitem_status_data_ok;
+	req->capinfo.data = count;
 
 	/* privacy flag */
 	req->privacy.status = P80211ENUM_msgitem_status_data_ok;
@@ -511,7 +516,7 @@ int prism2mgmt_start(wlandevice_t *wlandev, void *msgp)
 {
 	int result = 0;
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_dot11req_start_t *msg = msgp;
+	struct p80211msg_dot11req_start *msg = msgp;
 
 	p80211pstrd_t *pstr;
 	u8 bytebuf[80];
@@ -687,7 +692,7 @@ done:
 int prism2mgmt_readpda(wlandevice_t *wlandev, void *msgp)
 {
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_p2req_readpda_t *msg = msgp;
+	struct p80211msg_p2req_readpda *msg = msgp;
 	int result;
 
 	/* We only support collecting the PDA when in the FWLOAD
@@ -753,7 +758,7 @@ int prism2mgmt_readpda(wlandevice_t *wlandev, void *msgp)
 int prism2mgmt_ramdl_state(wlandevice_t *wlandev, void *msgp)
 {
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_p2req_ramdl_state_t *msg = msgp;
+	struct p80211msg_p2req_ramdl_state *msg = msgp;
 
 	if (wlandev->msdstate != WLAN_MSD_FWLOAD) {
 		printk(KERN_ERR
@@ -809,7 +814,7 @@ int prism2mgmt_ramdl_state(wlandevice_t *wlandev, void *msgp)
 int prism2mgmt_ramdl_write(wlandevice_t *wlandev, void *msgp)
 {
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_p2req_ramdl_write_t *msg = msgp;
+	struct p80211msg_p2req_ramdl_write *msg = msgp;
 	u32 addr;
 	u32 len;
 	u8 *buf;
@@ -872,7 +877,7 @@ int prism2mgmt_flashdl_state(wlandevice_t *wlandev, void *msgp)
 {
 	int result = 0;
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_p2req_flashdl_state_t *msg = msgp;
+	struct p80211msg_p2req_flashdl_state *msg = msgp;
 
 	if (wlandev->msdstate != WLAN_MSD_FWLOAD) {
 		printk(KERN_ERR
@@ -942,7 +947,7 @@ int prism2mgmt_flashdl_state(wlandevice_t *wlandev, void *msgp)
 int prism2mgmt_flashdl_write(wlandevice_t *wlandev, void *msgp)
 {
 	hfa384x_t *hw = wlandev->priv;
-	p80211msg_p2req_flashdl_write_t *msg = msgp;
+	struct p80211msg_p2req_flashdl_write *msg = msgp;
 	u32 addr;
 	u32 len;
 	u8 *buf;
@@ -1006,7 +1011,7 @@ int prism2mgmt_autojoin(wlandevice_t *wlandev, void *msgp)
 	int result = 0;
 	u16 reg;
 	u16 port_type;
-	p80211msg_lnxreq_autojoin_t *msg = msgp;
+	struct p80211msg_lnxreq_autojoin *msg = msgp;
 	p80211pstrd_t *pstr;
 	u8 bytebuf[256];
 	hfa384x_bytestr_t *p2bytestr = (hfa384x_bytestr_t *) bytebuf;
@@ -1074,7 +1079,7 @@ int prism2mgmt_autojoin(wlandevice_t *wlandev, void *msgp)
 int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 {
 	int result = 0;
-	p80211msg_lnxreq_wlansniff_t *msg = msgp;
+	struct p80211msg_lnxreq_wlansniff *msg = msgp;
 
 	hfa384x_t *hw = wlandev->priv;
 	u16 word;
@@ -1100,7 +1105,7 @@ int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 		result = hfa384x_drvr_disable(hw, 0);
 		if (result) {
 			pr_debug
-			    ("failed to disable port 0 after sniffing, result=%d\n",
+			("failed to disable port 0 after sniffing, result=%d\n",
 			     result);
 			goto failed;
 		}
@@ -1135,7 +1140,7 @@ int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 			result = hfa384x_drvr_enable(hw, 0);
 			if (result) {
 				pr_debug
-				    ("failed to enable port to presniff setting, result=%d\n",
+				("failed to enable port to presniff setting, result=%d\n",
 				     result);
 				goto failed;
 			}
@@ -1159,7 +1164,7 @@ int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 						  &(hw->presniff_port_type));
 				if (result) {
 					pr_debug
-					    ("failed to read porttype, result=%d\n",
+					("failed to read porttype, result=%d\n",
 					     result);
 					goto failed;
 				}
@@ -1169,7 +1174,7 @@ int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 						  &(hw->presniff_wepflags));
 				if (result) {
 					pr_debug
-					    ("failed to read wepflags, result=%d\n",
+					("failed to read wepflags, result=%d\n",
 					     result);
 					goto failed;
 				}
@@ -1236,8 +1241,8 @@ int prism2mgmt_wlansniff(wlandevice_t *wlandev, void *msgp)
 
 			if (result) {
 				pr_debug
-				    ("failed to set wepflags=0x%04x, result=%d\n",
-				     word, result);
+				  ("failed to set wepflags=0x%04x, result=%d\n",
+				   word, result);
 				goto failed;
 			}
 		}

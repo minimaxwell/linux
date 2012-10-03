@@ -226,7 +226,7 @@ struct ib_fast_reg_page_list *mlx4_ib_alloc_fast_reg_page_list(struct ib_device 
 	struct mlx4_ib_fast_reg_page_list *mfrpl;
 	int size = page_list_len * sizeof (u64);
 
-	if (size > PAGE_SIZE)
+	if (page_list_len > MLX4_MAX_FAST_REG_PAGES)
 		return ERR_PTR(-EINVAL);
 
 	mfrpl = kmalloc(sizeof *mfrpl, GFP_KERNEL);
@@ -338,7 +338,7 @@ int mlx4_ib_unmap_fmr(struct list_head *fmr_list)
 
 	err = mlx4_SYNC_TPT(mdev);
 	if (err)
-		printk(KERN_WARNING "mlx4_ib: SYNC_TPT error %d when "
+		pr_warn("SYNC_TPT error %d when "
 		       "unmapping FMRs\n", err);
 
 	return 0;

@@ -88,7 +88,7 @@ static void pasemi_smb_clear(struct pasemi_smbus *smbus)
 	reg_write(smbus, REG_SMSTA, status);
 }
 
-static unsigned int pasemi_smb_waitready(struct pasemi_smbus *smbus)
+static int pasemi_smb_waitready(struct pasemi_smbus *smbus)
 {
 	int timeout = 10;
 	unsigned int status;
@@ -401,7 +401,7 @@ static void __devexit pasemi_smb_remove(struct pci_dev *dev)
 	kfree(smbus);
 }
 
-static const struct pci_device_id pasemi_smb_ids[] = {
+static DEFINE_PCI_DEVICE_TABLE(pasemi_smb_ids) = {
 	{ PCI_DEVICE(0x1959, 0xa003) },
 	{ 0, }
 };
@@ -415,19 +415,8 @@ static struct pci_driver pasemi_smb_driver = {
 	.remove		= __devexit_p(pasemi_smb_remove),
 };
 
-static int __init pasemi_smb_init(void)
-{
-	return pci_register_driver(&pasemi_smb_driver);
-}
-
-static void __exit pasemi_smb_exit(void)
-{
-	pci_unregister_driver(&pasemi_smb_driver);
-}
+module_pci_driver(pasemi_smb_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR ("Olof Johansson <olof@lixom.net>");
 MODULE_DESCRIPTION("PA Semi PWRficient SMBus driver");
-
-module_init(pasemi_smb_init);
-module_exit(pasemi_smb_exit);

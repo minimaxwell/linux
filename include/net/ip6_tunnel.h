@@ -9,11 +9,13 @@
 #define IP6_TNL_F_CAP_XMIT 0x10000
 /* capable of receiving packets */
 #define IP6_TNL_F_CAP_RCV 0x20000
+/* determine capability on a per-packet basis */
+#define IP6_TNL_F_CAP_PER_PACKET 0x40000
 
 /* IPv6 tunnel */
 
 struct ip6_tnl {
-	struct ip6_tnl *next;	/* next tunnel in list */
+	struct ip6_tnl __rcu *next;	/* next tunnel in list */
 	struct net_device *dev;	/* virtual device associated with tunnel */
 	struct ip6_tnl_parm parms;	/* tunnel configuration parameters */
 	struct flowi fl;	/* flowi template for xmit */
@@ -27,6 +29,6 @@ struct ipv6_tlv_tnl_enc_lim {
 	__u8 type;		/* type-code for option         */
 	__u8 length;		/* option length                */
 	__u8 encap_limit;	/* tunnel encapsulation limit   */
-} __attribute__ ((packed));
+} __packed;
 
 #endif
