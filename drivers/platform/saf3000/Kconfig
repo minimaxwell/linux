@@ -53,6 +53,13 @@ config MCR3000_CPLD
 	default y
 	---help---
 	  Driver GPIO pour les ChipSelects SPI
+
+config MCR3000_HWMON
+	bool "mcr3000 hwmon driver"
+	select SAF3000_CLASS
+	default y
+	---help---
+	  Driver hwmon pour mcr3000 1g
 endif
 
 if CMPC885

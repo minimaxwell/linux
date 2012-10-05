@@ -273,6 +273,10 @@
 		mcs {
 			compatible = "s3k,mcr3000-mcs";
 		};
+		hwmon@4,800 { 
+			compatible = "s3k,mcr3000-hwmon";
+			reg = <4 0x800 0x8 5 0xe4 0x2>;
+		};
 	};
 
 	soc@ff000000 {

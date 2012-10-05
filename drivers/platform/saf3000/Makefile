@@ -15,3 +15,4 @@ obj-$(CONFIG_CMPC_CPLD)		+= gpio_miae.o
 obj-$(CONFIG_CMPC_CPLD)		+= tsa.o
 obj-$(CONFIG_CMPC_CPLD)		+= tdm.o
 obj-$(CONFIG_CMPC_CPLD)		+= messagerie_dsp.o
+obj-$(CONFIG_MCR3000_HWMON)	+= mcr3000_hwmon.o
