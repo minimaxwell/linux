@@ -56,6 +56,7 @@ struct fpgaf_info_data {
 	struct device *dev;
 	struct device *infos;
 	struct device *hwmon_dev;
+	int AL_IN_clear[2];
 };
 
 #define EXTRACT(x,dec,bits) ((x>>dec) & ((1<<bits)-1))
@@ -392,10 +393,10 @@ static ssize_t show_label(struct device *dev, struct device_attribute *attr,
 		return sprintf(buf, "Alimentation CBRAS\n");
 		break;
 	case 2:
-		return sprintf(buf, "Alimentation_1 48 Volts\n");
+		return sprintf(buf, "Alimentation externe 1\n");
 		break;
 	case 3:
-		return sprintf(buf, "Alimentation_2 48 Volts\n");
+		return sprintf(buf, "Alimentation externe 2\n");
 		break;
 	}
 
@@ -419,13 +420,15 @@ static ssize_t show_intrusion(struct device *dev, struct device_attribute *attr,
 	switch(nr) {
 	case 0:
 		if (fpga_f->alrm_in & 0x01)
-			return sprintf(buf, "1\n");
+			return sprintf(buf, "%d\n", 
+				data->AL_IN_clear[0] ? 0 : 1);
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 1:
 		if (fpga_f->alrm_in & 0x02)
-			return sprintf(buf, "1\n");
+			return sprintf(buf, "%d\n", 
+				data->AL_IN_clear[1] ? 0 : 1);
 		else
 			return sprintf(buf, "0\n");
 		break;
@@ -440,14 +443,17 @@ static ssize_t clear_intrusion(struct device *dev, struct device_attribute *attr
 	struct sensor_device_attribute *sensor_attr = to_sensor_dev_attr(attr);
 	int nr = sensor_attr->index;
 	struct fpgaf_info_data *data = dev_get_drvdata(dev);
-	struct fpgaf *fpga_f = data->fpgaf;
 
 	switch(nr) {
 	case 0:
-		clrbits16(&fpga_f->alrm_in, 0x01);
+		data->AL_IN_clear[0] = 
+			SENSORS_LIMIT(simple_strtoul(buf, NULL, 10), 0, 1) ? 
+			0 : 1;
 		return count;
 	case 1:
-		clrbits16(&fpga_f->alrm_in, 0x02);
+		data->AL_IN_clear[1] = 
+			SENSORS_LIMIT(simple_strtoul(buf, NULL, 10), 0, 1) ? 
+			0 : 1;
 		return count;
 	}
 
@@ -573,6 +579,8 @@ static int __devinit fpgaf_info_probe(struct platform_device *ofdev)
 	err = sysfs_create_group(&dev->kobj, &fpgaf_group);
 	if (err)
                 goto err_hwmon;
+	
+	data->AL_IN_clear[0] = data->AL_IN_clear[1] = 0;
 
 	return 0;
 
