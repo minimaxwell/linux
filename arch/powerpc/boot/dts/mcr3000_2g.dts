@@ -560,7 +560,7 @@
 				fsl,cpm-command = <0x80>;
 			};
 
-			scc3: tdm@a40 {
+			scc3t: tdm@a40 {
 				device_type = "tdm";
 				tdm_name = "scc3";
 				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
@@ -580,7 +580,7 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
-			scc4: tdm@a60 {
+			scc4t: tdm@a60 {
 				device_type = "tdm";
 				tdm_name = "scc4";
 				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
