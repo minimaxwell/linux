@@ -260,6 +260,14 @@ static void fpgaf_led_alrm2_set(struct led_classdev *cdev, enum led_brightness b
 	}
 }
 
+static ssize_t show_name(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+	return sprintf(buf, "fpga-f\n");
+}
+
+static DEVICE_ATTR(name, S_IRUGO, show_name, NULL);
+
 
 static ssize_t show_fan(struct device *dev, struct device_attribute *attr,
                 char *buf)
@@ -468,6 +476,7 @@ static SENSOR_DEVICE_ATTR(intrusion1_alarm, S_IRUGO | S_IWUSR, show_intrusion,
 
 
 static struct attribute *fpgaf_attributes[] = {
+	&dev_attr_name.attr,
 	&dev_attr_fan1_input.attr,
 	&dev_attr_fan1_alarm.attr,
 	&sensor_dev_attr_in0_input.dev_attr.attr,

@@ -402,6 +402,14 @@ static ssize_t fs_attr_config_show(struct device *dev, struct device_attribute *
 }
 static DEVICE_ATTR(config, S_IRUGO, fs_attr_config_show, NULL);
 
+static ssize_t show_name(struct device *dev, struct device_attribute *attr,
+                char *buf)
+{
+        return sprintf(buf, "fpga-f\n");
+}
+
+static DEVICE_ATTR(name, S_IRUGO, show_name, NULL);
+
 static ssize_t show_alim_ext(struct device *dev, struct device_attribute *attr,
                 char *buf)
 {
@@ -439,6 +447,7 @@ static ssize_t show_alim_label(struct device *dev, struct device_attribute *attr
 static DEVICE_ATTR(in0_label, S_IRUGO, show_alim_label, NULL);	
 
 static struct attribute *fpgam_attributes[] = {
+	&dev_attr_name.attr,
 	&dev_attr_in0_input.attr,
 	&dev_attr_in0_alarm.attr,
 	&dev_attr_in0_label.attr,
