@@ -228,10 +228,10 @@ static ssize_t show_label(struct device *dev, struct device_attribute *attr,
 		return sprintf(buf, "Alimentation 5 Volts\n");
 		break;
 	case 3:
-		return sprintf(buf, "Alimentation externe 1\n");
+		return sprintf(buf, "Alimentation externe 1 48 Volts\n");
 		break;
 	case 4:
-		return sprintf(buf, "Alimentation externe 2\n");
+		return sprintf(buf, "Alimentation externe 2 48 Volts\n");
 		break;
 	}
 
