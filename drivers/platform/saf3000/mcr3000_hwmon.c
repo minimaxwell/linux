@@ -82,7 +82,7 @@ static ssize_t show_fan(struct device *dev, struct device_attribute *attr,
 	struct hwmon_data *data = dev_get_drvdata(dev);
 	struct hwmon_fpga_regs *regs = data->fpga_regs;
 	
-	if (regs->fpga_RILED & 0x40)
+	if (regs->fpga_RILED & 0x20)
 		 return sprintf(buf, "0\n");
 	else
 		 return sprintf(buf, "1000\n");
@@ -97,7 +97,7 @@ static ssize_t show_fan_alarm(struct device *dev, struct device_attribute *attr,
 	struct hwmon_data *data = dev_get_drvdata(dev);
 	struct hwmon_fpga_regs *regs = data->fpga_regs;
 	
-	if (regs->fpga_RILED & 0x40)
+	if (regs->fpga_RILED & 0x20)
 		 return sprintf(buf, "1\n");
 	else
 		 return sprintf(buf, "0\n");
@@ -116,31 +116,31 @@ static ssize_t show_alim(struct device *dev, struct device_attribute *attr,
 
 	switch(nr) {
 	case 0:
-		if (regs->cpld_STWD & 0x100)
+		if (regs->cpld_STWD & 0x80)
 			return sprintf(buf, "1500\n");
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 1:
-		if (regs->cpld_STWD & 0x200)
+		if (regs->cpld_STWD & 0x40)
 			return sprintf(buf, "2500\n");
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 2:
-		if (regs->cpld_STWD & 0x400)
+		if (regs->cpld_STWD & 0x20)
 			return sprintf(buf, "5000\n");
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 3:
-		if (regs->cpld_EVT & 0x4000)
+		if (regs->cpld_EVT & 0x02)
 			return sprintf(buf, "0\n");
 		else
 			return sprintf(buf, "48000\n");
 		break;
 	case 4:
-		if (regs->cpld_EVT & 0x8000)
+		if (regs->cpld_EVT & 0x01)
 			return sprintf(buf, "0\n");
 		else
 			return sprintf(buf, "48000\n");
@@ -170,34 +170,34 @@ static ssize_t show_alarm(struct device *dev, struct device_attribute *attr,
 
 	switch(nr) {
 	case 0:
-		if (regs->cpld_STWD & 0x100)
-			return sprintf(buf, "1500\n");
-		else
+		if (regs->cpld_STWD & 0x80)
 			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "1\n");
 		break;
 	case 1:
-		if (regs->cpld_STWD & 0x200)
-			return sprintf(buf, "2500\n");
-		else
+		if (regs->cpld_STWD & 0x40)
 			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "1\n");
 		break;
 	case 2:
-		if (regs->cpld_STWD & 0x400)
-			return sprintf(buf, "5000\n");
-		else
+		if (regs->cpld_STWD & 0x20)
 			return sprintf(buf, "0\n");
+		else
+			return sprintf(buf, "1\n");
 		break;
 	case 3:
-		if (regs->cpld_EVT & 0x4000)
-			return sprintf(buf, "0\n");
+		if (regs->cpld_EVT & 0x02)
+			return sprintf(buf, "1\n");
 		else
-			return sprintf(buf, "48000\n");
+			return sprintf(buf, "0\n");
 		break;
 	case 4:
-		if (regs->cpld_EVT & 0x8000)
-			return sprintf(buf, "0\n");
+		if (regs->cpld_EVT & 0x01)
+			return sprintf(buf, "1\n");
 		else
-			return sprintf(buf, "48000\n");
+			return sprintf(buf, "0\n");
 		break;
 	}
 
@@ -255,14 +255,14 @@ static ssize_t show_intrusion(struct device *dev, struct device_attribute *attr,
 
 	switch(nr) {
 	case 0:
-		if (regs->cpld_EVT & 0x1000)
+		if (regs->cpld_EVT & 0x08)
 			return sprintf(buf, "%d\n", 
 				data->AL_IN_clear[0] ? 0 : 1);
 		else
 			return sprintf(buf, "0\n");
 		break;
 	case 1:
-		if (regs->cpld_EVT & 0x2000)
+		if (regs->cpld_EVT & 0x04)
 			return sprintf(buf, "%d\n", 
 				data->AL_IN_clear[1] ? 0 : 1);
 		else
