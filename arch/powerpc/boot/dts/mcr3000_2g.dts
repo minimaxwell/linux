@@ -365,6 +365,7 @@
 		#size-cells = <1>;
 		device_type = "soc";
 		ranges = <0x0 0xff000000 0x28000>;
+
 		bus-frequency = <0>;
 
 		WDT: watchdog@0 {
@@ -391,6 +392,13 @@
 				reg = <0x2>;
 				device_type = "ethernet-phy";
 			};
+
+			PHY5: ethernet-phy@5 {
+				interrupts = <2 1>;
+				interrupt-parent = <&PIC>;
+				reg = <0x5>;
+				device_type = "ethernet-phy";
+			};
 		};
 
 		eth0: ethernet@e00 {
@@ -400,8 +408,11 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <3 1>;
 			interrupt-parent = <&PIC>;
-			phy-handle = <&PHY1>;
+			phy-handle = <&PHY1 &PHY5>;
 			linux,network-index = <0>;
+			use-PHY5;
+			gpios = <&rst 15 1>;		// Reset Eth1
+			PHY-disable = "isolate";
 		};
 
 		eth1: ethernet@1e00 {

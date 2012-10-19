@@ -155,6 +155,7 @@ struct fs_enet_private {
 	int interrupt;
 	int gpio;
 	int disable_phy;
+	int use_PHY5;
 
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];

@@ -879,9 +879,26 @@ void fs_link_switch(struct fs_enet_private *fep)
 
 	if (phydev == fep->phydevs[0]) {
 		if (fep->phydevs[1]) {
+			/* MCR3000_2G Front side eth connector */
+			if (fep->use_PHY5) {
+				/* Switch off PHY 1 */
+				value = phy_read(phydev, MII_BMCR);
+				phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+				/* Unisolate PHY 5 */
+				phydev=fep->phydevs[1];
+				value = phy_read(phydev, MII_BMCR);
+				phy_write(phydev, MII_BMCR, 
+					((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+				if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			} 
+			else
+				if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
+
+
+
+
 			phydev = fep->phydevs[1];
 			dev_err(fep->dev, "Switch to PHY B\n");
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
 			/* In the open function, autoneg was disabled for PHY B.
 			   It must be enabled when PHY B is activated for the 
 			   first time. */
@@ -889,9 +906,22 @@ void fs_link_switch(struct fs_enet_private *fep)
 		}
 	}
 	else {
+		/* MCR3000_2G Front side eth connector */
+		if (fep->use_PHY5) {
+			/* isolate PHY 5 */
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+			/* Switch on PHY 1 */
+			phydev=fep->phydevs[0];
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, 
+				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
+		}
+		else
+			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
 		phydev = fep->phydevs[0];
 		dev_err(fep->dev, "Switch to PHY A\n");
-		if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
 	}
 
 	if (fep->phydevs[1]) {
@@ -1176,7 +1206,12 @@ static int fs_enet_open(struct net_device *dev)
 			value = phy_read(fep->phydevs[1], MII_BMCR);
 			phy_write(fep->phydevs[1], MII_BMCR, 
 				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			if (fep->gpio != -1) {
+				if (fep->use_PHY5) 
+					ldb_gpio_set_value(fep->gpio, 0);
+				else
+					ldb_gpio_set_value(fep->gpio, 1);
+			}
 			/* autoneg must be disabled at this point. Otherwise, 
 			the driver will remove the ISOLATE bit in the command
 			register and break networking */
@@ -1302,7 +1337,12 @@ static int fs_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		if (fep->phydev == fep->phydevs[1]) {
 			dev_err(fep->dev, "Switch to PHY A\n");
 			fep->phydev = fep->phydevs[0];
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			if (fep->gpio != -1) {
+				if (fep->use_PHY5) 
+					ldb_gpio_set_value(fep->gpio, 0);
+				else
+					ldb_gpio_set_value(fep->gpio, 1);
+			}
 		}
 		return ret;
 	}
@@ -1315,7 +1355,12 @@ static int fs_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		if (fep->phydev == fep->phydevs[0]) {
 			dev_err(fep->dev, "Switch to PHY B\n");
 			fep->phydev = fep->phydevs[1];
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
+			if (fep->gpio != -1) {
+				if (fep->use_PHY5) 
+					ldb_gpio_set_value(fep->gpio, 1);
+				else
+					ldb_gpio_set_value(fep->gpio, 0);
+			}
 		}
 		return ret;
 	}
@@ -1382,7 +1427,12 @@ static int fs_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 		if (fep->phydev == fep->phydevs[1]) {
 			dev_err(fep->dev, "Switch to PHY A\n");
 			fep->phydev = fep->phydevs[0];
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 1);
+			if (fep->gpio != -1) {
+				if (fep->use_PHY5) 
+					ldb_gpio_set_value(fep->gpio, 0);
+				else
+					ldb_gpio_set_value(fep->gpio, 1);
+			}
 		}
 		return ret;
 	}
@@ -1395,7 +1445,12 @@ static int fs_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 		if (fep->phydev == fep->phydevs[0]) {
 			dev_err(fep->dev, "Switch to PHY B\n");
 			fep->phydev = fep->phydevs[1];
-			if (fep->gpio != -1) ldb_gpio_set_value(fep->gpio, 0);
+			if (fep->gpio != -1) {
+				if (fep->use_PHY5) 
+					ldb_gpio_set_value(fep->gpio, 1);
+				else
+					ldb_gpio_set_value(fep->gpio, 0);
+			}
 		}
 		return ret;
 	}
@@ -1562,6 +1617,7 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 	int ngpios = of_gpio_count(ofdev->dev.of_node);
 	int gpio = -1;
 	char *Disable_PHY;
+	char *use_PHY5;
 
 	match = of_match_device(fs_enet_match, &ofdev->dev);
 	if (!match)
@@ -1630,6 +1686,12 @@ static int __devinit fs_enet_probe(struct platform_device *ofdev)
 		else if (! strcmp(Disable_PHY, "isolate"))
 			fep->disable_phy = PHY_ISOLATE;
 	}
+
+	fep->use_PHY5 = 0;
+	use_PHY5 = (char *)of_get_property(ofdev->dev.of_node, 
+		"use-PHY5", NULL);
+	if (use_PHY5) 
+		fep->use_PHY5=1;
 
 	ret = fep->ops->setup_data(ndev);
 	if (ret)
