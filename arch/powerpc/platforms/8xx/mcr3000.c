@@ -100,6 +100,24 @@ static struct cpm_pin mcr3000_pins[] = {
 	
 };
 
+static struct cpm_pin cmpc885_pins_fev292[] = { /* FEV 292, a supprimer une fois FEV 169 traitee */
+	{CPM_PORTC, 11, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS1			*/
+	{CPM_PORTC,  9, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS2			*/
+	{CPM_PORTC,  7, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS3			*/
+	{CPM_PORTC,  5, CPM_PIN_INPUT | CPM_PIN_GPIO }, 	/* CTS4			*/
+};
+	
+static void __init init_ioports_fev292(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(cmpc885_pins_fev292); i++) {
+		struct cpm_pin *pin = &cmpc885_pins_fev292[i];
+		cpm1_set_pin(pin->port, pin->pin, pin->flags);
+	}
+	pr_info("CTS1, CTS2, CTS3 and CTS4 temporarily deactivated (FEV292)\n");
+}
+
 static void __init init_ioports(void)
 {
 	int i;
@@ -262,6 +280,7 @@ static void __init mcr3000_setup_arch(void)
 {
 	cpm_reset();
 	init_ioports();
+	init_ioports_fev292();
 
 	mpc8xx_early_ping_watchdog();
 }
