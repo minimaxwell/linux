@@ -429,14 +429,14 @@
 			PHY2: ethernet-phy@2 {
 				interrupts = <2 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x2>;
+				reg = <0x3>;
 				device_type = "ethernet-phy";
 			};
 
 			PHY3: ethernet-phy@3 {
 				interrupts = <2 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x3>;
+				reg = <0x2>;
 				device_type = "ethernet-phy";
 			};
 		};
