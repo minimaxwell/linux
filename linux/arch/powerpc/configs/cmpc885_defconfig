@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 3.6.0 Kernel Configuration
+# Linux/powerpc 3.6.6 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -231,6 +231,8 @@ CONFIG_SAF3000=y
 # CONFIG_TQM8XX is not set
 CONFIG_MCR3000=y
 CONFIG_CMPC885=y
+CONFIG_MCR3000_2G=y
+CONFIG_MIAE=y
 
 #
 # MPC8xx CPM Options

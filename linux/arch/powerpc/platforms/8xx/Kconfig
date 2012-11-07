@@ -70,8 +70,16 @@ config MCR3000
 	depends on SAF3000
 
 config CMPC885
-	bool "Support for CMPC885 (MCR 2G, MIAe)"
+	bool "Support for CMPC885 (MCR 2G, MIAe / VGoIP)"
 	depends on SAF3000
+	
+config MCR3000_2G
+	bool "Support for MCR3000 2G (MCR 2G)"
+	depends on CMPC885
+
+config MIAE
+	bool "Support for MIA Ethernet (MIAe) and VGoIP"
+	depends on CMPC885
 
 menu "Freescale Ethernet driver platform-specific options"
 	depends on (FS_ENET && MPC885ADS)
