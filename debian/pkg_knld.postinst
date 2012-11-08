@@ -25,5 +25,8 @@ echo '#!/bin/sh' > /etc/rcS.d/S02_tmp_depmod
 echo 'depmod -a' >> /etc/rcS.d/S02_tmp_depmod
 echo 'rm -f $0' >> /etc/rcS.d/S02_tmp_depmod
 chmod a+x /etc/rcS.d/S02_tmp_depmod
+# activation du service drivers
+service-cfg drivers add 80
+service-cfg drivers on
 
-echo "KNL successfuly installed!"
+echo "KNLD successfuly installed!"

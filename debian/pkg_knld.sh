@@ -10,7 +10,7 @@
 # opt	 4 => Path and name for the 2nd dtb file
 #	 etc....
 #===============================================================
-package_knl()
+package_knld()
 {
 	#===== Check parameters
 	if [ "$#" -lt "3" ] ; then
@@ -20,11 +20,11 @@ package_knl()
 
 	#===== Construct directory path
 	ROOT_PATH=`pwd`
-	PATH_PKG=$ROOT_PATH/knl
+	PATH_PKG=$ROOT_PATH/knld
 	PATH_LINUX=$1
 
 	if [ ! -f $PATH_LINUX ] ; then
-		echo "pkg_knl: Error file not found [$PATH_LINUX]"
+		echo "pkg_knld: Error file not found [$PATH_LINUX]"
 		return 2
 	fi
 	
@@ -36,12 +36,15 @@ package_knl()
 	chmod 1777 $PATH_PKG/tmp
 	chmod 700 $PATH_PKG/tmp/root
 	cp $PATH_LINUX $PATH_PKG/tmp/root
+	
+	# copy modules
+	cp -a lib etc usr $PATH_PKG
 
 	# verifying DTB files exist
 	for (( i = 3; i <= $#; i += 1)); do
 		echo "dtb: ${!i}"
 		if [ ! -f ${!i} ]; then
-			echo "pkg_knl: Error ${!i} do not exist"
+			echo "pkg_knld: Error ${!i} do not exist"
 			return 2
 		fi
 	done
@@ -57,7 +60,7 @@ package_knl()
 	"MCR3000_2G")
 		dd if=/dev/zero of=$PATH_PKG/tmp/root/dtb.bin bs=1 count=192K;;
 	*)
-		echo "pkg_knl: Error board type unknown"
+		echo "pkg_knld: Error board type unknown"
 		return 2;;
 	esac
 
@@ -71,9 +74,9 @@ package_knl()
 	linux_file=`basename ${PATH_LINUX}`
 	#===== Making package
 	mkdir -p $PATH_PKG/DEBIAN
-	cp ./pkg_knl.control 	$PATH_PKG/DEBIAN/control
-	cp ./pkg_knl.postinst 	$PATH_PKG/DEBIAN/postinst
-	cp ./pkg_knl.preinst 	$PATH_PKG/DEBIAN/preinst
+	cp ./pkg_knld.control 	$PATH_PKG/DEBIAN/control
+	cp ./pkg_knld.postinst 	$PATH_PKG/DEBIAN/postinst
+	cp ./pkg_knld.preinst 	$PATH_PKG/DEBIAN/preinst
 
 	# replace with the good file name
 	sed -i "s#LINUX_FILE_NAME#/tmp/root/${linux_file}#g" $PATH_PKG/DEBIAN/postinst
@@ -99,15 +102,15 @@ package_knl()
 
 	chmod 755 $PATH_PKG/DEBIAN/post*
 	chmod 755 $PATH_PKG/DEBIAN/pre*
-	dpkg-deb --build knl
+	dpkg-deb --build knld
 
 	# rename the package
-	mv "knl.deb" "KNL-${board}-${version}.deb"
+	mv "knld.deb" "KNLD-${board}-${version}.deb"
 
 	return 0
 }
 
-usage_pkg_knl()
+usage_pkg_knld()
 {
 	echo "Usage: $0 KNL_BINARY DTB1 [DTB2 DTB3....]"
 	echo "   - Warning: the name of the KNL_BINARY file must be"
@@ -118,16 +121,16 @@ usage_pkg_knl()
 }
 
 
-if [ `basename $0` = "pkg_knl.sh" ]; then
+if [ `basename $0` = "pkg_knld.sh" ]; then
 
 	#===== By parameters
 	if [ -z "${1}" ]; then
-		usage_pkg_knl
+		usage_pkg_knld
 		exit 0
 	fi
 	LINUX_BIN=${1}
 
 	#===== Direct call
-	package_knl $LINUX_BIN ${2} ${3} ${4} ${5} ${6} ${7} ${8}
+	package_knld $LINUX_BIN ${2} ${3} ${4} ${5} ${6} ${7} ${8}
 
 fi
