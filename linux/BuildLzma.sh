@@ -40,7 +40,7 @@ if [ -f ./vmlinux.bin.gz ] ; then
 		exit 2
 	fi
 	# creation de l'image U-BOOT
-	mkimage -C lzma -A PowerPC -O Linux -T Kernel -a 0 -e 0 -n $BINARY_NAME -d ./vmlinux.bin.lzma ./uImage.lzma
+	mkimage -C lzma -A ppc -O Linux -T Kernel -a 0 -e 0 -n $BINARY_NAME -d ./vmlinux.bin.lzma ./uImage.lzma
 else
 	echo "Fichier vmlinux.bin.gz introuvable!"
 	exit 2
