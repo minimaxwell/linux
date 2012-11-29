@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 3.6.7 Kernel Configuration
+# Linux/powerpc 3.6.8 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -948,6 +948,7 @@ CONFIG_OF_GPIO=y
 CONFIG_DEBUG_GPIO=y
 CONFIG_ARCH_NR_GPIOS=1024
 CONFIG_GPIO_SYSFS=y
+CONFIG_GPIO_MAX730X=y
 
 #
 # Memory mapped GPIO drivers:
@@ -966,7 +967,7 @@ CONFIG_GPIO_SYSFS=y
 #
 # SPI GPIO expanders:
 #
-# CONFIG_GPIO_MAX7301 is not set
+CONFIG_GPIO_MAX7301=y
 # CONFIG_GPIO_MCP23S08 is not set
 # CONFIG_GPIO_MC33880 is not set
 # CONFIG_GPIO_74X164 is not set
@@ -1061,7 +1062,7 @@ CONFIG_LEDS_CLASS=y
 #
 # LED drivers
 #
-# CONFIG_LEDS_GPIO is not set
+CONFIG_LEDS_GPIO=y
 # CONFIG_LEDS_DAC124S085 is not set
 # CONFIG_LEDS_LT3593 is not set
 # CONFIG_LEDS_RENESAS_TPU is not set
