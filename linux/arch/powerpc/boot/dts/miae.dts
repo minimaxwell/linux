@@ -341,21 +341,21 @@
 				"pres_umain_b",		// Presence µMain_b
 				"pres_ucasque_a",	// Presence µCasque_a
 				"pres_ucasque_b";	// Presence µCasque_b
-			names_nvcs = "tor_in_1",
-				"tor_in_2",		// by_pass
-				"tor_in_3",
-				"tor_in_4",
+			names_nvcs = "pres_hp_3",	// Presence HP3
+				"pres_hp_2",		// Presence HP2
+				"pres_aith",		// Presence AITH
+				"pres_hp_1",		// Presence HP1
 				"tor_in_5",
-				"tor_in_6",
-				"tor_in_7",
-				"tor_in_8",
+				"alt_pedale_1",		// Pedale alternat 1
+				"alt_pedale_2",		// Pedale alternat 2
+				"tor_in_8",		// Decroche Combine
 				"tor_in_9",
 				"tor_in_10",
-				"tor_in_11",
-				"tor_out_1",		// Sortie Jour/Nuit
-				"tor_out_2",		// Sortie Alternat POUS
-				"tor_out_3",
-				"tor_out_4",
+				"alt_aith",		// Alternat AITH
+				"lum_hp_3",		// Jour/nuit HP3
+				"lum_hp_2",		// Jour/nuit HP2
+				"lum_aith",		// Jour/nuit AITH
+				"lum_hp_1",		// Jour/nuit HP1
 				"tor_out_5",
 				"tor_out_6",
 				"none",
