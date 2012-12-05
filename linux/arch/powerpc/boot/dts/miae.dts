@@ -348,7 +348,7 @@
 				"tor_in_5",
 				"alt_pedale_1",		// Pedale alternat 1
 				"alt_pedale_2",		// Pedale alternat 2
-				"tor_in_8",		// Decroche Combine
+				"dec_ucomb",		// Decroche Combine
 				"tor_in_9",
 				"tor_in_10",
 				"alt_aith",		// Alternat AITH
