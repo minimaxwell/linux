@@ -563,7 +563,7 @@
 				/* 2eme parametre = data rate (8MHz ou 4MHz) */
 				/* par défaut ts_info = <0 8> */
 				/* les TS codecs se deduiront a partir du channel phase du E1 */
-				ts_info = <0 8>;	/* phase = 0, debit = 8MHz */
+				ts_info = <0 4>;	/* phase = 0, debit = 8MHz */
 			};
 
 			smc1: serial@a80 {
