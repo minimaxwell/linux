@@ -1097,7 +1097,7 @@ CONFIG_STAGING=y
 # IIO staging drivers
 #
 # CONFIG_IIO_ST_HWMON is not set
-# CONFIG_IIO_SW_RING is not set
+CONFIG_IIO_SW_RING=y
 
 #
 # Accelerometers
@@ -1193,7 +1193,7 @@ CONFIG_AD7923=y
 # Triggers - standalone
 #
 # CONFIG_IIO_GPIO_TRIGGER is not set
-# CONFIG_IIO_SYSFS_TRIGGER is not set
+CONFIG_IIO_SYSFS_TRIGGER=y
 # CONFIG_IIO_SIMPLE_DUMMY is not set
 # CONFIG_ZSMALLOC is not set
 # CONFIG_FT1000 is not set
