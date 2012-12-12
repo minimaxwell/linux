@@ -22,6 +22,10 @@ extern void __init u16_gpiochip_init(const char *);
 extern void fpga_clk_set_brg(void);
 
 extern void gest_led_debug(int led, int cmde);
+extern int type_fav(void);
+
+#define FAV_NVCS_LEMO		6
+#define FAV_NVCS_FISCHER	5
 
 #endif /* __KERNEL__ */
 		

@@ -193,6 +193,12 @@
 				reg = <0x32 2>;
 				gpio-controller;
 			};
+			liens: gpio-controller@34 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-m-gpio";
+				reg = <0x34 2>;
+				gpio-controller;
+			};
 			gen: gpio-controller@40 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-m-gpio";
@@ -559,11 +565,11 @@
 				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
 				scc_codec = "SCC4";
 				scc_e1 = "SCC3";
-				/* 1er parametre = channel phase E1 (0 à 3 si data rate = 8MHz */
+				/* 1er parametre = channel phase E1 (0 à 1 si data rate = 4MHz */
 				/* 2eme parametre = data rate (8MHz ou 4MHz) */
-				/* par défaut ts_info = <0 8> */
+				/* par défaut ts_info = <0 4> */
 				/* les TS codecs se deduiront a partir du channel phase du E1 */
-				ts_info = <0 4>;	/* phase = 0, debit = 8MHz */
+				ts_info = <0 4>;	/* phase = 0, debit = 4MHz */
 			};
 
 			smc1: serial@a80 {
@@ -632,7 +638,8 @@
 					 &CPM1_PIO_C 12 1	/* EEPROM MIAE */
 					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
-					 &CPM1_PIO_B 21 1>;	/* EEPROM CMPC885 */
+					 &CPM1_PIO_B 21 1	/* EEPROM CMPC885 */
+					 &fav 5 1>;		/* FAV */
 				sicofi@0 {
 					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
@@ -695,6 +702,13 @@
 					at25,byte-len = <1024>;
 					at25,addr-mode = <2>;
 					at25,page-size = <32>;
+				};
+				csfav@7 {
+					compatible = "iio,ad7923";
+					spi-max-frequency = <3200000>;
+					reg = <7>;
+					spi-cs-high;
+					spi-cpol;
 				};
 			};
 			

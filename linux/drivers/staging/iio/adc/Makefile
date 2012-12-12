@@ -30,7 +30,7 @@ ad7298-$(CONFIG_IIO_BUFFER) += ad7298_ring.o
 obj-$(CONFIG_AD7298) += ad7298.o
 
 ad7923-y := ad7923_core.o
-#ad7923-$(CONFIG_IIO_BUFFER) += ad7298_ring.o
+ad7923-$(CONFIG_IIO_BUFFER) += ad7923_ring.o
 obj-$(CONFIG_AD7923) += ad7923.o
 
 obj-$(CONFIG_AD7291) += ad7291.o

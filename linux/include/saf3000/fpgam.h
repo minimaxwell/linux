@@ -18,7 +18,8 @@ struct fpgam {
 	u16 res3[1];
 	u16 tor_in;
 	u16 tor_out;
-	u16 res4[6];
+	u16 liens;
+	u16 res4[5];
 	u16 fct_gen;
 	u16 gest_far;
 	u16 gest_fav;

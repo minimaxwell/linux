@@ -19,6 +19,7 @@
 #include <linux/iio/sysfs.h>
 #include <linux/iio/buffer.h>
 
+#include <saf3000/saf3000.h>
 
 #include "ad7923.h"
 
@@ -48,11 +49,13 @@ static struct iio_chan_spec ad7923_channels[] = {
 
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
-	int ret;
-	st->tx_buf[0] = cpu_to_be16(AD7923_WRITE_CR | AD7923_CODING |
-				AD7923_PM_MODE_WRITE(AD7923_PM_MODE_OPS) |
-				AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_OFF) |
-				AD7923_CHANNEL_WRITE(ch) | AD7923_RANGE);
+	int ret, cmd;
+	
+	cmd = AD7923_WRITE_CR | AD7923_PM_MODE_WRITE(AD7923_PM_MODE_OPS) |
+		AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_OFF) | AD7923_CODING | 
+		AD7923_CHANNEL_WRITE(ch) | AD7923_RANGE;
+	cmd <<= AD7923_SHIFT_REGISTER;
+	st->tx_buf[0] = cpu_to_be16(cmd);
 
 	ret = spi_sync(st->spi, &st->scan_single_msg);
 	if (ret)
@@ -69,7 +72,6 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 {
 	int ret;
 	struct ad7923_state *st = iio_priv(indio_dev);
-	unsigned int scale_uv;
 
 	switch (m) {
 	case IIO_CHAN_INFO_RAW:
@@ -82,9 +84,10 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 
 		if (ret < 0)
 			return ret;
-		if (chan->address != EXTRACT(ret, 12, 4)) {
+		if (chan->address == EXTRACT(ret, 12, 4)) {
 			*val = EXTRACT(ret, 0, 12);
 			*val2 = EXTRACT_PERCENT(*val, 12);
+printk("  val1 %d / val2 %d\n", *val, *val2);
 		}
 		return IIO_VAL_INT;
 	}
@@ -93,15 +96,25 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 
 static const struct iio_info ad7923_info = {
 	.read_raw = &ad7923_read_raw,
+	.update_scan_mode = ad7923_update_scan_mode,
 	.driver_module = THIS_MODULE,
 };
 
 static int __devinit ad7923_probe(struct spi_device *spi)
 {
 	struct ad7923_state *st;
+	struct device *dev = &spi->dev;
 	int ret;
 	struct iio_dev *indio_dev = iio_device_alloc(sizeof(*st));
 
+#ifdef AD7923_USE_CS
+	ret = type_fav();
+	if ((ret != FAV_NVCS_LEMO) && (ret != FAV_NVCS_FISCHER)) {
+		dev_err(dev, "Driver AD7923 is not added (FAV = %d).\n", ret);
+		return -ENODEV;
+	}
+#endif
+	
 	if (indio_dev == NULL)
 		return -ENOMEM;
 
@@ -143,6 +156,8 @@ static int __devinit ad7923_probe(struct spi_device *spi)
 	ret = iio_device_register(indio_dev);
 	if (ret)
 		goto error_cleanup_ring;
+
+	dev_info(dev, "Driver AD7923 is added.\n");
 
 	return 0;
 
@@ -192,6 +207,6 @@ static struct spi_driver ad7923_driver = {
 };
 module_spi_driver(ad7923_driver);
 
-MODULE_AUTHOR("Michael Hennerich <hennerich@blackfin.uclinux.org>");
+MODULE_AUTHOR("VASSEUR Patrick");
 MODULE_DESCRIPTION("Analog Devices AD7923 ADC");
 MODULE_LICENSE("GPL v2");
