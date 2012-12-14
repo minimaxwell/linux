@@ -87,7 +87,6 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 		if (chan->address == EXTRACT(ret, 12, 4)) {
 			*val = EXTRACT(ret, 0, 12);
 			*val2 = EXTRACT_PERCENT(*val, 12);
-printk("  val1 %d / val2 %d\n", *val, *val2);
 		}
 		return IIO_VAL_INT;
 	}
