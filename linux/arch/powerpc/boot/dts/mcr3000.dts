@@ -424,6 +424,26 @@
 				gpio-controller;
 			};
 		
+			dsp1: dsp1@900 {
+				device_type = "dsp";
+				compatible = "fsl,cpm1-dsp";
+				reg = <0x900 0x30 0x3ec0 0x40>;
+				interrupts = <22>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-dsp = <1>;
+				fsl,cpm-command = <0x90>;
+			};
+
+			dsp2: dsp2@900 {
+				device_type = "dsp";
+				compatible = "fsl,cpm1-dsp";
+				reg = <0x900 0x30 0x3fc0 0x40>;
+				interrupts = <22>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-dsp = <2>;
+				fsl,cpm-command = <0xd0>;
+			};
+
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc866-smc-uart", "fsl,cpm1-smc-uart";
@@ -472,14 +492,6 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <4>;
 				fsl,cpm-command = <0xc0>;
-			};
-
-			dsp1: dsp1@900 {
-				compatible = "fsl,mpc866-dsp", "fsl,cpm1-dsp";
-				reg = <0x900 0x30 0x1ec0 0x30>;
-				interrupts = <24>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-command = <0x00>;
 			};
 
 			spi: spi@a80 {

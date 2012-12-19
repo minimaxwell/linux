@@ -559,6 +559,26 @@
 				gpio-controller;
 			};
 			
+			dsp1: dsp1@900 {
+				device_type = "dsp";
+				compatible = "fsl,cpm1-dsp";
+				reg = <0x900 0x30 0x3ec0 0x40>;
+				interrupts = <22>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-dsp = <1>;
+				fsl,cpm-command = <0x90>;
+			};
+
+			dsp2: dsp2@900 {
+				device_type = "dsp";
+				compatible = "fsl,cpm1-dsp";
+				reg = <0x900 0x30 0x3fc0 0x40>;
+				interrupts = <22>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-dsp = <2>;
+				fsl,cpm-command = <0xd0>;
+			};
+
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440 0x930 0x20>;
