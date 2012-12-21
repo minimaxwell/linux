@@ -583,8 +583,8 @@
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
-				scc_codec = "SCC4";
-				scc_e1 = "SCC3";
+				scc_codec = "SMC2";
+				scc_e1 = "SCC4";
 				/* 1er parametre = channel phase E1 (0 à 1 si data rate = 4MHz */
 				/* 2eme parametre = data rate (8MHz ou 4MHz) */
 				/* par défaut ts_info = <0 4> */
@@ -612,18 +612,37 @@
 				fsl,cpm-command = <0x40>;
 			};
 
-			scc3: tdm@a40 {
+			scc3: serial@a40 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x80>;
+			};
+
+			scc3t: tdm@a40 {
 				device_type = "tdm";
 				tdm_name = "scc3";
 				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28>;
 				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
 			};
 
-			scc4: tdm@a60 {
+			scc4: serial@a60 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa60 0x20 0x3f00 0x80>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0xc0>;
+			};
+
+			scc4t: tdm@a60 {
 				device_type = "tdm";
 				tdm_name = "scc4";
 				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
@@ -633,7 +652,7 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
-			smc2: tdm_smc@a90 {
+			smc2t: tdm_smc@a90 {
 				device_type = "tdm";
 				tdm_name = "smc2";
 				compatible = "fsl,mpc885-smc-tdm", "fsl,cpm1-smc-tdm";
@@ -668,7 +687,7 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec 1";
-					analog_em = "-2dB -2dB 0dB 0dB";
+					analog_em = "-2dB -2dB -2dB -2dB";
 					analog_rec = "6dB 6dB 6dB 6dB";
 				};
 				lm74@1 {
