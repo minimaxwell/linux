@@ -54,12 +54,8 @@
 #define MII_LXT971_ISR		19  /* Interrupt Status Register */
 
 /* register definitions for the 973 */
-#define MII_LXT973_PCR		16 /* Port Configuration Register */
+#define MII_LXT973_PCR 16 /* Port Configuration Register */
 #define PCR_FIBER_SELECT 1
-#define MII_LXT973_SFR		27  /* Special Function Register */
-
-#define PHYDEV_PRIV_FIBER	1
-#define PHYDEV_PRIV_REVA2	2
 
 MODULE_DESCRIPTION("Intel LXT PHY driver");
 MODULE_AUTHOR("Andy Fleming");
@@ -103,9 +99,6 @@ static int lxt970_config_init(struct phy_device *phydev)
 	return err;
 }
 
-/* register definitions for the 973 */
-#define MII_LXT973_PCR 16 /* Port Configuration Register */
-#define PCR_FIBER_SELECT 1
 
 static int lxt971_ack_interrupt(struct phy_device *phydev)
 {
@@ -213,9 +206,10 @@ int lxt973a2_read_status(struct phy_device *phydev)
 
 			if (lpa & LPA_100FULL)
 				phydev->duplex = DUPLEX_FULL;
-		} else
+		} else {
 			if (lpa & LPA_10FULL)
 				phydev->duplex = DUPLEX_FULL;
+		}
 
 		if (phydev->duplex == DUPLEX_FULL) {
 			phydev->pause = lpa & LPA_PAUSE_CAP ? 1 : 0;
@@ -245,22 +239,9 @@ int lxt973a2_read_status(struct phy_device *phydev)
 	return 0;
 }
 
-static int lxt973_read_status(struct phy_device *phydev)
-{
-	return (int)phydev->priv&PHYDEV_PRIV_REVA2 ?
-			lxt973a2_read_status(phydev) :
-			genphy_read_status(phydev);
-}
-
 static int lxt973_probe(struct phy_device *phydev)
 {
 	int val = phy_read(phydev, MII_LXT973_PCR);
-	int priv = 0;
-
-	phydev->priv = NULL;
-
-	if (val < 0)
-		return val;
 
 	if (val & PCR_FIBER_SELECT) {
 		/*
@@ -272,26 +253,17 @@ static int lxt973_probe(struct phy_device *phydev)
 		val &= ~BMCR_ANENABLE;
 		phy_write(phydev, MII_BMCR, val);
 		/* Remember that the port is in fiber mode. */
-		priv |= PHYDEV_PRIV_FIBER;
+		phydev->priv = lxt973_probe;
+	} else {
+		phydev->priv = NULL;
 	}
-	val = phy_read(phydev, MII_PHYSID2);
-
-	if (val < 0)
-		return val;
-
-	if ((val & 0xf) == 0) { /* rev A2 */
-		dev_info(&phydev->dev, " LXT973 revision A2 has bugs\n");
-		priv |= PHYDEV_PRIV_REVA2;
-	}
-	phydev->priv = (void *)priv;
 	return 0;
 }
 
 static int lxt973_config_aneg(struct phy_device *phydev)
 {
 	/* Do nothing if port is in fiber mode. */
-	return (int)phydev->priv&PHYDEV_PRIV_FIBER ?
-			0 : genphy_config_aneg(phydev);
+	return phydev->priv ? 0 : genphy_config_aneg(phydev);
 }
 
 static struct phy_driver lxt97x_driver[] = {
@@ -320,16 +292,23 @@ static struct phy_driver lxt97x_driver[] = {
 	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= 0x00137a10,
+	.name		= "LXT973-A2",
+	.phy_id_mask	= 0xffffffff,
+	.features	= PHY_BASIC_FEATURES,
+	.flags		= 0,
+	.probe		= lxt973_probe,
+	.config_aneg	= lxt973_config_aneg,
+	.read_status	= lxt973a2_read_status,
+	.driver		= { .owner = THIS_MODULE,},
+}, {
+	.phy_id		= 0x00137a10,
 	.name		= "LXT973",
 	.phy_id_mask	= 0xfffffff0,
 	.features	= PHY_BASIC_FEATURES,
 	.flags		= 0,
 	.probe		= lxt973_probe,
 	.config_aneg	= lxt973_config_aneg,
-	.read_status	= lxt973_read_status,
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
-	.isolate	= genphy_isolate,
+	.read_status	= genphy_read_status,
 	.driver		= { .owner = THIS_MODULE,},
 } };
 
