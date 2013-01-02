@@ -105,21 +105,6 @@ static void gntdev_print_maps(struct gntdev_priv *priv,
 #endif
 }
 
-static void gntdev_free_map(struct grant_map *map)
-{
-	if (map == NULL)
-		return;
-
-	if (map->pages)
-		free_xenballooned_pages(map->count, map->pages);
-	kfree(map->pages);
-	kfree(map->grants);
-	kfree(map->map_ops);
-	kfree(map->unmap_ops);
-	kfree(map->kmap_ops);
-	kfree(map);
-}
-
 static struct grant_map *gntdev_alloc_map(struct gntdev_priv *priv, int count)
 {
 	struct grant_map *add;
@@ -157,7 +142,12 @@ static struct grant_map *gntdev_alloc_map(struct gntdev_priv *priv, int count)
 	return add;
 
 err:
-	gntdev_free_map(add);
+	kfree(add->pages);
+	kfree(add->grants);
+	kfree(add->map_ops);
+	kfree(add->unmap_ops);
+	kfree(add->kmap_ops);
+	kfree(add);
 	return NULL;
 }
 
@@ -208,9 +198,17 @@ static void gntdev_put_map(struct grant_map *map)
 		evtchn_put(map->notify.event);
 	}
 
-	if (map->pages && !use_ptemod)
-		unmap_grant_pages(map, 0, map->count);
-	gntdev_free_map(map);
+	if (map->pages) {
+		if (!use_ptemod)
+			unmap_grant_pages(map, 0, map->count);
+
+		free_xenballooned_pages(map->count, map->pages);
+	}
+	kfree(map->pages);
+	kfree(map->grants);
+	kfree(map->map_ops);
+	kfree(map->unmap_ops);
+	kfree(map);
 }
 
 /* ------------------------------------------------------------------ */

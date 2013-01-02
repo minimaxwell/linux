@@ -846,16 +846,6 @@ static int evergreen_cs_track_validate_texture(struct radeon_cs_parser *p,
 		return -EINVAL;
 	}
 
-	if (!mipmap) {
-		if (llevel) {
-			dev_warn(p->dev, "%s:%i got NULL MIP_ADDRESS relocation\n",
-				 __func__, __LINE__);
-			return -EINVAL;
-		} else {
-			return 0; /* everything's ok */
-		}
-	}
-
 	/* check mipmap size */
 	for (i = 1; i <= llevel; i++) {
 		unsigned w, h, d;
@@ -1088,27 +1078,6 @@ static int evergreen_cs_packet_next_reloc(struct radeon_cs_parser *p,
 	/* FIXME: we assume reloc size is 4 dwords */
 	*cs_reloc = p->relocs_ptr[(idx / 4)];
 	return 0;
-}
-
-/**
- * evergreen_cs_packet_next_is_pkt3_nop() - test if the next packet is NOP
- * @p:		structure holding the parser context.
- *
- * Check if the next packet is a relocation packet3.
- **/
-static bool evergreen_cs_packet_next_is_pkt3_nop(struct radeon_cs_parser *p)
-{
-	struct radeon_cs_packet p3reloc;
-	int r;
-
-	r = evergreen_cs_packet_parse(p, &p3reloc, p->idx);
-	if (r) {
-		return false;
-	}
-	if (p3reloc.type != PACKET_TYPE3 || p3reloc.opcode != PACKET3_NOP) {
-		return false;
-	}
-	return true;
 }
 
 /**
@@ -2361,7 +2330,7 @@ static int evergreen_packet3_check(struct radeon_cs_parser *p,
 		for (i = 0; i < (pkt->count / 8); i++) {
 			struct radeon_bo *texture, *mipmap;
 			u32 toffset, moffset;
-			u32 size, offset, mip_address, tex_dim;
+			u32 size, offset;
 
 			switch (G__SQ_CONSTANT_TYPE(radeon_get_ib_value(p, idx+1+(i*8)+7))) {
 			case SQ_TEX_VTX_VALID_TEXTURE:
@@ -2390,28 +2359,14 @@ static int evergreen_packet3_check(struct radeon_cs_parser *p,
 				}
 				texture = reloc->robj;
 				toffset = (u32)((reloc->lobj.gpu_offset >> 8) & 0xffffffff);
-
 				/* tex mip base */
-				tex_dim = ib[idx+1+(i*8)+0] & 0x7;
-				mip_address = ib[idx+1+(i*8)+3];
-
-				if ((tex_dim == SQ_TEX_DIM_2D_MSAA || tex_dim == SQ_TEX_DIM_2D_ARRAY_MSAA) &&
-				    !mip_address &&
-				    !evergreen_cs_packet_next_is_pkt3_nop(p)) {
-					/* MIP_ADDRESS should point to FMASK for an MSAA texture.
-					 * It should be 0 if FMASK is disabled. */
-					moffset = 0;
-					mipmap = NULL;
-				} else {
-					r = evergreen_cs_packet_next_reloc(p, &reloc);
-					if (r) {
-						DRM_ERROR("bad SET_RESOURCE (tex)\n");
-						return -EINVAL;
-					}
-					moffset = (u32)((reloc->lobj.gpu_offset >> 8) & 0xffffffff);
-					mipmap = reloc->robj;
+				r = evergreen_cs_packet_next_reloc(p, &reloc);
+				if (r) {
+					DRM_ERROR("bad SET_RESOURCE (tex)\n");
+					return -EINVAL;
 				}
-
+				moffset = (u32)((reloc->lobj.gpu_offset >> 8) & 0xffffffff);
+				mipmap = reloc->robj;
 				r = evergreen_cs_track_validate_texture(p, texture, mipmap, idx+1+(i*8));
 				if (r)
 					return r;
@@ -2725,9 +2680,6 @@ static bool evergreen_vm_reg_valid(u32 reg)
 	/* check config regs */
 	switch (reg) {
 	case GRBM_GFX_INDEX:
-	case CP_STRMOUT_CNTL:
-	case CP_COHER_CNTL:
-	case CP_COHER_SIZE:
 	case VGT_VTX_VECT_EJECT_REG:
 	case VGT_CACHE_INVALIDATION:
 	case VGT_GS_VERTEX_REUSE:
@@ -2832,7 +2784,6 @@ static bool evergreen_vm_reg_valid(u32 reg)
 	case CAYMAN_SQ_EX_ALLOC_TABLE_SLOTS:
 		return true;
 	default:
-		DRM_ERROR("Invalid register 0x%x in CS\n", reg);
 		return false;
 	}
 }

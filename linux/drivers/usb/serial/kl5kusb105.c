@@ -62,8 +62,8 @@ static bool debug;
 /*
  * Function prototypes
  */
-static int klsi_105_port_probe(struct usb_serial_port *port);
-static int klsi_105_port_remove(struct usb_serial_port *port);
+static int  klsi_105_startup(struct usb_serial *serial);
+static void klsi_105_release(struct usb_serial *serial);
 static int  klsi_105_open(struct tty_struct *tty, struct usb_serial_port *port);
 static void klsi_105_close(struct usb_serial_port *port);
 static void klsi_105_set_termios(struct tty_struct *tty,
@@ -101,8 +101,8 @@ static struct usb_serial_driver kl5kusb105d_device = {
 	/*.break_ctl =		klsi_105_break_ctl,*/
 	.tiocmget =		klsi_105_tiocmget,
 	.tiocmset =		klsi_105_tiocmset,
-	.port_probe =		klsi_105_port_probe,
-	.port_remove =		klsi_105_port_remove,
+	.attach =		klsi_105_startup,
+	.release =		klsi_105_release,
 	.throttle =		usb_serial_generic_throttle,
 	.unthrottle =		usb_serial_generic_unthrottle,
 	.process_read_urb =	klsi_105_process_read_urb,
@@ -225,40 +225,58 @@ static int klsi_105_get_line_state(struct usb_serial_port *port,
  * Driver's tty interface functions
  */
 
-static int klsi_105_port_probe(struct usb_serial_port *port)
+static int klsi_105_startup(struct usb_serial *serial)
 {
 	struct klsi_105_private *priv;
+	int i;
 
-	priv = kmalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
+	/* check if we support the product id (see keyspan.c)
+	 * FIXME
+	 */
 
-	/* set initial values for control structures */
-	priv->cfg.pktlen    = 5;
-	priv->cfg.baudrate  = kl5kusb105a_sio_b9600;
-	priv->cfg.databits  = kl5kusb105a_dtb_8;
-	priv->cfg.unknown1  = 0;
-	priv->cfg.unknown2  = 1;
+	/* allocate the private data structure */
+	for (i = 0; i < serial->num_ports; i++) {
+		priv = kmalloc(sizeof(struct klsi_105_private),
+						   GFP_KERNEL);
+		if (!priv) {
+			dbg("%skmalloc for klsi_105_private failed.", __func__);
+			i--;
+			goto err_cleanup;
+		}
+		/* set initial values for control structures */
+		priv->cfg.pktlen    = 5;
+		priv->cfg.baudrate  = kl5kusb105a_sio_b9600;
+		priv->cfg.databits  = kl5kusb105a_dtb_8;
+		priv->cfg.unknown1  = 0;
+		priv->cfg.unknown2  = 1;
 
-	priv->line_state    = 0;
+		priv->line_state    = 0;
 
-	spin_lock_init(&priv->lock);
+		usb_set_serial_port_data(serial->port[i], priv);
 
-	/* priv->termios is left uninitialized until port opening */
+		spin_lock_init(&priv->lock);
 
-	usb_set_serial_port_data(port, priv);
+		/* priv->termios is left uninitialized until port opening */
+		init_waitqueue_head(&serial->port[i]->write_wait);
+	}
 
 	return 0;
+
+err_cleanup:
+	for (; i >= 0; i--) {
+		priv = usb_get_serial_port_data(serial->port[i]);
+		kfree(priv);
+		usb_set_serial_port_data(serial->port[i], NULL);
+	}
+	return -ENOMEM;
 }
 
-static int klsi_105_port_remove(struct usb_serial_port *port)
+static void klsi_105_release(struct usb_serial *serial)
 {
-	struct klsi_105_private *priv;
+	int i;
 
-	priv = usb_get_serial_port_data(port);
-	kfree(priv);
-
-	return 0;
+	for (i = 0; i < serial->num_ports; ++i)
+		kfree(usb_get_serial_port_data(serial->port[i]));
 }
 
 static int  klsi_105_open(struct tty_struct *tty, struct usb_serial_port *port)

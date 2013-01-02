@@ -76,8 +76,6 @@ proc_bus_pci_read(struct file *file, char __user *buf, size_t nbytes, loff_t *pp
 	if (!access_ok(VERIFY_WRITE, buf, cnt))
 		return -EINVAL;
 
-	pci_config_pm_runtime_get(dev);
-
 	if ((pos & 1) && cnt) {
 		unsigned char val;
 		pci_user_read_config_byte(dev, pos, &val);
@@ -123,8 +121,6 @@ proc_bus_pci_read(struct file *file, char __user *buf, size_t nbytes, loff_t *pp
 		cnt--;
 	}
 
-	pci_config_pm_runtime_put(dev);
-
 	*ppos = pos;
 	return nbytes;
 }
@@ -149,8 +145,6 @@ proc_bus_pci_write(struct file *file, const char __user *buf, size_t nbytes, lof
 
 	if (!access_ok(VERIFY_READ, buf, cnt))
 		return -EINVAL;
-
-	pci_config_pm_runtime_get(dev);
 
 	if ((pos & 1) && cnt) {
 		unsigned char val;
@@ -196,8 +190,6 @@ proc_bus_pci_write(struct file *file, const char __user *buf, size_t nbytes, lof
 		pos++;
 		cnt--;
 	}
-
-	pci_config_pm_runtime_put(dev);
 
 	*ppos = pos;
 	i_size_write(ino, dp->size);

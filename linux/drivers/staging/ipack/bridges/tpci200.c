@@ -604,8 +604,8 @@ static int tpci200_slot_unregister(struct ipack_device *dev)
 	if (mutex_lock_interruptible(&tpci200->mutex))
 		return -ERESTARTSYS;
 
-	tpci200->slots[dev->slot].dev = NULL;
 	ipack_device_unregister(dev);
+	tpci200->slots[dev->slot].dev = NULL;
 	mutex_unlock(&tpci200->mutex);
 
 	return 0;

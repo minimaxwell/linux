@@ -126,6 +126,9 @@ static inline int calc_divisor(int bps)
 
 static int ark3116_attach(struct usb_serial *serial)
 {
+	struct usb_serial_port *port = serial->port[0];
+	struct ark3116_private *priv;
+
 	/* make sure we have our end-points */
 	if ((serial->num_bulk_in == 0) ||
 	    (serial->num_bulk_out == 0) ||
@@ -140,15 +143,8 @@ static int ark3116_attach(struct usb_serial *serial)
 		return -EINVAL;
 	}
 
-	return 0;
-}
-
-static int ark3116_port_probe(struct usb_serial_port *port)
-{
-	struct usb_serial *serial = port->serial;
-	struct ark3116_private *priv;
-
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	priv = kzalloc(sizeof(struct ark3116_private),
+		       GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
@@ -203,15 +199,18 @@ static int ark3116_port_probe(struct usb_serial_port *port)
 	return 0;
 }
 
-static int ark3116_port_remove(struct usb_serial_port *port)
+static void ark3116_release(struct usb_serial *serial)
 {
+	struct usb_serial_port *port = serial->port[0];
 	struct ark3116_private *priv = usb_get_serial_port_data(port);
 
 	/* device is closed, so URBs and DMA should be down */
-	mutex_destroy(&priv->hw_lock);
-	kfree(priv);
 
-	return 0;
+	usb_set_serial_port_data(port, NULL);
+
+	mutex_destroy(&priv->hw_lock);
+
+	kfree(priv);
 }
 
 static void ark3116_init_termios(struct tty_struct *tty)
@@ -726,8 +725,7 @@ static struct usb_serial_driver ark3116_device = {
 	.id_table =		id_table,
 	.num_ports =		1,
 	.attach =		ark3116_attach,
-	.port_probe =		ark3116_port_probe,
-	.port_remove =		ark3116_port_remove,
+	.release =		ark3116_release,
 	.set_termios =		ark3116_set_termios,
 	.init_termios =		ark3116_init_termios,
 	.ioctl =		ark3116_ioctl,

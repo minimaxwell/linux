@@ -7,6 +7,7 @@
  */
 
 #include <linux/types.h>
+#include <linux/utsname.h>
 #include <linux/kernel.h>
 #include <linux/ktime.h>
 #include <linux/slab.h>
@@ -17,8 +18,6 @@
 #include <linux/lockd/lockd.h>
 
 #include <asm/unaligned.h>
-
-#include "netns.h"
 
 #define NLMDBG_FACILITY		NLMDBG_MONITOR
 #define NSM_PROGRAM		100024
@@ -41,7 +40,6 @@ struct nsm_args {
 	u32			proc;
 
 	char			*mon_name;
-	char			*nodename;
 };
 
 struct nsm_res {
@@ -72,7 +70,7 @@ static struct rpc_clnt *nsm_create(struct net *net)
 	};
 	struct rpc_create_args args = {
 		.net			= net,
-		.protocol		= XPRT_TRANSPORT_TCP,
+		.protocol		= XPRT_TRANSPORT_UDP,
 		.address		= (struct sockaddr *)&sin,
 		.addrsize		= sizeof(sin),
 		.servername		= "rpc.statd",
@@ -85,61 +83,10 @@ static struct rpc_clnt *nsm_create(struct net *net)
 	return rpc_create(&args);
 }
 
-static struct rpc_clnt *nsm_client_set(struct lockd_net *ln,
-		struct rpc_clnt *clnt)
-{
-	spin_lock(&ln->nsm_clnt_lock);
-	if (ln->nsm_users == 0) {
-		if (clnt == NULL)
-			goto out;
-		ln->nsm_clnt = clnt;
-	}
-	clnt = ln->nsm_clnt;
-	ln->nsm_users++;
-out:
-	spin_unlock(&ln->nsm_clnt_lock);
-	return clnt;
-}
-
-static struct rpc_clnt *nsm_client_get(struct net *net)
-{
-	struct rpc_clnt	*clnt, *new;
-	struct lockd_net *ln = net_generic(net, lockd_net_id);
-
-	clnt = nsm_client_set(ln, NULL);
-	if (clnt != NULL)
-		goto out;
-
-	clnt = new = nsm_create(net);
-	if (IS_ERR(clnt))
-		goto out;
-
-	clnt = nsm_client_set(ln, new);
-	if (clnt != new)
-		rpc_shutdown_client(new);
-out:
-	return clnt;
-}
-
-static void nsm_client_put(struct net *net)
-{
-	struct lockd_net *ln = net_generic(net, lockd_net_id);
-	struct rpc_clnt	*clnt = NULL;
-
-	spin_lock(&ln->nsm_clnt_lock);
-	ln->nsm_users--;
-	if (ln->nsm_users == 0) {
-		clnt = ln->nsm_clnt;
-		ln->nsm_clnt = NULL;
-	}
-	spin_unlock(&ln->nsm_clnt_lock);
-	if (clnt != NULL)
-		rpc_shutdown_client(clnt);
-}
-
 static int nsm_mon_unmon(struct nsm_handle *nsm, u32 proc, struct nsm_res *res,
-			 struct rpc_clnt *clnt)
+			 struct net *net)
 {
+	struct rpc_clnt	*clnt;
 	int		status;
 	struct nsm_args args = {
 		.priv		= &nsm->sm_priv,
@@ -147,24 +94,31 @@ static int nsm_mon_unmon(struct nsm_handle *nsm, u32 proc, struct nsm_res *res,
 		.vers		= 3,
 		.proc		= NLMPROC_NSM_NOTIFY,
 		.mon_name	= nsm->sm_mon_name,
-		.nodename	= clnt->cl_nodename,
 	};
 	struct rpc_message msg = {
 		.rpc_argp	= &args,
 		.rpc_resp	= res,
 	};
 
-	BUG_ON(clnt == NULL);
+	clnt = nsm_create(net);
+	if (IS_ERR(clnt)) {
+		status = PTR_ERR(clnt);
+		dprintk("lockd: failed to create NSM upcall transport, "
+				"status=%d\n", status);
+		goto out;
+	}
 
 	memset(res, 0, sizeof(*res));
 
 	msg.rpc_proc = &clnt->cl_procinfo[proc];
-	status = rpc_call_sync(clnt, &msg, RPC_TASK_SOFTCONN);
+	status = rpc_call_sync(clnt, &msg, 0);
 	if (status < 0)
 		dprintk("lockd: NSM upcall RPC failed, status=%d\n",
 				status);
 	else
 		status = 0;
+	rpc_shutdown_client(clnt);
+ out:
 	return status;
 }
 
@@ -184,7 +138,6 @@ int nsm_monitor(const struct nlm_host *host)
 	struct nsm_handle *nsm = host->h_nsmhandle;
 	struct nsm_res	res;
 	int		status;
-	struct rpc_clnt *clnt;
 
 	dprintk("lockd: nsm_monitor(%s)\n", nsm->sm_name);
 
@@ -197,15 +150,7 @@ int nsm_monitor(const struct nlm_host *host)
 	 */
 	nsm->sm_mon_name = nsm_use_hostnames ? nsm->sm_name : nsm->sm_addrbuf;
 
-	clnt = nsm_client_get(host->net);
-	if (IS_ERR(clnt)) {
-		status = PTR_ERR(clnt);
-		dprintk("lockd: failed to create NSM upcall transport, "
-				"status=%d, net=%p\n", status, host->net);
-		return status;
-	}
-
-	status = nsm_mon_unmon(nsm, NSMPROC_MON, &res, clnt);
+	status = nsm_mon_unmon(nsm, NSMPROC_MON, &res, host->net);
 	if (unlikely(res.status != 0))
 		status = -EIO;
 	if (unlikely(status < 0)) {
@@ -237,11 +182,9 @@ void nsm_unmonitor(const struct nlm_host *host)
 
 	if (atomic_read(&nsm->sm_count) == 1
 	 && nsm->sm_monitored && !nsm->sm_sticky) {
-		struct lockd_net *ln = net_generic(host->net, lockd_net_id);
-
 		dprintk("lockd: nsm_unmonitor(%s)\n", nsm->sm_name);
 
-		status = nsm_mon_unmon(nsm, NSMPROC_UNMON, &res, ln->nsm_clnt);
+		status = nsm_mon_unmon(nsm, NSMPROC_UNMON, &res, host->net);
 		if (res.status != 0)
 			status = -EIO;
 		if (status < 0)
@@ -249,8 +192,6 @@ void nsm_unmonitor(const struct nlm_host *host)
 					nsm->sm_name);
 		else
 			nsm->sm_monitored = 0;
-
-		nsm_client_put(host->net);
 	}
 }
 
@@ -489,7 +430,7 @@ static void encode_my_id(struct xdr_stream *xdr, const struct nsm_args *argp)
 {
 	__be32 *p;
 
-	encode_nsm_string(xdr, argp->nodename);
+	encode_nsm_string(xdr, utsname()->nodename);
 	p = xdr_reserve_space(xdr, 4 + 4 + 4);
 	*p++ = cpu_to_be32(argp->prog);
 	*p++ = cpu_to_be32(argp->vers);

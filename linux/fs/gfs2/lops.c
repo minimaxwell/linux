@@ -393,10 +393,12 @@ static void buf_lo_add(struct gfs2_sbd *sdp, struct gfs2_bufdata *bd)
 	struct gfs2_meta_header *mh;
 	struct gfs2_trans *tr;
 
+	lock_buffer(bd->bd_bh);
+	gfs2_log_lock(sdp);
 	tr = current->journal_info;
 	tr->tr_touched = 1;
 	if (!list_empty(&bd->bd_list))
-		return;
+		goto out;
 	set_bit(GLF_LFLUSH, &bd->bd_gl->gl_flags);
 	set_bit(GLF_DIRTY, &bd->bd_gl->gl_flags);
 	mh = (struct gfs2_meta_header *)bd->bd_bh->b_data;
@@ -412,6 +414,9 @@ static void buf_lo_add(struct gfs2_sbd *sdp, struct gfs2_bufdata *bd)
 	sdp->sd_log_num_buf++;
 	list_add(&bd->bd_list, &sdp->sd_log_le_buf);
 	tr->tr_num_buf_new++;
+out:
+	gfs2_log_unlock(sdp);
+	unlock_buffer(bd->bd_bh);
 }
 
 static void gfs2_check_magic(struct buffer_head *bh)
@@ -772,10 +777,12 @@ static void databuf_lo_add(struct gfs2_sbd *sdp, struct gfs2_bufdata *bd)
 	struct address_space *mapping = bd->bd_bh->b_page->mapping;
 	struct gfs2_inode *ip = GFS2_I(mapping->host);
 
+	lock_buffer(bd->bd_bh);
+	gfs2_log_lock(sdp);
 	if (tr)
 		tr->tr_touched = 1;
 	if (!list_empty(&bd->bd_list))
-		return;
+		goto out;
 	set_bit(GLF_LFLUSH, &bd->bd_gl->gl_flags);
 	set_bit(GLF_DIRTY, &bd->bd_gl->gl_flags);
 	if (gfs2_is_jdata(ip)) {
@@ -786,6 +793,9 @@ static void databuf_lo_add(struct gfs2_sbd *sdp, struct gfs2_bufdata *bd)
 	} else {
 		list_add_tail(&bd->bd_list, &sdp->sd_log_le_ordered);
 	}
+out:
+	gfs2_log_unlock(sdp);
+	unlock_buffer(bd->bd_bh);
 }
 
 /**

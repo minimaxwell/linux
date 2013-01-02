@@ -2176,12 +2176,9 @@ static bool pfmemalloc_watermark_ok(pg_data_t *pgdat)
  * Throttle direct reclaimers if backing storage is backed by the network
  * and the PFMEMALLOC reserve for the preferred node is getting dangerously
  * depleted. kswapd will continue to make progress and wake the processes
- * when the low watermark is reached.
- *
- * Returns true if a fatal signal was delivered during throttling. If this
- * happens, the page allocator should not consider triggering the OOM killer.
+ * when the low watermark is reached
  */
-static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
+static void throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 					nodemask_t *nodemask)
 {
 	struct zone *zone;
@@ -2196,20 +2193,13 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 	 * processes to block on log_wait_commit().
 	 */
 	if (current->flags & PF_KTHREAD)
-		goto out;
-
-	/*
-	 * If a fatal signal is pending, this process should not throttle.
-	 * It should return quickly so it can exit and free its memory
-	 */
-	if (fatal_signal_pending(current))
-		goto out;
+		return;
 
 	/* Check if the pfmemalloc reserves are ok */
 	first_zones_zonelist(zonelist, high_zoneidx, NULL, &zone);
 	pgdat = zone->zone_pgdat;
 	if (pfmemalloc_watermark_ok(pgdat))
-		goto out;
+		return;
 
 	/* Account for the throttling */
 	count_vm_event(PGSCAN_DIRECT_THROTTLE);
@@ -2225,20 +2215,12 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 	if (!(gfp_mask & __GFP_FS)) {
 		wait_event_interruptible_timeout(pgdat->pfmemalloc_wait,
 			pfmemalloc_watermark_ok(pgdat), HZ);
-
-		goto check_pending;
+		return;
 	}
 
 	/* Throttle until kswapd wakes the process */
 	wait_event_killable(zone->zone_pgdat->pfmemalloc_wait,
 		pfmemalloc_watermark_ok(pgdat));
-
-check_pending:
-	if (fatal_signal_pending(current))
-		return true;
-
-out:
-	return false;
 }
 
 unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
@@ -2260,12 +2242,13 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 		.gfp_mask = sc.gfp_mask,
 	};
 
+	throttle_direct_reclaim(gfp_mask, zonelist, nodemask);
+
 	/*
-	 * Do not enter reclaim if fatal signal was delivered while throttled.
-	 * 1 is returned so that the page allocator does not OOM kill at this
-	 * point.
+	 * Do not enter reclaim if fatal signal is pending. 1 is returned so
+	 * that the page allocator does not consider triggering OOM
 	 */
-	if (throttle_direct_reclaim(gfp_mask, zonelist, nodemask))
+	if (fatal_signal_pending(current))
 		return 1;
 
 	trace_mm_vmscan_direct_reclaim_begin(order,
@@ -2383,19 +2366,6 @@ static void age_active_anon(struct zone *zone, struct scan_control *sc)
 	} while (memcg);
 }
 
-static bool zone_balanced(struct zone *zone, int order,
-			  unsigned long balance_gap, int classzone_idx)
-{
-	if (!zone_watermark_ok_safe(zone, order, high_wmark_pages(zone) +
-				    balance_gap, classzone_idx, 0))
-		return false;
-
-	if (COMPACTION_BUILD && order && !compaction_suitable(zone, order))
-		return false;
-
-	return true;
-}
-
 /*
  * pgdat_balanced is used when checking if a node is balanced for high-order
  * allocations. Only zones that meet watermarks and are in a zone allowed
@@ -2474,7 +2444,8 @@ static bool prepare_kswapd_sleep(pg_data_t *pgdat, int order, long remaining,
 			continue;
 		}
 
-		if (!zone_balanced(zone, order, 0, i))
+		if (!zone_watermark_ok_safe(zone, order, high_wmark_pages(zone),
+							i, 0))
 			all_zones_ok = false;
 		else
 			balanced += zone->present_pages;
@@ -2583,7 +2554,8 @@ loop_again:
 				break;
 			}
 
-			if (!zone_balanced(zone, order, 0, 0)) {
+			if (!zone_watermark_ok_safe(zone, order,
+					high_wmark_pages(zone), 0, 0)) {
 				end_zone = i;
 				break;
 			} else {
@@ -2659,8 +2631,9 @@ loop_again:
 				testorder = 0;
 
 			if ((buffer_heads_over_limit && is_highmem_idx(i)) ||
-			    !zone_balanced(zone, testorder,
-					   balance_gap, end_zone)) {
+				    !zone_watermark_ok_safe(zone, testorder,
+					high_wmark_pages(zone) + balance_gap,
+					end_zone, 0)) {
 				shrink_zone(zone, &sc);
 
 				reclaim_state->reclaimed_slab = 0;
@@ -2687,7 +2660,8 @@ loop_again:
 				continue;
 			}
 
-			if (!zone_balanced(zone, testorder, 0, end_zone)) {
+			if (!zone_watermark_ok_safe(zone, testorder,
+					high_wmark_pages(zone), end_zone, 0)) {
 				all_zones_ok = 0;
 				/*
 				 * We are still under min water mark.  This
@@ -2979,8 +2953,6 @@ static int kswapd(void *p)
 						&balanced_classzone_idx);
 		}
 	}
-
-	current->reclaim_state = NULL;
 	return 0;
 }
 

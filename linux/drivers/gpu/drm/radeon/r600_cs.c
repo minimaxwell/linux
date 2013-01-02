@@ -2180,8 +2180,7 @@ static int r600_packet3_check(struct radeon_cs_parser *p,
 		}
 		break;
 	case PACKET3_STRMOUT_BASE_UPDATE:
-		/* RS780 and RS880 also need this */
-		if (p->family < CHIP_RS780) {
+		if (p->family < CHIP_RV770) {
 			DRM_ERROR("STRMOUT_BASE_UPDATE only supported on 7xx\n");
 			return -EINVAL;
 		}

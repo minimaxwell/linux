@@ -319,30 +319,39 @@ static int f81232_ioctl(struct tty_struct *tty,
 	return -ENOIOCTLCMD;
 }
 
-static int f81232_port_probe(struct usb_serial_port *port)
+static int f81232_startup(struct usb_serial *serial)
 {
 	struct f81232_private *priv;
+	int i;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	spin_lock_init(&priv->lock);
-	init_waitqueue_head(&priv->delta_msr_wait);
-
-	usb_set_serial_port_data(port, priv);
-
+	for (i = 0; i < serial->num_ports; ++i) {
+		priv = kzalloc(sizeof(struct f81232_private), GFP_KERNEL);
+		if (!priv)
+			goto cleanup;
+		spin_lock_init(&priv->lock);
+		init_waitqueue_head(&priv->delta_msr_wait);
+		usb_set_serial_port_data(serial->port[i], priv);
+	}
 	return 0;
+
+cleanup:
+	for (--i; i >= 0; --i) {
+		priv = usb_get_serial_port_data(serial->port[i]);
+		kfree(priv);
+		usb_set_serial_port_data(serial->port[i], NULL);
+	}
+	return -ENOMEM;
 }
 
-static int f81232_port_remove(struct usb_serial_port *port)
+static void f81232_release(struct usb_serial *serial)
 {
+	int i;
 	struct f81232_private *priv;
 
-	priv = usb_get_serial_port_data(port);
-	kfree(priv);
-
-	return 0;
+	for (i = 0; i < serial->num_ports; ++i) {
+		priv = usb_get_serial_port_data(serial->port[i]);
+		kfree(priv);
+	}
 }
 
 static struct usb_serial_driver f81232_device = {
@@ -365,8 +374,8 @@ static struct usb_serial_driver f81232_device = {
 	.tiocmset =		f81232_tiocmset,
 	.process_read_urb =	f81232_process_read_urb,
 	.read_int_callback =	f81232_read_int_callback,
-	.port_probe =		f81232_port_probe,
-	.port_remove =		f81232_port_remove,
+	.attach =		f81232_startup,
+	.release =		f81232_release,
 };
 
 static struct usb_serial_driver * const serial_drivers[] = {

@@ -69,6 +69,13 @@ struct ssu100_port_private {
 	struct async_icount icount;
 };
 
+static void ssu100_release(struct usb_serial *serial)
+{
+	struct ssu100_port_private *priv = usb_get_serial_port_data(*serial->port);
+
+	kfree(priv);
+}
+
 static inline int ssu100_control_msg(struct usb_device *dev,
 				     u8 request, u16 data, u16 index)
 {
@@ -437,33 +444,21 @@ static int ssu100_ioctl(struct tty_struct *tty,
 
 static int ssu100_attach(struct usb_serial *serial)
 {
-	return ssu100_initdevice(serial->dev);
-}
-
-static int ssu100_port_probe(struct usb_serial_port *port)
-{
 	struct ssu100_port_private *priv;
+	struct usb_serial_port *port = *serial->port;
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
+	if (!priv) {
+		dev_err(&port->dev, "%s- kmalloc(%Zd) failed.\n", __func__,
+			sizeof(*priv));
 		return -ENOMEM;
+	}
 
 	spin_lock_init(&priv->status_lock);
 	init_waitqueue_head(&priv->delta_msr_wait);
-
 	usb_set_serial_port_data(port, priv);
 
-	return 0;
-}
-
-static int ssu100_port_remove(struct usb_serial_port *port)
-{
-	struct ssu100_port_private *priv;
-
-	priv = usb_get_serial_port_data(port);
-	kfree(priv);
-
-	return 0;
+	return ssu100_initdevice(serial->dev);
 }
 
 static int ssu100_tiocmget(struct tty_struct *tty)
@@ -654,8 +649,7 @@ static struct usb_serial_driver ssu100_device = {
 	.open		     = ssu100_open,
 	.close		     = ssu100_close,
 	.attach              = ssu100_attach,
-	.port_probe          = ssu100_port_probe,
-	.port_remove         = ssu100_port_remove,
+	.release             = ssu100_release,
 	.dtr_rts             = ssu100_dtr_rts,
 	.process_read_urb    = ssu100_process_read_urb,
 	.tiocmget            = ssu100_tiocmget,

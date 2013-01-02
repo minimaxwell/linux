@@ -1484,8 +1484,7 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 		goto put_gmch;
 	}
 
-	if (drm_core_check_feature(dev, DRIVER_MODESET))
-		i915_kick_out_firmware_fb(dev_priv);
+	i915_kick_out_firmware_fb(dev_priv);
 
 	pci_set_master(dev->pdev);
 

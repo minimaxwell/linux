@@ -654,7 +654,7 @@ static void shmem_evict_inode(struct inode *inode)
 		kfree(xattr->name);
 		kfree(xattr);
 	}
-	WARN_ON(inode->i_blocks);
+	BUG_ON(inode->i_blocks);
 	shmem_free_inode(inode->i_sb);
 	clear_inode(inode);
 }
@@ -921,29 +921,25 @@ static struct mempolicy *shmem_get_sbmpol(struct shmem_sb_info *sbinfo)
 static struct page *shmem_swapin(swp_entry_t swap, gfp_t gfp,
 			struct shmem_inode_info *info, pgoff_t index)
 {
+	struct mempolicy mpol, *spol;
 	struct vm_area_struct pvma;
-	struct page *page;
+
+	spol = mpol_cond_copy(&mpol,
+			mpol_shared_policy_lookup(&info->policy, index));
 
 	/* Create a pseudo vma that just contains the policy */
 	pvma.vm_start = 0;
 	/* Bias interleave by inode number to distribute better across nodes */
 	pvma.vm_pgoff = index + info->vfs_inode.i_ino;
 	pvma.vm_ops = NULL;
-	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
-
-	page = swapin_readahead(swap, gfp, &pvma, 0);
-
-	/* Drop reference taken by mpol_shared_policy_lookup() */
-	mpol_cond_put(pvma.vm_policy);
-
-	return page;
+	pvma.vm_policy = spol;
+	return swapin_readahead(swap, gfp, &pvma, 0);
 }
 
 static struct page *shmem_alloc_page(gfp_t gfp,
 			struct shmem_inode_info *info, pgoff_t index)
 {
 	struct vm_area_struct pvma;
-	struct page *page;
 
 	/* Create a pseudo vma that just contains the policy */
 	pvma.vm_start = 0;
@@ -952,12 +948,10 @@ static struct page *shmem_alloc_page(gfp_t gfp,
 	pvma.vm_ops = NULL;
 	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
 
-	page = alloc_page_vma(gfp, &pvma, 0);
-
-	/* Drop reference taken by mpol_shared_policy_lookup() */
-	mpol_cond_put(pvma.vm_policy);
-
-	return page;
+	/*
+	 * alloc_page_vma() will drop the shared policy reference
+	 */
+	return alloc_page_vma(gfp, &pvma, 0);
 }
 #else /* !CONFIG_NUMA */
 #ifdef CONFIG_TMPFS
@@ -1162,20 +1156,8 @@ repeat:
 		if (!error) {
 			error = shmem_add_to_page_cache(page, mapping, index,
 						gfp, swp_to_radix_entry(swap));
-			/*
-			 * We already confirmed swap under page lock, and make
-			 * no memory allocation here, so usually no possibility
-			 * of error; but free_swap_and_cache() only trylocks a
-			 * page, so it is just possible that the entry has been
-			 * truncated or holepunched since swap was confirmed.
-			 * shmem_undo_range() will have done some of the
-			 * unaccounting, now delete_from_swap_cache() will do
-			 * the rest (including mem_cgroup_uncharge_swapcache).
-			 * Reset swap.val? No, leave it so "failed" goes back to
-			 * "repeat": reading a hole and writing should succeed.
-			 */
-			if (error)
-				delete_from_swap_cache(page);
+			/* We already confirmed swap, and make no allocation */
+			VM_BUG_ON(error);
 		}
 		if (error)
 			goto failed;
@@ -2384,13 +2366,11 @@ static struct dentry *shmem_fh_to_dentry(struct super_block *sb,
 {
 	struct inode *inode;
 	struct dentry *dentry = NULL;
-	u64 inum;
+	u64 inum = fid->raw[2];
+	inum = (inum << 32) | fid->raw[1];
 
 	if (fh_len < 3)
 		return NULL;
-
-	inum = fid->raw[2];
-	inum = (inum << 32) | fid->raw[1];
 
 	inode = ilookup5(sb, (unsigned long)(inum + fid->raw[0]),
 			shmem_match, fid->raw);

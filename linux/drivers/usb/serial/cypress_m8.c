@@ -124,10 +124,10 @@ struct cypress_private {
 };
 
 /* function prototypes for the Cypress USB to serial device */
-static int  cypress_earthmate_port_probe(struct usb_serial_port *port);
-static int  cypress_hidcom_port_probe(struct usb_serial_port *port);
-static int  cypress_ca42v2_port_probe(struct usb_serial_port *port);
-static int  cypress_port_remove(struct usb_serial_port *port);
+static int  cypress_earthmate_startup(struct usb_serial *serial);
+static int  cypress_hidcom_startup(struct usb_serial *serial);
+static int  cypress_ca42v2_startup(struct usb_serial *serial);
+static void cypress_release(struct usb_serial *serial);
 static int  cypress_open(struct tty_struct *tty, struct usb_serial_port *port);
 static void cypress_close(struct usb_serial_port *port);
 static void cypress_dtr_rts(struct usb_serial_port *port, int on);
@@ -157,8 +157,8 @@ static struct usb_serial_driver cypress_earthmate_device = {
 	.description =			"DeLorme Earthmate USB",
 	.id_table =			id_table_earthmate,
 	.num_ports =			1,
-	.port_probe =			cypress_earthmate_port_probe,
-	.port_remove =			cypress_port_remove,
+	.attach =			cypress_earthmate_startup,
+	.release =			cypress_release,
 	.open =				cypress_open,
 	.close =			cypress_close,
 	.dtr_rts =			cypress_dtr_rts,
@@ -183,8 +183,8 @@ static struct usb_serial_driver cypress_hidcom_device = {
 	.description =			"HID->COM RS232 Adapter",
 	.id_table =			id_table_cyphidcomrs232,
 	.num_ports =			1,
-	.port_probe =			cypress_hidcom_port_probe,
-	.port_remove =			cypress_port_remove,
+	.attach =			cypress_hidcom_startup,
+	.release =			cypress_release,
 	.open =				cypress_open,
 	.close =			cypress_close,
 	.dtr_rts =			cypress_dtr_rts,
@@ -209,8 +209,8 @@ static struct usb_serial_driver cypress_ca42v2_device = {
 	.description =			"Nokia CA-42 V2 Adapter",
 	.id_table =			id_table_nokiaca42v2,
 	.num_ports =			1,
-	.port_probe =			cypress_ca42v2_port_probe,
-	.port_remove =			cypress_port_remove,
+	.attach =			cypress_ca42v2_startup,
+	.release =			cypress_release,
 	.open =				cypress_open,
 	.close =			cypress_close,
 	.dtr_rts =			cypress_dtr_rts,
@@ -437,10 +437,10 @@ static void cypress_set_dead(struct usb_serial_port *port)
  *****************************************************************************/
 
 
-static int cypress_generic_port_probe(struct usb_serial_port *port)
+static int generic_startup(struct usb_serial *serial)
 {
-	struct usb_serial *serial = port->serial;
 	struct cypress_private *priv;
+	struct usb_serial_port *port = serial->port[0];
 
 	priv = kzalloc(sizeof(struct cypress_private), GFP_KERNEL);
 	if (!priv)
@@ -489,17 +489,15 @@ static int cypress_generic_port_probe(struct usb_serial_port *port)
 }
 
 
-static int cypress_earthmate_port_probe(struct usb_serial_port *port)
+static int cypress_earthmate_startup(struct usb_serial *serial)
 {
-	struct usb_serial *serial = port->serial;
 	struct cypress_private *priv;
-	int ret;
+	struct usb_serial_port *port = serial->port[0];
 
-	ret = cypress_generic_port_probe(port);
-	if (ret) {
+	if (generic_startup(serial)) {
 		dbg("%s - Failed setting up port %d", __func__,
 				port->number);
-		return ret;
+		return 1;
 	}
 
 	priv = usb_get_serial_port_data(port);
@@ -519,52 +517,54 @@ static int cypress_earthmate_port_probe(struct usb_serial_port *port)
 	}
 
 	return 0;
-}
+} /* cypress_earthmate_startup */
 
-static int cypress_hidcom_port_probe(struct usb_serial_port *port)
+
+static int cypress_hidcom_startup(struct usb_serial *serial)
 {
 	struct cypress_private *priv;
-	int ret;
 
-	ret = cypress_generic_port_probe(port);
-	if (ret) {
- 		dev_dbg(&port->dev, "%s - Failed setting up port\n", __func__);
-		return ret;
+	if (generic_startup(serial)) {
+		dbg("%s - Failed setting up port %d", __func__,
+				serial->port[0]->number);
+		return 1;
 	}
 
-	priv = usb_get_serial_port_data(port);
+	priv = usb_get_serial_port_data(serial->port[0]);
 	priv->chiptype = CT_CYPHIDCOM;
 
 	return 0;
-}
+} /* cypress_hidcom_startup */
 
-static int cypress_ca42v2_port_probe(struct usb_serial_port *port)
+
+static int cypress_ca42v2_startup(struct usb_serial *serial)
 {
 	struct cypress_private *priv;
-	int ret;
 
-	ret = cypress_generic_port_probe(port);
-	if (ret) {
- 		dev_dbg(&port->dev, "%s - Failed setting up port\n", __func__);
-		return ret;
+	if (generic_startup(serial)) {
+		dbg("%s - Failed setting up port %d", __func__,
+				serial->port[0]->number);
+		return 1;
 	}
 
-	priv = usb_get_serial_port_data(port);
+	priv = usb_get_serial_port_data(serial->port[0]);
 	priv->chiptype = CT_CA42V2;
 
 	return 0;
-}
+} /* cypress_ca42v2_startup */
 
-static int cypress_port_remove(struct usb_serial_port *port)
+
+static void cypress_release(struct usb_serial *serial)
 {
 	struct cypress_private *priv;
 
-	priv = usb_get_serial_port_data(port);
+	/* all open ports are closed at this point */
+	priv = usb_get_serial_port_data(serial->port[0]);
 
-	kfifo_free(&priv->write_fifo);
-	kfree(priv);
-
-	return 0;
+	if (priv) {
+		kfifo_free(&priv->write_fifo);
+		kfree(priv);
+	}
 }
 
 

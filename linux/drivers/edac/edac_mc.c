@@ -416,18 +416,10 @@ struct mem_ctl_info *edac_mc_alloc(unsigned mc_num,
 		dimm->cschannel = chn;
 
 		/* Increment csrow location */
-		if (layers[0].is_virt_csrow) {
+		row++;
+		if (row == tot_csrows) {
+			row = 0;
 			chn++;
-			if (chn == tot_channels) {
-				chn = 0;
-				row++;
-			}
-		} else {
-			row++;
-			if (row == tot_csrows) {
-				row = 0;
-				chn++;
-			}
 		}
 
 		/* Increment dimm location */

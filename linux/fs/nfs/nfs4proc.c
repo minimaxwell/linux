@@ -331,7 +331,8 @@ static int nfs4_handle_exception(struct nfs_server *server, int errorcode, struc
 			dprintk("%s ERROR: %d Reset session\n", __func__,
 				errorcode);
 			nfs4_schedule_session_recovery(clp->cl_session, errorcode);
-			goto wait_on_recovery;
+			exception->retry = 1;
+			break;
 #endif /* defined(CONFIG_NFS_V4_1) */
 		case -NFS4ERR_FILE_OPEN:
 			if (exception->timeout > HZ) {
@@ -1498,11 +1499,9 @@ static void nfs4_open_prepare(struct rpc_task *task, void *calldata)
 	data->timestamp = jiffies;
 	if (nfs4_setup_sequence(data->o_arg.server,
 				&data->o_arg.seq_args,
-				&data->o_res.seq_res,
-				task) != 0)
-		nfs_release_seqid(data->o_arg.seqid);
-	else
-		rpc_call_start(task);
+				&data->o_res.seq_res, task))
+		return;
+	rpc_call_start(task);
 	return;
 unlock_no_action:
 	rcu_read_unlock();
@@ -1775,11 +1774,7 @@ static void nfs41_clear_delegation_stateid(struct nfs4_state *state)
 		 * informs us the stateid is unrecognized. */
 		if (status != -NFS4ERR_BAD_STATEID)
 			nfs41_free_stateid(server, stateid);
-		nfs_remove_bad_delegation(state->inode);
 
-		write_seqlock(&state->seqlock);
-		nfs4_stateid_copy(&state->stateid, &state->open_stateid);
-		write_sequnlock(&state->seqlock);
 		clear_bit(NFS_DELEGATED_STATE, &state->flags);
 	}
 }
@@ -2183,10 +2178,9 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 	if (nfs4_setup_sequence(NFS_SERVER(calldata->inode),
 				&calldata->arg.seq_args,
 				&calldata->res.seq_res,
-				task) != 0)
-		nfs_release_seqid(calldata->arg.seqid);
-	else
-		rpc_call_start(task);
+				task))
+		goto out;
+	rpc_call_start(task);
 out:
 	dprintk("%s: done!\n", __func__);
 }
@@ -3368,11 +3362,8 @@ static int nfs4_proc_fsinfo(struct nfs_server *server, struct nfs_fh *fhandle, s
 
 	nfs_fattr_init(fsinfo->fattr);
 	error = nfs4_do_fsinfo(server, fhandle, fsinfo);
-	if (error == 0) {
-		/* block layout checks this! */
-		server->pnfs_blksize = fsinfo->blksize;
+	if (error == 0)
 		set_pnfs_layoutdriver(server, fhandle, fsinfo->layouttype);
-	}
 
 	return error;
 }
@@ -4392,7 +4383,6 @@ static void nfs4_locku_done(struct rpc_task *task, void *data)
 			if (nfs4_async_handle_error(task, calldata->server, NULL) == -EAGAIN)
 				rpc_restart_call_prepare(task);
 	}
-	nfs_release_seqid(calldata->arg.seqid);
 }
 
 static void nfs4_locku_prepare(struct rpc_task *task, void *data)
@@ -4409,11 +4399,9 @@ static void nfs4_locku_prepare(struct rpc_task *task, void *data)
 	calldata->timestamp = jiffies;
 	if (nfs4_setup_sequence(calldata->server,
 				&calldata->arg.seq_args,
-				&calldata->res.seq_res,
-				task) != 0)
-		nfs_release_seqid(calldata->arg.seqid);
-	else
-		rpc_call_start(task);
+				&calldata->res.seq_res, task))
+		return;
+	rpc_call_start(task);
 }
 
 static const struct rpc_call_ops nfs4_locku_ops = {
@@ -4558,7 +4546,7 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 	/* Do we need to do an open_to_lock_owner? */
 	if (!(data->arg.lock_seqid->sequence->flags & NFS_SEQID_CONFIRMED)) {
 		if (nfs_wait_on_sequence(data->arg.open_seqid, task) != 0)
-			goto out_release_lock_seqid;
+			return;
 		data->arg.open_stateid = &state->stateid;
 		data->arg.new_lock_owner = 1;
 		data->res.open_seqid = data->arg.open_seqid;
@@ -4567,15 +4555,10 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 	data->timestamp = jiffies;
 	if (nfs4_setup_sequence(data->server,
 				&data->arg.seq_args,
-				&data->res.seq_res,
-				task) == 0) {
-		rpc_call_start(task);
+				&data->res.seq_res, task))
 		return;
-	}
-	nfs_release_seqid(data->arg.open_seqid);
-out_release_lock_seqid:
-	nfs_release_seqid(data->arg.lock_seqid);
-	dprintk("%s: done!, ret = %d\n", __func__, task->tk_status);
+	rpc_call_start(task);
+	dprintk("%s: done!, ret = %d\n", __func__, data->rpc_status);
 }
 
 static void nfs4_recover_lock_prepare(struct rpc_task *task, void *calldata)
