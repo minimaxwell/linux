@@ -365,8 +365,8 @@
 		#size-cells = <1>;
 		device_type = "soc";
 		ranges = <0x0 0xff000000 0x28000>;
-
 		bus-frequency = <0>;
+		clock-frequency = <0>;
 
 		WDT: watchdog@0 {
 			compatible = "fsl,mpc823-wdt";
