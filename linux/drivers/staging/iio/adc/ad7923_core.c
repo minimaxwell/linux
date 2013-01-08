@@ -206,6 +206,6 @@ static struct spi_driver ad7923_driver = {
 };
 module_spi_driver(ad7923_driver);
 
-MODULE_AUTHOR("VASSEUR Patrick");
+MODULE_AUTHOR("Patrick Vasseur <patrick.vasseur@c-s.fr>");
 MODULE_DESCRIPTION("Analog Devices AD7923 ADC");
 MODULE_LICENSE("GPL v2");
