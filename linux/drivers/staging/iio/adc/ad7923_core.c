@@ -1,7 +1,8 @@
 /*
  * AD7923 SPI ADC driver
  *
- * Copyright 2012
+ * Copyright 2011 Analog Devices Inc (from AD7298 Driver)
+ * Copyright 2012 CS Systemes d'Information
  *
  * Licensed under the GPL-2.
  */
