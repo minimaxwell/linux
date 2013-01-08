@@ -50,9 +50,9 @@ static struct iio_chan_spec ad7923_channels[] = {
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
 	int ret, cmd;
-	
+
 	cmd = AD7923_WRITE_CR | AD7923_PM_MODE_WRITE(AD7923_PM_MODE_OPS) |
-		AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_OFF) | AD7923_CODING | 
+		AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_OFF) | AD7923_CODING |
 		AD7923_CHANNEL_WRITE(ch) | AD7923_RANGE;
 	cmd <<= AD7923_SHIFT_REGISTER;
 	st->tx_buf[0] = cpu_to_be16(cmd);
@@ -113,7 +113,7 @@ static int __devinit ad7923_probe(struct spi_device *spi)
 		return -ENODEV;
 	}
 #endif
-	
+
 	if (indio_dev == NULL)
 		return -ENOMEM;
 

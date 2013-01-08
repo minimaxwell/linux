@@ -35,9 +35,9 @@
 #define AD7923_SHIFT_REGISTER	4
 
 /* val = value, dec = left shift, bits = number of bits of the mask */
-#define EXTRACT(val,dec,bits)		((val >> dec) & ((1 << bits) - 1))
+#define EXTRACT(val, dec, bits)		((val >> dec) & ((1 << bits) - 1))
 /* val = value, bits = number of bits of the original value */
-#define EXTRACT_PERCENT(val,bits)	(((val + 1) * 100) >> bits)
+#define EXTRACT_PERCENT(val, bits)	(((val + 1) * 100) >> bits)
 
 struct ad7923_state {
 	struct spi_device		*spi;
@@ -63,7 +63,7 @@ int ad7923_update_scan_mode(struct iio_dev *indio_dev,
 static inline int
 ad7923_register_ring_funcs_and_init(struct iio_dev *indio_dev)
 {
-        return 0;
+	return 0;
 }
 static inline void ad7923_ring_cleanup(struct iio_dev *indio_dev)
 {
