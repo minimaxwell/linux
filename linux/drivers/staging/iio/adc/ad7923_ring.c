@@ -29,7 +29,6 @@ int ad7923_update_scan_mode(struct iio_dev *indio_dev,
 	int scan_count;
 
 	/* Now compute overall size */
-//	scan_count = bitmap_weight(active_scan_mask, indio_dev->masklength);
 	for (i = 0, channel = 0; i < AD7923_MAX_CHAN; i++)
 		if (test_bit(i, active_scan_mask))
 			channel = i;
