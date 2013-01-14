@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# board type indice in the array
+MCR3000_1G=0
+MCR3000_2G=1
+MIAE=2
+CMPC885=3
+
+# type of board supported
+BOARD_TAB[$MCR3000_1G]=MCR3000_1G
+BOARD_TAB[$MCR3000_2G]=MCR3000_2G
+BOARD_TAB[$MIAE]=MIAE
+BOARD_TAB[$CMPC885]=CMPC885
+
+check_board_type()
+{
+	if [ -z "$1" ] ; then
+		return 1
+	fi
+	for (( i=0 ; i<${#BOARD_TAB[*]} ; i++ )); do
+		if [ "${BOARD_TAB[$i]}" == "$1" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
