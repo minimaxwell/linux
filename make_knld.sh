@@ -319,7 +319,7 @@ make_knld()
 
 usage_make_knld()
 {
-	echo "Usage: $0 KERNEL_VERSION DRV_VERSION SRC_KERNEL_DIR SRC_OFL_DIR SRC_DRV_DIR DELIVERY_DIR"
+	echo "Usage: $0 KERNEL_VERSION DRV_VERSION SRC_OFL_DIR SRC_DRV_DIR DELIVERY_DIR"
 }
 
 if [ `basename $0` = "make_knld.sh" ]; then
