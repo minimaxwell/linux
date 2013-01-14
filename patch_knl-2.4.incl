@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#===== chemin de livraison
+PATCH_DIRECTORY=patch_knl
+
+
+#----- Function to generate patch
+make_patch_knl ()
+{
+	# verifying version is not empty
+	if [ -z "${1}" ]; then
+		echo "make_patch_knl: Error! version not valide"
+		return 1
+	fi
+	local knl_version=${1}
+
+	# verifying version is not empty
+	if [ -z "${2}" ]; then
+		echo "make_patch_knl: Error! version not valide"
+		return 1
+	fi
+	local btl_version=${2}
+
+	# verifying version is not empty
+	if [ -z "${3}" ]; then
+		echo "make_patch_knl: Error! delivery path not defined"
+		return 1
+	fi
+	local destination=${3}
+
+	pushd $PATCH_DIRECTORY
+	local patch_name="patch_KNL2.4_to_KNL2.6-"${knl_version}"_BTL-"${btl_version}
+	mkdir ${patch_name}
+	cp ./* ${patch_name}
+	tar czvf ${patch_name}.tar.gz ${patch_name}
+	rm -Rf ${patch_name}
+	mv ${patch_name}.tar.gz ${destination}
+	popd
+}

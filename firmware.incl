@@ -1,0 +1,209 @@
+#!/bin/bash
+
+. board.incl
+
+#===== absolute directory path to firmware files
+# Contient les sous repertoires designant les types
+# de cartes. Par example /root/firmware/MCR3000_1G
+FIRMWARE_PATH=./firmware
+
+#===== liste des firmware associé au LDB pour MCR3000 1G
+# Correspondance des versions: FPGA, DSP, FPGA_C4E1 standart, FPGA_C4E1 transparent
+#                    +----------------------> FPGA
+#                    |     +----------------> DSP
+#                    |     |     +----------> FPGA_C4E1 standart
+#                    |     |     |   +------> FPGA_C4E1 transparent
+#                    |     |     |   |
+LDB_MCR3000_1G_3_0_0=(6.E r3-2.13 3.0 1.3)
+LDB_MCR3000_1G_3_0_1=(6.E r3-2.13 3.0 1.3)
+LDB_MCR3000_1G_3_0_2=(6.E r3-2.13 3.0 1.3)
+LDB_MCR3000_1G_3_0_3=(6.E r3-2.13 3.0 1.3)
+LDB_MCR3000_1G_3_0_4=(6.F r3-2.14 3.0 1.3)
+LDB_MCR3000_1G_3_0_5=(6.F r3-2.14 3.0 1.3)
+LDB_MCR3000_1G_3_0_6=(6.F r3-2.14 3.0 1.3)
+LDB_MCR3000_1G_3_0_7=(6.F r3-2.14 3.0 1.3)
+LDB_MCR3000_1G_3_0_8=(6.F r3-2.15 3.0 1.3)
+LDB_MCR3000_1G_3_0_9=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_0=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_1=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_2=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_3=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_4=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_1_5=(6.F r3-2.16.0 3.0 1.3)
+LDB_MCR3000_1G_3_2_0=(6.F r3-2.16.0 3.0 1.3)
+# correspondance pour la compil du trunk
+eval LDB_MCR3000_1G_999=(${LDB_MCR3000_1G_3_1_0[@]})
+# correspondance nom en debut de fichier et version
+LDB_MCR3000_1G_FIRM_NAME=(FPGA DSP FPGAC4E1 FPGAC4E1)
+
+#===== liste des firmware associé au LDB pour MCR3000 2G
+# Correspondance des versions: FPGA_R, DSP, FPGA_C4E1 standart, FPGA_C4E1 transparent
+#                    +----------------------> FPGA
+#                    |     +----------------> DSP
+#                    |     |     +----------> FPGA_C4E1 standart
+#                    |     |     |   +------> FPGA_C4E1 transparent
+#                    |     |     |   |
+LDB_MCR3000_2G_3_0_4=(1.2 r3-2.15 4.0 1.3)
+LDB_MCR3000_2G_3_0_5=(1.2 r3-2.15 4.0 1.3)
+LDB_MCR3000_2G_3_0_6=(1.2 r3-2.15 4.0 1.3)
+LDB_MCR3000_2G_3_0_7=(1.2 r3-2.15 4.0 1.3)
+LDB_MCR3000_2G_3_0_8=(1.2 r3-2.15 4.0 1.3)
+LDB_MCR3000_2G_3_0_9=(1.3.0 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_0=(1.3.1 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_1=(1.3.1 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_2=(1.3.2 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_3=(1.3.2 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_4=(1.3.2 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_1_5=(1.3.2 r3-2.16.0 4.0 1.3)
+LDB_MCR3000_2G_3_2_0=(1.3.2 r3-2.16.0 4.0 1.3)
+# correspondance pour la compil du trunk
+eval LDB_MCR3000_2G_999=(${LDB_MCR3000_2G_3_1_0[@]})
+# correspondance nom en debut de fichier et version
+LDB_MCR3000_2G_FIRM_NAME=(FPGA DSP FPGAC4E1 FPGAC4E1)
+
+#===== enumeration des différents firmware existant
+# cette liste doit contenir tous les noms de firmware
+# qui existe quel que soit le type de carte ou les
+# listes de firmwares.
+# Un même nom peut être utilisé pour deux type
+# de cartes différentes. Par exemple FIRM_FPGA
+# designe aussi bien le firmware pour la carte
+# MCR3000_1G que pour la carte MCR3000_2G
+# On peut egalement avoir deux nom différent
+# ayant un même indice
+FIRM_FPGA=0
+FIRM_DSP=1
+FIRM_FPGA_C4E1=2
+FIRM_FPGA_C4E1T=3
+
+#===== fonction to copy firmware
+# parameters:
+#	1 => Board type (supported board are declares in "board.incl")
+#	2 => LDB version (example 3.0.8)
+#	3 => Directory destination to copy
+#	4 => Firmware name (see enumeration list below)
+cp_firmware()
+{
+	# verifying directory destination
+	local dest_dir=$3
+	if [ ! -d ${dest_dir} ]; then
+		echo "cp_firmware: Error! destination dir does not exist"
+		return 1
+	fi
+
+	# verifying version is not empty
+	if [ -z "${2}" ]; then
+		echo "cp_firmware: Error! version not valide"
+		return 1
+	fi
+	local ldb_version=${2}
+
+	# verifying supported board
+	check_board_type $1
+	if [ $? -ne 0 ]; then
+		echo "cp_firmware: Error! board type (${1}) not supported"
+		return 1
+	fi
+	local firm_board=$1
+
+	# verifying firmware name and extract firmware index list
+	local firm_name=$4
+	case $firm_name in
+	FIRM_FPGA)		local firm_index=$FIRM_FPGA
+				;;
+	FIRM_DSP)		local firm_index=$FIRM_DSP
+				;;
+	FIRM_FPGA_C4E1)		local firm_index=$FIRM_FPGA_C4E1
+				;;
+	FIRM_FPGA_C4E1T)	local firm_index=$FIRM_FPGA_C4E1T
+				;;
+	*)			echo "cp_firmware: Error! firmware name (${firm_name}) unknown"
+				return 1
+				;;
+	esac
+
+	# getting list name
+	local num_version=`echo ${ldb_version} | sed -e "s/\./_/g" | sed -e "s/~//g"`
+	eval list_firmware_version=($`echo "{LDB_"${firm_board}"_"${num_version}"[@]}"`)
+	if [ ! ${list_firmware_version[${firm_index}]} ]; then
+		if [ ${ldb_version:0:3} == "999" ]; then
+			eval list_firmware_version=($`echo "{LDB_"${firm_board}"_"999"[@]}"`)
+		fi
+	fi
+	if [ ! ${list_firmware_version[${firm_index}]} ] ; then
+		echo "cp_firmware: Error! firmware version not found"
+		return 1
+	fi
+	eval list_firmware_name=($`echo "{LDB_"${firm_board}"_FIRM_NAME[@]}"`)
+	if [ ! ${list_firmware_name[${firm_index}]} ] ; then
+		echo "cp_firmware: Error! firmware name not found"
+		return 1
+	fi
+
+	# copy firmware to destination
+	local firm_file="${list_firmware_name[${firm_index}]}-${list_firmware_version[${firm_index}]}"
+	local test_file=`ls ${FIRMWARE_PATH}/${firm_board}/${firm_file}*`
+	if [ -z "${test_file}" ]; then
+		echo "cp_firmware: Error! binary file not found"
+		return 1
+	fi
+	install -m 444 -o root -g root ${FIRMWARE_PATH}/${firm_board}/$firm_file* ${dest_dir}
+
+	return 0
+}
+
+#===== fonction to get version for a firmware
+# parameters:
+#	1 => Board type (supported board are declares in "board.incl")
+#	2 => LDB version (example 3.0.8)
+#	3 => Firmware name (see enumeration list below)
+get_firmware_version()
+{
+	# verifying version is not empty
+	if [ -z "${2}" ]; then
+		echo "get_firmware_version: Error! version not valide"
+		return 1
+	fi
+	local ldb_version=${2}
+
+	# verifying supported board
+	check_board_type $1
+	if [ $? -ne 0 ]; then
+		echo "get_firmware_version: Error! board type (${1}) not supported"
+		return 1
+	fi
+	firm_board=$1
+
+	# verifying firmware name and extract firmware index list
+	firm_name=$3
+	case $firm_name in
+	FIRM_FPGA)		firm_index=$FIRM_FPGA
+				;;
+	FIRM_DSP)		firm_index=$FIRM_DSP
+				;;
+	FIRM_FPGA_C4E1)		firm_index=$FIRM_FPGA_C4E1
+				;;
+	FIRM_FPGA_C4E1T)	firm_index=$FIRM_FPGA_C4E1T
+				;;
+	*)			echo "cp_firmware: Error! firmware name (${firm_name}) unknown"
+				return 1
+				;;
+	esac
+
+	# getting list name
+	local num_version=`echo ${ldb_version} | sed -e "s/\./_/g" | sed -e "s/~//g"`
+	eval list_firmware_version=($`echo "{LDB_"${firm_board}"_"${num_version}"[@]}"`)
+	if [ ! ${list_firmware_version[${firm_index}]} ]; then
+		if [ ${ldb_version:0:3} == "999" ]; then
+			eval list_firmware_version=($`echo "{LDB_"${firm_board}"_"999"[@]}"`)
+		fi
+	fi
+	if [ ! ${list_firmware_version[${firm_index}]} ] ; then
+		echo "cp_firmware: Error! firmware version not found"
+		return 1
+	fi
+
+	# return version
+	echo -n "${list_firmware_version[${firm_index}]}"
+	return 0
+}
