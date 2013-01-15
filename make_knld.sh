@@ -73,6 +73,15 @@ make_knld()
 	ln -sf $drv_path/drv linux/drivers/platform/saf3000 
 	ln -sf $drv_path/drv/include/ldb linux/include
 
+	#===== generating KNL headers for OFL
+	pushd $knl_path/linux
+
+	# making knl config
+	make cmpc885_defconfig
+
+	rm -rf $ofl_path/knl
+	make INSTALL_HDR_PATH=$ofl_path/knl headers_install 
+
 	#===== generating OFL
 	pushd $ofl_path
 	version_ofl=$knl_version
@@ -88,13 +97,14 @@ make_knld()
 	mkdir -p $knl_path/debian/lib/
 
 	#===== generating
-	pushd $knl_path/linux
 
 	# cleaning
 	make distclean
 
 	# making knl config
 	make cmpc885_defconfig
+
+	#===== generating KNL
 
 	#===== Adding the initramfs source to knl config.
 	ln -sf ../initramfs
@@ -131,8 +141,6 @@ make_knld()
 		cp ./arch/powerpc/boot/${file} $liv_path/KNLD-${knl_version}/BINAIRES/
 	done
 
-	popd
-	
 	#===== generating DRV tools
 	
 	pushd $drv_path/cor
@@ -143,15 +151,15 @@ make_knld()
 	fi
 	popd
 
-	mkdir -p ./debian/usr/local/bin
-	install -m 755 -o root -g root $drv_path/cor/CORLoader ./debian/usr/local/bin
-	ppc-linux-strip ./debian/usr/local/bin/CORLoader
+	mkdir -p $knl_path/debian/usr/local/bin
+	install -m 755 -o root -g root $drv_path/cor/CORLoader $knl_path/debian/usr/local/bin
+	ppc-linux-strip $knl_path/debian/usr/local/bin/CORLoader
 
-	cp -af $drv_path/etc ./debian
-	cp -af $drv_path/cfg ./debian/usr/local
-	chown -R 1002:1000 ./debian/usr/local/cfg/
-	find ./debian/etc -type d -name ".svn" -exec rm -rf {} \;
-	find ./debian/usr -type d -name ".svn" -exec rm -rf {} \;
+	cp -af $drv_path/etc $knl_path/debian
+	cp -af $drv_path/cfg $knl_path/debian/usr/local
+	chown -R 1002:1000 $knl_path/debian/usr/local/cfg/
+	find $knl_path/debian/etc -type d -name ".svn" -exec rm -rf {} \;
+	find $knl_path/debian/usr -type d -name ".svn" -exec rm -rf {} \;
 		
 	local firmware_path=`pwd`/debian/lib/firmware
 
@@ -185,7 +193,6 @@ make_knld()
 	popd
 
 	#===== generating the headers package (needed to generate LDB).
-	pushd ./linux
 	rm -f ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar.gz
 	find arch/powerpc/include/ -type f | sed -e "/\/\.svn\//d" | xargs tar -cf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar 
 	find arch/powerpc/lib/ -type f | sed -e "/\/\.svn\//d" | xargs tar -rf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar 
@@ -196,13 +203,11 @@ make_knld()
 	tar -rf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar Makefile Module.symvers 
 	find scripts/ -type f | sed -e "/\/debian\//d" | sed -e "/\/\.svn\//d" | xargs tar -rf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar 
 	gzip ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar
-	popd
 
 	#===== generating for each board
 	for my_board in MCR3000_1G MCR3000_2G; do
 		# in case of MCR3000 1G we must generate the patch
 		if [ "${my_board}" == "MCR3000_1G" ]; then
-			pushd ./linux
 			rm -rf ../debian/lib/modules/
 
 			sed -i -e "s/.*CONFIG_MCR3000_DRV.*/CONFIG_MCR3000_DRV=m/" .config
@@ -217,20 +222,18 @@ make_knld()
 			make modules_install INSTALL_MOD_PATH=../debian
 			find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
 
-			popd
 
 			# Don't rebuild the btl (FEV 276).
 			# make_btl ${my_board} ${path_btl} $PATCH_DIRECTORY || return 1
 			rm -rf $PATCH_DIRECTORY
 			mkdir $PATCH_DIRECTORY
 			cp $btl_image $PATCH_DIRECTORY/u-boot.bin
-			mv ${liv_path}/KNLD-${knl_version}/BINAIRES/uImage.lzma $PATCH_DIRECTORY
+			cp ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage.lzma $PATCH_DIRECTORY/uImage.lzma
 			cp ${liv_path}/KNLD-${knl_version}/BINAIRES/mcr3000.dtb $PATCH_DIRECTORY
 			make_patch_knl ${knl_version} ${btl_version} ${liv_path}/KNLD-${knl_version}/PATCH || return 1
 		fi
 
 		if [ "${my_board}" == "MCR3000_2G" ]; then
-			pushd ./linux
 			rm -rf ../debian/lib/modules/
 
 			sed -i -e "s/.*CONFIG_MCR3000_DRV.*/# CONFIG_MCR3000_DRV is not set/" .config
@@ -245,11 +248,10 @@ make_knld()
 			make modules_install INSTALL_MOD_PATH=../debian
 			find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
 
-			popd
 		fi
 
 		# debian package 
-		pushd ./debian
+		pushd $knl_path/debian
 		case ${my_board} in
 		MCR3000_1G)	cp ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage.lzma ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/mcr3000.dtb ./
@@ -278,8 +280,8 @@ make_knld()
 
 
 	# build KNL manpages rpm package
- 	if [ -d ./man ] && 
-           [ -f ./man/KNL_docs.spec ]; then        
+ 	if [ -d $knl_path/man ] && 
+           [ -f $knl_path/man/KNL_docs.spec ]; then        
 		rm -rf ~/rpmbuild
 		mkdir -p ~/rpmbuild/BUILD
 		mkdir -p ~/rpmbuild/RPMS
@@ -291,7 +293,7 @@ make_knld()
 			mv ~/.rpmmacros ./man/
 		fi
 		echo "%_topdir      %(echo $HOME)/rpmbuild" > ~/.rpmmacros
-		pushd ./man
+		pushd $knl_path/man
 		cp KNL_docs.spec ~/rpmbuild/SPECS/
 		man_version=$(grep "Version:" KNL_docs.spec | while read NOT_USED VERSION; do echo $VERSION; done)
 		tar -cvzf KNL_docs-${man_version}.tar.gz KNL_docs/ --exclude "*\.svn*"
@@ -302,8 +304,8 @@ make_knld()
 		popd
 		cp ~/rpmbuild/RPMS/noarch/KNL_docs-*.noarch.rpm ${liv_path}/KNLD-${knl_version}/MANPAGES/
 		rm -f ~/.rpmmacros
-		if [ -f ./man/.rpmmacros ]; then 
-			mv ./man/.rpmmacros ~/
+		if [ -f $knl_path/man/.rpmmacros ]; then 
+			mv $knl_path/man/.rpmmacros ~/
 		fi
 	fi
 
@@ -311,6 +313,8 @@ make_knld()
 	# md5sum
 	pushd ${liv_path}/KNLD-${knl_version}/BINAIRES
 	find -type f | xargs md5sum > md5sum.chk
+	popd
+
 	popd
 		
 	return 0

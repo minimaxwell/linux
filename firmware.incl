@@ -5,7 +5,7 @@
 #===== absolute directory path to firmware files
 # Contient les sous repertoires designant les types
 # de cartes. Par example /root/firmware/MCR3000_1G
-FIRMWARE_PATH=./firmware
+FIRMWARE_PATH=`pwd`/firmware
 
 #===== liste des firmware associé au LDB pour MCR3000 1G
 # Correspondance des versions: FPGA, DSP, FPGA_C4E1 standart, FPGA_C4E1 transparent
