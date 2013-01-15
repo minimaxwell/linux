@@ -584,8 +584,8 @@
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
-				scc_codec = "SCC4";
-				scc_e1 = "SCC3";
+				scc_codec = "SMC2";
+				scc_e1 = "SCC4";
 				/* 1er parametre = channel phase E1 (0 à 1 si data rate = 4MHz */
 				/* 2eme parametre = data rate (8MHz ou 4MHz) */
 				/* par défaut ts_info = <0 4> */
