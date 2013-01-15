@@ -316,24 +316,24 @@
 				&fav      8 1	// Presence µCasque1
 				&fav     12 1>;	// Presence µCasque2
 			names = "tor_in_1",
-				"tor_in_2",		// by_pass
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"tor_out_1",		// Sortie Jour/Nuit
-				"tor_out_2",		// Sortie Alternat POUS
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
-				"none",
+				"tor_in_2",
+				"tor_in_3",
+				"tor_in_4",
+				"tor_in_5",
+				"tor_in_6",
+				"tor_in_7",
+				"tor_in_8",
+				"tor_in_9",
+				"tor_in_10",
+				"tor_in_11",
+				"tor_out_1",
+				"tor_out_2",
+				"tor_out_3",
+				"tor_out_4",
+				"tor_out_5",
+				"tor_out_6",
+				"tor_out_7",
+				"tor_out_8",
 				"alt_bp",		// Alternat BP
 				"tor_in_13",		// Alternat 1
 				"tor_in_14",		// Alternat 2
