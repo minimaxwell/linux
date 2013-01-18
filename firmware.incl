@@ -57,7 +57,7 @@ LDB_MCR3000_2G_3_1_3=(1.3.2 r3-2.16.0 4.0 1.3)
 LDB_MCR3000_2G_3_1_4=(1.3.2 r3-2.16.0 4.0 1.3)
 LDB_MCR3000_2G_3_1_5=(1.3.2 r3-2.16.0 4.0 1.3)
 LDB_MCR3000_2G_3_2_0=(1.3.2 r3-2.16.0 4.0 1.3)
-LDB_MCR3000_2G_3_2_1=(1.3.2 r3-2.16.0 4.0 1.3)	# binaires pour KNL 3.9.1
+LDB_MCR3000_2G_3_2_1=(1.3.3 r3-2.16.0 4.0 1.3)	# binaires pour KNL 3.9.1
 # correspondance pour la compil du trunk
 eval LDB_MCR3000_2G_999=(${LDB_MCR3000_2G_3_1_0[@]})
 # correspondance nom en debut de fichier et version
