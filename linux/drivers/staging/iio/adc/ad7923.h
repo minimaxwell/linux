@@ -11,6 +11,14 @@
 
 #define AD7923_USE_CS
 
+#ifdef AD7923_USE_CS
+struct convert_ident {
+	unsigned short	min;
+	unsigned short	max;
+};
+int ad7923_convert(int channel, int val);
+#endif
+
 #define AD7923_WRITE_CR		(1 << 11)	/* write control register */
 #define AD7923_RANGE		(1 << 1)	/* range to REFin */
 #define AD7923_CODING		(1 << 0)	/* coding is straight binary */

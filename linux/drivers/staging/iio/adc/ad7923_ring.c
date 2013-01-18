@@ -27,7 +27,6 @@ int ad7923_update_scan_mode(struct iio_dev *indio_dev,
 {
 	struct ad7923_state *st = iio_priv(indio_dev);
 	int i, cmd, channel;
-	int scan_count;
 
 	/* Now compute overall size */
 	for (i = 0, channel = 0; i < AD7923_MAX_CHAN; i++)
@@ -90,8 +89,12 @@ static irqreturn_t ad7923_trigger_handler(int irq, void *p)
 		if (test_bit(i, indio_dev->active_scan_mask))
 			channel = i;
 
-	for (i = 0; i < (channel + 1); i++)
+	for (i = 0; i < (channel + 1); i++) {
 		buf[i] = be16_to_cpu(st->rx_buf[i]);
+#ifdef AD7923_USE_CS
+		buf[i] = ad7923_convert(i, buf[i]) + (i << 12);
+#endif
+	}
 
 	iio_push_to_buffer(indio_dev->buffer, (u8 *)buf);
 

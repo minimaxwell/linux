@@ -48,6 +48,35 @@ static struct iio_chan_spec ad7923_channels[] = {
 	IIO_CHAN_SOFT_TIMESTAMP(4),
 };
 
+#ifdef AD7923_USE_CS
+static struct convert_ident ident_equipt[] = {
+	{   0,  340}, { 341,  420}, { 421,  502}, { 503,  578}, { 579,  682},
+	{ 683,  804}, { 805,  908}, { 909, 1016}, {1017, 1120}, {1121, 1232},
+	{1233, 1392}, {1393, 1523}, {1524, 1664}, {1665, 1786}, {1787, 1954},
+	{1955, 2194}, {2195, 2396}, {2397, 2556}, {2557, 2738}, {2739, 2966},
+	{2967, 3156}, {3157, 4095},
+};
+
+int ad7923_convert(int channel, int val)
+{
+	int i, ret = -1;
+
+	val = EXTRACT(val, 0, 12);
+	if (channel >= AD7923_CHANNEL_2) {
+		for (i = 0; i < (sizeof(ident_equipt) / sizeof(struct convert_ident)); i++) {
+			if ((val >= ident_equipt[i].min)
+				&& (val <= ident_equipt[i].max))
+				break;
+		}
+		ret = i + 1;
+	}
+	else
+		ret = EXTRACT_PERCENT(val, 12);
+		
+	return (ret);
+}
+#endif
+
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
 	int ret, cmd;
@@ -86,8 +115,12 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 		if (ret < 0)
 			return ret;
 		if (chan->address == EXTRACT(ret, 12, 4)) {
+#ifdef AD7923_USE_CS
+			*val = ad7923_convert(chan->address, ret);
+#else
 			*val = EXTRACT(ret, 0, 12);
 			*val2 = EXTRACT_PERCENT(*val, 12);
+#endif
 		}
 		return IIO_VAL_INT;
 	}
