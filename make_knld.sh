@@ -96,14 +96,6 @@ make_knld()
 	rm -rf $knl_path/debian/lib/
 	mkdir -p $knl_path/debian/lib/
 
-	#===== generating
-
-	# cleaning
-	make distclean
-
-	# making knl config
-	make cmpc885_defconfig
-
 	#===== generating KNL
 
 	#===== Adding the initramfs source to knl config.
