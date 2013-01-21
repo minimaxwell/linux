@@ -161,7 +161,7 @@ make_knld()
 	find $knl_path/debian/etc -type d -name ".svn" -exec rm -rf {} \;
 	find $knl_path/debian/usr -type d -name ".svn" -exec rm -rf {} \;
 		
-	local firmware_path=`pwd`/debian/lib/firmware
+	local firmware_path=$knl_path/debian/lib/firmware
 
 	rm -rf ${firmware_path}
 	mkdir -p ${firmware_path}
