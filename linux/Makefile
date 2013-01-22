@@ -2,7 +2,7 @@ ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
 PATCHLEVEL = 7
-SUBLEVEL = 3
+SUBLEVEL = 4
 EXTRAVERSION =
 NAME = Terrified Chipmunk
 
