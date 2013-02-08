@@ -105,7 +105,21 @@ make_knld()
 	echo "CONFIG_INITRAMFS_ROOT_GID=0" >> $knl_path/linux/.config
 
 	#===== update LOCAL VERSION
-	sed -i -e "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"-s3k-${knl_version}\"/" $knl_path/linux/.config
+	# Check for svn and a svn repo.
+	unset LANG
+	if rev=`svn info $knl_path 2>/dev/null | grep '^Last Changed Rev'`; then
+		if [ `svn status $knl_path | grep -v "^\?" | wc -l` -eq 0 ]; then
+			local knl_rev=`echo $rev | awk '{print "svn" $NF}'`
+		else
+			local knl_rev=`echo $rev"~" | awk '{print "svn" $NF}'`
+		fi
+	else
+			local knl_rev=local
+	fi
+	local knl_full_version=${knl_version}${knl_rev}
+
+	# update
+	sed -i -e "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"-s3k-${knl_full_version}_drv-${drv_version}\"/" $knl_path/linux/.config
 	echo "#define DRV_VERSION \"${drv_version}\"" > $knl_path/linux/include/saf3000/drv_version.h
 
 	# making knl 
