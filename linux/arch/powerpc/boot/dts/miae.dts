@@ -743,12 +743,22 @@
 					at25,addr-mode = <2>;
 					at25,page-size = <32>;
 				};
-				csfav@7 {
-					compatible = "iio,ad7923";
+				csfavnvcs@7 {
+					compatible = "iio,ad7923", "cs,mia-fav";
 					spi-max-frequency = <2000000>;
 					reg = <7>;
 					spi-cs-high;
 					spi-cpol;
+					fav-id = <5 6>;
+				};
+				gpiofav: csfavgw@7 {
+					compatible = "gpio,max7301", "cs,mia-fav";
+					spi-max-frequency = <2000000>;
+					reg = <7>;
+					spi-cs-high;
+					#gpio-cells = <2>;
+					gpio-controller;
+					fav-id = <4>;
 				};
 			};
 			
@@ -762,6 +772,107 @@
 				compatible = "s3k,dummy-gpio";
 				reg = <0x2 0x1>; /* necessaire mais non utilise */
 				gpio-controller;
+			};
+
+			gpio-leds {
+				compatible = "gpio-leds", "cs,mia-fav";
+				fav-id = <4>;
+				port_31 {
+					label = "fav_rouge_1";
+					gpios = <&gpiofav 27 1>;
+				};
+				port_30 {
+					label = "fav_rouge_2";
+					gpios = <&gpiofav 26 1>;
+				};
+				port_29 {
+					label = "fav_rouge_3";
+					gpios = <&gpiofav 25 1>;
+				};
+				port_28 {
+					label = "fav_rouge_4";
+					gpios = <&gpiofav 24 1>;
+				};
+				port_27 {
+					label = "fav_rouge_5";
+					gpios = <&gpiofav 23 1>;
+				};
+				port_26 {
+					label = "fav_rouge_6";
+					gpios = <&gpiofav 22 1>;
+				};
+				port_25 {
+					label = "fav_rouge_7";
+					gpios = <&gpiofav 21 1>;
+				};
+				port_24 {
+					label = "fav_rouge_8";
+					gpios = <&gpiofav 20 1>;
+				};
+				port_23 {
+					label = "fav_verte_1";
+					gpios = <&gpiofav 19 1>;
+				};
+				port_22 {
+					label = "fav_verte_2";
+					gpios = <&gpiofav 18 1>;
+				};
+				port_21 {
+					label = "fav_verte_3";
+					gpios = <&gpiofav 17 1>;
+				};
+				port_20 {
+					label = "fav_verte_4";
+					gpios = <&gpiofav 16 1>;
+				};
+				port_19 {
+					label = "fav_verte_5";
+					gpios = <&gpiofav 15 1>;
+				};
+				port_18 {
+					label = "fav_verte_6";
+					gpios = <&gpiofav 14 1>;
+				};
+				port_17 {
+					label = "fav_verte_7";
+					gpios = <&gpiofav 13 1>;
+				};
+				port_16 {
+					label = "fav_verte_8";
+					gpios = <&gpiofav 12 1>;
+				};
+				port_15 {
+					label = "fav_jaune_9";
+					gpios = <&gpiofav 11 1>;
+				};
+				port_14 {
+					label = "fav_jaune_10";
+					gpios = <&gpiofav 10 1>;
+				};
+				port_13 {
+					label = "fav_jaune_11";
+					gpios = <&gpiofav 9 1>;
+				};
+				port_12 {
+					label = "fav_jaune_12";
+					gpios = <&gpiofav 8 1>;
+				};
+				port_11 {
+					label = "fav_jaune_13";
+					gpios = <&gpiofav 7 1>;
+				};
+				port_10 {
+					label = "fav_jaune_14";
+					gpios = <&gpiofav 6 1>;
+				};
+				port_9 {
+					label = "fav_jaune_15";
+					gpios = <&gpiofav 5 1>;
+				};
+				port_8 {
+					label = "fav_jaune_16";
+					gpios = <&gpiofav 4 1>;
+				};
 			};
 		};
 			
