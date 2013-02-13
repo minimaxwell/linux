@@ -102,10 +102,10 @@ static void mpc8xxx_wdt_timer_ping(unsigned long arg)
 {
 	if (wdt_auto)
 		wdt_last_ping = jiffies;
-	
+
 	if (jiffies - wdt_last_ping <= heartbeat * HZ) {
 		mpc8xxx_wdt_keepalive();
-		/* We're pinging it twice faster than needed, just to be sure. */
+		/* We're pinging it twice faster than needed, to be sure. */
 		mod_timer(&wdt_timer, jiffies + HZ * timeout_sec / 2);
 	}
 }
@@ -149,7 +149,7 @@ static int mpc8xxx_wdt_open(struct inode *inode, struct file *file)
 	tmp |= timeout << 16;
 
 	out_be32(&wd_base->swcrr, tmp);
-	
+
 	wdt_auto = 0;
 
 	return nonseekable_open(inode, file);
@@ -238,9 +238,8 @@ static int __devinit mpc8xxx_wdt_probe(struct platform_device *ofdev)
 		ret = -ENOSYS;
 		goto err_unmap;
 	}
-	if (enabled) {
+	if (enabled)
 		timeout = in_be32(&wd_base->swcrr) >> 16;
-	}
 
 	/* Calculate the timeout in seconds */
 	if (prescale)
