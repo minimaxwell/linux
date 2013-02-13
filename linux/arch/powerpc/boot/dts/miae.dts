@@ -687,7 +687,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
-					name_codec = "codec 1";
+					name_codec = "codec_1";
 					analog_em = "-2dB -2dB -2dB -2dB";
 					analog_rec = "6dB 6dB 6dB 6dB";
 				};
@@ -704,7 +704,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
-					name_codec = "codec 2";
+					name_codec = "codec_2";
 					analog_em = "-2dB 0dB 0dB 18dB";
 					analog_rec = "3dB 3dB 3dB 4,5dB";
 				};
@@ -724,7 +724,7 @@
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
-					name_codec = "codec 3";
+					name_codec = "codec_3";
 					analog_em = "12dB -7dB 12dB -7dB";
 					analog_rec = "6dB 6dB 6dB 6dB";
 				};
