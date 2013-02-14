@@ -163,12 +163,13 @@ static void max7301_set(struct gpio_chip *chip, unsigned offset, int value)
 int __devinit __max730x_probe(struct max7301 *ts)
 {
 	struct device *dev = ts->dev;
+	struct device_node *np = dev->of_node;
 	struct max7301_platform_data *pdata;
 	int i, ret;
 
 	pdata = dev->platform_data;
-	if (!pdata || !pdata->base) {
-		dev_err(dev, "incorrect or missing platform data\n");
+	if (!(pdata || np)) {
+		dev_err(dev, "No platform data or Device Tree found\n");
 		return -EINVAL;
 	}
 
@@ -178,7 +179,6 @@ int __devinit __max730x_probe(struct max7301 *ts)
 	/* Power up the chip and disable IRQ output */
 	ts->write(dev, 0x04, 0x01);
 
-	ts->input_pullup_active = pdata->input_pullup_active;
 	ts->chip.label = dev->driver->name;
 
 	ts->chip.direction_input = max7301_direction_input;
@@ -186,7 +186,12 @@ int __devinit __max730x_probe(struct max7301 *ts)
 	ts->chip.direction_output = max7301_direction_output;
 	ts->chip.set = max7301_set;
 
-	ts->chip.base = pdata->base;
+	if (pdata) {
+		ts->input_pullup_active = pdata->input_pullup_active;
+		ts->chip.base = pdata->base;
+	}
+	else
+		ts->chip.base = -1;
 	ts->chip.ngpio = PIN_NUMBER;
 	ts->chip.can_sleep = 1;
 	ts->chip.dev = dev;
