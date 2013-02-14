@@ -9,7 +9,7 @@
 #ifndef IIO_ADC_AD7923_H_
 #define IIO_ADC_AD7923_H_
 
-#define AD7923_USE_CS
+//#define AD7923_USE_CS
 
 #ifdef AD7923_USE_CS
 struct convert_ident {
