@@ -9,16 +9,6 @@
 #ifndef IIO_ADC_AD7923_H_
 #define IIO_ADC_AD7923_H_
 
-//#define AD7923_USE_CS
-
-#ifdef AD7923_USE_CS
-struct convert_ident {
-	unsigned short	min;
-	unsigned short	max;
-};
-int ad7923_convert(int channel, int val);
-#endif
-
 #define AD7923_WRITE_CR		(1 << 11)	/* write control register */
 #define AD7923_RANGE		(1 << 1)	/* range to REFin */
 #define AD7923_CODING		(1 << 0)	/* coding is straight binary */
@@ -45,12 +35,14 @@ int ad7923_convert(int channel, int val);
 
 /* val = value, dec = left shift, bits = number of bits of the mask */
 #define EXTRACT(val, dec, bits)		((val >> dec) & ((1 << bits) - 1))
-/* val = value, bits = number of bits of the original value */
-#define EXTRACT_PERCENT(val, bits)	(((val + 1) * 100) >> bits)
 
 struct ad7923_state {
 	struct spi_device		*spi;
 	struct regulator		*reg;
+	/*
+	 * In reception, the first is invalid data, four for datas and the last
+	 * with cs_change null
+	 */
 	struct spi_transfer		ring_xfer[6];
 	struct spi_transfer		scan_single_xfer[2];
 	struct spi_message		ring_msg;
@@ -60,7 +52,7 @@ struct ad7923_state {
 	 * transfer buffers to live in their own cache lines.
 	 */
 	unsigned short			rx_buf[4] ____cacheline_aligned;
-	unsigned short			tx_buf[2];
+	unsigned short			tx_buf[4];
 };
 
 #ifdef CONFIG_IIO_BUFFER

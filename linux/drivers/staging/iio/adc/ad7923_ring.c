@@ -26,29 +26,30 @@ int ad7923_update_scan_mode(struct iio_dev *indio_dev,
 	const unsigned long *active_scan_mask)
 {
 	struct ad7923_state *st = iio_priv(indio_dev);
-	int i, cmd, channel;
+	int i, cmd, len;
 
-	/* Now compute overall size */
-	for (i = 0, channel = 0; i < AD7923_MAX_CHAN; i++)
-		if (test_bit(i, active_scan_mask))
-			channel = i;
-
-	cmd = AD7923_WRITE_CR | AD7923_CODING | AD7923_RANGE |
-		AD7923_PM_MODE_WRITE(AD7923_PM_MODE_OPS) |
-		AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_ON) |
-		AD7923_CHANNEL_WRITE(channel);
-	cmd <<= AD7923_SHIFT_REGISTER;
-	st->tx_buf[0] = cpu_to_be16(cmd);
+	len = 0;
+	for_each_set_bit(i, active_scan_mask, AD7923_MAX_CHAN) {
+		cmd = AD7923_WRITE_CR | AD7923_CODING | AD7923_RANGE |
+			AD7923_PM_MODE_WRITE(AD7923_PM_MODE_OPS) |
+			AD7923_SEQUENCE_WRITE(AD7923_SEQUENCE_OFF) |
+			AD7923_CHANNEL_WRITE(i);
+		cmd <<= AD7923_SHIFT_REGISTER;
+		st->tx_buf[len++] = cpu_to_be16(cmd);
+	}
 
 	/* build spi ring message */
-	st->ring_xfer[0].tx_buf = &st->tx_buf[0];
-	st->ring_xfer[0].len = 2;
-	st->ring_xfer[0].cs_change = 1;
+	for (i = 0; i < len; i++) {
+		st->ring_xfer[i].tx_buf = &st->tx_buf[i];
+		st->ring_xfer[i].len = 2;
+		st->ring_xfer[i].cs_change = 1;
+	}
 
 	spi_message_init(&st->ring_msg);
 	spi_message_add_tail(&st->ring_xfer[0], &st->ring_msg);
 
-	for (i = 0; i < (channel + 1); i++) {
+	/* first transfer is invalid data */
+	for (i = 0; i < len; i++) {
 		st->ring_xfer[i + 1].rx_buf = &st->rx_buf[i];
 		st->ring_xfer[i + 1].len = 2;
 		st->ring_xfer[i + 1].cs_change = 1;
@@ -73,7 +74,7 @@ static irqreturn_t ad7923_trigger_handler(int irq, void *p)
 	struct ad7923_state *st = iio_priv(indio_dev);
 	s64 time_ns = 0;
 	__u16 buf[16];
-	int b_sent, i, channel;
+	int b_sent, i;
 
 	b_sent = spi_sync(st->spi, &st->ring_msg);
 	if (b_sent)
@@ -85,16 +86,9 @@ static irqreturn_t ad7923_trigger_handler(int irq, void *p)
 			&time_ns, sizeof(time_ns));
 	}
 
-	for (i = 0, channel = 0; i < AD7923_MAX_CHAN; i++)
-		if (test_bit(i, indio_dev->active_scan_mask))
-			channel = i;
-
-	for (i = 0; i < (channel + 1); i++) {
+	for (i = 0; i < bitmap_weight(indio_dev->active_scan_mask,
+						 AD7923_MAX_CHAN); i++)
 		buf[i] = be16_to_cpu(st->rx_buf[i]);
-#ifdef AD7923_USE_CS
-		buf[i] = ad7923_convert(i, buf[i]) + (i << 12);
-#endif
-	}
 
 	iio_push_to_buffer(indio_dev->buffer, (u8 *)buf);
 

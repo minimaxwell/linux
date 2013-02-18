@@ -37,45 +37,17 @@
 			.sign = 'u',					\
 			.realbits = 12,					\
 			.storagebits = 16,				\
+			.endianness = IIO_BE,				\
 		},							\
 	}
 
-static struct iio_chan_spec ad7923_channels[] = {
+static const struct iio_chan_spec ad7923_channels[] = {
 	AD7923_V_CHAN(0),
 	AD7923_V_CHAN(1),
 	AD7923_V_CHAN(2),
 	AD7923_V_CHAN(3),
 	IIO_CHAN_SOFT_TIMESTAMP(4),
 };
-
-#ifdef AD7923_USE_CS
-static struct convert_ident ident_equipt[] = {
-	{   0,  340}, { 341,  420}, { 421,  502}, { 503,  578}, { 579,  682},
-	{ 683,  804}, { 805,  908}, { 909, 1016}, {1017, 1120}, {1121, 1232},
-	{1233, 1392}, {1393, 1523}, {1524, 1664}, {1665, 1786}, {1787, 1954},
-	{1955, 2194}, {2195, 2396}, {2397, 2556}, {2557, 2738}, {2739, 2966},
-	{2967, 3156}, {3157, 4095},
-};
-
-int ad7923_convert(int channel, int val)
-{
-	int i, ret = -1;
-
-	val = EXTRACT(val, 0, 12);
-	if (channel >= AD7923_CHANNEL_2) {
-		for (i = 0; i < (sizeof(ident_equipt) / sizeof(struct convert_ident)); i++) {
-			if ((val >= ident_equipt[i].min)
-				&& (val <= ident_equipt[i].max))
-				break;
-		}
-		ret = i + 1;
-	}
-	else
-		ret = EXTRACT_PERCENT(val, 12);
-		
-	return (ret);
-}
-#endif
 
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
@@ -114,14 +86,8 @@ static int ad7923_read_raw(struct iio_dev *indio_dev,
 
 		if (ret < 0)
 			return ret;
-		if (chan->address == EXTRACT(ret, 12, 4)) {
-#ifdef AD7923_USE_CS
-			*val = ad7923_convert(chan->address, ret);
-#else
+		if (chan->address == EXTRACT(ret, 12, 4))
 			*val = EXTRACT(ret, 0, 12);
-			*val2 = EXTRACT_PERCENT(*val, 12);
-#endif
-		}
 		return IIO_VAL_INT;
 	}
 	return -EINVAL;
@@ -136,29 +102,13 @@ static const struct iio_info ad7923_info = {
 static int __devinit ad7923_probe(struct spi_device *spi)
 {
 	struct ad7923_state *st;
-	struct device *dev = &spi->dev;
 	int ret;
 	struct iio_dev *indio_dev = iio_device_alloc(sizeof(*st));
-
-#ifdef AD7923_USE_CS
-	ret = type_fav();
-	if ((ret != FAV_NVCS_LEMO) && (ret != FAV_NVCS_FISCHER)) {
-		dev_err(dev, "Driver AD7923 is not added (FAV = %d).\n", ret);
-		return -ENODEV;
-	}
-#endif
 
 	if (indio_dev == NULL)
 		return -ENOMEM;
 
 	st = iio_priv(indio_dev);
-
-	st->reg = regulator_get(&spi->dev, "vcc");
-	if (!IS_ERR(st->reg)) {
-		ret = regulator_enable(st->reg);
-		if (ret)
-			goto error_put_reg;
-	}
 
 	spi_set_drvdata(spi, indio_dev);
 
@@ -184,24 +134,17 @@ static int __devinit ad7923_probe(struct spi_device *spi)
 
 	ret = ad7923_register_ring_funcs_and_init(indio_dev);
 	if (ret)
-		goto error_disable_reg;
+		goto error_free;
 
 	ret = iio_device_register(indio_dev);
 	if (ret)
 		goto error_cleanup_ring;
 
-	dev_info(dev, "Driver AD7923 is added.\n");
-
 	return 0;
 
 error_cleanup_ring:
 	ad7923_ring_cleanup(indio_dev);
-error_disable_reg:
-	if (!IS_ERR(st->reg))
-		regulator_disable(st->reg);
-error_put_reg:
-	if (!IS_ERR(st->reg))
-		regulator_put(st->reg);
+error_free:
 	iio_device_free(indio_dev);
 
 	return ret;
@@ -210,14 +153,9 @@ error_put_reg:
 static int __devexit ad7923_remove(struct spi_device *spi)
 {
 	struct iio_dev *indio_dev = spi_get_drvdata(spi);
-	struct ad7923_state *st = iio_priv(indio_dev);
 
 	iio_device_unregister(indio_dev);
 	ad7923_ring_cleanup(indio_dev);
-	if (!IS_ERR(st->reg)) {
-		regulator_disable(st->reg);
-		regulator_put(st->reg);
-	}
 	iio_device_free(indio_dev);
 
 	return 0;
