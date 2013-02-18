@@ -306,15 +306,20 @@
 				&far     13 1	// Alternat 1
 				&far     14 1	// Alternat 2
 				&far     12 1	// Alternat Combine
+				&far     11 1	// Presence Combine
 				&fav     11 1	// Alternat µMain1
 				&fav     15 1	// Alternat µMain2
 				&fav      9 1	// Alternat µCasque1
 				&fav     13 1	// Alternat µCasque2
-				&far     11 1	// Presence Combine
 				&fav     10 1	// Presence µMain1
 				&fav     14 1	// Presence µMain2
 				&fav      8 1	// Presence µCasque1
 				&fav     12 1>;	// Presence µCasque2
+		};
+
+		GPIO_CA_CLA {
+			compatible = "s3k,gpios-def-ca", "cs,mia-far";
+			far-id = <7>;
 			names = "tor_in_1",
 				"tor_in_2",
 				"tor_in_3",
@@ -334,51 +339,11 @@
 				"tor_out_6",
 				"tor_out_7",
 				"tor_out_8",
-				"alt_bp",		// Alternat BP
+				"alt_bp",
 				"tor_in_13",		// Alternat 1
 				"tor_in_14",		// Alternat 2
-				"alt_ucomb",		// Alternat Combine
-				"alt_umain_a",		// Alternat µMain_a
-				"alt_umain_b",		// Alternat µMain_b
-				"alt_ucasque_a",	// Alternat µCasque_a
-				"alt_ucasque_b",	// Alternat µCasque_b
-				"pres_ucomb",		// Presence Combine
-				"pres_umain_a",		// Presence µMain_a
-				"pres_umain_b",		// Presence µMain_b
-				"pres_ucasque_a",	// Presence µCasque_a
-				"pres_ucasque_b";	// Presence µCasque_b
-			names_nvcs = "pres_hp_3",	// Presence HP3
-				"pres_hp_2",		// Presence HP2
-				"pres_aith",		// Presence AITH
-				"pres_hp_1",		// Presence HP1
-				"tor_in_5",
-				"alt_pedale_1",		// Pedale alternat 1
-				"alt_pedale_2",		// Pedale alternat 2
-				"dec_ucomb",		// Decroche Combine
-				"tor_in_9",
-				"tor_in_10",
-				"alt_aith",		// Alternat AITH
-				"lum_hp_3",		// Jour/nuit HP3
-				"lum_hp_2",		// Jour/nuit HP2
-				"lum_aith",		// Jour/nuit AITH
-				"lum_hp_1",		// Jour/nuit HP1
-				"tor_out_5",
-				"tor_out_6",
-				"none",
-				"none",
-				"alt_bp",		// Alternat BP
-				"tor_in_13",		// Alternat 1
-				"tor_in_14",		// Alternat 2
-				"alt_ucomb",		// Alternat Combine
-				"alt_umain_a",		// Alternat µMain_a
-				"alt_umain_b",		// Alternat µMain_b
-				"alt_ucasque_a",	// Alternat µCasque_a
-				"alt_ucasque_b",	// Alternat µCasque_b
-				"pres_ucomb",		// Presence Combine
-				"pres_umain_a",		// Presence µMain_a
-				"pres_umain_b",		// Presence µMain_b
-				"pres_ucasque_a",	// Presence µCasque_a
-				"pres_ucasque_b";	// Presence µCasque_b
+				"alt_ucomb",
+				"pres_ucomb";
 			codec = "Rec. In 1",
 				"Interco In 1",
 				"Rec. In 2",
@@ -387,10 +352,6 @@
 				"Audio OPT 1",
 				"Audio OPT 2",
 				"Micro Combine",
-				"Micro Casque_a",
-				"Micro Main_a",
-				"Micro Casque_b",
-				"Micro Main_b",
 				"Rec. Out 1",
 				"Interco Out 1",
 				"Rec. Out 2",
@@ -398,11 +359,160 @@
 				"HP ITH",
 				"HP 1",
 				"HP 2",
-				"Ecoute Combine",
+				"Ecoute Combine";
+		};
+
+		GPIO_FAV_CLA {
+			compatible = "s3k,gpios-def-fav", "cs,mia-fav";
+			fav-id = <7>;
+			names = "alt_umain_a",
+				"alt_umain_b",
+				"alt_ucasque_a",
+				"alt_ucasque_b",
+				"pres_umain_a",
+				"pres_umain_b",
+				"pres_ucasque_a",
+				"pres_ucasque_b";
+			codec = "Micro Casque_a",
+				"Micro Main_a",
+				"Micro Casque_b",
+				"Micro Main_b",
 				"Ec. droite Casque_a",
 				"Ec. gauche Casque_a",
 				"Ec. droite Casque_b",
 				"Ec. gauche Casque_b";
+		};
+
+		GPIO_CA_NVCS {
+			compatible = "s3k,gpios-def-ca", "cs,mia-far";
+			far-id = <1>;
+			names = "pres_hp_3",
+				"pres_hp_2",
+				"pres_aith",
+				"pres_hp_1",
+				"tor_in_5",
+				"alt_pedale_1",
+				"alt_pedale_2",
+				"dec_ucomb",
+				"tor_in_9",
+				"tor_in_10",
+				"alt_aith",
+				"lum_hp_3",
+				"lum_hp_2",
+				"lum_aith",
+				"lum_hp_1",
+				"tor_out_5",
+				"tor_out_6",
+				"none",
+				"none",
+				"alt_bp",
+				"tor_in_13",		// Alternat 1
+				"tor_in_14",		// Alternat 2
+				"alt_ucomb",
+				"pres_ucomb";
+			codec = "Rec. In 1",
+				"Interco In 1",
+				"Rec. In 2",
+				"Interco In 2",
+				"Micro ITH",
+				"Audio OPT 1",
+				"Audio OPT 2",
+				"Micro Combine",
+				"Rec. Out 1",
+				"Interco Out 1",
+				"Rec. Out 2",
+				"Interco Out 2",
+				"HP ITH",
+				"HP 1",
+				"HP 2",
+				"Ecoute Combine";
+		};
+
+		GPIO_FAV_NVCS {
+			compatible = "s3k,gpios-def-fav", "cs,mia-fav";
+			fav-id = <5 6>;
+			names = "alt_umain_a",
+				"alt_umain_b",
+				"alt_ucasque_a",
+				"alt_ucasque_b",
+				"pres_umain_a",
+				"pres_umain_b",
+				"pres_ucasque_a",
+				"pres_ucasque_b";
+			codec = "Micro Casque_a",
+				"Micro Main_a",
+				"Micro Casque_b",
+				"Micro Main_b",
+				"Ec. droite Casque_a",
+				"Ec. gauche Casque_a",
+				"Ec. droite Casque_b",
+				"Ec. gauche Casque_b";
+		};
+
+		GPIO_CA_GW {
+			compatible = "s3k,gpios-def-ca", "cs,mia-far";
+			far-id = <4>;
+			names = "tor_in_1",
+				"tor_in_2",
+				"tor_in_3",
+				"tor_in_4",
+				"tor_in_5",
+				"tor_in_6",
+				"tor_in_7",
+				"none",
+				"none",
+				"dptt",
+				"pt_ct",
+				"tor_out_1",
+				"tor_out_2",
+				"tor_out_3",
+				"tor_out_4",
+				"tor_out_5",
+				"tor_out_6",
+				"tor_out_7",
+				"cgc",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none";
+			codec = "Audio In 1",
+				"Audio In 2",
+				"Audio In 3",
+				"Audio In 4",
+				"Audio In 5",
+				"Audio In 6",
+				"Audio In 7",
+				"Audio In 8",
+				"Audio Out 1",
+				"Audio Out 2",
+				"Audio Out 3",
+				"Audio Out 4",
+				"not used",
+				"not used",
+				"not used",
+				"not used";
+		};
+
+		GPIO_FAV_GW {
+			compatible = "s3k,gpios-def-fav", "cs,mia-fav";
+			fav-id = <4>;
+			names = "none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none",
+				"none";
+			codec = "Micro Casque_a",
+				"not used",
+				"not used",
+				"not used",
+				"Ec. droite Casque_a",
+				"not used",
+				"not used",
+				"not used";
 		};
 	};
 
