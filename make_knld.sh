@@ -211,7 +211,7 @@ make_knld()
 	gzip ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar
 
 	#===== generating for each board
-	for my_board in MCR3000_1G MCR3000_2G; do
+	for my_board in MCR3000_1G CMPC885; do
 		# in case of MCR3000 1G we must generate the patch
 		if [ "${my_board}" == "MCR3000_1G" ]; then
 			rm -rf ../debian/lib/modules/
@@ -239,7 +239,7 @@ make_knld()
 			make_patch_knl ${knl_version} ${btl_version} ${liv_path}/KNLD-${knl_version}/PATCH || return 1
 		fi
 
-		if [ "${my_board}" == "MCR3000_2G" ]; then
+		if [ "${my_board}" == "CMPC885" ]; then
 			rm -rf ../debian/lib/modules/
 
 			sed -i -e "s/.*CONFIG_MCR3000_DRV.*/# CONFIG_MCR3000_DRV is not set/" .config
@@ -266,16 +266,16 @@ make_knld()
 				rm -f mcr3000.dtb
 				mv KNLD-${my_board}-${knl_version}.deb ${liv_path}/KNLD-${knl_version}/DEBIAN/
 				;;
-		MCR3000_2G)	cp ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage ./
+		CMPC885)	cp ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/cmpc885.dtb ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/mcr3000_2g.dtb ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/miae.dtb ./
-				./pkg_knld.sh KNLD-${knl_version}-uImage MCR3000_2G cmpc885.dtb mcr3000_2g.dtb miae.dtb || return 1
+				./pkg_knld.sh KNLD-${knl_version}-uImage CMPC885 cmpc885.dtb mcr3000_2g.dtb miae.dtb || return 1
 				rm -f KNLD-${knl_version}-uImage
 				rm -f cmpc885.dtb
 				rm -f mcr3000_2g.dtb
 				rm -f miae.dtb
-				mv KNLD-${my_board}-${knl_version}.deb ${liv_path}/KNLD-${knl_version}/DEBIAN/
+				mv KNLD-CMPC885-${knl_version}.deb ${liv_path}/KNLD-${knl_version}/DEBIAN/
 				;;
 		*)		echo "make_delivery_ldb: Error! board not supported"
 				return 2

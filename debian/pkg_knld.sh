@@ -57,7 +57,7 @@ package_knld()
 	"MCR3000_1G")
 		dd if=/dev/zero of=$PATH_PKG/tmp/root/dtb.bin bs=1 count=64K;;
 
-	"MCR3000_2G")
+	"CMPC885")
 		dd if=/dev/zero of=$PATH_PKG/tmp/root/dtb.bin bs=1 count=192K;;
 	*)
 		echo "pkg_knld: Error board type unknown"
@@ -92,7 +92,7 @@ package_knld()
 	"MCR3000_1G")
 		sed -i "s/KNL_MODEL_SUPPORT/MCR3000/g" $PATH_PKG/DEBIAN/preinst;;
 
-	"MCR3000_2G")
+	"CMPC885")
 		sed -i "s/KNL_MODEL_SUPPORT/MCR3000_2G MIAE CMPC885/g" $PATH_PKG/DEBIAN/preinst;;
 
 	*)
@@ -115,7 +115,7 @@ usage_pkg_knld()
 	echo "Usage: $0 KNL_BINARY DTB1 [DTB2 DTB3....]"
 	echo "   - Warning: the name of the KNL_BINARY file must be"
 	echo "   in the format KNL-BOARD-VERSION-FORMAT. Example:"
-	echo "   KNL-MCR3000_2G-3.6.2-uImage"
+	echo "   KNL-CMPC885-3.6.2-uImage"
 	echo "   - In the FLASH the DTB files are flashed in the same"
 	echo "   order as the parameters DTB1 DTB2 DTB3....."
 }
