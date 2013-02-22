@@ -168,8 +168,8 @@ int __devinit __max730x_probe(struct max7301 *ts)
 	int i, ret;
 
 	pdata = dev->platform_data;
-	if (!(pdata || np)) {
-		dev_err(dev, "No platform data or Device Tree found\n");
+	if ((!pdata || !pdata->base) && !np) {
+		dev_err(dev, "No platform data nor Device Tree found\n");
 		return -EINVAL;
 	}
 
@@ -189,9 +189,9 @@ int __devinit __max730x_probe(struct max7301 *ts)
 	if (pdata) {
 		ts->input_pullup_active = pdata->input_pullup_active;
 		ts->chip.base = pdata->base;
-	}
-	else
+	} else {
 		ts->chip.base = -1;
+	}
 	ts->chip.ngpio = PIN_NUMBER;
 	ts->chip.can_sleep = 1;
 	ts->chip.dev = dev;
