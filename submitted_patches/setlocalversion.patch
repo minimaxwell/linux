@@ -1,0 +1,25 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Michal Marek <mmarek@suse.cz>
+CC: linux-kernel@vger.kernel.org, linux-kbuild@vger.kernel.org
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH] Unset LANG in setlocalversion script
+
+This patch allows the use of setlocalversion script regardless of the LANG
+parameter. Otherwise, the `svn info 2>/dev/null | grep '^Last Changed Rev'`
+returns nothing because for instance, in French the text 'Last Changed Rev'
+is replaced by 'Révision de la dernière modification'
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+diff -ur linux-3.7.9/scripts/setlocalversion linux/scripts/setlocalversion
+--- linux-3.7.9/scripts/setlocalversion	2013-02-17 19:53:32.000000000 +0100
++++ linux/scripts/setlocalversion	2012-11-03 03:15:32.000000000 +0100
+@@ -9,6 +9,8 @@
+ #
+ #
+ 
++unset LANG
++
+ usage() {
+ 	echo "Usage: $0 [--save-scmversion] [srctree]" >&2
+ 	exit 1
