@@ -52,17 +52,17 @@ struct mpc8xxx_wdt_type {
 static struct mpc8xxx_wdt __iomem *wd_base;
 static int mpc8xxx_wdt_init_late(void);
 
-#define WD_TIMO 10			/* Default heartbeat = 10 seconds */
+#define WD_TIMO 10			/* Default timeout = 10 seconds */
 
-static int heartbeat = WD_TIMO;
-module_param(heartbeat, int, 0);
-MODULE_PARM_DESC(heartbeat,
-	"Watchdog SW heartbeat in seconds. (0 < heartbeat < 65536s, default="
-				__MODULE_STRING(WD_TIMO) "s)");
-static u16 timeout = 0xffff;
-module_param(timeout, ushort, 0);
+static uint timeout = WD_TIMO;
+module_param(timeout, uint, 0);
 MODULE_PARM_DESC(timeout,
-	"Watchdog HW timeout in ticks. (0<timeout<65536, default=65535)");
+	"Watchdog SW timeout in seconds. (0 < timeout < 65536s, default = "
+				__MODULE_STRING(WD_TIMO) "s)");
+static u16 hw_timo = 0xffff;
+module_param(hw_timo, ushort, 0);
+MODULE_PARM_DESC(hw_timo,
+	"Watchdog HW timeout in ticks. (0 < hw_timo < 65536, default = 65535)");
 
 static bool reset = 1;
 module_param(reset, bool, 0);
@@ -79,7 +79,7 @@ MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
  * to 0
  */
 static int prescale = 1;
-static unsigned int timeout_sec;
+static unsigned int hw_timo_sec;
 
 static int wdt_auto = 1;
 static unsigned long wdt_is_open;
@@ -103,10 +103,10 @@ static void mpc8xxx_wdt_timer_ping(unsigned long arg)
 	if (wdt_auto)
 		wdt_last_ping = jiffies;
 
-	if (jiffies - wdt_last_ping <= heartbeat * HZ) {
+	if (jiffies - wdt_last_ping <= timeout * HZ) {
 		mpc8xxx_wdt_keepalive();
 		/* We're pinging it twice faster than needed, to be sure. */
-		mod_timer(&wdt_timer, jiffies + HZ * timeout_sec / 2);
+		mod_timer(&wdt_timer, jiffies + HZ * hw_timo_sec / 2);
 	}
 }
 
@@ -146,7 +146,7 @@ static int mpc8xxx_wdt_open(struct inode *inode, struct file *file)
 	if (reset)
 		tmp |= SWCRR_SWRI;
 
-	tmp |= timeout << 16;
+	tmp |= hw_timo << 16;
 
 	out_be32(&wd_base->swcrr, tmp);
 
@@ -187,9 +187,9 @@ static long mpc8xxx_wdt_ioctl(struct file *file, unsigned int cmd,
 		mpc8xxx_wdt_sw_keepalive();
 		return 0;
 	case WDIOC_GETTIMEOUT:
-		return put_user(heartbeat, p);
+		return put_user(timeout, p);
 	case WDIOC_SETTIMEOUT:
-		return get_user(heartbeat, p);
+		return get_user(timeout, p);
 	default:
 		return -ENOTTY;
 	}
@@ -239,13 +239,13 @@ static int __devinit mpc8xxx_wdt_probe(struct platform_device *ofdev)
 		goto err_unmap;
 	}
 	if (enabled)
-		timeout = in_be32(&wd_base->swcrr) >> 16;
+		hw_timo = in_be32(&wd_base->swcrr) >> 16;
 
 	/* Calculate the timeout in seconds */
 	if (prescale)
-		timeout_sec = (timeout * wdt_type->prescaler) / freq;
+		hw_timo_sec = (hw_timo * wdt_type->prescaler) / freq;
 	else
-		timeout_sec = timeout / freq;
+		hw_timo_sec = hw_timo / freq;
 
 #ifdef MODULE
 	ret = mpc8xxx_wdt_init_late();
@@ -253,8 +253,8 @@ static int __devinit mpc8xxx_wdt_probe(struct platform_device *ofdev)
 		goto err_unmap;
 #endif
 
-	pr_info("WDT driver for MPC8xxx initialized. mode:%s timeout=%d (%d seconds)\n",
-		reset ? "reset" : "interrupt", timeout, timeout_sec);
+	pr_info("WDT driver for MPC8xxx initialized. mode:%s timeout = %d (%d seconds)\n",
+		reset ? "reset" : "interrupt", hw_timo, hw_timo_sec);
 
 	/*
 	 * If the watchdog was previously enabled or we're running on
