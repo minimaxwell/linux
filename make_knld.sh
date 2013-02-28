@@ -107,25 +107,24 @@ make_knld()
 	#===== update LOCAL VERSION
 	# Check for svn and a svn repo.
 	unset LANG
+
 	if rev=`svn info $knl_path 2>/dev/null | grep '^Last Changed Rev'`; then
 		if [ `svn status $knl_path | grep -v "^\?" | wc -l` -eq 0 ]; then
-			local knl_rev=`echo $rev | awk '{print "svn" $NF}'`
+			local EXTRA_VERSION="-s3k-drv-${drv_version}_knld-${knl_version}-"
 		else
-			local knl_rev=`echo $rev"~" | awk '{print "svn" $NF}'`
+			local EXTRA_VERSION="-draft-drv-${drv_version}/knld_${knl_version}-"
 		fi
 	else
-			local knl_rev=local
+			local EXTRA_VERSION="-local-drv-${drv_version}/knld_${knl_version}-"
 	fi
-	local knl_full_version=${knl_version}${knl_rev}
 
 	# update
-	sed -i -e "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"-s3k-${knl_full_version}_drv-${drv_version}\"/" $knl_path/linux/.config
 	echo "#define DRV_VERSION \"${drv_version}\"" > $knl_path/linux/include/saf3000/drv_version.h
 
 	# making knl 
 	rm -rf $knl_path/ofl/*
 
-	make -j 4 uImage
+	make -j 4 uImage EXTRAVERSION=$EXTRA_VERSION
 	if [ $? -ne 0 ] ; then
 		echo "make_knld: Error! echec make uImage"
 		return 2
