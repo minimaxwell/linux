@@ -100,7 +100,7 @@ cp_firmware()
 		echo "cp_firmware: Error! version not valide"
 		return 1
 	fi
-	local ldb_version=`echo "${2}" | sed -e "s/svn.*//"`
+	local ldb_version=`echo "${2}" | sed -e "s/-svn.*//"`
 
 	# verifying supported board
 	check_board_type $1
