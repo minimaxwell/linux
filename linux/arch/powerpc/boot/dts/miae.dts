@@ -319,7 +319,7 @@
 
 		GPIO_CA_CLA {
 			compatible = "s3k,gpios-def-ca", "cs,mia-far";
-			far-id = <7>;
+			far-id = <0 7>;
 			names = "tor_in_1",
 				"tor_in_2",
 				"tor_in_3",
@@ -692,7 +692,7 @@
 
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa", "cs,mia-far";
-				far-id = <0 1 2 3 4 5 6>; /* Toutes cartes audio sauf CLA */
+				far-id = <1 2 3 4 5 6>; /* Toutes cartes audio sauf CLA */
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
 				scc_codec = "SMC2";
@@ -706,7 +706,7 @@
 
 			tsa_cla: tsa_cla@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa", "cs,mia-far";
-				far-id = <7>; /* Carte audio CLA */
+				far-id = <0 7>; /* Carte audio CLA */
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 ou SMC2 */
 				scc_codec = "SCC3";
