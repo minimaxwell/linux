@@ -260,12 +260,10 @@ static void mxs_auart_set_mctrl(struct uart_port *u, unsigned mctrl)
 
 	u32 ctrl = readl(u->membase + AUART_CTRL2);
 
-	ctrl &= ~(AUART_CTRL2_RTSEN | AUART_CTRL2_RTS);
+	ctrl &= ~AUART_CTRL2_RTSEN;
 	if (mctrl & TIOCM_RTS) {
 		if (tty_port_cts_enabled(&u->state->port))
 			ctrl |= AUART_CTRL2_RTSEN;
-		else
-			ctrl |= AUART_CTRL2_RTS;
 	}
 
 	s->ctrl = mctrl;

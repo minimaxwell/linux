@@ -615,7 +615,8 @@ EXPORT_SYMBOL_GPL(nfs_create_rpc_client);
  */
 static void nfs_destroy_server(struct nfs_server *server)
 {
-	if (server->nlm_host)
+	if (!(server->flags & NFS_MOUNT_LOCAL_FLOCK) ||
+			!(server->flags & NFS_MOUNT_LOCAL_FCNTL))
 		nlmclnt_done(server->nlm_host);
 }
 

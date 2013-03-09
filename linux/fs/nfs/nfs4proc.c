@@ -1721,8 +1721,7 @@ static int _nfs4_recover_proc_open(struct nfs4_opendata *data)
 
 static int nfs4_opendata_access(struct rpc_cred *cred,
 				struct nfs4_opendata *opendata,
-				struct nfs4_state *state, fmode_t fmode,
-				int openflags)
+				struct nfs4_state *state, fmode_t fmode)
 {
 	struct nfs_access_entry cache;
 	u32 mask;
@@ -1734,14 +1733,11 @@ static int nfs4_opendata_access(struct rpc_cred *cred,
 
 	mask = 0;
 	/* don't check MAY_WRITE - a newly created file may not have
-	 * write mode bits, but POSIX allows the creating process to write.
-	 * use openflags to check for exec, because fmode won't
-	 * always have FMODE_EXEC set when file open for exec. */
-	if (openflags & __FMODE_EXEC) {
-		/* ONLY check for exec rights */
-		mask = MAY_EXEC;
-	} else if (fmode & FMODE_READ)
-		mask = MAY_READ;
+	 * write mode bits, but POSIX allows the creating process to write */
+	if (fmode & FMODE_READ)
+		mask |= MAY_READ;
+	if (fmode & FMODE_EXEC)
+		mask |= MAY_EXEC;
 
 	cache.cred = cred;
 	cache.jiffies = jiffies;
@@ -2013,7 +2009,7 @@ static int _nfs4_do_open(struct inode *dir,
 	if (server->caps & NFS_CAP_POSIX_LOCK)
 		set_bit(NFS_STATE_POSIX_LOCKS, &state->flags);
 
-	status = nfs4_opendata_access(cred, opendata, state, fmode, flags);
+	status = nfs4_opendata_access(cred, opendata, state, fmode);
 	if (status != 0)
 		goto err_opendata_put;
 
@@ -3941,13 +3937,8 @@ static ssize_t __nfs4_get_acl_uncached(struct inode *inode, void *buf, size_t bu
 		goto out_free;
 	}
 	nfs4_write_cached_acl(inode, pages, res.acl_data_offset, res.acl_len);
-	if (buf) {
-		if (res.acl_len > buflen) {
-			ret = -ERANGE;
-			goto out_free;
-		}
+	if (buf)
 		_copy_from_pages(buf, pages, res.acl_data_offset, res.acl_len);
-	}
 out_ok:
 	ret = res.acl_len;
 out_free:
@@ -6147,26 +6138,13 @@ static void nfs41_sequence_prepare(struct rpc_task *task, void *data)
 	rpc_call_start(task);
 }
 
-static void nfs41_sequence_prepare_privileged(struct rpc_task *task, void *data)
-{
-	rpc_task_set_priority(task, RPC_PRIORITY_PRIVILEGED);
-	nfs41_sequence_prepare(task, data);
-}
-
 static const struct rpc_call_ops nfs41_sequence_ops = {
 	.rpc_call_done = nfs41_sequence_call_done,
 	.rpc_call_prepare = nfs41_sequence_prepare,
 	.rpc_release = nfs41_sequence_release,
 };
 
-static const struct rpc_call_ops nfs41_sequence_privileged_ops = {
-	.rpc_call_done = nfs41_sequence_call_done,
-	.rpc_call_prepare = nfs41_sequence_prepare_privileged,
-	.rpc_release = nfs41_sequence_release,
-};
-
-static struct rpc_task *_nfs41_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred,
-					     const struct rpc_call_ops *seq_ops)
+static struct rpc_task *_nfs41_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 {
 	struct nfs4_sequence_data *calldata;
 	struct rpc_message msg = {
@@ -6176,7 +6154,7 @@ static struct rpc_task *_nfs41_proc_sequence(struct nfs_client *clp, struct rpc_
 	struct rpc_task_setup task_setup_data = {
 		.rpc_client = clp->cl_rpcclient,
 		.rpc_message = &msg,
-		.callback_ops = seq_ops,
+		.callback_ops = &nfs41_sequence_ops,
 		.flags = RPC_TASK_ASYNC | RPC_TASK_SOFT,
 	};
 
@@ -6203,7 +6181,7 @@ static int nfs41_proc_async_sequence(struct nfs_client *clp, struct rpc_cred *cr
 
 	if ((renew_flags & NFS4_RENEW_TIMEOUT) == 0)
 		return 0;
-	task = _nfs41_proc_sequence(clp, cred, &nfs41_sequence_ops);
+	task = _nfs41_proc_sequence(clp, cred);
 	if (IS_ERR(task))
 		ret = PTR_ERR(task);
 	else
@@ -6217,7 +6195,7 @@ static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 	struct rpc_task *task;
 	int ret;
 
-	task = _nfs41_proc_sequence(clp, cred, &nfs41_sequence_privileged_ops);
+	task = _nfs41_proc_sequence(clp, cred);
 	if (IS_ERR(task)) {
 		ret = PTR_ERR(task);
 		goto out;
@@ -6517,8 +6495,7 @@ nfs4_proc_layoutget(struct nfs4_layoutget *lgp, gfp_t gfp_flags)
 	status = nfs4_wait_for_completion_rpc_task(task);
 	if (status == 0)
 		status = task->tk_status;
-	/* if layoutp->len is 0, nfs4_layoutget_prepare called rpc_exit */
-	if (status == 0 && lgp->res.layoutp->len)
+	if (status == 0)
 		lseg = pnfs_layout_process(lgp);
 	rpc_put_task(task);
 	dprintk("<-- %s status=%d\n", __func__, status);

@@ -822,10 +822,7 @@ static int macvlan_changelink(struct net_device *dev,
 
 static size_t macvlan_get_size(const struct net_device *dev)
 {
-	return (0
-		+ nla_total_size(4) /* IFLA_MACVLAN_MODE */
-		+ nla_total_size(2) /* IFLA_MACVLAN_FLAGS */
-		);
+	return nla_total_size(4);
 }
 
 static int macvlan_fill_info(struct sk_buff *skb,

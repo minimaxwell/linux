@@ -3730,11 +3730,10 @@ brcmf_configure_wpaie(struct net_device *ndev, struct brcmf_vs_tlv *wpa_ie,
 
 	len = wpa_ie->len + TLV_HDR_LEN;
 	data = (u8 *)wpa_ie;
-	offset = TLV_HDR_LEN;
+	offset = 0;
 	if (!is_rsn_ie)
 		offset += VS_IE_FIXED_HDR_LEN;
-	else
-		offset += WPA_IE_VERSION_LEN;
+	offset += WPA_IE_VERSION_LEN;
 
 	/* check for multicast cipher suite */
 	if (offset + WPA_IE_MIN_OUI_LEN > len) {

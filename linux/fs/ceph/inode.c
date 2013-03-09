@@ -1466,7 +1466,7 @@ void __ceph_do_pending_vmtruncate(struct inode *inode)
 {
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	u64 to;
-	int wrbuffer_refs, finish = 0;
+	int wrbuffer_refs, wake = 0;
 
 retry:
 	spin_lock(&ci->i_ceph_lock);
@@ -1498,18 +1498,15 @@ retry:
 	truncate_inode_pages(inode->i_mapping, to);
 
 	spin_lock(&ci->i_ceph_lock);
-	if (to == ci->i_truncate_size) {
-		ci->i_truncate_pending = 0;
-		finish = 1;
-	}
+	ci->i_truncate_pending--;
+	if (ci->i_truncate_pending == 0)
+		wake = 1;
 	spin_unlock(&ci->i_ceph_lock);
-	if (!finish)
-		goto retry;
 
 	if (wrbuffer_refs == 0)
 		ceph_check_caps(ci, CHECK_CAPS_AUTHONLY, NULL);
-
-	wake_up_all(&ci->i_cap_wq);
+	if (wake)
+		wake_up_all(&ci->i_cap_wq);
 }
 
 

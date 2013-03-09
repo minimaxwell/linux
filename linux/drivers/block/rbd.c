@@ -61,10 +61,7 @@
 
 #define RBD_MINORS_PER_MAJOR	256		/* max minors per blkdev */
 
-#define RBD_SNAP_DEV_NAME_PREFIX	"snap_"
-#define RBD_MAX_SNAP_NAME_LEN	\
-			(NAME_MAX - (sizeof (RBD_SNAP_DEV_NAME_PREFIX) - 1))
-
+#define RBD_MAX_SNAP_NAME_LEN	32
 #define RBD_MAX_SNAP_COUNT	510	/* allows max snapc to fit in 4KB */
 #define RBD_MAX_OPT_LEN		1024
 
@@ -207,7 +204,6 @@ struct rbd_device {
 
 	/* sysfs related */
 	struct device		dev;
-	unsigned long		open_count;
 };
 
 static DEFINE_MUTEX(ctl_mutex);	  /* Serialize open/close/setup/teardown */
@@ -222,7 +218,7 @@ static int rbd_dev_snaps_update(struct rbd_device *rbd_dev);
 static int rbd_dev_snaps_register(struct rbd_device *rbd_dev);
 
 static void rbd_dev_release(struct device *dev);
-static void rbd_remove_snap_dev(struct rbd_snap *snap);
+static void __rbd_remove_snap_dev(struct rbd_snap *snap);
 
 static ssize_t rbd_add(struct bus_type *bus, const char *buf,
 		       size_t count);
@@ -281,11 +277,8 @@ static int rbd_open(struct block_device *bdev, fmode_t mode)
 	if ((mode & FMODE_WRITE) && rbd_dev->mapping.read_only)
 		return -EROFS;
 
-	mutex_lock_nested(&ctl_mutex, SINGLE_DEPTH_NESTING);
 	rbd_get_dev(rbd_dev);
 	set_device_ro(bdev, rbd_dev->mapping.read_only);
-	rbd_dev->open_count++;
-	mutex_unlock(&ctl_mutex);
 
 	return 0;
 }
@@ -294,11 +287,7 @@ static int rbd_release(struct gendisk *disk, fmode_t mode)
 {
 	struct rbd_device *rbd_dev = disk->private_data;
 
-	mutex_lock_nested(&ctl_mutex, SINGLE_DEPTH_NESTING);
-	rbd_assert(rbd_dev->open_count > 0);
-	rbd_dev->open_count--;
 	rbd_put_dev(rbd_dev);
-	mutex_unlock(&ctl_mutex);
 
 	return 0;
 }
@@ -399,7 +388,7 @@ enum {
 static match_table_t rbd_opts_tokens = {
 	/* int args above */
 	/* string args above */
-	{Opt_read_only, "read_only"},
+	{Opt_read_only, "mapping.read_only"},
 	{Opt_read_only, "ro"},		/* Alternate spelling */
 	{Opt_read_write, "read_write"},
 	{Opt_read_write, "rw"},		/* Alternate spelling */
@@ -706,13 +695,13 @@ static char *rbd_segment_name(struct rbd_device *rbd_dev, u64 offset)
 	u64 segment;
 	int ret;
 
-	name = kmalloc(MAX_OBJ_NAME_SIZE + 1, GFP_NOIO);
+	name = kmalloc(RBD_MAX_SEG_NAME_LEN + 1, GFP_NOIO);
 	if (!name)
 		return NULL;
 	segment = offset >> rbd_dev->header.obj_order;
-	ret = snprintf(name, MAX_OBJ_NAME_SIZE + 1, "%s.%012llx",
+	ret = snprintf(name, RBD_MAX_SEG_NAME_LEN, "%s.%012llx",
 			rbd_dev->header.object_prefix, segment);
-	if (ret < 0 || ret > MAX_OBJ_NAME_SIZE) {
+	if (ret < 0 || ret >= RBD_MAX_SEG_NAME_LEN) {
 		pr_err("error formatting segment name for #%llu (%d)\n",
 			segment, ret);
 		kfree(name);
@@ -1718,13 +1707,13 @@ static int rbd_read_header(struct rbd_device *rbd_dev,
 	return ret;
 }
 
-static void rbd_remove_all_snaps(struct rbd_device *rbd_dev)
+static void __rbd_remove_all_snaps(struct rbd_device *rbd_dev)
 {
 	struct rbd_snap *snap;
 	struct rbd_snap *next;
 
 	list_for_each_entry_safe(snap, next, &rbd_dev->snaps, node)
-		rbd_remove_snap_dev(snap);
+		__rbd_remove_snap_dev(snap);
 }
 
 /*
@@ -2068,7 +2057,7 @@ static bool rbd_snap_registered(struct rbd_snap *snap)
 	return ret;
 }
 
-static void rbd_remove_snap_dev(struct rbd_snap *snap)
+static void __rbd_remove_snap_dev(struct rbd_snap *snap)
 {
 	list_del(&snap->node);
 	if (device_is_registered(&snap->dev))
@@ -2084,7 +2073,7 @@ static int rbd_register_snap_dev(struct rbd_snap *snap,
 	dev->type = &rbd_snap_device_type;
 	dev->parent = parent;
 	dev->release = rbd_snap_dev_release;
-	dev_set_name(dev, "%s%s", RBD_SNAP_DEV_NAME_PREFIX, snap->name);
+	dev_set_name(dev, "snap_%s", snap->name);
 	dout("%s: registering device for snapshot %s\n", __func__, snap->name);
 
 	ret = device_register(dev);
@@ -2200,7 +2189,6 @@ static int rbd_dev_v2_object_prefix(struct rbd_device *rbd_dev)
 	dout("%s: rbd_req_sync_exec returned %d\n", __func__, ret);
 	if (ret < 0)
 		goto out;
-	ret = 0;    /* rbd_req_sync_exec() can return positive */
 
 	p = reply_buf;
 	rbd_dev->header.object_prefix = ceph_extract_encoded_string(&p,
@@ -2450,7 +2438,7 @@ static int rbd_dev_snaps_update(struct rbd_device *rbd_dev)
 
 			if (rbd_dev->mapping.snap_id == snap->id)
 				rbd_dev->mapping.snap_exists = false;
-			rbd_remove_snap_dev(snap);
+			__rbd_remove_snap_dev(snap);
 			dout("%ssnap id %llu has been removed\n",
 				rbd_dev->mapping.snap_id == snap->id ?
 								"mapped " : "",
@@ -2633,8 +2621,8 @@ static void rbd_dev_id_put(struct rbd_device *rbd_dev)
 		struct rbd_device *rbd_dev;
 
 		rbd_dev = list_entry(tmp, struct rbd_device, node);
-		if (rbd_dev->dev_id > max_id)
-			max_id = rbd_dev->dev_id;
+		if (rbd_id > max_id)
+			max_id = rbd_id;
 	}
 	spin_unlock(&rbd_dev_list_lock);
 
@@ -2777,13 +2765,8 @@ static char *rbd_add_parse_args(struct rbd_device *rbd_dev,
 	if (!rbd_dev->image_name)
 		goto out_err;
 
-	/* Snapshot name is optional; default is to use "head" */
-
+	/* Snapshot name is optional */
 	len = next_token(&buf);
-	if (len > RBD_MAX_SNAP_NAME_LEN) {
-		err_ptr = ERR_PTR(-ENAMETOOLONG);
-		goto out_err;
-	}
 	if (!len) {
 		buf = RBD_SNAP_HEAD_NAME; /* No snapshot supplied */
 		len = sizeof (RBD_SNAP_HEAD_NAME) - 1;
@@ -2793,6 +2776,8 @@ static char *rbd_add_parse_args(struct rbd_device *rbd_dev,
 		goto out_err;
 	memcpy(snap_name, buf, len);
 	*(snap_name + len) = '\0';
+
+dout("    SNAP_NAME is <%s>, len is %zd\n", snap_name, len);
 
 	return snap_name;
 
@@ -2856,7 +2841,6 @@ static int rbd_dev_image_id(struct rbd_device *rbd_dev)
 	dout("%s: rbd_req_sync_exec returned %d\n", __func__, ret);
 	if (ret < 0)
 		goto out;
-	ret = 0;    /* rbd_req_sync_exec() can return positive */
 
 	p = response;
 	rbd_dev->image_id = ceph_extract_encoded_string(&p,
@@ -3061,11 +3045,11 @@ static ssize_t rbd_add(struct bus_type *bus,
 	/* no need to lock here, as rbd_dev is not registered yet */
 	rc = rbd_dev_snaps_update(rbd_dev);
 	if (rc)
-		goto err_out_probe;
+		goto err_out_header;
 
 	rc = rbd_dev_set_mapping(rbd_dev, snap_name);
 	if (rc)
-		goto err_out_snaps;
+		goto err_out_header;
 
 	/* generate unique id: find highest unique id, add one */
 	rbd_dev_id_get(rbd_dev);
@@ -3129,9 +3113,7 @@ err_out_blkdev:
 	unregister_blkdev(rbd_dev->major, rbd_dev->name);
 err_out_id:
 	rbd_dev_id_put(rbd_dev);
-err_out_snaps:
-	rbd_remove_all_snaps(rbd_dev);
-err_out_probe:
+err_out_header:
 	rbd_header_free(&rbd_dev->header);
 err_out_client:
 	kfree(rbd_dev->header_name);
@@ -3229,12 +3211,7 @@ static ssize_t rbd_remove(struct bus_type *bus,
 		goto done;
 	}
 
-	if (rbd_dev->open_count) {
-		ret = -EBUSY;
-		goto done;
-	}
-
-	rbd_remove_all_snaps(rbd_dev);
+	__rbd_remove_all_snaps(rbd_dev);
 	rbd_bus_del_dev(rbd_dev);
 
 done:

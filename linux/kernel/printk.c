@@ -847,11 +847,10 @@ static size_t print_time(u64 ts, char *buf)
 	if (!printk_time)
 		return 0;
 
-	rem_nsec = do_div(ts, 1000000000);
-
 	if (!buf)
-		return snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
+		return 15;
 
+	rem_nsec = do_div(ts, 1000000000);
 	return sprintf(buf, "[%5lu.%06lu] ",
 		       (unsigned long)ts, rem_nsec / 1000);
 }

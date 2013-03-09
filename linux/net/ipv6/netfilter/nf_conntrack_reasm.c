@@ -311,10 +311,7 @@ found:
 	else
 		fq->q.fragments = skb;
 
-	if (skb->dev) {
-		fq->iif = skb->dev->ifindex;
-		skb->dev = NULL;
-	}
+	skb->dev = NULL;
 	fq->q.stamp = skb->tstamp;
 	fq->q.meat += skb->len;
 	if (payload_len > fq->q.max_size)

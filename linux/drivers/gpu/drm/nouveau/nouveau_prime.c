@@ -197,7 +197,6 @@ struct drm_gem_object *nouveau_gem_prime_import(struct drm_device *dev,
 		if (nvbo->gem) {
 			if (nvbo->gem->dev == dev) {
 				drm_gem_object_reference(nvbo->gem);
-				dma_buf_put(dma_buf);
 				return nvbo->gem;
 			}
 		}

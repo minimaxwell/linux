@@ -91,8 +91,9 @@ static int sta_info_hash_del(struct ieee80211_local *local,
 	return -ENOENT;
 }
 
-static void cleanup_single_sta(struct sta_info *sta)
+static void free_sta_work(struct work_struct *wk)
 {
+	struct sta_info *sta = container_of(wk, struct sta_info, free_sta_wk);
 	int ac, i;
 	struct tid_ampdu_tx *tid_tx;
 	struct ieee80211_sub_if_data *sdata = sta->sdata;
@@ -147,35 +148,11 @@ static void cleanup_single_sta(struct sta_info *sta)
 	sta_info_free(local, sta);
 }
 
-void ieee80211_cleanup_sdata_stas(struct ieee80211_sub_if_data *sdata)
-{
-	struct sta_info *sta;
-
-	spin_lock_bh(&sdata->cleanup_stations_lock);
-	while (!list_empty(&sdata->cleanup_stations)) {
-		sta = list_first_entry(&sdata->cleanup_stations,
-				       struct sta_info, list);
-		list_del(&sta->list);
-		spin_unlock_bh(&sdata->cleanup_stations_lock);
-
-		cleanup_single_sta(sta);
-
-		spin_lock_bh(&sdata->cleanup_stations_lock);
-	}
-
-	spin_unlock_bh(&sdata->cleanup_stations_lock);
-}
-
 static void free_sta_rcu(struct rcu_head *h)
 {
 	struct sta_info *sta = container_of(h, struct sta_info, rcu_head);
-	struct ieee80211_sub_if_data *sdata = sta->sdata;
 
-	spin_lock(&sdata->cleanup_stations_lock);
-	list_add_tail(&sta->list, &sdata->cleanup_stations);
-	spin_unlock(&sdata->cleanup_stations_lock);
-
-	ieee80211_queue_work(&sdata->local->hw, &sdata->cleanup_stations_wk);
+	ieee80211_queue_work(&sta->local->hw, &sta->free_sta_wk);
 }
 
 /* protected by RCU */
@@ -328,6 +305,7 @@ struct sta_info *sta_info_alloc(struct ieee80211_sub_if_data *sdata,
 
 	spin_lock_init(&sta->lock);
 	INIT_WORK(&sta->drv_unblock_wk, sta_unblock);
+	INIT_WORK(&sta->free_sta_wk, free_sta_work);
 	INIT_WORK(&sta->ampdu_mlme.work, ieee80211_ba_session_work);
 	mutex_init(&sta->ampdu_mlme.mtx);
 
@@ -870,7 +848,7 @@ void sta_info_init(struct ieee80211_local *local)
 
 void sta_info_stop(struct ieee80211_local *local)
 {
-	del_timer_sync(&local->sta_cleanup);
+	del_timer(&local->sta_cleanup);
 	sta_info_flush(local, NULL);
 }
 
@@ -898,20 +876,6 @@ int sta_info_flush(struct ieee80211_local *local,
 		}
 	}
 	mutex_unlock(&local->sta_mtx);
-
-	rcu_barrier();
-
-	if (sdata) {
-		ieee80211_cleanup_sdata_stas(sdata);
-		cancel_work_sync(&sdata->cleanup_stations_wk);
-	} else {
-		mutex_lock(&local->iflist_mtx);
-		list_for_each_entry(sdata, &local->interfaces, list) {
-			ieee80211_cleanup_sdata_stas(sdata);
-			cancel_work_sync(&sdata->cleanup_stations_wk);
-		}
-		mutex_unlock(&local->iflist_mtx);
-	}
 
 	return ret;
 }

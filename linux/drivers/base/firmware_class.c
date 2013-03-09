@@ -143,7 +143,7 @@ struct fw_cache_entry {
 };
 
 struct firmware_priv {
-	struct delayed_work timeout_work;
+	struct timer_list timeout;
 	bool nowait;
 	struct device dev;
 	struct firmware_buf *buf;
@@ -246,6 +246,7 @@ static void __fw_free_buf(struct kref *ref)
 		 __func__, buf->fw_id, buf, buf->data,
 		 (unsigned int)buf->size);
 
+	spin_lock(&fwc->lock);
 	list_del(&buf->list);
 	spin_unlock(&fwc->lock);
 
@@ -262,10 +263,7 @@ static void __fw_free_buf(struct kref *ref)
 
 static void fw_free_buf(struct firmware_buf *buf)
 {
-	struct firmware_cache *fwc = buf->fwc;
-	spin_lock(&fwc->lock);
-	if (!kref_put(&buf->ref, __fw_free_buf))
-		spin_unlock(&fwc->lock);
+	kref_put(&buf->ref, __fw_free_buf);
 }
 
 /* direct firmware loading support */
@@ -295,7 +293,7 @@ static bool fw_read_file_contents(struct file *file, struct firmware_buf *fw_buf
 	char *buf;
 
 	size = fw_file_size(file);
-	if (size <= 0)
+	if (size < 0)
 		return false;
 	buf = vmalloc(size);
 	if (!buf)
@@ -669,18 +667,11 @@ static struct bin_attribute firmware_attr_data = {
 	.write = firmware_data_write,
 };
 
-static void firmware_class_timeout_work(struct work_struct *work)
+static void firmware_class_timeout(u_long data)
 {
-	struct firmware_priv *fw_priv = container_of(work,
-			struct firmware_priv, timeout_work.work);
+	struct firmware_priv *fw_priv = (struct firmware_priv *) data;
 
-	mutex_lock(&fw_lock);
-	if (test_bit(FW_STATUS_DONE, &(fw_priv->buf->status))) {
-		mutex_unlock(&fw_lock);
-		return;
-	}
 	fw_load_abort(fw_priv);
-	mutex_unlock(&fw_lock);
 }
 
 static struct firmware_priv *
@@ -699,8 +690,8 @@ fw_create_instance(struct firmware *firmware, const char *fw_name,
 
 	fw_priv->nowait = nowait;
 	fw_priv->fw = firmware;
-	INIT_DELAYED_WORK(&fw_priv->timeout_work,
-		firmware_class_timeout_work);
+	setup_timer(&fw_priv->timeout,
+		    firmware_class_timeout, (u_long) fw_priv);
 
 	f_dev = &fw_priv->dev;
 
@@ -867,9 +858,7 @@ static int _request_firmware_load(struct firmware_priv *fw_priv, bool uevent,
 		dev_dbg(f_dev->parent, "firmware: direct-loading"
 			" firmware %s\n", buf->fw_id);
 
-		mutex_lock(&fw_lock);
 		set_bit(FW_STATUS_DONE, &buf->status);
-		mutex_unlock(&fw_lock);
 		complete_all(&buf->completion);
 		direct_load = 1;
 		goto handle_fw;
@@ -905,14 +894,15 @@ static int _request_firmware_load(struct firmware_priv *fw_priv, bool uevent,
 		dev_set_uevent_suppress(f_dev, false);
 		dev_dbg(f_dev, "firmware: requesting %s\n", buf->fw_id);
 		if (timeout != MAX_SCHEDULE_TIMEOUT)
-			schedule_delayed_work(&fw_priv->timeout_work, timeout);
+			mod_timer(&fw_priv->timeout,
+				  round_jiffies_up(jiffies + timeout));
 
 		kobject_uevent(&fw_priv->dev.kobj, KOBJ_ADD);
 	}
 
 	wait_for_completion(&buf->completion);
 
-	cancel_delayed_work_sync(&fw_priv->timeout_work);
+	del_timer_sync(&fw_priv->timeout);
 
 handle_fw:
 	mutex_lock(&fw_lock);

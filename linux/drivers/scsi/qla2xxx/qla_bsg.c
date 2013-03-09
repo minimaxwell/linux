@@ -219,8 +219,7 @@ qla24xx_proc_fcp_prio_cfg_cmd(struct fc_bsg_job *bsg_job)
 		break;
 	}
 exit_fcp_prio_cfg:
-	if (!ret)
-		bsg_job->job_done(bsg_job);
+	bsg_job->job_done(bsg_job);
 	return ret;
 }
 
@@ -742,8 +741,9 @@ qla2x00_process_loopback(struct fc_bsg_job *bsg_job)
 			if (qla81xx_get_port_config(vha, config)) {
 				ql_log(ql_log_warn, vha, 0x701f,
 				    "Get port config failed.\n");
+				bsg_job->reply->result = (DID_ERROR << 16);
 				rval = -EPERM;
-				goto done_free_dma_rsp;
+				goto done_free_dma_req;
 			}
 
 			ql_dbg(ql_dbg_user, vha, 0x70c0,
@@ -761,8 +761,9 @@ qla2x00_process_loopback(struct fc_bsg_job *bsg_job)
 				    new_config, elreq.options);
 
 			if (rval) {
+				bsg_job->reply->result = (DID_ERROR << 16);
 				rval = -EPERM;
-				goto done_free_dma_rsp;
+				goto done_free_dma_req;
 			}
 
 			type = "FC_BSG_HST_VENDOR_LOOPBACK";
@@ -794,8 +795,9 @@ qla2x00_process_loopback(struct fc_bsg_job *bsg_job)
 					    "MPI reset failed.\n");
 				}
 
+				bsg_job->reply->result = (DID_ERROR << 16);
 				rval = -EIO;
-				goto done_free_dma_rsp;
+				goto done_free_dma_req;
 			}
 		} else {
 			type = "FC_BSG_HST_VENDOR_LOOPBACK";
@@ -810,27 +812,34 @@ qla2x00_process_loopback(struct fc_bsg_job *bsg_job)
 		ql_log(ql_log_warn, vha, 0x702c,
 		    "Vendor request %s failed.\n", type);
 
+		fw_sts_ptr = ((uint8_t *)bsg_job->req->sense) +
+		    sizeof(struct fc_bsg_reply);
+
+		memcpy(fw_sts_ptr, response, sizeof(response));
+		fw_sts_ptr += sizeof(response);
+		*fw_sts_ptr = command_sent;
 		rval = 0;
 		bsg_job->reply->result = (DID_ERROR << 16);
-		bsg_job->reply->reply_payload_rcv_len = 0;
 	} else {
 		ql_dbg(ql_dbg_user, vha, 0x702d,
 		    "Vendor request %s completed.\n", type);
-		bsg_job->reply->result = (DID_OK << 16);
+
+		bsg_job->reply_len = sizeof(struct fc_bsg_reply) +
+			sizeof(response) + sizeof(uint8_t);
+		bsg_job->reply->reply_payload_rcv_len =
+			bsg_job->reply_payload.payload_len;
+		fw_sts_ptr = ((uint8_t *)bsg_job->req->sense) +
+			sizeof(struct fc_bsg_reply);
+		memcpy(fw_sts_ptr, response, sizeof(response));
+		fw_sts_ptr += sizeof(response);
+		*fw_sts_ptr = command_sent;
+		bsg_job->reply->result = DID_OK;
 		sg_copy_from_buffer(bsg_job->reply_payload.sg_list,
 			bsg_job->reply_payload.sg_cnt, rsp_data,
 			rsp_data_len);
 	}
+	bsg_job->job_done(bsg_job);
 
-	bsg_job->reply_len = sizeof(struct fc_bsg_reply) +
-	    sizeof(response) + sizeof(uint8_t);
-	fw_sts_ptr = ((uint8_t *)bsg_job->req->sense) +
-	    sizeof(struct fc_bsg_reply);
-	memcpy(fw_sts_ptr, response, sizeof(response));
-	fw_sts_ptr += sizeof(response);
-	*fw_sts_ptr = command_sent;
-
-done_free_dma_rsp:
 	dma_free_coherent(&ha->pdev->dev, rsp_data_len,
 		rsp_data, rsp_data_dma);
 done_free_dma_req:
@@ -844,8 +853,6 @@ done_unmap_req_sg:
 	dma_unmap_sg(&ha->pdev->dev,
 	    bsg_job->request_payload.sg_list,
 	    bsg_job->request_payload.sg_cnt, DMA_TO_DEVICE);
-	if (!rval)
-		bsg_job->job_done(bsg_job);
 	return rval;
 }
 
@@ -870,15 +877,16 @@ qla84xx_reset(struct fc_bsg_job *bsg_job)
 	if (rval) {
 		ql_log(ql_log_warn, vha, 0x7030,
 		    "Vendor request 84xx reset failed.\n");
-		rval = (DID_ERROR << 16);
+		rval = 0;
+		bsg_job->reply->result = (DID_ERROR << 16);
 
 	} else {
 		ql_dbg(ql_dbg_user, vha, 0x7031,
 		    "Vendor request 84xx reset completed.\n");
 		bsg_job->reply->result = DID_OK;
-		bsg_job->job_done(bsg_job);
 	}
 
+	bsg_job->job_done(bsg_job);
 	return rval;
 }
 
@@ -968,7 +976,8 @@ qla84xx_updatefw(struct fc_bsg_job *bsg_job)
 		ql_log(ql_log_warn, vha, 0x7037,
 		    "Vendor request 84xx updatefw failed.\n");
 
-		rval = (DID_ERROR << 16);
+		rval = 0;
+		bsg_job->reply->result = (DID_ERROR << 16);
 	} else {
 		ql_dbg(ql_dbg_user, vha, 0x7038,
 		    "Vendor request 84xx updatefw completed.\n");
@@ -977,6 +986,7 @@ qla84xx_updatefw(struct fc_bsg_job *bsg_job)
 		bsg_job->reply->result = DID_OK;
 	}
 
+	bsg_job->job_done(bsg_job);
 	dma_pool_free(ha->s_dma_pool, mn, mn_dma);
 
 done_free_fw_buf:
@@ -986,8 +996,6 @@ done_unmap_sg:
 	dma_unmap_sg(&ha->pdev->dev, bsg_job->request_payload.sg_list,
 		bsg_job->request_payload.sg_cnt, DMA_TO_DEVICE);
 
-	if (!rval)
-		bsg_job->job_done(bsg_job);
 	return rval;
 }
 
@@ -1155,7 +1163,8 @@ qla84xx_mgmt_cmd(struct fc_bsg_job *bsg_job)
 		ql_log(ql_log_warn, vha, 0x7043,
 		    "Vendor request 84xx mgmt failed.\n");
 
-		rval = (DID_ERROR << 16);
+		rval = 0;
+		bsg_job->reply->result = (DID_ERROR << 16);
 
 	} else {
 		ql_dbg(ql_dbg_user, vha, 0x7044,
@@ -1175,6 +1184,8 @@ qla84xx_mgmt_cmd(struct fc_bsg_job *bsg_job)
 		}
 	}
 
+	bsg_job->job_done(bsg_job);
+
 done_unmap_sg:
 	if (mgmt_b)
 		dma_free_coherent(&ha->pdev->dev, data_len, mgmt_b, mgmt_dma);
@@ -1189,8 +1200,6 @@ done_unmap_sg:
 exit_mgmt:
 	dma_pool_free(ha->s_dma_pool, mn, mn_dma);
 
-	if (!rval)
-		bsg_job->job_done(bsg_job);
 	return rval;
 }
 
@@ -1267,7 +1276,9 @@ qla24xx_iidma(struct fc_bsg_job *bsg_job)
 		    fcport->port_name[3], fcport->port_name[4],
 		    fcport->port_name[5], fcport->port_name[6],
 		    fcport->port_name[7], rval, fcport->fp_speed, mb[0], mb[1]);
-		rval = (DID_ERROR << 16);
+		rval = 0;
+		bsg_job->reply->result = (DID_ERROR << 16);
+
 	} else {
 		if (!port_param->mode) {
 			bsg_job->reply_len = sizeof(struct fc_bsg_reply) +
@@ -1281,9 +1292,9 @@ qla24xx_iidma(struct fc_bsg_job *bsg_job)
 		}
 
 		bsg_job->reply->result = DID_OK;
-		bsg_job->job_done(bsg_job);
 	}
 
+	bsg_job->job_done(bsg_job);
 	return rval;
 }
 
@@ -1876,6 +1887,8 @@ qla2x00_process_vendor_specific(struct fc_bsg_job *bsg_job)
 		return qla24xx_process_bidir_cmd(bsg_job);
 
 	default:
+		bsg_job->reply->result = (DID_ERROR << 16);
+		bsg_job->job_done(bsg_job);
 		return -ENOSYS;
 	}
 }
@@ -1906,6 +1919,8 @@ qla24xx_bsg_request(struct fc_bsg_job *bsg_job)
 		ql_dbg(ql_dbg_user, vha, 0x709f,
 		    "BSG: ISP abort active/needed -- cmd=%d.\n",
 		    bsg_job->request->msgcode);
+		bsg_job->reply->result = (DID_ERROR << 16);
+		bsg_job->job_done(bsg_job);
 		return -EBUSY;
 	}
 
@@ -1928,6 +1943,7 @@ qla24xx_bsg_request(struct fc_bsg_job *bsg_job)
 	case FC_BSG_RPT_CT:
 	default:
 		ql_log(ql_log_warn, vha, 0x705a, "Unsupported BSG request.\n");
+		bsg_job->reply->result = ret;
 		break;
 	}
 	return ret;

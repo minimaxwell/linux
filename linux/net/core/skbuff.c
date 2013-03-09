@@ -1620,7 +1620,7 @@ static void sock_spd_release(struct splice_pipe_desc *spd, unsigned int i)
 
 static struct page *linear_to_page(struct page *page, unsigned int *len,
 				   unsigned int *offset,
-				   struct sock *sk)
+				   struct sk_buff *skb, struct sock *sk)
 {
 	struct page_frag *pfrag = sk_page_frag(sk);
 
@@ -1653,14 +1653,14 @@ static bool spd_can_coalesce(const struct splice_pipe_desc *spd,
 static bool spd_fill_page(struct splice_pipe_desc *spd,
 			  struct pipe_inode_info *pipe, struct page *page,
 			  unsigned int *len, unsigned int offset,
-			  bool linear,
+			  struct sk_buff *skb, bool linear,
 			  struct sock *sk)
 {
 	if (unlikely(spd->nr_pages == MAX_SKB_FRAGS))
 		return true;
 
 	if (linear) {
-		page = linear_to_page(page, len, &offset, sk);
+		page = linear_to_page(page, len, &offset, skb, sk);
 		if (!page)
 			return true;
 	}
@@ -1677,9 +1677,23 @@ static bool spd_fill_page(struct splice_pipe_desc *spd,
 	return false;
 }
 
+static inline void __segment_seek(struct page **page, unsigned int *poff,
+				  unsigned int *plen, unsigned int off)
+{
+	unsigned long n;
+
+	*poff += off;
+	n = *poff / PAGE_SIZE;
+	if (n)
+		*page = nth_page(*page, n);
+
+	*poff = *poff % PAGE_SIZE;
+	*plen -= off;
+}
+
 static bool __splice_segment(struct page *page, unsigned int poff,
 			     unsigned int plen, unsigned int *off,
-			     unsigned int *len,
+			     unsigned int *len, struct sk_buff *skb,
 			     struct splice_pipe_desc *spd, bool linear,
 			     struct sock *sk,
 			     struct pipe_inode_info *pipe)
@@ -1694,19 +1708,23 @@ static bool __splice_segment(struct page *page, unsigned int poff,
 	}
 
 	/* ignore any bits we already processed */
-	poff += *off;
-	plen -= *off;
-	*off = 0;
+	if (*off) {
+		__segment_seek(&page, &poff, &plen, *off);
+		*off = 0;
+	}
 
 	do {
 		unsigned int flen = min(*len, plen);
 
-		if (spd_fill_page(spd, pipe, page, &flen, poff,
-				  linear, sk))
+		/* the linear region may spread across several pages  */
+		flen = min_t(unsigned int, flen, PAGE_SIZE - poff);
+
+		if (spd_fill_page(spd, pipe, page, &flen, poff, skb, linear, sk))
 			return true;
-		poff += flen;
-		plen -= flen;
+
+		__segment_seek(&page, &poff, &plen, flen);
 		*len -= flen;
+
 	} while (*len && plen);
 
 	return false;
@@ -1730,7 +1748,7 @@ static bool __skb_splice_bits(struct sk_buff *skb, struct pipe_inode_info *pipe,
 	if (__splice_segment(virt_to_page(skb->data),
 			     (unsigned long) skb->data & (PAGE_SIZE - 1),
 			     skb_headlen(skb),
-			     offset, len, spd,
+			     offset, len, skb, spd,
 			     skb_head_is_locked(skb),
 			     sk, pipe))
 		return true;
@@ -1743,7 +1761,7 @@ static bool __skb_splice_bits(struct sk_buff *skb, struct pipe_inode_info *pipe,
 
 		if (__splice_segment(skb_frag_page(f),
 				     f->page_offset, skb_frag_size(f),
-				     offset, len, spd, false, sk, pipe))
+				     offset, len, skb, spd, false, sk, pipe))
 			return true;
 	}
 

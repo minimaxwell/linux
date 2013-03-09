@@ -391,9 +391,10 @@ void rt2x00lib_txdone(struct queue_entry *entry,
 		tx_info->flags |= IEEE80211_TX_STAT_AMPDU;
 		tx_info->status.ampdu_len = 1;
 		tx_info->status.ampdu_ack_len = success ? 1 : 0;
-
-		if (!success)
-			tx_info->flags |= IEEE80211_TX_STAT_AMPDU_NO_BACK;
+		/*
+		 * TODO: Need to tear down BA session here
+		 * if not successful.
+		 */
 	}
 
 	if (rate_flags & IEEE80211_TX_RC_USE_RTS_CTS) {
@@ -1121,9 +1122,6 @@ static inline void rt2x00lib_set_if_combinations(struct rt2x00_dev *rt2x00dev)
 {
 	struct ieee80211_iface_limit *if_limit;
 	struct ieee80211_iface_combination *if_combination;
-
-	if (rt2x00dev->ops->max_ap_intf < 2)
-		return;
 
 	/*
 	 * Build up AP interface limits structure.

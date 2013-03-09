@@ -1723,7 +1723,7 @@ static struct rt6_info *addrconf_get_prefix_route(const struct in6_addr *pfx,
 			continue;
 		if ((rt->rt6i_flags & flags) != flags)
 			continue;
-		if ((rt->rt6i_flags & noflags) != 0)
+		if ((noflags != 0) && ((rt->rt6i_flags & flags) != 0))
 			continue;
 		dst_hold(&rt->dst);
 		break;

@@ -1427,12 +1427,12 @@ static void tcp_service_net_dma(struct sock *sk, bool wait)
 }
 #endif
 
-static struct sk_buff *tcp_recv_skb(struct sock *sk, u32 seq, u32 *off)
+static inline struct sk_buff *tcp_recv_skb(struct sock *sk, u32 seq, u32 *off)
 {
 	struct sk_buff *skb;
 	u32 offset;
 
-	while ((skb = skb_peek(&sk->sk_receive_queue)) != NULL) {
+	skb_queue_walk(&sk->sk_receive_queue, skb) {
 		offset = seq - TCP_SKB_CB(skb)->seq;
 		if (tcp_hdr(skb)->syn)
 			offset--;
@@ -1440,11 +1440,6 @@ static struct sk_buff *tcp_recv_skb(struct sock *sk, u32 seq, u32 *off)
 			*off = offset;
 			return skb;
 		}
-		/* This looks weird, but this can happen if TCP collapsing
-		 * splitted a fat GRO packet, while we released socket lock
-		 * in skb_splice_bits()
-		 */
-		sk_eat_skb(sk, skb, false);
 	}
 	return NULL;
 }
@@ -1486,7 +1481,7 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 					break;
 			}
 			used = recv_actor(desc, skb, offset, len);
-			if (used <= 0) {
+			if (used < 0) {
 				if (!copied)
 					copied = used;
 				break;
@@ -1495,19 +1490,15 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 				copied += used;
 				offset += used;
 			}
-			/* If recv_actor drops the lock (e.g. TCP splice
+			/*
+			 * If recv_actor drops the lock (e.g. TCP splice
 			 * receive) the skb pointer might be invalid when
 			 * getting here: tcp_collapse might have deleted it
 			 * while aggregating skbs from the socket queue.
 			 */
-			skb = tcp_recv_skb(sk, seq - 1, &offset);
-			if (!skb)
+			skb = tcp_recv_skb(sk, seq-1, &offset);
+			if (!skb || (offset+1 != skb->len))
 				break;
-			/* TCP coalescing might have appended data to the skb.
-			 * Try to splice more frags
-			 */
-			if (offset + 1 != skb->len)
-				continue;
 		}
 		if (tcp_hdr(skb)->fin) {
 			sk_eat_skb(sk, skb, false);
@@ -1524,10 +1515,8 @@ int tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 	tcp_rcv_space_adjust(sk);
 
 	/* Clean up data we have read: This will do ACK frames. */
-	if (copied > 0) {
-		tcp_recv_skb(sk, seq, &offset);
+	if (copied > 0)
 		tcp_cleanup_rbuf(sk, copied);
-	}
 	return copied;
 }
 EXPORT_SYMBOL(tcp_read_sock);
