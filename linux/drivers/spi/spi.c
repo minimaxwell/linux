@@ -867,6 +867,8 @@ static void of_register_spi_devices(struct spi_master *master)
 			spi->mode |= SPI_CPOL;
 		if (of_find_property(nc, "spi-cs-high", NULL))
 			spi->mode |= SPI_CS_HIGH;
+		if (of_find_property(nc, "spi-3wire", NULL))
+			spi->mode |= SPI_3WIRE;
 		if (of_find_property(nc, "spi-troll", NULL))
 			spi->mode |= SPI_TROLL;
 

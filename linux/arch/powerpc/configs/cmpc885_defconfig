@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 3.7.0 Kernel Configuration
+# Linux/powerpc 3.8.0 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -176,9 +176,9 @@ CONFIG_HAVE_DMA_API_DEBUG=y
 CONFIG_HAVE_ARCH_JUMP_LABEL=y
 CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG=y
 CONFIG_ARCH_WANT_IPC_PARSE_VERSION=y
-CONFIG_GENERIC_KERNEL_THREAD=y
 CONFIG_HAVE_MOD_ARCH_SPECIFIC=y
 CONFIG_MODULES_USE_ELF_RELA=y
+CONFIG_CLONE_BACKWARDS=y
 
 #
 # GCOV-based kernel profiling
@@ -457,6 +457,7 @@ CONFIG_NETFILTER_XT_TARGET_LOG=y
 # CONFIG_NETFILTER_XT_TARGET_NETMAP is not set
 # CONFIG_NETFILTER_XT_TARGET_NFLOG is not set
 # CONFIG_NETFILTER_XT_TARGET_NFQUEUE is not set
+# CONFIG_NETFILTER_XT_TARGET_NOTRACK is not set
 # CONFIG_NETFILTER_XT_TARGET_RATEEST is not set
 # CONFIG_NETFILTER_XT_TARGET_REDIRECT is not set
 # CONFIG_NETFILTER_XT_TARGET_TEE is not set
@@ -543,7 +544,7 @@ CONFIG_IP_NF_RAW=y
 CONFIG_STP=y
 CONFIG_GARP=y
 # CONFIG_BRIDGE is not set
-# CONFIG_NET_DSA is not set
+CONFIG_HAVE_NET_DSA=y
 CONFIG_VLAN_8021Q=y
 CONFIG_VLAN_8021Q_GVRP=y
 # CONFIG_DECNET is not set
@@ -604,7 +605,6 @@ CONFIG_DEBUG_DRIVER=y
 #
 # Bus devices
 #
-# CONFIG_OMAP_OCP2SCP is not set
 # CONFIG_CONNECTOR is not set
 CONFIG_MTD=y
 # CONFIG_MTD_TESTS is not set
@@ -679,6 +679,7 @@ CONFIG_MTD_NAND=y
 # CONFIG_MTD_NAND_ECC_BCH is not set
 # CONFIG_MTD_SM_COMMON is not set
 # CONFIG_MTD_NAND_MUSEUM_IDS is not set
+# CONFIG_MTD_NAND_DENALI is not set
 CONFIG_MTD_NAND_CMPC885=y
 CONFIG_MTD_NAND_MCR3000=y
 CONFIG_MTD_NAND_IDS=y
@@ -769,10 +770,21 @@ CONFIG_MII=y
 #
 # CAIF transport drivers
 #
+
+#
+# Distributed Switch Architecture drivers
+#
+# CONFIG_NET_DSA_MV88E6XXX is not set
+# CONFIG_NET_DSA_MV88E6060 is not set
+# CONFIG_NET_DSA_MV88E6XXX_NEED_PPU is not set
+# CONFIG_NET_DSA_MV88E6131 is not set
+# CONFIG_NET_DSA_MV88E6123_61_65 is not set
 CONFIG_ETHERNET=y
+CONFIG_NET_CADENCE=y
+# CONFIG_ARM_AT91_ETHER is not set
+# CONFIG_MACB is not set
 # CONFIG_NET_VENDOR_BROADCOM is not set
 # CONFIG_NET_CALXEDA_XGMAC is not set
-# CONFIG_NET_VENDOR_CHELSIO is not set
 # CONFIG_DNET is not set
 CONFIG_NET_VENDOR_FREESCALE=y
 CONFIG_FS_ENET=y
@@ -875,6 +887,7 @@ CONFIG_SERIAL_CPM_CONSOLE=y
 # CONFIG_SERIAL_ALTERA_UART is not set
 # CONFIG_SERIAL_IFX6X60 is not set
 # CONFIG_SERIAL_XILINX_PS_UART is not set
+# CONFIG_SERIAL_ARC is not set
 # CONFIG_TTY_PRINTK is not set
 # CONFIG_HVC_UDBG is not set
 # CONFIG_IPMI_HANDLER is not set
@@ -925,10 +938,12 @@ CONFIG_SPI_FSL_SPI=y
 #
 # PTP clock support
 #
+# CONFIG_PTP_1588_CLOCK is not set
 
 #
-# Enable Device Drivers -> PPS to see the PTP clock options.
+# Enable PHYLIB and NETWORK_PHY_TIMESTAMPING to see the additional clocks.
 #
+# CONFIG_PTP_1588_CLOCK_PCH is not set
 CONFIG_ARCH_WANT_OPTIONAL_GPIOLIB=y
 CONFIG_ARCH_REQUIRE_GPIOLIB=y
 CONFIG_GPIOLIB=y
@@ -942,6 +957,7 @@ CONFIG_GPIO_MAX730X=y
 # Memory mapped GPIO drivers:
 #
 # CONFIG_GPIO_GENERIC_PLATFORM is not set
+# CONFIG_GPIO_TS5500 is not set
 # CONFIG_GPIO_XILINX is not set
 
 #
@@ -967,6 +983,10 @@ CONFIG_GPIO_MAX7301=y
 #
 # MODULbus GPIO expanders:
 #
+
+#
+# USB GPIO expanders:
+#
 # CONFIG_W1 is not set
 # CONFIG_POWER_SUPPLY is not set
 # CONFIG_POWER_AVS is not set
@@ -989,6 +1009,12 @@ CONFIG_SENSORS_LM70=y
 # CONFIG_SENSORS_ADS7871 is not set
 CONFIG_THERMAL=y
 CONFIG_THERMAL_HWMON=y
+CONFIG_THERMAL_DEFAULT_GOV_STEP_WISE=y
+# CONFIG_THERMAL_DEFAULT_GOV_FAIR_SHARE is not set
+# CONFIG_THERMAL_DEFAULT_GOV_USER_SPACE is not set
+# CONFIG_FAIR_SHARE is not set
+CONFIG_STEP_WISE=y
+# CONFIG_USER_SPACE is not set
 CONFIG_WATCHDOG=y
 # CONFIG_WATCHDOG_CORE is not set
 # CONFIG_WATCHDOG_NOWAYOUT is not set
@@ -1016,6 +1042,7 @@ CONFIG_BCMA_POSSIBLE=y
 #
 # CONFIG_MFD_CORE is not set
 # CONFIG_MFD_SM501 is not set
+# CONFIG_MFD_TI_AM335X_TSCADC is not set
 # CONFIG_HTC_PASIC3 is not set
 # CONFIG_MFD_TPS65912_SPI is not set
 # CONFIG_MFD_STMPE is not set
@@ -1114,15 +1141,12 @@ CONFIG_IIO_SW_RING=y
 #
 # Analog to digital converters
 #
-# CONFIG_AD7298 is not set
 CONFIG_AD7923=y
 # CONFIG_AD7606 is not set
-# CONFIG_AD7887 is not set
 # CONFIG_AD7780 is not set
-# CONFIG_AD7793 is not set
 # CONFIG_AD7816 is not set
 # CONFIG_AD7192 is not set
-# CONFIG_ADT7310 is not set
+# CONFIG_ADT7410 is not set
 # CONFIG_AD7280 is not set
 
 #
@@ -1205,8 +1229,6 @@ CONFIG_IIO_SYSFS_TRIGGER=y
 # Android
 #
 # CONFIG_ANDROID is not set
-# CONFIG_PHONE is not set
-# CONFIG_IPACK_BUS is not set
 # CONFIG_WIMAX_GDM72XX is not set
 # CONFIG_DGRP is not set
 CONFIG_SAF3000_PLATFORM_DEVICES=y
@@ -1243,6 +1265,7 @@ CONFIG_CMPC_CPLD=y
 # CONFIG_MEMORY is not set
 CONFIG_IIO=y
 CONFIG_IIO_BUFFER=y
+# CONFIG_IIO_BUFFER_CB is not set
 CONFIG_IIO_KFIFO_BUF=y
 CONFIG_IIO_TRIGGERED_BUFFER=y
 CONFIG_IIO_TRIGGER=y
@@ -1256,8 +1279,11 @@ CONFIG_IIO_CONSUMERS_PER_TRIGGER=2
 # Analog to digital converters
 #
 # CONFIG_AD7266 is not set
+# CONFIG_AD7298 is not set
 # CONFIG_AD7791 is not set
+# CONFIG_AD7793 is not set
 # CONFIG_AD7476 is not set
+# CONFIG_AD7887 is not set
 
 #
 # Amplifiers
@@ -1265,8 +1291,24 @@ CONFIG_IIO_CONSUMERS_PER_TRIGGER=2
 # CONFIG_AD8366 is not set
 
 #
-# Light sensors
+# Hid Sensor IIO Common
 #
+
+#
+# Digital to analog converters
+#
+# CONFIG_AD5064 is not set
+# CONFIG_AD5360 is not set
+# CONFIG_AD5380 is not set
+# CONFIG_AD5421 is not set
+# CONFIG_AD5624R_SPI is not set
+# CONFIG_AD5446 is not set
+# CONFIG_AD5449 is not set
+# CONFIG_AD5504 is not set
+# CONFIG_AD5755 is not set
+# CONFIG_AD5764 is not set
+# CONFIG_AD5791 is not set
+# CONFIG_AD5686 is not set
 
 #
 # Frequency Synthesizers DDS/PLL
@@ -1283,32 +1325,24 @@ CONFIG_IIO_CONSUMERS_PER_TRIGGER=2
 # CONFIG_ADF4350 is not set
 
 #
-# Digital to analog converters
-#
-# CONFIG_AD5064 is not set
-# CONFIG_AD5360 is not set
-# CONFIG_AD5380 is not set
-# CONFIG_AD5421 is not set
-# CONFIG_AD5624R_SPI is not set
-# CONFIG_AD5446 is not set
-# CONFIG_AD5504 is not set
-# CONFIG_AD5755 is not set
-# CONFIG_AD5764 is not set
-# CONFIG_AD5791 is not set
-# CONFIG_AD5686 is not set
-
-#
-# Hid Sensor IIO Common
-#
-
-#
 # Digital gyroscope sensors
+#
+# CONFIG_ADIS16136 is not set
+
+#
+# Inertial measurement units
+#
+# CONFIG_ADIS16480 is not set
+
+#
+# Light sensors
 #
 
 #
 # Magnetometer sensors
 #
 # CONFIG_PWM is not set
+# CONFIG_IPACK_BUS is not set
 
 #
 # File systems

@@ -135,7 +135,7 @@ const char *part_probes[] = { "cmdlinepart", NULL };
 /*
  * mcr3000_remove
  */
-static int __devexit mcr3000_remove(struct platform_device *ofdev)
+static int mcr3000_remove(struct platform_device *ofdev)
 {
 	struct mcr3000_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
@@ -157,7 +157,7 @@ static int __devexit mcr3000_remove(struct platform_device *ofdev)
 /*
  * mcr3000_probe
  */
-static int __devinit mcr3000_probe(struct platform_device *ofdev)
+static int mcr3000_probe(struct platform_device *ofdev)
 {
 	struct mcr3000_host *host;
 	struct mtd_info *mtd;
@@ -311,7 +311,7 @@ MODULE_DEVICE_TABLE(of, mcr3000_match);
  */
 static struct platform_driver mcr3000_driver = {
 	.probe		= mcr3000_probe,
-	.remove		= __devexit_p(mcr3000_remove),
+	.remove		= mcr3000_remove,
 	.driver		=
 	{
 		.name		= DRV_NAME,

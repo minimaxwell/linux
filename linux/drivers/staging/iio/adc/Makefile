@@ -12,24 +12,14 @@ ad799x-y := ad799x_core.o
 ad799x-$(CONFIG_AD799X_RING_BUFFER) += ad799x_ring.o
 obj-$(CONFIG_AD799X) += ad799x.o
 
-ad7887-y := ad7887_core.o
-ad7887-$(CONFIG_IIO_BUFFER) += ad7887_ring.o
-obj-$(CONFIG_AD7887) += ad7887.o
-
-ad7298-y := ad7298_core.o
-ad7298-$(CONFIG_IIO_BUFFER) += ad7298_ring.o
-obj-$(CONFIG_AD7298) += ad7298.o
-
 ad7923-y := ad7923_core.o
 ad7923-$(CONFIG_IIO_BUFFER) += ad7923_ring.o
 obj-$(CONFIG_AD7923) += ad7923.o
 
 obj-$(CONFIG_AD7291) += ad7291.o
 obj-$(CONFIG_AD7780) += ad7780.o
-obj-$(CONFIG_AD7793) += ad7793.o
 obj-$(CONFIG_AD7816) += ad7816.o
 obj-$(CONFIG_AD7192) += ad7192.o
-obj-$(CONFIG_ADT7310) += adt7310.o
 obj-$(CONFIG_ADT7410) += adt7410.o
 obj-$(CONFIG_AD7280) += ad7280a.o
 obj-$(CONFIG_LPC32XX_ADC) += lpc32xx_adc.o

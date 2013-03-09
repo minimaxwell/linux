@@ -142,7 +142,7 @@ extern const char *part_probes[];
 /*
  * cmpc885_remove
  */
-static int __devexit cmpc885_remove(struct platform_device *ofdev)
+static int cmpc885_remove(struct platform_device *ofdev)
 {
 	struct cmpc885_host *host = dev_get_drvdata(&ofdev->dev);
 	struct mtd_info *mtd = &host->mtd;
@@ -164,7 +164,7 @@ static int __devexit cmpc885_remove(struct platform_device *ofdev)
 /*
  * cmpc885_probe
  */
-static int __devinit cmpc885_probe(struct platform_device *ofdev)
+static int cmpc885_probe(struct platform_device *ofdev)
 {
 	struct cmpc885_host *host;
 	struct mtd_info *mtd;
@@ -319,7 +319,7 @@ MODULE_DEVICE_TABLE(of, cmpc885_match);
  */
 static struct platform_driver cmpc885_driver = {
 	.probe		= cmpc885_probe,
-	.remove		= __devexit_p(cmpc885_remove),
+	.remove		= cmpc885_remove,
 	.driver		=
 	{
 		.name		= DRV_NAME,
