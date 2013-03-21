@@ -2,7 +2,7 @@ ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
 PATCHLEVEL = 8
-SUBLEVEL = 3
+SUBLEVEL = 4
 EXTRAVERSION =
 NAME = Unicycling Gorilla
 
