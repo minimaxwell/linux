@@ -134,8 +134,10 @@ void fpgaf_cascade(unsigned int irq, struct irq_desc *desc)
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	int cascade_irq = fpgaf_get_irq();
 
-	if (cascade_irq >= 0)
+	while (cascade_irq >= 0) {
 		generic_handle_irq(cascade_irq);
+		cascade_irq = fpgaf_get_irq();
+	}
 
 	chip->irq_eoi(&desc->irq_data);
 }
