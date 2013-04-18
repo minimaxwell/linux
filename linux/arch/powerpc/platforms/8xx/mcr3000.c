@@ -234,18 +234,13 @@ end:
 
 static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
 {
-	int cascade_irq;
-	struct irq_chip *chip;
+	struct irq_chip *chip = irq_desc_get_chip(desc);
+	int cascade_irq = cpld_get_irq();
 
-	if ((cascade_irq = cpld_get_irq()) >= 0) {
-		struct irq_desc *cdesc = irq_to_desc(cascade_irq);
-
+	if (cascade_irq >= 0)
 		generic_handle_irq(cascade_irq);
-		chip = irq_desc_get_chip(cdesc);
-		if (chip->irq_eoi) chip->irq_eoi(&cdesc->irq_data);
-	}
-	chip = irq_desc_get_chip(desc);
-	if (chip->irq_eoi) chip->irq_eoi(&desc->irq_data);
+
+	chip->irq_eoi(&desc->irq_data);
 }
 
 /*
