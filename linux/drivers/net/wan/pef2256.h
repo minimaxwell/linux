@@ -42,6 +42,7 @@
 
 struct pef2256_dev_priv {
 	struct sk_buff *tx_skbuff;
+	struct device *dev;
 
 	u16 rx_len;
 	u8 rx_buff[2048];

@@ -8,30 +8,21 @@
 
 #include "pef2256.h"
 
-
-void pef2256_TX_TIMEOUT(struct net_device *netdev)
+static ssize_t fs_attr_master_show(struct device *dev, 
+			struct device_attribute *attr, char *buf)
 {
-	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
-
-	/* FIXME : Something may be missing there */
-	dev_kfree_skb(priv->tx_skbuff);
-	priv->tx_skbuff=NULL;
-	netif_wake_queue(netdev);
+	return 0;
 }
 
 
-void pef2256_RX_TIMEOUT(struct work_struct *work)
+static ssize_t fs_attr_master_store(struct device *dev, 
+			struct device_attribute *attr,  const char *buf, 
+			size_t count)
 {
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct pef2256_dev_priv *priv =
-			container_of(dwork, struct pef2256_dev_priv, 
-					rx_timeout_queue);
-
-	/* FIXME : Something may be missing there */
-	priv->netdev->stats.rx_errors++;
-	priv->rx_len = 0;
+	return 0;
 }
 
+static DEVICE_ATTR(master, S_IRUGO | S_IWUSR, fs_attr_master_show, fs_attr_master_store);
 
 static int pef2256_open(struct net_device *netdev)
 {
@@ -41,8 +32,6 @@ static int pef2256_open(struct net_device *netdev)
 		return -EAGAIN;
 
 	/* Do E1 stuff */
-
-	INIT_DELAYED_WORK(&priv->rx_timeout_queue, pef2256_RX_TIMEOUT);
 
 	priv->tx_skbuff = NULL;
 	priv->rx_len = 0;
@@ -138,7 +127,6 @@ static const struct net_device_ops pef2256_ops = {
 	.ndo_stop       = pef2256_close,
 	.ndo_change_mtu = hdlc_change_mtu,
 	.ndo_start_xmit = hdlc_start_xmit,
-	.ndo_tx_timeout = pef2256_TX_TIMEOUT,
 };
 
 
@@ -179,6 +167,7 @@ static int pef2256_probe(struct platform_device *ofdev)
 	int ret = -ENOMEM;
 	struct net_device *netdev;
 	hdlc_device *hdlc;
+	int sys_ret;
 
 	match = of_match_device(pef2256_match, &ofdev->dev);
 	if (!match)
@@ -189,6 +178,9 @@ static int pef2256_probe(struct platform_device *ofdev)
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (! priv)
 		return ret;
+
+	priv->tx_skbuff = NULL;
+	priv->dev = &ofdev->dev;
 
 	netdev = priv->netdev;
 	hdlc = dev_to_hdlc(netdev);
@@ -202,6 +194,22 @@ static int pef2256_probe(struct platform_device *ofdev)
 	hdlc->xmit = pef2256_start_xmit;
 	
 	platform_set_drvdata(ofdev, priv);
+
+	ret = register_hdlc_device(netdev);
+	if (ret < 0) {
+		pr_err("unable to register\n");
+		return ret;
+	}
+
+	sys_ret = 0;
+	sys_ret |= device_create_file(priv->dev, &dev_attr_master);
+
+	if (sys_ret) {
+		device_remove_file(priv->dev, &dev_attr_master);
+		unregister_hdlc_device(priv->netdev);
+		free_netdev(priv->netdev);
+	}
+
 	return 0;
 }
 
@@ -212,6 +220,8 @@ static int pef2256_probe(struct platform_device *ofdev)
 static int pef2256_remove(struct platform_device *ofdev)
 {
 	struct pef2256_dev_priv *priv = platform_get_drvdata(ofdev);
+
+	device_remove_file(priv->dev, &dev_attr_master);
 
 	unregister_hdlc_device(priv->netdev);
 	free_netdev(priv->netdev);
