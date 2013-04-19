@@ -9,18 +9,14 @@
 #include "pef2256.h"
 
 
-void pef2256_TX_TIMEOUT(struct work_struct *work)
+void pef2256_TX_TIMEOUT(struct net_device *netdev)
 {
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct pef2256_dev_priv *priv =
-			container_of(dwork, struct pef2256_dev_priv, 
-					tx_timeout_queue);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 
 	/* FIXME : Something may be missing there */
-	priv->netdev->stats.tx_errors++;
 	dev_kfree_skb(priv->tx_skbuff);
 	priv->tx_skbuff=NULL;
-	netif_wake_queue(priv->netdev);
+	netif_wake_queue(netdev);
 }
 
 
@@ -46,7 +42,6 @@ static int pef2256_open(struct net_device *netdev)
 
 	/* Do E1 stuff */
 
-	INIT_DELAYED_WORK(&priv->tx_timeout_queue, pef2256_TX_TIMEOUT);
 	INIT_DELAYED_WORK(&priv->rx_timeout_queue, pef2256_RX_TIMEOUT);
 
 	priv->tx_skbuff = NULL;
@@ -63,7 +58,6 @@ static int pef2256_close(struct net_device *netdev)
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 
 	netif_stop_queue(netdev);
-	cancel_delayed_work_sync(&priv->tx_timeout_queue);
 	cancel_delayed_work_sync(&priv->rx_timeout_queue);
 
 	/* Do E1 stuff */
@@ -115,7 +109,6 @@ static int pef2256_xmit(int irq, void *dev_id)
 	/* Do E1 stuff */
 
 	/* Si trame entierement transferee */
-	cancel_delayed_work_sync(&priv->tx_timeout_queue);
 	netdev->stats.tx_packets++;
 	netdev->stats.tx_bytes += priv->tx_skbuff->len;
 	dev_kfree_skb(priv->tx_skbuff);
@@ -136,7 +129,6 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 
 	/* Do E1 stuff */
 
-	schedule_delayed_work(&priv->tx_timeout_queue, TX_TIMEOUT);
 	netif_stop_queue(netdev);
 	return NETDEV_TX_OK;
 }
@@ -146,6 +138,7 @@ static const struct net_device_ops pef2256_ops = {
 	.ndo_stop       = pef2256_close,
 	.ndo_change_mtu = hdlc_change_mtu,
 	.ndo_start_xmit = hdlc_start_xmit,
+	.ndo_tx_timeout = pef2256_TX_TIMEOUT,
 };
 
 

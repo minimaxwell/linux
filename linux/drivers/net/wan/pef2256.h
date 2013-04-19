@@ -38,9 +38,7 @@
 #define M_DRV_PEF2256_AUTHOR	"CHANTELAUZE Jerome - Avril 2013"
 
 /* A preciser */
-#define TIMEOUT 50
-#define TX_TIMEOUT TIMEOUT
-#define RX_TIMEOUT TIMEOUT
+#define RX_TIMEOUT 500
 
 struct pef2256_dev_priv {
 	struct sk_buff *tx_skbuff;
@@ -52,6 +50,5 @@ struct pef2256_dev_priv {
 	unsigned short parity;
        	struct net_device *netdev;
 
-	struct delayed_work tx_timeout_queue;
 	struct delayed_work rx_timeout_queue;
 };
