@@ -53,7 +53,7 @@ static void fpgaf_end_irq(struct irq_data *d)
 {
 	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
-	clrbits16(&fpgaf_regs->it_ack, 1<<(15-vec));
+	out_be16(&fpgaf_regs->it_ack, ~(1 << (15-vec)));
 }
 
 static struct irq_chip fpgaf_pic = {

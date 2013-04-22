@@ -64,10 +64,10 @@ static void fpgam_end_irq(struct irq_data *d)
 	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
 	if (vec < 16)
-		clrbits16(&fpgam_regs->it_ack1, 1 << (15-vec));
+		out_be16(&fpgam_regs->it_ack1, ~(1 << (15-vec)));
 	else {
 		vec -= 16;
-		clrbits16(&fpgam_regs->it_ack2, 1 << (15-vec));
+		out_be16(&fpgam_regs->it_ack2, ~(1 << (15-vec)));
 	}
 }
 
