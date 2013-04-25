@@ -8,6 +8,8 @@
 
 #include "pef2256.h"
 
+irqreturn_t pef2256_irq(int irq, void *dev_priv);
+
 static ssize_t fs_attr_master_show(struct device *dev, 
 			struct device_attribute *attr, char *buf)
 {
@@ -24,14 +26,261 @@ static ssize_t fs_attr_master_store(struct device *dev,
 
 static DEVICE_ATTR(master, S_IRUGO | S_IWUSR, fs_attr_master_show, fs_attr_master_store);
 
+
+
+/*
+ * Initialisation du FALC56
+ */
+static int init_FALC(struct pef2256_dev_priv *priv)
+{
+	pef2256_regs *base_addr;
+	int Version;
+	
+	/* récupération de la version du composant */
+	Version = priv->component_id;
+	
+	/* Initialisation du composant FALC56 */
+	base_addr = (pef2256_regs *)priv->base_addr;
+	/* RCLK output : DPLL clock, DCO-X enabled, DCO-X internal reference clock */
+	out_8(&(base_addr->mCMR1), 0x00);
+	/* SCLKR selected, SCLKX selected, receive synchro pulse sourced by SYPR,
+	   transmit synchro pulse sourced by SYPX */
+	out_8(&(base_addr->mCMR2), 0x00);
+	/* NRZ coding, no alarm simulation */
+	out_8(&(base_addr->mFMR0), 0x00);
+	/* E1 double frame format, 2 Mbit/s system data rate, no AIS transmission
+	   to remote end or system interface, payload loop off, transmit remote alarm on */
+	out_8(&(base_addr->mFMR1), 0x00);
+	out_8(&(base_addr->mFMR2), 0x02);
+	/* E1 default for LIM2 */
+	out_8(&(base_addr->mLIM2), 0x20);
+	if (priv->mode == MASTER_MODE)
+		/* SEC input, active high */
+		out_8(&(base_addr->mGPC1), 0x00);
+	else
+		/* FSC output, active high */
+		out_8(&(base_addr->mGPC1), 0x40);
+	/* internal second timer, power on */
+	out_8(&(base_addr->mGCR), 0x00);
+	/* slave mode, local loop off, mode short-haul */
+	if (Version == E_DRV_E1_VERSION_1_2)
+		out_8(&(base_addr->mLIM0), 0x00);
+	else
+		out_8(&(base_addr->mLIM0), 0x08);
+	/* analog interface selected, remote loop off */
+	out_8(&(base_addr->mLIM1), 0x00);
+	if (Version == E_DRV_E1_VERSION_1_2) {
+		/* function of ports RP(A to D) : output receive sync pulse
+		   function of ports XP(A to D) : output transmit line clock */
+		out_8(&(base_addr->mPC1), 0x77);
+		out_8(&(base_addr->mPC2), 0x77);
+		out_8(&(base_addr->mPC3), 0x77);
+		out_8(&(base_addr->mPC4), 0x77);
+	}
+	else {
+		/* function of ports RP(A to D) : output high
+		   function of ports XP(A to D) : output high */
+		out_8(&(base_addr->mPC1), 0xAA);
+		out_8(&(base_addr->mPC2), 0xAA);
+		out_8(&(base_addr->mPC3), 0xAA);
+		out_8(&(base_addr->mPC4), 0xAA);
+	}
+	/* function of port RPA : input SYPR
+	   function of port XPA : input SYPX */
+	out_8(&(base_addr->mPC1), 0x00);
+	/* SCLKR, SCLKX, RCLK configured to inputs,
+	   XFMS active low, CLK1 and CLK2 pin configuration */
+	out_8(&(base_addr->mPC5), 0x00);
+	out_8(&(base_addr->mPC6), 0x00);
+	/* the receive clock offset is cleared
+	   the receive time slot offset is cleared */
+	out_8(&(base_addr->mRC0), 0x00);
+	out_8(&(base_addr->mRC1), 0x9C);
+	/* 2.048 MHz system clocking rate, receive buffer 2 frames, transmit buffer
+	   bypass, data sampled and transmitted on the falling edge of SCLKR/X,
+	   automatic freeze signaling, data is active in the first channel phase */
+	out_8(&(base_addr->mSIC1), 0x00);
+	out_8(&(base_addr->mSIC2), 0x00);
+	out_8(&(base_addr->mSIC3), 0x00);
+	/* channel loop-back and single frame mode are disabled */
+	out_8(&(base_addr->mLOOP), 0x00);
+	/* all bits of the transmitted service word are cleared */
+	out_8(&(base_addr->mXSW), 0x1F);
+	/* spare bit values are cleared */
+	out_8(&(base_addr->mXSP), 0x00);
+	/* no transparent mode active */
+	out_8(&(base_addr->mTSWM), 0x00);
+	/* the transmit clock offset is cleared
+	   the transmit time slot offset is cleared */
+	out_8(&(base_addr->mXC0), 0x00);
+	out_8(&(base_addr->mXC1), 0x9C);
+	/* transmitter in tristate mode */
+	out_8(&(base_addr->mXPM2), 0x40);
+	/* transmit pulse mask */
+	if (Version != E_DRV_E1_VERSION_1_2)
+		out_8(&(base_addr->mXPM0), 0x9C);
+	
+	if (Version == E_DRV_E1_VERSION_1_2) {
+		/* master clock is 16,384 MHz (flexible master clock) */
+		out_8(&(base_addr->mGCM2), 0x58);
+		out_8(&(base_addr->mGCM3), 0xD2);
+		out_8(&(base_addr->mGCM4), 0xC2);
+		out_8(&(base_addr->mGCM5), 0x07);
+		out_8(&(base_addr->mGCM6), 0x10);
+	}
+	else {
+		/* master clock is 16,384 MHz (flexible master clock) */
+		out_8(&(base_addr->mGCM2), 0x18);
+		out_8(&(base_addr->mGCM3), 0xFB);
+		out_8(&(base_addr->mGCM4), 0x0B);
+		out_8(&(base_addr->mGCM5), 0x01);
+		out_8(&(base_addr->mGCM6), 0x0B);
+		out_8(&(base_addr->mDif1.mGCM7), 0xDB);
+		out_8(&(base_addr->mDif2.mGCM8), 0xDF);
+	}
+
+	/* master mode => LIM0.MAS = 1 (bit 0) */
+	if (priv->mode == MASTER_MODE)
+		setbits8(&(base_addr->mLIM0), 1 << 0);
+
+	/* transmit line in normal operation => XPM2.XLT = 0 (bit 6) */
+	clrbits8(&(base_addr->mXPM2), 1 << 6);
+
+	if (Version == E_DRV_E1_VERSION_1_2) {
+		/* receive input threshold = 0,21V => LIM1.RIL2:0 = 101 (bits 6, 5 et 4) */
+		setbits8(&(base_addr->mLIM1), 1 << 4);
+		setbits8(&(base_addr->mLIM1), 1 << 6);
+	}
+	else {
+		/* receive input threshold = 0,21V => LIM1.RIL2:0 = 100 (bits 6, 5 et 4) */
+		setbits8(&(base_addr->mLIM1), 1 << 6);
+	}
+	/* transmit line coding = HDB3 => FMR0.XC1:0 = 11 (bits 7 et 6) */
+	setbits8(&(base_addr->mFMR0), 1 << 6);
+	setbits8(&(base_addr->mFMR0), 1 << 7);
+	/* receive line coding = HDB3 => FMR0.RC1:0 = 11 (bits 5 et 4) */
+	setbits8(&(base_addr->mFMR0), 1 << 4);
+	setbits8(&(base_addr->mFMR0), 1 << 5);
+	/* detection of LOS alarm = 176 pulses (soit (10 + 1) * 16) */
+	out_8(&(base_addr->mPCD), 10);
+	/* recovery of LOS alarm = 22 pulses (soit 21 + 1) */
+	out_8(&(base_addr->mPCR), 21);
+	/* DCO-X center frequency => CMR2.DCOXC = 1 (bit 5) */
+	setbits8(&(base_addr->mCMR2), 1 << 5);
+	if (priv->mode == SLAVE_MODE) {
+		/* select RCLK source = 2M => CMR1.RS(1:0) = 10 (bits 5 et 4) */
+		setbits8(&(base_addr->mCMR1), 1 << 5);
+		/* disable switching RCLK -> SYNC => CMR1.DCS = 1 (bit 3) */
+		setbits8(&(base_addr->mCMR1), 1 << 3);
+	}
+	if (Version != E_DRV_E1_VERSION_1_2)
+		/* during inactive channel phase RDO into tri-state mode */
+		setbits8(&(base_addr->mSIC3), 1 << 5);
+	if (! strcmp (priv->rising_edge_sync_pulse, "transmit")) {
+		/* rising edge sync pulse transmit => SIC3.RESX = 1 (bit 3) */
+		setbits8(&(base_addr->mSIC3), 1 << 3);
+	}
+	else {
+		/* rising edge sync pulse receive => SIC3.RESR = 1 (bit 2) */
+		setbits8(&(base_addr->mSIC3), 1 << 2);
+	}
+	/* transmit offset counter = 4
+	   => XC0.XCO10:8 = 000 (bits 2, 1 et 0); XC1.XCO7:0 = 4 (bits 7 ... 0) */
+	out_8(&(base_addr->mXC1), 4);
+	/* receive offset counter = 4
+	   => RC0.RCO10:8 = 000 (bits 2, 1 et 0); RC1.RCO7:0 = 4 (bits 7 ... 0) */
+	out_8(&(base_addr->mRC1), 4);
+
+	/* clocking rate 8M and data rate 2M on the system highway */
+	setbits8(&(base_addr->mSIC1), 1 << 7);
+	/* data rate 4M on the system highway */
+	if (priv->data_rate == DATA_RATE_4M)
+		setbits8(&(base_addr->mFMR1), 1 << 1);
+	/* data rate 8M on the system highway */
+	if (priv->data_rate == DATA_RATE_8M)
+		setbits8(&(base_addr->mSIC1), 1 << 6);
+	/* channel phase for FALC56 */
+	if ((priv->channel_phase == CHANNEL_PHASE_1)
+		|| (priv->channel_phase == CHANNEL_PHASE_3))
+		setbits8(&(base_addr->mSIC2), 1 << 1);
+	if ((priv->channel_phase == CHANNEL_PHASE_2)
+		|| (priv->channel_phase == CHANNEL_PHASE_3))
+		setbits8(&(base_addr->mSIC2), 1 << 2);
+	
+	if (priv->mode == SLAVE_MODE) {
+		/* transmit buffer size = 2 frames => SIC1.XBS1:0 = 10 (bits 1 et 0) */
+		setbits8(&(base_addr->mSIC1), 1 << 1);
+	}
+
+	dev_err(priv->dev, "Before setting multiframe FMR1=%0x FMR2=%0x, XSP=%0x\n", 
+		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
+	/* transmit in multiframe => FMR1.XFS = 1 (bit 3) */
+	setbits8(&(base_addr->mFMR1), 1 << 3);
+	/* receive in multiframe => FMR2.RFS1:0 = 10 (bits 7 et 6) */
+	setbits8(&(base_addr->mFMR2), 1 << 7);
+	/* Automatic transmission of submultiframe status => XSP.AXS = 1 (bit 3) */
+	setbits8(&(base_addr->mXSP), 1 << 3);
+	dev_err(priv->dev, "After setting multiframe FMR1=%0x FMR2=%0x, XSP=%0x\n", 
+		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
+
+	/* error counter mode toutes les 1s => FMR1.ECM = 1 (bit 2) */
+	setbits8(&(base_addr->mFMR1), 1 << 2);
+	/* error counter mode COFA => GCR.ECMC = 1 (bit 4) */
+	setbits8(&(base_addr->mGCR), 1 << 4);
+	/* errors in service words with no influence => RC0.SWD = 1 (bit 7) */
+	setbits8(&(base_addr->mRC0), 1 << 7);
+	/* 4 consecutive incorrect FAS = loss of sync => RC0.ASY4 = 1 (bit 6) */
+	setbits8(&(base_addr->mRC0), 1 << 6);
+	/* Si-Bit in service word from XDI => XSW.XSIS = 1 (bit 7) */
+	setbits8(&(base_addr->mXSW), 1 << 7);
+	/* Si-Bit in FAS word from XDI => XSP.XSIF = 1 (bit 2) */
+	setbits8(&(base_addr->mXSP), 1 << 2);
+
+	/* port RCLK is output => PC5.CRP = 1 (bit 0) */
+	setbits8(&(base_addr->mPC5), 1 << 0);
+	/* visibility of the masked interrupts => GCR.VIS = 1 (bit 7) */
+	setbits8(&(base_addr->mGCR), 1 << 7);
+	/* reset des lignes
+	   => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4); CMDR.SRES = 1 (bit 0) */
+	out_8(&(base_addr->mCMDR), 0x51);
+
+	return 0;
+}
+
+
+
 static int pef2256_open(struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
+	pef2256_regs *base_addr = (pef2256_regs *)priv->base_addr;
+	int ret;
 
 	if (hdlc_open(netdev))
 		return -EAGAIN;
 
 	/* Do E1 stuff */
+	/* Enregistrement interruption FALC pour MPC */
+	ret = request_irq(priv->irq, pef2256_irq, 0, "e1-wan", priv);
+	if (ret) {
+		dev_err(priv->dev, "Cannot request irq. Device seems busy.\n");
+		return -EBUSY;
+	}
+	/* programmation du composant FALC */
+	if (priv->component_id != E_DRV_E1_VERSION_UNDEF) {
+		ret = init_FALC(priv);
+	}
+	else {
+		dev_err(priv->dev, "Composant ident (%X/%X) = %d\n", 
+			base_addr->mVSTR, base_addr->mWID, priv->component_id);
+		ret = -ENODEV;
+	}
+
+	dev_err(priv->dev, "After init_FALC : FMR1=%0x FMR2=%0x, XSP=%0x\n", 
+			base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
+
+	if (ret < 0)
+		return ret; 
+	
 
 	priv->tx_skbuff = NULL;
 	priv->rx_len = 0;
@@ -55,6 +304,15 @@ static int pef2256_close(struct net_device *netdev)
 	return 0;
 }
 
+
+
+static int pef2256_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+{
+	int ret; 
+
+	ret = hdlc_ioctl(dev, ifr, cmd);
+	return ret;
+}
 
 
 /* Handler IT lecture */
@@ -108,6 +366,17 @@ static int pef2256_xmit(int irq, void *dev_id)
 }
 
 
+/* Handler IRQ */
+irqreturn_t pef2256_irq(int irq, void *dev_priv)
+{
+	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
+
+	/* Do E1 stuff */
+
+	return 0;
+}
+
+
 static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 					  struct net_device *netdev)
 {
@@ -127,6 +396,7 @@ static const struct net_device_ops pef2256_ops = {
 	.ndo_stop       = pef2256_close,
 	.ndo_change_mtu = hdlc_change_mtu,
 	.ndo_start_xmit = hdlc_start_xmit,
+	.ndo_do_ioctl   = pef2256_ioctl,
 };
 
 
@@ -168,21 +438,90 @@ static int pef2256_probe(struct platform_device *ofdev)
 	struct net_device *netdev;
 	hdlc_device *hdlc;
 	int sys_ret;
+	pef2256_regs *base_addr;
+	struct device_node *np = (&ofdev->dev)->of_node;
+	const u32 *data;
+	int len;
 
 	match = of_match_device(pef2256_match, &ofdev->dev);
 	if (!match)
 		return -EINVAL;
 
-	/* Do E1 stuff */
+	dev_err(&ofdev->dev, "Found PEF2256\n");
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (! priv)
 		return ret;
 
-	priv->tx_skbuff = NULL;
 	priv->dev = &ofdev->dev;
 
-	netdev = priv->netdev;
+	data = of_get_property(np, "data-rate", &len);
+	if (!data || len != 4) {
+		dev_err(&ofdev->dev,"failed to read data-rate -> using 8Mb\n");
+		priv->data_rate = DATA_RATE_8M;
+	}
+	else
+		priv->data_rate = *data;
+
+	data = of_get_property(np, "channel-phase", &len);
+	if (!data || len != 4) {
+		dev_err(&ofdev->dev,"failed to read channel phase -> using 0\n");
+		priv->channel_phase = CHANNEL_PHASE_0;
+	}
+	else
+		priv->channel_phase = *data;
+
+	data = of_get_property(np, "rising-edge-sync-pulse", NULL);
+	if (!data) {
+		dev_err(&ofdev->dev, "failed to read rising edge sync pulse -> using \"transmit\"\n");
+		strcpy (priv->rising_edge_sync_pulse, "transmit");
+	}
+	else if (strcmp ((char *)data, "transmit") && 
+			strcmp ((char *)data, "receive")) {
+		dev_err(&ofdev->dev, "invalid rising edge sync pulse -> using \"transmit\"\n");
+		strcpy (priv->rising_edge_sync_pulse, "transmit");
+	}
+	else
+		strncpy (priv->rising_edge_sync_pulse, (char *)data, 10);
+
+	/* Do E1 stuff */
+	priv->irq = of_irq_to_resource(np, 0, NULL);
+	if (!priv->irq) {
+		dev_err(priv->dev, "no irq defined\n");
+		return -EINVAL;
+	}
+
+	/* remappage de l'adresse physique du composant E1 */
+	priv->base_addr = of_iomap(np, 0);
+	if (!priv->base_addr) {
+		dev_err(&ofdev->dev,"of_iomap failed\n");
+		kfree(priv);
+		return ret;
+	}
+	
+	/* lecture du registre d'identification */
+	base_addr = (pef2256_regs *)priv->base_addr;
+	priv->component_id = E_DRV_E1_VERSION_UNDEF;
+	if (base_addr->mVSTR == 0x00) {
+		if ((base_addr->mWID & M_DRV_E1_WID_IDENT_1) == M_DRV_E1_WID_IDENT_1_2)
+			priv->component_id = E_DRV_E1_VERSION_1_2;
+	}
+	else if (base_addr->mVSTR == 0x05) {
+		if ((base_addr->mWID & M_DRV_E1_WID_IDENT_2) == M_DRV_E1_WID_IDENT_2_1)
+			priv->component_id = E_DRV_E1_VERSION_2_1;
+		else if ((base_addr->mWID & M_DRV_E1_WID_IDENT_2) == M_DRV_E1_WID_IDENT_2_2)
+			priv->component_id = E_DRV_E1_VERSION_2_2;
+	}
+
+	priv->tx_skbuff = NULL;
+
+	netdev = alloc_hdlcdev(priv);
+	if (! netdev) {
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	priv->netdev = netdev;
 	hdlc = dev_to_hdlc(netdev);
 /* ???
 	d->base_addr = ;
@@ -210,6 +549,9 @@ static int pef2256_probe(struct platform_device *ofdev)
 		free_netdev(priv->netdev);
 	}
 
+	dev_err(priv->dev, "Leaving pef2256_probe : FMR1=%0x FMR2=%0x, XSP=%0x\n", 
+		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
+
 	return 0;
 }
 
@@ -235,7 +577,7 @@ static int pef2256_remove(struct platform_device *ofdev)
 
 static const struct of_device_id pef2256_match[] = {
 	{
-		.compatible = "s3k,mcr3000-e1",
+		.compatible = "s3k,mcr3000-e1-wan",
 	},
 	{},
 };
