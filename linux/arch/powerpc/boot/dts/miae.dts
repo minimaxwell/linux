@@ -525,6 +525,23 @@
 				"not used",
 				"not used";
 		};
+		
+		/* Declarations test, a finaliser */
+		EXTCON_FAV_CLA {
+			compatible = "extcon-gpio", "cs,mia-fav";
+			fav-id = <7>;
+			gpios = <&fav      8 1>;	// Presence Casque1
+			interrupts = <17>;
+			interrupt-parent = <&FPGAM_PIC>;
+		};
+		EXTCON_FAV_NVCS {
+			compatible = "extcon-adc-jack", "cs,mia-fav";
+			fav-id = <5 6>;
+			gpios = <&fav      8 1>;	// Presence Casque1
+			interrupts = <17>;
+			interrupt-parent = <&FPGAM_PIC>;
+			iio-channel = <3>;
+		};
 	};
 
 	soc@ff000000 {
