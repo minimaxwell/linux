@@ -2,7 +2,7 @@ ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
 PATCHLEVEL = 8
-SUBLEVEL = 11
+SUBLEVEL = 12
 EXTRAVERSION =
 NAME = Displaced Humerus Anterior
 
