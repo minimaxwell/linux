@@ -272,6 +272,15 @@
 			interrupt-parent = <&PIC>;
 		};
 		
+		e1-wan@4,2000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-e1-wan";
+			reg = <4 0x2000000 0xFF>;
+			interrupts = <8 1>;
+			interrupt-parent = <&PIC>;
+		};
+		
 		mtsl@4,3000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;

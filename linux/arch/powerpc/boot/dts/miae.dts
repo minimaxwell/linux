@@ -266,8 +266,6 @@
 			reg = <4 0x2000000 0xFF>;
 			interrupts = <8 1>;
 			interrupt-parent = <&PIC>;
-			data-rate = <4>;
-			channel-phase = <0>;
 		};
 		
 		dpram@3,0 {
@@ -553,7 +551,7 @@
 		bus-frequency = <0>;
 		clock-frequency = <0>;
 
-		WDT: watchdog@0 {
+		WDT: watchdon@0 {
 			compatible = "fsl,mpc823-wdt";
 			reg = <0x0 0x10>;
 		};
