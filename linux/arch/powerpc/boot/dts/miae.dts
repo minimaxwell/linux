@@ -845,8 +845,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec_1";
-					analog_em = "-2dB -2dB -2dB -2dB";
-					analog_rec = "6dB 6dB 6dB 6dB";
+					analog_in = "-2dB -2dB -2dB -2dB";
+					analog_out = "6dB 6dB 6dB 6dB";
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -862,8 +862,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec_2";
-					analog_em = "-2dB 0dB 0dB 18dB";
-					analog_rec = "3dB 3dB 3dB 4,5dB";
+					analog_in = "-2dB 0dB 0dB 18dB";
+					analog_out = "3dB 3dB 3dB 4,5dB";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25", "cs,eeprom";
@@ -882,8 +882,8 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec_3";
-					analog_em = "12dB -7dB 12dB -7dB";
-					analog_rec = "6dB 6dB 6dB 6dB";
+					analog_in = "12dB -7dB 12dB -7dB";
+					analog_out = "6dB 6dB 6dB 6dB";
 				};
 				lm74@5 {
 					compatible = "ti,tmp121", "ns,lm74";
