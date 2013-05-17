@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 3.8.11 Kernel Configuration
+# Linux/powerpc 3.8.13 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -1150,7 +1150,7 @@ CONFIG_LEDS_TRIGGERS=y
 #
 CONFIG_LEDS_TRIGGER_TIMER=y
 # CONFIG_LEDS_TRIGGER_ONESHOT is not set
-# CONFIG_LEDS_TRIGGER_HEARTBEAT is not set
+CONFIG_LEDS_TRIGGER_HEARTBEAT=y
 # CONFIG_LEDS_TRIGGER_BACKLIGHT is not set
 # CONFIG_LEDS_TRIGGER_CPU is not set
 CONFIG_LEDS_TRIGGER_GPIO=y
