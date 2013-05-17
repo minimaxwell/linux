@@ -56,6 +56,86 @@
 /* A preciser */
 #define RX_TIMEOUT 500
 
+/* Configuration d'une fréquence pour la trame enregistrement */
+/* Nombre de paramètres fréquence et centres */
+#define M_DRV_E1_NB_FREQ_ENREG  30      /* nombre de fréquence par trame enregistrement */
+#define M_DRV_E1_NB_PARAM_FREQ  6
+#define M_DRV_E1_NB_PARAM_CNTR  8
+
+/* structures sur les canaux HDLC */
+typedef struct		/* structure sur configuration canal HDLC */
+{
+	unsigned char	mMode;		/* mode de fonctionnement du canal */
+	unsigned char	mIdle;		/* définition octet intertrame */
+	unsigned char	mTS;		/* TS émission et réception */
+	unsigned char	mRec;		/* mode de réception */
+} tDRVE1CfgCanal;
+
+typedef struct		/* structure sur paramètres d'une fréquence */
+{
+	/* valeur de la fréquence */
+	unsigned char	mValeur[M_DRV_E1_NB_PARAM_FREQ];
+	/* affectation des centres pour la fréquence */
+	unsigned char	mCentre[M_DRV_E1_NB_PARAM_CNTR];
+} tDRVE1ParamFreq;
+
+#define M_DRV_E1_ADES_INIT	0xFF	/* initialisation en broadcast (mAdes) */
+#define M_DRV_E1_CTL_INIT	0x00	/* initialisation du champ mCtl */
+#define M_DRV_E1_CTL_NUM_MASK	0x0E	/* bits 1, 2 et 3 du champ mCtl */
+#define M_DRV_E1_CTL_NUM_PLUS	(1 << 1)	/* incrément du numéro de trame */
+
+typedef struct		/* structure sur datas trame enregistrement */
+{
+	unsigned char	mAdes;		/* adresse destinataire */
+	unsigned char	mCtl;		/* type et numéro de trame */
+	// données sur l'ensemble des fréquences
+	tDRVE1ParamFreq	mFreq[M_DRV_E1_NB_FREQ_ENREG];
+} tDRVE1TrameEnreg;
+
+#define M_DRV_E1_MAJ_INIT	0		/* initialisation mise à jour */
+#define M_DRV_E1_MAJ_FREQ	(1 << 0)	/* mise à jour valeur fréquence */
+#define M_DRV_E1_MAJ_CNTR	(1 << 1)	/* mise à jour affectation centre */
+#define M_DRV_E1_MAJ_OK		(M_DRV_E1_MAJ_FREQ + M_DRV_E1_MAJ_CNTR)
+
+typedef struct		/* structure sur modification d'une fréquence */
+{
+	unsigned char	mIdent;		/* numéro de la fréquence */
+	unsigned char	mMaj;		/* suivi mise à jour fréquence */
+	tDRVE1ParamFreq	mParam;		/* paramètre de la fréquence */
+} tDRVE1MajFreq;
+
+typedef struct		/* structure sur canal HDLC (Enregistrement) */
+{
+	tDRVE1MajFreq		mMajFq;		/* mise à jour paramètres fréquence */
+	tDRVE1MajFreq		mBusyFq;	/* stockage paramètres fréquence en cours de transfert */
+	unsigned short		mIxTrft;	/* index transfert émission */
+	tDRVE1TrameEnreg	mTrame;		/* trame enregistrement à émettre */
+} tDRVE1EmTrEnreg;
+
+/* gestion trame émission HDLC */
+typedef union
+{
+	unsigned char		mOctet[512];	/* longueur maximale */
+	tDRVE1EmTrEnreg		mTrEnreg;
+} tDRVE1TrameEm;
+
+typedef struct		/* structure sur lecture trame enregistrement */
+{
+	unsigned short		mIxLct;		/* index de lecture trame */
+	tDRVE1TrameEnreg	mTrame;		/* trame enregistrement à lire */
+} tDRVE1LctTrEnreg;
+
+/* gestion trame réception HDLC */
+typedef union
+{
+	unsigned char		mOctet[512];	/* longueur maximale */
+	tDRVE1LctTrEnreg	mTrEnreg;
+} tDRVE1TrameRec;
+
+#define M_DRV_E1_TAILLE_FIFO	32	/* taille fifo HDLC pour transfert de datas */
+
+
+
 typedef enum
 {
 	E_DRV_E1_VERSION_UNDEF = 0,
@@ -79,7 +159,7 @@ struct pef2256_dev_priv {
 
 	void *base_addr;
 	int component_id;
-	int mode;         /* MASTER or SLAVE */
+	int mode;	/* MASTER or SLAVE */
 	int board_type;
 	int channel_phase;
 	int data_rate;
@@ -87,6 +167,12 @@ struct pef2256_dev_priv {
 
 	u16 rx_len;
 	u8 rx_buff[2048];
+
+	u32 Tx_TS;	/* Transmit Time Slots */
+	u32 Rx_TS;	/* Receive Time Slots */
+
+	tDRVE1TrameEm  Tx_buffer;	/* Transmit buffer */
+	tDRVE1TrameRec Rx_buffer;	/* Receive buffer */
 
 	unsigned short encoding;
 	unsigned short parity;

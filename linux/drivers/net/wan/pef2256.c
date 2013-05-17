@@ -29,6 +29,133 @@ static DEVICE_ATTR(master, S_IRUGO | S_IWUSR, fs_attr_master_show, fs_attr_maste
 
 
 /*
+ * Configuration canal HDLC 
+ */
+int Config_HDLC(struct pef2256_dev_priv *priv)
+{
+	int i;
+	unsigned char *ptr;
+//	tDRVE1IdentDev _Dev;
+	int TS_idx;
+	pef2256_regs *base_addr;
+
+//	/* arret systématique du canal
+//	   arret des ITs du canal HDLC
+//	   positionnement ITs émission */
+//	_Dev.mSelIt = (1 << E_DRV_E1_HDLC_XPR) | (1 << E_DRV_E1_HDLC_ALLS) | (1 << E_DRV_E1_HDLC_XDU);
+//	/* positionnement ITs réception */
+//	_Dev.mSelIt |= (1 << E_DRV_E1_HDLC_RPF) | (1 << E_DRV_E1_HDLC_RME);
+//	_Dev.mAppel = M_DRV_E1_UNREG_HDL;
+//	_Dev.mIdent = E_DRV_E1_IT_HDLC1;
+//	fDRVE1PoseHdl(&_Dev, NULL, NULL);
+
+	/* attente vidage des fifos */
+	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
+
+	/* positionnement de l'adresse du trameur E1 */
+	base_addr = (pef2256_regs *)priv->base_addr;
+
+	/* MODE.HRAC = 0 (Receiver inactive)
+	   MODE.DIV = 0 (Data normal operation)
+	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	/* MODE.MDS2:0 = 100 (No address comparison) */
+	/* MODE.HRAC = 1 (Receiver active) */
+	out_8(&(base_addr->mMODE), 1 << 3);
+	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
+	   CCR1.XMFA = 0 (No transmit multiframe alignment)
+	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
+	/* positionnement Interframe Time Fill */
+	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	/* CCR2.XCRC = 0 (Transmit CRC ON)
+	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	   CCR2.RADD = 0 (No write address in RFIFO) */
+	out_8(&(base_addr->mCCR2), 0x00);
+	/* Initialisation sélection Time Slot */
+	out_8(&(base_addr->mTTR1), 0x00);
+	out_8(&(base_addr->mTTR2), 0x00);
+	out_8(&(base_addr->mTTR3), 0x00);
+	out_8(&(base_addr->mTTR4), 0x00);
+	out_8(&(base_addr->mRTR1), 0x00);
+	out_8(&(base_addr->mRTR2), 0x00);
+	out_8(&(base_addr->mRTR3), 0x00);
+	out_8(&(base_addr->mRTR4), 0x00);
+	/* positionnement bits pour TS sélectionnés */
+	/* On commence au TS 1, le TS 0 est réservé */
+	for (TS_idx=1; TS_idx<32; TS_idx++) {
+		i = 7 - (TS_idx % 8);
+		switch (TS_idx / 8) {
+		case 0:
+			if (priv->Tx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mTTR1), 1 << i);
+			if (priv->Rx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mRTR1), 1 << i);
+			break;
+		case 1:
+			if (priv->Tx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mTTR2), 1 << i);
+			if (priv->Rx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mRTR2), 1 << i);
+			break;
+		case 2:
+			if (priv->Tx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mTTR3), 1 << i);
+			if (priv->Rx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mRTR3), 1 << i);
+			break;
+		case 3:
+			if (priv->Tx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mTTR4), 1 << i);
+			if (priv->Rx_TS & (1 << TS_idx))
+				setbits8(&(base_addr->mRTR4), 1 << i);
+			break;
+		}
+	}
+
+//	/* gestion des ITs du canal HDLC 1 */
+//	_Dev.mIdent = E_DRV_E1_IT_HDLC1;
+//	/* positionnement ITs émission */
+//	_Dev.mSelIt = (1 << E_DRV_E1_HDLC_XPR) | (1 << E_DRV_E1_HDLC_ALLS) | (1 << E_DRV_E1_HDLC_XDU);
+//	/* positionnement ITs réception */
+//	if (ipParam->mRes[0] == E_DRV_E1_MODE_HDLC_MAX)
+//		_Dev.mSelIt |= (1 << E_DRV_E1_HDLC_RPF) | (1 << E_DRV_E1_HDLC_RME);
+//	if (ipParam->mMode != E_DRV_E1_MODE_HDLC_OFF)
+//		_Dev.mAppel = M_DRV_E1_REG_HDL;
+//	else
+//		_Dev.mAppel = M_DRV_E1_UNREG_HDL;
+//	fDRVE1PoseHdl(&_Dev, NULL, NULL);
+
+	/* initialisation des trames émission et réception */
+	memset(&priv->Tx_buffer.mOctet[0], 0, sizeof(tDRVE1TrameEm));
+	memset(&priv->Rx_buffer.mOctet[0], 0, sizeof(tDRVE1TrameRec));
+	priv->Tx_buffer.mTrEnreg.mTrame.mAdes = M_DRV_E1_ADES_INIT;
+	priv->Tx_buffer.mTrEnreg.mTrame.mCtl = M_DRV_E1_CTL_INIT;
+	priv->Tx_buffer.mTrEnreg.mIxTrft = 0;
+	/* transfert d'un premier paquet de x octets */
+	ptr = (unsigned char *)&priv->Tx_buffer.mTrEnreg.mTrame;
+	/* transfert dans FIFO possible */
+	if (base_addr->mSIS & 0x40) {
+		for (i = 0; i < M_DRV_E1_TAILLE_FIFO; i++) {
+			base_addr->mFIFO.mXFIFO[i % sizeof(short)] = *(ptr++);
+			priv->Tx_buffer.mTrEnreg.mIxTrft++;
+			if (priv->Tx_buffer.mTrEnreg.mIxTrft >= sizeof(tDRVE1TrameEnreg))
+				break;
+		}
+		/* positionnement transfert trame enregistrement (CMDR.XHF = 1) */
+		setbits8(&(base_addr->mCMDR), 1 << 3);
+		/* positionnement fin transfert trame enregistrement (CMDR.XME = 1) */
+		if (i < M_DRV_E1_TAILLE_FIFO)
+			setbits8(&(base_addr->mCMDR), 1 << 1);
+	}
+	/* transfert dans FIFO impossible */
+	else
+		return -EINVAL;
+	
+	return 0;
+}
+
+
+/*
  * Initialisation du FALC56
  */
 static int init_FALC(struct pef2256_dev_priv *priv)
