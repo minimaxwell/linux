@@ -9,11 +9,16 @@
 #include "pef2256.h"
 
 irqreturn_t pef2256_irq(int irq, void *dev_priv);
+static int Config_HDLC(struct pef2256_dev_priv *priv);
+static int init_FALC(struct pef2256_dev_priv *priv);
 
 static ssize_t fs_attr_master_show(struct device *dev, 
 			struct device_attribute *attr, char *buf)
 {
-	return 0;
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+
+	return sprintf(buf, "%d\n", priv->mode);
 }
 
 
@@ -21,10 +26,91 @@ static ssize_t fs_attr_master_store(struct device *dev,
 			struct device_attribute *attr,  const char *buf, 
 			size_t count)
 {
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+	u32 value = simple_strtol(buf, NULL, 10);
+	int reconfigure = (value != priv->mode);
+
+	if (value != MASTER_MODE && value != SLAVE_MODE)
+		return -EINVAL;
+
+	priv->mode = value;
+	if (reconfigure) {
+		init_FALC(priv);
+		Config_HDLC(priv);
+	}
+
 	return 0;
 }
 
 static DEVICE_ATTR(master, S_IRUGO | S_IWUSR, fs_attr_master_show, fs_attr_master_store);
+
+
+
+static ssize_t fs_attr_Tx_TS_show(struct device *dev, 
+			struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+
+	return sprintf(buf, "0x%08x\n", priv->Tx_TS);
+}
+
+
+static ssize_t fs_attr_Tx_TS_store(struct device *dev, 
+			struct device_attribute *attr,  const char *buf, 
+			size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+	u32 value = simple_strtol(buf, NULL, 10);
+	int reconfigure = (value != priv->Tx_TS);
+
+	/* TS 0 is reserved */
+	if (value & 0x80000000)
+		return -EINVAL;
+
+	priv->Tx_TS = value;
+	if (reconfigure)
+		Config_HDLC(priv);
+
+	return count;
+}
+
+static DEVICE_ATTR(Tx_TS, S_IRUGO | S_IWUSR, fs_attr_Tx_TS_show, fs_attr_Tx_TS_store);
+
+
+static ssize_t fs_attr_Rx_TS_show(struct device *dev, 
+			struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+
+	return sprintf(buf, "0x%08x\n", priv->Rx_TS);
+}
+
+
+static ssize_t fs_attr_Rx_TS_store(struct device *dev, 
+			struct device_attribute *attr,  const char *buf, 
+			size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+	u32 value = simple_strtol(buf, NULL, 10);
+	int reconfigure = (value != priv->Rx_TS);
+
+	/* TS 0 is reserved */
+	if (value & 0x80000000) 
+		return -EINVAL;
+
+	priv->Rx_TS = value;
+	if (reconfigure)
+		Config_HDLC(priv);
+
+	return count;
+}
+
+static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show, fs_attr_Rx_TS_store);
 
 
 
@@ -642,6 +728,9 @@ static int pef2256_probe(struct platform_device *ofdev)
 
 	priv->tx_skbuff = NULL;
 
+	/* Par defaut ; Tx et Rx sur TS 1 */
+	priv->Tx_TS = priv->Rx_TS = 0x40000000;
+
 	netdev = alloc_hdlcdev(priv);
 	if (! netdev) {
 		ret = -ENOMEM;
@@ -659,7 +748,7 @@ static int pef2256_probe(struct platform_device *ofdev)
 	hdlc->attach = pef2256_hdlc_attach;
 	hdlc->xmit = pef2256_start_xmit;
 	
-	platform_set_drvdata(ofdev, priv);
+	dev_set_drvdata(&ofdev->dev, netdev);
 
 	ret = register_hdlc_device(netdev);
 	if (ret < 0) {
@@ -669,6 +758,8 @@ static int pef2256_probe(struct platform_device *ofdev)
 
 	sys_ret = 0;
 	sys_ret |= device_create_file(priv->dev, &dev_attr_master);
+	sys_ret |= device_create_file(priv->dev, &dev_attr_Tx_TS);
+	sys_ret |= device_create_file(priv->dev, &dev_attr_Rx_TS);
 
 	if (sys_ret) {
 		device_remove_file(priv->dev, &dev_attr_master);
@@ -688,8 +779,11 @@ static int pef2256_probe(struct platform_device *ofdev)
  */
 static int pef2256_remove(struct platform_device *ofdev)
 {
-	struct pef2256_dev_priv *priv = platform_get_drvdata(ofdev);
+	struct net_device *ndev = dev_get_drvdata(&ofdev->dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
 
+	device_remove_file(priv->dev, &dev_attr_Rx_TS);
+	device_remove_file(priv->dev, &dev_attr_Tx_TS);
 	device_remove_file(priv->dev, &dev_attr_master);
 
 	unregister_hdlc_device(priv->netdev);
@@ -697,7 +791,7 @@ static int pef2256_remove(struct platform_device *ofdev)
 
 	/* Do E1 stuff */
 
-	platform_set_drvdata(ofdev, NULL);
+	dev_set_drvdata(&ofdev->dev, NULL);
 	kfree(ofdev);
 	return 0;
 }
