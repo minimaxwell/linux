@@ -12,7 +12,7 @@ irqreturn_t pef2256_irq(int irq, void *dev_priv);
 static int Config_HDLC(struct pef2256_dev_priv *priv);
 static int init_FALC(struct pef2256_dev_priv *priv);
 
-static ssize_t fs_attr_master_show(struct device *dev, 
+static ssize_t fs_attr_mode_show(struct device *dev, 
 			struct device_attribute *attr, char *buf)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
@@ -22,7 +22,7 @@ static ssize_t fs_attr_master_show(struct device *dev,
 }
 
 
-static ssize_t fs_attr_master_store(struct device *dev, 
+static ssize_t fs_attr_mode_store(struct device *dev, 
 			struct device_attribute *attr,  const char *buf, 
 			size_t count)
 {
@@ -43,7 +43,7 @@ static ssize_t fs_attr_master_store(struct device *dev,
 	return 0;
 }
 
-static DEVICE_ATTR(master, S_IRUGO | S_IWUSR, fs_attr_master_show, fs_attr_master_store);
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
 
 
 
@@ -730,6 +730,8 @@ static int pef2256_probe(struct platform_device *ofdev)
 
 	/* Par defaut ; Tx et Rx sur TS 1 */
 	priv->Tx_TS = priv->Rx_TS = 0x40000000;
+	/* Par defaut ; mode = MASTER */
+	priv->mode = 0;
 
 	netdev = alloc_hdlcdev(priv);
 	if (! netdev) {
@@ -757,18 +759,15 @@ static int pef2256_probe(struct platform_device *ofdev)
 	}
 
 	sys_ret = 0;
-	sys_ret |= device_create_file(priv->dev, &dev_attr_master);
+	sys_ret |= device_create_file(priv->dev, &dev_attr_mode);
 	sys_ret |= device_create_file(priv->dev, &dev_attr_Tx_TS);
 	sys_ret |= device_create_file(priv->dev, &dev_attr_Rx_TS);
 
 	if (sys_ret) {
-		device_remove_file(priv->dev, &dev_attr_master);
+		device_remove_file(priv->dev, &dev_attr_mode);
 		unregister_hdlc_device(priv->netdev);
 		free_netdev(priv->netdev);
 	}
-
-	dev_err(priv->dev, "Leaving pef2256_probe : FMR1=%0x FMR2=%0x, XSP=%0x\n", 
-		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
 
 	return 0;
 }
@@ -784,7 +783,7 @@ static int pef2256_remove(struct platform_device *ofdev)
 
 	device_remove_file(priv->dev, &dev_attr_Rx_TS);
 	device_remove_file(priv->dev, &dev_attr_Tx_TS);
-	device_remove_file(priv->dev, &dev_attr_master);
+	device_remove_file(priv->dev, &dev_attr_mode);
 
 	unregister_hdlc_device(priv->netdev);
 	free_netdev(priv->netdev);
