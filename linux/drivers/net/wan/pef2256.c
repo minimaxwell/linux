@@ -120,26 +120,75 @@ static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show, fs_attr_Rx_TS_s
 int Config_HDLC(struct pef2256_dev_priv *priv)
 {
 	int i;
-	unsigned char *ptr;
-//	tDRVE1IdentDev _Dev;
 	int TS_idx;
 	pef2256_regs *base_addr;
+	u8 dummy;
 
-//	/* arret systématique du canal
-//	   arret des ITs du canal HDLC
-//	   positionnement ITs émission */
-//	_Dev.mSelIt = (1 << E_DRV_E1_HDLC_XPR) | (1 << E_DRV_E1_HDLC_ALLS) | (1 << E_DRV_E1_HDLC_XDU);
-//	/* positionnement ITs réception */
-//	_Dev.mSelIt |= (1 << E_DRV_E1_HDLC_RPF) | (1 << E_DRV_E1_HDLC_RME);
-//	_Dev.mAppel = M_DRV_E1_UNREG_HDL;
-//	_Dev.mIdent = E_DRV_E1_IT_HDLC1;
-//	fDRVE1PoseHdl(&_Dev, NULL, NULL);
+	/* positionnement de l'adresse du trameur E1 */
+	base_addr = (pef2256_regs *)priv->base_addr;
+
+	/* Lecture pour effacer les IT existantes */
+	dummy = base_addr->mISR0;
+	dummy = base_addr->mISR1;
+
+	/* Masquage des IT HDLC 1 Emission */
+	/* IMR1 - XPR */
+	base_addr->mIMR1 |= 1;
+	/* IMR1 - XDU */
+	base_addr->mIMR1 |= 1 << 4;
+	/* IMR1 - ALLS */
+	base_addr->mIMR1 |= 1 << 5;
+
+	/* Masquage des IT HDLC 1 Reception */
+	/* IMR0 - RPF */
+	base_addr->mIMR0 |= 1;
+	/* IMR0 - RME */
+	base_addr->mIMR0 |= 1 << 7;
+	/* IMR1 - RDO */
+	base_addr->mIMR1 |= 1 << 6;
 
 	/* attente vidage des fifos */
 	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
 
-	/* positionnement de l'adresse du trameur E1 */
-	base_addr = (pef2256_regs *)priv->base_addr;
+	/* MODE.HRAC = 0 (Receiver inactive)
+	   MODE.DIV = 0 (Data normal operation)
+	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	/* MODE.MDS2:0 = 100 (No address comparison) */
+	/* MODE.HRAC = 1 (Receiver active) */
+	out_8(&(base_addr->mMODE), 1 << 3);
+	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
+	   CCR1.XMFA = 0 (No transmit multiframe alignment)
+	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
+	/* positionnement Interframe Time Fill */
+	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	/* CCR2.XCRC = 0 (Transmit CRC ON)
+	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	   CCR2.RADD = 0 (No write address in RFIFO) */
+	out_8(&(base_addr->mCCR2), 0x00);
+
+	/* attente vidage des fifos */
+	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
+
+	/* MODE.HRAC = 0 (Receiver inactive)
+	   MODE.DIV = 0 (Data normal operation)
+	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	/* MODE.MDS2:0 = 100 (No address comparison) */
+	/* MODE.HRAC = 1 (Receiver active) */
+	out_8(&(base_addr->mMODE), 1 << 3);
+	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
+	   CCR1.XMFA = 0 (No transmit multiframe alignment)
+	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
+	/* positionnement Interframe Time Fill */
+	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	/* CCR2.XCRC = 0 (Transmit CRC ON)
+	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	   CCR2.RADD = 0 (No write address in RFIFO) */
+	out_8(&(base_addr->mCCR2), 0x00);
+
+	/* attente vidage des fifos */
+	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
 	   MODE.DIV = 0 (Data normal operation)
@@ -198,45 +247,22 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 		}
 	}
 
-//	/* gestion des ITs du canal HDLC 1 */
-//	_Dev.mIdent = E_DRV_E1_IT_HDLC1;
-//	/* positionnement ITs émission */
-//	_Dev.mSelIt = (1 << E_DRV_E1_HDLC_XPR) | (1 << E_DRV_E1_HDLC_ALLS) | (1 << E_DRV_E1_HDLC_XDU);
-//	/* positionnement ITs réception */
-//	if (ipParam->mRes[0] == E_DRV_E1_MODE_HDLC_MAX)
-//		_Dev.mSelIt |= (1 << E_DRV_E1_HDLC_RPF) | (1 << E_DRV_E1_HDLC_RME);
-//	if (ipParam->mMode != E_DRV_E1_MODE_HDLC_OFF)
-//		_Dev.mAppel = M_DRV_E1_REG_HDL;
-//	else
-//		_Dev.mAppel = M_DRV_E1_UNREG_HDL;
-//	fDRVE1PoseHdl(&_Dev, NULL, NULL);
+	/* Demasquage des IT HDLC 1 Emission */
+	/* IMR1 - XPR */
+	base_addr->mIMR1 &= ~1;
+	/* IMR1 - XDU */
+	base_addr->mIMR1 &= ~(1 << 4);
+	/* IMR1 - ALLS */
+	base_addr->mIMR1 &= ~(1 << 5);
 
-	/* initialisation des trames émission et réception */
-	memset(&priv->Tx_buffer.mOctet[0], 0, sizeof(tDRVE1TrameEm));
-	memset(&priv->Rx_buffer.mOctet[0], 0, sizeof(tDRVE1TrameRec));
-	priv->Tx_buffer.mTrEnreg.mTrame.mAdes = M_DRV_E1_ADES_INIT;
-	priv->Tx_buffer.mTrEnreg.mTrame.mCtl = M_DRV_E1_CTL_INIT;
-	priv->Tx_buffer.mTrEnreg.mIxTrft = 0;
-	/* transfert d'un premier paquet de x octets */
-	ptr = (unsigned char *)&priv->Tx_buffer.mTrEnreg.mTrame;
-	/* transfert dans FIFO possible */
-	if (base_addr->mSIS & 0x40) {
-		for (i = 0; i < M_DRV_E1_TAILLE_FIFO; i++) {
-			base_addr->mFIFO.mXFIFO[i % sizeof(short)] = *(ptr++);
-			priv->Tx_buffer.mTrEnreg.mIxTrft++;
-			if (priv->Tx_buffer.mTrEnreg.mIxTrft >= sizeof(tDRVE1TrameEnreg))
-				break;
-		}
-		/* positionnement transfert trame enregistrement (CMDR.XHF = 1) */
-		setbits8(&(base_addr->mCMDR), 1 << 3);
-		/* positionnement fin transfert trame enregistrement (CMDR.XME = 1) */
-		if (i < M_DRV_E1_TAILLE_FIFO)
-			setbits8(&(base_addr->mCMDR), 1 << 1);
-	}
-	/* transfert dans FIFO impossible */
-	else
-		return -EINVAL;
-	
+	/* Demasquage des IT HDLC 1 Reception */
+	/* IMR0 - RPF */
+	base_addr->mIMR0 &= ~1;
+	/* IMR0 - RME */
+	base_addr->mIMR0 &= ~(1 << 7);
+	/* IMR1 - RDO */
+	base_addr->mIMR1 &= ~(1 << 6);
+
 	return 0;
 }
 
@@ -495,7 +521,7 @@ static int pef2256_open(struct net_device *netdev)
 		return ret; 
 	
 
-	priv->tx_skbuff = NULL;
+	priv->tx_skb = NULL;
 	priv->rx_len = 0;
 
 	netif_start_queue(netdev);
@@ -527,53 +553,109 @@ static int pef2256_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	return ret;
 }
 
-
 /* Handler IT lecture */
-static int pef2256_rx(int irq, void *dev_id)
+static int pef2256_rx(struct pef2256_dev_priv *priv)
 {
-	struct net_device *netdev = (struct net_device *)dev_id;
-	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 	struct sk_buff *skb;
+	int idx, size;
+	pef2256_regs *base_addr;
+
+	base_addr = (pef2256_regs *)priv->base_addr;
+
+	/* We have received an RDO, acknowledge the FIFOs and wait for an RME */
+	if (priv->rx_len == -1) {
+		/* Acknowledge the FIFO */
+		setbits8(&(base_addr->mCMDR), 1 << 7);
+
+		if (priv->ISR0 & (1 << 7)) 
+			priv->rx_len = 0;
+
+		return 0;
+	}
 
 	if (! priv->rx_len)
 		schedule_delayed_work(&priv->rx_timeout_queue, RX_TIMEOUT);
 
 	/* Do E1 stuff */
+	/* RPF : a block is available in the receive FIFO */
+	if (priv->ISR0 & 1) {
+		for (idx=0; idx < 32; idx++)
+			priv->rx_buff[priv->rx_len + idx] = base_addr->mFIFO.mRFIFO[idx & 1];
 
-	/* Si trame entierement arrivee */
-	cancel_delayed_work_sync(&priv->rx_timeout_queue);
-	skb = dev_alloc_skb(priv->rx_len);
-	if (! skb) {
-		priv->rx_len = 0;
-		netdev->stats.rx_dropped++;
-		return -ENOMEM;
+		/* Acknowledge the FIFO */
+		setbits8(&(base_addr->mCMDR), 1 << 7);
+
+		priv->rx_len += 32;
 	}
-	memcpy(skb->data, priv->rx_buff, priv->rx_len);
-	skb_put(skb, priv->rx_len);
-	priv->rx_len = 0;
-	skb->protocol = hdlc_type_trans(skb, priv->netdev);
-	netdev->stats.rx_packets++;
-	netdev->stats.rx_bytes += skb->len;
-	netif_rx(skb);
+
+	/* RME : Message end : Read the receive FIFO */
+	if (priv->ISR0 & (1 << 7)) {
+		/* Get size of last block */
+		size = base_addr->mRBC2 & 0x1F;
+
+		/* Read last block */
+		for (idx=0; idx < size; idx++)
+			priv->rx_buff[priv->rx_len + idx] = base_addr->mFIFO.mRFIFO[idx & 1];
+
+		/* Acknowledge the FIFO */
+		setbits8(&(base_addr->mCMDR), 1 << 7);
+
+		priv->rx_len += size;
+
+		/* Packet received */
+		cancel_delayed_work_sync(&priv->rx_timeout_queue);
+		skb = dev_alloc_skb(priv->rx_len);
+		if (! skb) {
+			priv->rx_len = 0;
+			priv->netdev->stats.rx_dropped++;
+			return -ENOMEM;
+		}
+		memcpy(skb->data, priv->rx_buff, priv->rx_len);
+		skb_put(skb, priv->rx_len);
+		priv->rx_len = 0;
+		skb->protocol = hdlc_type_trans(skb, priv->netdev);
+		priv->netdev->stats.rx_packets++;
+		priv->netdev->stats.rx_bytes += skb->len;
+		netif_rx(skb);
+	}
 
 	return 0;
 }
 
 
 /* Handler IT ecriture */
-static int pef2256_xmit(int irq, void *dev_id)
+static int pef2256_tx(struct pef2256_dev_priv *priv)
 {
-	struct net_device *netdev = (struct net_device *)dev_id;
-	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
+	int idx, size;
+	pef2256_regs *base_addr;
+	u8 *tx_buff = priv->tx_skb->data;
+
+	base_addr = (pef2256_regs *)priv->base_addr;
 
 	/* Do E1 stuff */
 
-	/* Si trame entierement transferee */
-	netdev->stats.tx_packets++;
-	netdev->stats.tx_bytes += priv->tx_skbuff->len;
-	dev_kfree_skb(priv->tx_skbuff);
-	priv->tx_skbuff=NULL;
-	netif_wake_queue(netdev);
+	/* ALLS : transmit all done */
+	if (priv->ISR1 & (1 << 5)) {
+		priv->netdev->stats.tx_packets++;
+		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
+		dev_kfree_skb(priv->tx_skb);
+		priv->tx_skb=NULL;
+		netif_wake_queue(priv->netdev);
+	}
+	/* XPR : write a new block in transmit FIFO */
+	else {
+		size = priv->tx_skb->len - priv->tx_len;
+		size = size > 32 ? 32 : size;
+
+		for (idx=0; idx < size; idx++)
+			base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
+
+		priv->tx_len += size;
+
+		setbits8(&(base_addr->mCMDR), 1 << 3);
+		if (priv->tx_len == priv->tx_len)
+			setbits8(&(base_addr->mCMDR), 1 << 1);
+	}
 
 	return 0;
 }
@@ -583,8 +665,48 @@ static int pef2256_xmit(int irq, void *dev_id)
 irqreturn_t pef2256_irq(int irq, void *dev_priv)
 {
 	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
+	pef2256_regs *base_addr;
+	u8 GIS;
 
 	/* Do E1 stuff */
+
+	base_addr = (pef2256_regs *)priv->base_addr;
+	GIS = base_addr->mGIS;
+
+	priv->ISR0 = priv->ISR1 = 0;
+
+	/* We only care about ISR0 and ISR1 */
+	/* ISR0 */
+	if (GIS & 1)
+		priv->ISR0 = base_addr->mISR0 & ~(base_addr->mIMR0);
+	/* ISR1 */
+	if (GIS & (1 << 1))
+		priv->ISR1 = base_addr->mISR1 & ~(base_addr->mIMR1);
+	
+	/* RDO : Receive data overflow -> RX error */
+	if (priv->ISR1 & (1 << 6)) {
+		/* Acknowledge the FIFO */
+		setbits8(&(base_addr->mCMDR), 1 << 7);
+
+		priv->netdev->stats.rx_errors++;
+		priv->rx_len = -1;
+	}
+
+	/* XDU : Transmit data underrun -> TX error */
+	if (priv->ISR1 & (1 << 4)) {
+		priv->netdev->stats.tx_errors++;
+		dev_kfree_skb(priv->tx_skb);
+		priv->tx_skb=NULL;
+		netif_wake_queue(priv->netdev);
+	}
+
+	/* RPF or RME : FIFO received -> call pef2256_rx */
+	if (priv->ISR0 & (1 | (1 << 7)))
+		pef2256_rx(priv);
+
+	/* XPR or ALLS : FIFO sent -> call pef2256_tx */
+	if (priv->ISR1 & (1 | (1 << 5)))
+		pef2256_tx(priv);
 
 	return 0;
 }
@@ -594,11 +716,28 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 					  struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
+	int idx, size;
+	pef2256_regs *base_addr;
+	u8 *tx_buff = priv->tx_skb->data;
+
+	base_addr = (pef2256_regs *)priv->base_addr;
 
 	/* demande emission trame skb->data de longueur skb->len */
-	priv->tx_skbuff = skb;
+	priv->tx_skb = skb;
+	priv->tx_len = 0;
 
 	/* Do E1 stuff */
+	size = priv->tx_skb->len - priv->tx_len;
+	size = size > 32 ? 32 : size;
+
+	for (idx=0; idx < size; idx++)
+		base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
+
+	priv->tx_len += size;
+
+	setbits8(&(base_addr->mCMDR), 1 << 3);
+	if (priv->tx_len == priv->tx_len)
+		setbits8(&(base_addr->mCMDR), 1 << 1);
 
 	netif_stop_queue(netdev);
 	return NETDEV_TX_OK;
@@ -726,7 +865,7 @@ static int pef2256_probe(struct platform_device *ofdev)
 			priv->component_id = E_DRV_E1_VERSION_2_2;
 	}
 
-	priv->tx_skbuff = NULL;
+	priv->tx_skb = NULL;
 
 	/* Par defaut ; Tx et Rx sur TS 1 */
 	priv->Tx_TS = priv->Rx_TS = 0x40000000;

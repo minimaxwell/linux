@@ -154,7 +154,8 @@ typedef enum
 
 
 struct pef2256_dev_priv {
-	struct sk_buff *tx_skbuff;
+	struct sk_buff *tx_skb;
+	u16 tx_len;
 	struct device *dev;
 
 	void *base_addr;
@@ -171,14 +172,14 @@ struct pef2256_dev_priv {
 	u32 Tx_TS;	/* Transmit Time Slots */
 	u32 Rx_TS;	/* Receive Time Slots */
 
-	tDRVE1TrameEm  Tx_buffer;	/* Transmit buffer */
-	tDRVE1TrameRec Rx_buffer;	/* Receive buffer */
-
 	unsigned short encoding;
 	unsigned short parity;
        	struct net_device *netdev;
 
 	int irq;
+
+	u8 ISR0;			/* ISR0 register */
+	u8 ISR1;			/* ISR1 register */
 
 	struct delayed_work rx_timeout_queue;
 };
@@ -187,8 +188,8 @@ struct pef2256_dev_priv {
 /* déclaration des registres du trameur E1 */
 typedef union
 {
-	unsigned char	mXFIFO[sizeof(short)];		/* Transmit FIFO */
-	unsigned char	mRFIFO[sizeof(short)];		/* Receive FIFO */
+	u8	mXFIFO[sizeof(u16)];		/* Transmit FIFO */
+	u8	mRFIFO[sizeof(u16)];		/* Receive FIFO */
 } pef2256_Fifo;
 
 typedef union
