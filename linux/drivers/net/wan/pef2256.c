@@ -12,6 +12,119 @@ irqreturn_t pef2256_irq(int irq, void *dev_priv);
 static int Config_HDLC(struct pef2256_dev_priv *priv);
 static int init_FALC(struct pef2256_dev_priv *priv);
 
+void print_regs(pef2256_regs *base_addr)
+{
+	printk("	mMODE = 0x%02x\n", base_addr->mMODE);
+	printk("	mRAH1 = 0x%02x\n", base_addr->mRAH1);
+	printk("	mRAH2 = 0x%02x\n", base_addr->mRAH2);
+	printk("	mRAL1 = 0x%02x\n", base_addr->mRAL1);
+	printk("	mRAL2 = 0x%02x\n", base_addr->mRAL2);
+	printk("	mIPC = 0x%02x\n", base_addr->mIPC);
+	printk("	mCCR1 = 0x%02x\n", base_addr->mCCR1);
+	printk("	mCCR2 = 0x%02x\n", base_addr->mCCR2);
+	printk("	mRTR1 = 0x%02x\n", base_addr->mRTR1);
+	printk("	mRTR2 = 0x%02x\n", base_addr->mRTR2);
+	printk("	mRTR3 = 0x%02x\n", base_addr->mRTR3);
+	printk("	mRTR4 = 0x%02x\n", base_addr->mRTR4);
+	printk("	mTTR1 = 0x%02x\n", base_addr->mTTR1);
+	printk("	mTTR2 = 0x%02x\n", base_addr->mTTR2);
+	printk("	mTTR3 = 0x%02x\n", base_addr->mTTR3);
+	printk("	mTTR4 = 0x%02x\n", base_addr->mTTR4);
+	printk("	mIMR0 = 0x%02x\n", base_addr->mIMR0);
+	printk("	mIMR1 = 0x%02x\n", base_addr->mIMR1);
+	printk("	mIMR2 = 0x%02x\n", base_addr->mIMR2);
+	printk("	mIMR3 = 0x%02x\n", base_addr->mIMR3);
+	printk("	mIMR4 = 0x%02x\n", base_addr->mIMR4);
+	printk("	mIMR5 = 0x%02x\n", base_addr->mIMR5);
+	printk("	mIERR = 0x%02x\n", base_addr->mIERR);
+	printk("	mFMR0 = 0x%02x\n", base_addr->mFMR0);
+	printk("	mFMR1 = 0x%02x\n", base_addr->mFMR1);
+	printk("	mFMR2 = 0x%02x\n", base_addr->mFMR2);
+	printk("	mLOOP = 0x%02x\n", base_addr->mLOOP);
+	printk("	mXSW = 0x%02x\n", base_addr->mXSW);
+	printk("	mXSP = 0x%02x\n", base_addr->mXSP);
+	printk("	mXC0 = 0x%02x\n", base_addr->mXC0);
+	printk("	mXC1 = 0x%02x\n", base_addr->mXC1);
+	printk("	mRC0 = 0x%02x\n", base_addr->mRC0);
+	printk("	mRC1 = 0x%02x\n", base_addr->mRC1);
+	printk("	mXPM0 = 0x%02x\n", base_addr->mXPM0);
+	printk("	mXPM1 = 0x%02x\n", base_addr->mXPM1);
+	printk("	mXPM2 = 0x%02x\n", base_addr->mXPM2);
+	printk("	mTSWM = 0x%02x\n", base_addr->mTSWM);
+	printk("	mIDLE = 0x%02x\n", base_addr->mIDLE);
+	printk("	mXSA4 = 0x%02x\n", base_addr->mXSA4);
+	printk("	mXSA5 = 0x%02x\n", base_addr->mXSA5);
+	printk("	mXSA6 = 0x%02x\n", base_addr->mXSA6);
+	printk("	mXSA7 = 0x%02x\n", base_addr->mXSA7);
+	printk("	mXSA8 = 0x%02x\n", base_addr->mXSA8);
+	printk("	mFMR3 = 0x%02x\n", base_addr->mFMR3);
+	printk("	mICB1 = 0x%02x\n", base_addr->mICB1);
+	printk("	mICB2 = 0x%02x\n", base_addr->mICB2);
+	printk("	mICB3 = 0x%02x\n", base_addr->mICB3);
+	printk("	mICB4 = 0x%02x\n", base_addr->mICB4);
+	printk("	mLIM0 = 0x%02x\n", base_addr->mLIM0);
+	printk("	mLIM1 = 0x%02x\n", base_addr->mLIM1);
+	printk("	mPCD = 0x%02x\n", base_addr->mPCD);
+	printk("	mPCR = 0x%02x\n", base_addr->mPCR);
+	printk("	mLIM2 = 0x%02x\n", base_addr->mLIM2);
+	printk("	mLCR1 = 0x%02x\n", base_addr->mLCR1);
+	printk("	mLCR2 = 0x%02x\n", base_addr->mLCR2);
+	printk("	mLCR3 = 0x%02x\n", base_addr->mLCR3);
+	printk("	mSIC1 = 0x%02x\n", base_addr->mSIC1);
+	printk("	mSIC2 = 0x%02x\n", base_addr->mSIC2);
+	printk("	mSIC3 = 0x%02x\n", base_addr->mSIC3);
+	printk("	mCMR1 = 0x%02x\n", base_addr->mCMR1);
+	printk("	mCMR2 = 0x%02x\n", base_addr->mCMR2);
+	printk("	mGCR = 0x%02x\n", base_addr->mGCR);
+	printk("	mESM = 0x%02x\n", base_addr->mESM);
+	printk("	mCMR3 = 0x%02x\n", base_addr->mCMR3);
+	printk("	mPC1 = 0x%02x\n", base_addr->mPC1);
+	printk("	mPC2 = 0x%02x\n", base_addr->mPC2);
+	printk("	mPC3 = 0x%02x\n", base_addr->mPC3);
+	printk("	mPC4 = 0x%02x\n", base_addr->mPC4);
+	printk("	mPC5 = 0x%02x\n", base_addr->mPC5);
+	printk("	mGPC1 = 0x%02x\n", base_addr->mGPC1);
+	printk("	mPC6 = 0x%02x\n", base_addr->mPC6);
+	printk("	mCCR3 = 0x%02x\n", base_addr->mCCR3);
+	printk("	mCCR4 = 0x%02x\n", base_addr->mCCR4);
+	printk("	mCCR5 = 0x%02x\n", base_addr->mCCR5);
+	printk("	mMODE2 = 0x%02x\n", base_addr->mMODE2);
+	printk("	mMODE3 = 0x%02x\n", base_addr->mMODE3);
+	printk("	mRBC2 = 0x%02x\n", base_addr->mRBC2);
+	printk("	mRBC3 = 0x%02x\n", base_addr->mRBC3);
+	printk("	mGCM1 = 0x%02x\n", base_addr->mGCM1);
+	printk("	mGCM2 = 0x%02x\n", base_addr->mGCM2);
+	printk("	mGCM3 = 0x%02x\n", base_addr->mGCM3);
+	printk("	mGCM4 = 0x%02x\n", base_addr->mGCM4);
+	printk("	mGCM5 = 0x%02x\n", base_addr->mGCM5);
+	printk("	mGCM6 = 0x%02x\n", base_addr->mGCM6);
+	printk("	SIS2/GCM7 = 0x%02x\n", base_addr->mDif1.mSIS2);
+	printk("	RSIS2/GCM8 = 0x%02x\n", base_addr->mDif2.mRSIS2);
+	printk("	mTSEO = 0x%02x\n", base_addr->mTSEO);
+	printk("	mTSBS1 = 0x%02x\n", base_addr->mTSBS1);
+	printk("	mTSBS2 = 0x%02x\n", base_addr->mTSBS2);
+	printk("	mTSBS3 = 0x%02x\n", base_addr->mTSBS3);
+	printk("	mTSS2 = 0x%02x\n", base_addr->mTSS2);
+	printk("	mTSS3 = 0x%02x\n", base_addr->mTSS3);
+	printk("	mRes10 = 0x%02x\n", base_addr->mRes10);
+	printk("	mRes11 = 0x%02x\n", base_addr->mRes11);
+	printk("	mTPC0 = 0x%02x\n", base_addr->mTPC0);
+	printk("	mGLC1 = 0x%02x\n", base_addr->mGLC1);
+}
+
+static ssize_t fs_attr_regs_show(struct device *dev, 
+			struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
+	pef2256_regs *base_addr = (pef2256_regs *)priv->base_addr;
+
+	print_regs(base_addr);
+	return sprintf(buf, "*** printk DEBUG ***\n");
+}
+
+static DEVICE_ATTR(regs, S_IRUGO, fs_attr_regs_show, NULL);
+
 static ssize_t fs_attr_mode_show(struct device *dev, 
 			struct device_attribute *attr, char *buf)
 {
@@ -35,12 +148,12 @@ static ssize_t fs_attr_mode_store(struct device *dev,
 		return -EINVAL;
 
 	priv->mode = value;
-	if (reconfigure) {
+	if (reconfigure && priv->init_done) {
 		init_FALC(priv);
 		Config_HDLC(priv);
 	}
 
-	return 0;
+	return count;
 }
 
 static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
@@ -71,7 +184,7 @@ static ssize_t fs_attr_Tx_TS_store(struct device *dev,
 		return -EINVAL;
 
 	priv->Tx_TS = value;
-	if (reconfigure)
+	if (reconfigure && priv->init_done)
 		Config_HDLC(priv);
 
 	return count;
@@ -104,7 +217,7 @@ static ssize_t fs_attr_Rx_TS_store(struct device *dev,
 		return -EINVAL;
 
 	priv->Rx_TS = value;
-	if (reconfigure)
+	if (reconfigure && priv->init_done)
 		Config_HDLC(priv);
 
 	return count;
@@ -504,6 +617,7 @@ static int pef2256_open(struct net_device *netdev)
 		dev_err(priv->dev, "Cannot request irq. Device seems busy.\n");
 		return -EBUSY;
 	}
+
 	/* programmation du composant FALC */
 	if (priv->component_id != E_DRV_E1_VERSION_UNDEF) {
 		ret = init_FALC(priv);
@@ -514,28 +628,26 @@ static int pef2256_open(struct net_device *netdev)
 		ret = -ENODEV;
 	}
 
-	dev_err(priv->dev, "After init_FALC : FMR1=%0x FMR2=%0x, XSP=%0x\n", 
-			base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
-
 	if (ret < 0)
 		return ret; 
-	
 
 	priv->tx_skb = NULL;
 	priv->rx_len = 0;
 
+	Config_HDLC(priv);
+
 	netif_start_queue(netdev);
 	netif_carrier_on(netdev);
+
+	priv->init_done = 1;
+
 	return 0;
 }
 
 
 static int pef2256_close(struct net_device *netdev)
 {
-	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
-
 	netif_stop_queue(netdev);
-	cancel_delayed_work_sync(&priv->rx_timeout_queue);
 
 	/* Do E1 stuff */
 
@@ -560,10 +672,11 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 	int idx, size;
 	pef2256_regs *base_addr;
 
-	base_addr = (pef2256_regs *)priv->base_addr;
+	base_addr = priv->base_addr;
 
 	/* We have received an RDO, acknowledge the FIFOs and wait for an RME */
 	if (priv->rx_len == -1) {
+printk("****** pef2256_rx : data overflow ! \n");
 		/* Acknowledge the FIFO */
 		setbits8(&(base_addr->mCMDR), 1 << 7);
 
@@ -572,9 +685,6 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 
 		return 0;
 	}
-
-	if (! priv->rx_len)
-		schedule_delayed_work(&priv->rx_timeout_queue, RX_TIMEOUT);
 
 	/* Do E1 stuff */
 	/* RPF : a block is available in the receive FIFO */
@@ -603,20 +713,24 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 		priv->rx_len += size;
 
 		/* Packet received */
-		cancel_delayed_work_sync(&priv->rx_timeout_queue);
-		skb = dev_alloc_skb(priv->rx_len);
-		if (! skb) {
+		if (priv->rx_len > 0) {
+
+printk("****** pef2256_rx : RX all done (%d bytes) ! \n", priv->rx_len);
+
+			skb = dev_alloc_skb(priv->rx_len);
+			if (! skb) {
+				priv->rx_len = 0;
+				priv->netdev->stats.rx_dropped++;
+				return -ENOMEM;
+			}
+			memcpy(skb->data, priv->rx_buff, priv->rx_len);
+			skb_put(skb, priv->rx_len);
 			priv->rx_len = 0;
-			priv->netdev->stats.rx_dropped++;
-			return -ENOMEM;
+			skb->protocol = hdlc_type_trans(skb, priv->netdev);
+			priv->netdev->stats.rx_packets++;
+			priv->netdev->stats.rx_bytes += skb->len;
+			netif_rx(skb);
 		}
-		memcpy(skb->data, priv->rx_buff, priv->rx_len);
-		skb_put(skb, priv->rx_len);
-		priv->rx_len = 0;
-		skb->protocol = hdlc_type_trans(skb, priv->netdev);
-		priv->netdev->stats.rx_packets++;
-		priv->netdev->stats.rx_bytes += skb->len;
-		netif_rx(skb);
 	}
 
 	return 0;
@@ -636,9 +750,10 @@ static int pef2256_tx(struct pef2256_dev_priv *priv)
 
 	/* ALLS : transmit all done */
 	if (priv->ISR1 & (1 << 5)) {
+printk("*********** pef2256_tx : TX all done ! \n");
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
-		dev_kfree_skb(priv->tx_skb);
+		// dev_kfree_skb(priv->tx_skb); 
 		priv->tx_skb=NULL;
 		netif_wake_queue(priv->netdev);
 	}
@@ -653,7 +768,7 @@ static int pef2256_tx(struct pef2256_dev_priv *priv)
 		priv->tx_len += size;
 
 		setbits8(&(base_addr->mCMDR), 1 << 3);
-		if (priv->tx_len == priv->tx_len)
+		if (priv->tx_len == priv->tx_skb->len)
 			setbits8(&(base_addr->mCMDR), 1 << 1);
 	}
 
@@ -682,22 +797,33 @@ irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	/* ISR1 */
 	if (GIS & (1 << 1))
 		priv->ISR1 = base_addr->mISR1 & ~(base_addr->mIMR1);
-	
+
+	/* Don't do anything else before init is done */
+	if (! priv->init_done)
+		return IRQ_HANDLED;
+
 	/* RDO : Receive data overflow -> RX error */
 	if (priv->ISR1 & (1 << 6)) {
+printk("*********** pef2256_irq : data overflow ! \n");
 		/* Acknowledge the FIFO */
 		setbits8(&(base_addr->mCMDR), 1 << 7);
-
 		priv->netdev->stats.rx_errors++;
-		priv->rx_len = -1;
+		/* RME received ? */
+		if (priv->ISR0 & (1 << 7)) 
+			priv->rx_len = 0;
+		else
+			priv->rx_len = -1;
+		return IRQ_HANDLED;
 	}
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (priv->ISR1 & (1 << 4)) {
+printk("*********** pef2256_irq : data underrun ! \n");
 		priv->netdev->stats.tx_errors++;
-		dev_kfree_skb(priv->tx_skb);
+		// dev_kfree_skb(priv->tx_skb);
 		priv->tx_skb=NULL;
 		netif_wake_queue(priv->netdev);
+		return IRQ_HANDLED;
 	}
 
 	/* RPF or RME : FIFO received -> call pef2256_rx */
@@ -708,7 +834,7 @@ irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	if (priv->ISR1 & (1 | (1 << 5)))
 		pef2256_tx(priv);
 
-	return 0;
+	return IRQ_HANDLED;
 }
 
 
@@ -718,7 +844,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 	int idx, size;
 	pef2256_regs *base_addr;
-	u8 *tx_buff = priv->tx_skb->data;
+	u8 *tx_buff = skb->data;
 
 	base_addr = (pef2256_regs *)priv->base_addr;
 
@@ -736,7 +862,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 	priv->tx_len += size;
 
 	setbits8(&(base_addr->mCMDR), 1 << 3);
-	if (priv->tx_len == priv->tx_len)
+	if (priv->tx_len == priv->tx_skb->len)
 		setbits8(&(base_addr->mCMDR), 1 << 1);
 
 	netif_stop_queue(netdev);
@@ -901,12 +1027,15 @@ static int pef2256_probe(struct platform_device *ofdev)
 	sys_ret |= device_create_file(priv->dev, &dev_attr_mode);
 	sys_ret |= device_create_file(priv->dev, &dev_attr_Tx_TS);
 	sys_ret |= device_create_file(priv->dev, &dev_attr_Rx_TS);
+	sys_ret |= device_create_file(priv->dev, &dev_attr_regs);
 
 	if (sys_ret) {
 		device_remove_file(priv->dev, &dev_attr_mode);
 		unregister_hdlc_device(priv->netdev);
 		free_netdev(priv->netdev);
 	}
+
+	priv->init_done = 0;
 
 	return 0;
 }

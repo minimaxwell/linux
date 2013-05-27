@@ -158,6 +158,8 @@ struct pef2256_dev_priv {
 	u16 tx_len;
 	struct device *dev;
 
+	int init_done;	
+	
 	void *base_addr;
 	int component_id;
 	int mode;	/* MASTER or SLAVE */
@@ -180,8 +182,6 @@ struct pef2256_dev_priv {
 
 	u8 ISR0;			/* ISR0 register */
 	u8 ISR1;			/* ISR1 register */
-
-	struct delayed_work rx_timeout_queue;
 };
 
 
