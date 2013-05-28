@@ -810,6 +810,16 @@
 				fsl,cpm-command = <0xc0>;
 			};
 
+			smc2: serial@a90 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart";
+				reg = <0xa90 0x10 0x3f80 0x40>;
+				interrupts = <3>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0xd0>;
+			};
+
 			smc2t: tdm_smc@a90 {
 				device_type = "tdm";
 				tdm_name = "smc2";
