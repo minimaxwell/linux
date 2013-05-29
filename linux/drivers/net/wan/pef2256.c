@@ -564,16 +564,12 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 		setbits8(&(base_addr->mSIC1), 1 << 1);
 	}
 
-	dev_err(priv->dev, "Before setting multiframe FMR1=%0x FMR2=%0x, XSP=%0x\n", 
-		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
 	/* transmit in multiframe => FMR1.XFS = 1 (bit 3) */
 	setbits8(&(base_addr->mFMR1), 1 << 3);
 	/* receive in multiframe => FMR2.RFS1:0 = 10 (bits 7 et 6) */
 	setbits8(&(base_addr->mFMR2), 1 << 7);
 	/* Automatic transmission of submultiframe status => XSP.AXS = 1 (bit 3) */
 	setbits8(&(base_addr->mXSP), 1 << 3);
-	dev_err(priv->dev, "After setting multiframe FMR1=%0x FMR2=%0x, XSP=%0x\n", 
-		base_addr->mFMR1, base_addr->mFMR2, base_addr->mXSP);
 
 	/* error counter mode toutes les 1s => FMR1.ECM = 1 (bit 2) */
 	setbits8(&(base_addr->mFMR1), 1 << 2);
@@ -736,8 +732,7 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 /* Handler IT ecriture */
 static int pef2256_tx(struct pef2256_dev_priv *priv)
 {
-	int idx;
-	static int size;
+	int idx, size;
 	pef2256_regs *base_addr;
 	u8 *tx_buff = priv->tx_skb->data;
 
