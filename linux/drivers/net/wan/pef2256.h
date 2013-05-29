@@ -314,7 +314,8 @@ typedef struct
 	unsigned char	mRSP2;		/* 0x63		Receive Signaling Pointer 2 */
 	unsigned char	mSIS;		/* 0x64		Signaling Status Register */
 	unsigned char	mRSIS;		/* 0x65		Receive Signaling Status Register */
-	unsigned short	mRBC;		/* 0x66/0x67	Receive Byte Control */
+	unsigned char	mRBCL;		/* 0x66		Receive Byte Control */
+	unsigned char	mRBCH;		/* 0x67		Receive Byte Control */
 	unsigned char	mISR0;		/* 0x68		Interrupt Status Register 0 */
 	unsigned char	mISR1;		/* 0x69		Interrupt Status Register 1 */
 	unsigned char	mISR2;		/* 0x6A		Interrupt Status Register 2 */

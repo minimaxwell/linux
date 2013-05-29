@@ -674,9 +674,8 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 
 	base_addr = priv->base_addr;
 
-	/* We have received an RDO, acknowledge the FIFOs and wait for an RME */
+	/* RDO has been received -> wait for RME */
 	if (priv->rx_len == -1) {
-printk("****** pef2256_rx : data overflow ! \n");
 		/* Acknowledge the FIFO */
 		setbits8(&(base_addr->mCMDR), 1 << 7);
 
@@ -701,7 +700,7 @@ printk("****** pef2256_rx : data overflow ! \n");
 	/* RME : Message end : Read the receive FIFO */
 	if (priv->ISR0 & (1 << 7)) {
 		/* Get size of last block */
-		size = base_addr->mRBC2 & 0x1F;
+		size = base_addr->mRBCL & 0x1F;
 
 		/* Read last block */
 		for (idx=0; idx < size; idx++)
@@ -714,9 +713,6 @@ printk("****** pef2256_rx : data overflow ! \n");
 
 		/* Packet received */
 		if (priv->rx_len > 0) {
-
-printk("****** pef2256_rx : RX all done (%d bytes) ! \n", priv->rx_len);
-
 			skb = dev_alloc_skb(priv->rx_len);
 			if (! skb) {
 				priv->rx_len = 0;
@@ -740,7 +736,8 @@ printk("****** pef2256_rx : RX all done (%d bytes) ! \n", priv->rx_len);
 /* Handler IT ecriture */
 static int pef2256_tx(struct pef2256_dev_priv *priv)
 {
-	int idx, size;
+	int idx;
+	static int size;
 	pef2256_regs *base_addr;
 	u8 *tx_buff = priv->tx_skb->data;
 
@@ -750,26 +747,28 @@ static int pef2256_tx(struct pef2256_dev_priv *priv)
 
 	/* ALLS : transmit all done */
 	if (priv->ISR1 & (1 << 5)) {
-printk("*********** pef2256_tx : TX all done ! \n");
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
 		// dev_kfree_skb(priv->tx_skb); 
 		priv->tx_skb=NULL;
+		priv->tx_len=0;
 		netif_wake_queue(priv->netdev);
 	}
 	/* XPR : write a new block in transmit FIFO */
-	else {
+	else if (priv->tx_len < priv->tx_skb->len) {
 		size = priv->tx_skb->len - priv->tx_len;
-		size = size > 32 ? 32 : size;
+		if (size > 32)
+			size = 32;
 
 		for (idx=0; idx < size; idx++)
 			base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
 
 		priv->tx_len += size;
 
-		setbits8(&(base_addr->mCMDR), 1 << 3);
-		if (priv->tx_len == priv->tx_skb->len)
-			setbits8(&(base_addr->mCMDR), 1 << 1);
+		if (priv->tx_len == priv->tx_skb->len) 
+			base_addr->mCMDR |= ((1 << 3) | (1 << 1));
+		else
+			setbits8(&(base_addr->mCMDR), 1 << 3);
 	}
 
 	return 0;
@@ -784,7 +783,6 @@ irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	u8 GIS;
 
 	/* Do E1 stuff */
-
 	base_addr = (pef2256_regs *)priv->base_addr;
 	GIS = base_addr->mGIS;
 
@@ -854,7 +852,8 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 
 	/* Do E1 stuff */
 	size = priv->tx_skb->len - priv->tx_len;
-	size = size > 32 ? 32 : size;
+	if (size > 32)
+		size = 32;
 
 	for (idx=0; idx < size; idx++)
 		base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
