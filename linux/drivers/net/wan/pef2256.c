@@ -11,6 +11,8 @@
 irqreturn_t pef2256_irq(int irq, void *dev_priv);
 static int Config_HDLC(struct pef2256_dev_priv *priv);
 static int init_FALC(struct pef2256_dev_priv *priv);
+static int pef2256_open(struct net_device *netdev);
+static int pef2256_close(struct net_device *netdev);
 
 void print_regs(pef2256_regs *base_addr)
 {
@@ -149,8 +151,9 @@ static ssize_t fs_attr_mode_store(struct device *dev,
 
 	priv->mode = value;
 	if (reconfigure && priv->init_done) {
+		pef2256_close(ndev);
 		init_FALC(priv);
-		Config_HDLC(priv);
+		pef2256_open(ndev);
 	}
 
 	return count;
@@ -184,8 +187,9 @@ static ssize_t fs_attr_Tx_TS_store(struct device *dev,
 		return -EINVAL;
 
 	priv->Tx_TS = value;
-	if (reconfigure && priv->init_done)
+	if (reconfigure && priv->init_done) {
 		Config_HDLC(priv);
+	}
 
 	return count;
 }
@@ -217,8 +221,9 @@ static ssize_t fs_attr_Rx_TS_store(struct device *dev,
 		return -EINVAL;
 
 	priv->Rx_TS = value;
-	if (reconfigure && priv->init_done)
+	if (reconfigure && priv->init_done) {
 		Config_HDLC(priv);
+	}
 
 	return count;
 }
@@ -334,27 +339,27 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 		i = 7 - (TS_idx % 8);
 		switch (TS_idx / 8) {
 		case 0:
-			if (priv->Tx_TS & (1 << TS_idx))
+			if (priv->Tx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mTTR1), 1 << i);
-			if (priv->Rx_TS & (1 << TS_idx))
+			if (priv->Rx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mRTR1), 1 << i);
 			break;
 		case 1:
-			if (priv->Tx_TS & (1 << TS_idx))
+			if (priv->Tx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mTTR2), 1 << i);
-			if (priv->Rx_TS & (1 << TS_idx))
+			if (priv->Rx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mRTR2), 1 << i);
 			break;
 		case 2:
-			if (priv->Tx_TS & (1 << TS_idx))
+			if (priv->Tx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mTTR3), 1 << i);
-			if (priv->Rx_TS & (1 << TS_idx))
+			if (priv->Rx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mRTR3), 1 << i);
 			break;
 		case 3:
-			if (priv->Tx_TS & (1 << TS_idx))
+			if (priv->Tx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mTTR4), 1 << i);
-			if (priv->Rx_TS & (1 << TS_idx))
+			if (priv->Rx_TS & (1 << (31 - TS_idx)))
 				setbits8(&(base_addr->mRTR4), 1 << i);
 			break;
 		}
@@ -632,8 +637,8 @@ static int pef2256_open(struct net_device *netdev)
 
 	Config_HDLC(priv);
 
-	netif_start_queue(netdev);
 	netif_carrier_on(netdev);
+	netif_start_queue(netdev);
 
 	priv->init_done = 1;
 
@@ -643,11 +648,18 @@ static int pef2256_open(struct net_device *netdev)
 
 static int pef2256_close(struct net_device *netdev)
 {
+	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
+
+	if (! priv->init_done)
+		return 0;
+
+	priv->init_done = 0;
 	netif_stop_queue(netdev);
+	hdlc_close(netdev);
+	free_irq(priv->irq, priv);
 
 	/* Do E1 stuff */
 
-	hdlc_close(netdev);
 	return 0;
 }
 
