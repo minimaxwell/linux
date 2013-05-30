@@ -167,12 +167,16 @@ int cpld_get_irq(void)
 {
 	int vec;
 	int ret;
+	int pending = in_be16(cpld_pic_reg) & 0x1fe0;
 
-	vec = 16 - ffs(in_be16(cpld_pic_reg)&0x1fe0);
-	
-	clrbits16(cpld_pic_reg, 1<<(15-vec));
-	
-	ret=irq_linear_revmap(cpld_pic_host, vec);
+	if (pending) {
+		vec = 16 - ffs(pending);
+		ret = irq_linear_revmap(cpld_pic_host, vec);
+	}
+	else {
+		ret = -1;
+	}
+		
 	return ret;
 }
 

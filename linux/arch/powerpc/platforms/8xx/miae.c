@@ -82,13 +82,21 @@ int fpgam_get_irq(void)
 {
 	int vec;
 	int ret;
+	int pending1 = in_be16(&fpgam_regs->it_pend1) & 0x87FF;
+	int pending2 = in_be16(&fpgam_regs->it_pend2);
 
-	if (in_be16(&fpgam_regs->it_pend1) & 0x87FF)
-		vec = 16 - ffs(in_be16(&fpgam_regs->it_pend1) & 0x87FF);
-	else
-		vec = 32 - ffs(in_be16(&fpgam_regs->it_pend2));
+	if (pending1) {
+		vec = 16 - ffs(pending1);
+		ret = irq_linear_revmap(fpgam_pic_host, vec);
+	}
+	else if (pending2) {
+		vec = 32 - ffs(pending2);
+		ret = irq_linear_revmap(fpgam_pic_host, vec);
+	}
+	else {
+		ret = -1;
+	}
 	
-	ret=irq_linear_revmap(fpgam_pic_host, vec);
 	return ret;
 }
 
