@@ -8,7 +8,7 @@ build_kernel()
 	#==== .config to use (cmpc885_defconfig or mcr3000_defconfig).
 	local config=$1
 
-	if [ -z "$config"]; then
+	if [ -z "$config" ]; then
 		echo "build_kernel: Error! config not defined"
 		return 2
 	fi
