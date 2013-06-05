@@ -3,6 +3,76 @@
 . patch_knl-2.4.incl
 . firmware.incl
 
+build_kernel()
+{
+	#==== .config to use (cmpc885_defconfig or mcr3000_defconfig).
+	local config=$1
+
+	if [ -z "$config"]; then
+		echo "build_kernel: Error! config not defined"
+		return 2
+	fi
+
+	make $1
+
+	if [ $? -ne 0 ] ; then
+		echo "build_kernel: Error! unknown config"
+		return 2
+	fi
+	
+	#===== generating KNL
+
+	#===== Adding the initramfs source to knl config.
+	ln -sf ../initramfs
+	sed -i -e "s/^CONFIG_INITRAMFS_SOURCE=.*/CONFIG_INITRAMFS_SOURCE=\"..\/initramfs.txt\"/" $knl_path/linux/.config
+	echo "CONFIG_INITRAMFS_ROOT_UID=0" >> $knl_path/linux/.config
+	echo "CONFIG_INITRAMFS_ROOT_GID=0" >> $knl_path/linux/.config
+
+	#===== update LOCAL VERSION
+	# Check for svn and a svn repo.
+	unset LANG
+
+	if rev=`svn info $knl_path 2>/dev/null | grep '^Last Changed Rev'`; then
+		if [ `svn status $knl_path | grep -v "^\?" | wc -l` -eq 0 ]; then
+			local EXTRA_VERSION="-s3k-drv-${drv_version}_knld-${knl_version}"
+		else
+			local EXTRA_VERSION="-draft-drv-${drv_version}_knld-${knl_version}"
+		fi
+	else
+			local EXTRA_VERSION="-local-drv-${drv_version}_knld-${knl_version}"
+	fi
+
+	# update
+	sed -i -e "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"${EXTRA_VERSION}\"/" $knl_path/linux/.config
+	echo "#define DRV_VERSION \"${drv_version}\"" > $knl_path/linux/include/saf3000/drv_version.h
+
+	# making knl 
+	make -j 4 uImage 
+	if [ $? -ne 0 ] ; then
+		echo "make_knld: Error! echec make uImage"
+		return 2
+	fi
+
+	# mcr3000 : Generate lzma image for mcr3000_1G.
+	if [ "$config" = "mcr3000_defconfig" ]; then
+		./BuildLzma.sh
+		mv uImage.lzma ./arch/powerpc/boot
+
+		rm -rf ../debian/lib/modules/
+
+		sed -i -e "s/.*CONFIG_MCR3000_DRV.*/CONFIG_MCR3000_DRV=m/" .config
+		sed -i -e "s/.*CONFIG_CMPC885_DRV.*/# CONFIG_CMPC885_DRV is not set/" .config
+
+		make modules
+		if [ $? -ne 0 ] ; then
+			echo "make_delivery_knld: Error! echec make modules"
+			return 2
+		fi
+	
+		make modules_install INSTALL_MOD_PATH=../debian
+	fi
+}
+
 
 #===== function make_knld
 # parameters: 1 => Version number for KNL (example: 3.6.3)
@@ -98,38 +168,8 @@ make_knld()
 
 	#===== generating KNL
 
-	#===== Adding the initramfs source to knl config.
-	ln -sf ../initramfs
-	sed -i -e "s/^CONFIG_INITRAMFS_SOURCE=.*/CONFIG_INITRAMFS_SOURCE=\"..\/initramfs.txt\"/" $knl_path/linux/.config
-	echo "CONFIG_INITRAMFS_ROOT_UID=0" >> $knl_path/linux/.config
-	echo "CONFIG_INITRAMFS_ROOT_GID=0" >> $knl_path/linux/.config
-
-	#===== update LOCAL VERSION
-	# Check for svn and a svn repo.
-	unset LANG
-
-	if rev=`svn info $knl_path 2>/dev/null | grep '^Last Changed Rev'`; then
-		if [ `svn status $knl_path | grep -v "^\?" | wc -l` -eq 0 ]; then
-			local EXTRA_VERSION="-s3k-drv-${drv_version}_knld-${knl_version}"
-		else
-			local EXTRA_VERSION="-draft-drv-${drv_version}_knld-${knl_version}"
-		fi
-	else
-			local EXTRA_VERSION="-local-drv-${drv_version}_knld-${knl_version}"
-	fi
-
-	# update
-	sed -i -e "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"${EXTRA_VERSION}\"/" $knl_path/linux/.config
-	echo "#define DRV_VERSION \"${drv_version}\"" > $knl_path/linux/include/saf3000/drv_version.h
-
-	# making knl 
-	rm -rf $knl_path/ofl/*
-
-	make -j 4 uImage 
-	if [ $? -ne 0 ] ; then
-		echo "make_knld: Error! echec make uImage"
-		return 2
-	fi
+	build_kernel mcr3000_defconfig
+	build_kernel cmpc885_defconfig
 		
 	make -j 4 mcr3000.dtb cmpc885.dtb mcr3000_2g.dtb miae.dtb
 	if [ $? -ne 0 ] ; then
@@ -137,8 +177,6 @@ make_knld()
 		return 2
 	fi
 
-	./BuildLzma.sh
-	mv uImage.lzma ./arch/powerpc/boot
 	local bin_list="mcr3000.dtb cmpc885.dtb mcr3000_2g.dtb miae.dtb"
 	# cp to delivery
 	cp ./arch/powerpc/boot/uImage ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage
@@ -215,21 +253,6 @@ make_knld()
 	for my_board in MCR3000_1G CMPC885; do
 		# in case of MCR3000 1G we must generate the patch
 		if [ "${my_board}" == "MCR3000_1G" ]; then
-			rm -rf ../debian/lib/modules/
-
-			sed -i -e "s/.*CONFIG_MCR3000_DRV.*/CONFIG_MCR3000_DRV=m/" .config
-			sed -i -e "s/.*CONFIG_CMPC885_DRV.*/# CONFIG_CMPC885_DRV is not set/" .config
-
-			make modules
-			if [ $? -ne 0 ] ; then
-				echo "make_delivery_knld: Error! echec make modules"
-				return 2
-			fi
-	
-			make modules_install INSTALL_MOD_PATH=../debian
-			find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
-
-
 			# Don't rebuild the btl (FEV 276).
 			# make_btl ${my_board} ${path_btl} $PATCH_DIRECTORY || return 1
 			rm -rf $PATCH_DIRECTORY
@@ -253,9 +276,9 @@ make_knld()
 			fi
 	
 			make modules_install INSTALL_MOD_PATH=../debian
-			find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
-
 		fi
+
+		find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
 
 		# debian package 
 		pushd $knl_path/debian
