@@ -588,6 +588,8 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <1>;
 				fsl,cpm-command = <0x40>;
+				gpios = <&CPM1_PIO_B 18 1	/* RTS2 */
+				         &CPM1_PIO_C 9 1>;	/* CTS2 */
 			};
 
 			scc3: serial@a40 {
@@ -598,6 +600,8 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
+				gpios = <&CPM1_PIO_D 7 1	/* RTS3 */
+				         &CPM1_PIO_C 5 1>;	/* CTS3 */
 			};
 
 			scc3t: tdm@a40 {
