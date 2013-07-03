@@ -71,6 +71,8 @@ build_kernel()
 	
 		make modules_install INSTALL_MOD_PATH=../debian
 	fi
+
+	return 0
 }
 
 
@@ -169,7 +171,14 @@ make_knld()
 	#===== generating KNL
 
 	build_kernel mcr3000_defconfig
+	if [ $? -ne 0 ] ; then
+		return $?
+	fi
+
 	build_kernel cmpc885_defconfig
+	if [ $? -ne 0 ] ; then
+		return $?
+	fi
 		
 	make -j 4 mcr3000.dtb cmpc885.dtb mcr3000_2g.dtb miae.dtb
 	if [ $? -ne 0 ] ; then
