@@ -1,7 +1,6 @@
 #!/bin/bash
 
 . patch_knl-2.4.incl
-. firmware.incl
 
 build_kernel()
 {
@@ -218,33 +217,10 @@ make_knld()
 
 	rm -rf ${firmware_path}
 	mkdir -p ${firmware_path}
-	cp_firmware MCR3000_1G ${drv_version} ${firmware_path} FIRM_DSP
+	cp -a $knl_path/firmware/MCR3000_1G/* ${firmware_path}
 	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_2G ${drv_version} ${firmware_path} FIRM_DSP
+	cp -a $knl_path/firmware/MCR3000_2G/* ${firmware_path}
 	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_1G ${drv_version} ${firmware_path} FIRM_FPGA
-	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_2G ${drv_version} ${firmware_path} FIRM_FPGA
-	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_1G ${drv_version} ${firmware_path} FIRM_FPGA_C4E1
-	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_2G ${drv_version} ${firmware_path} FIRM_FPGA_C4E1
-	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_1G ${drv_version} ${firmware_path} FIRM_FPGA_C4E1T
-	if [ $? -ne 0 ]; then return 2; fi
-	cp_firmware MCR3000_2G ${drv_version} ${firmware_path} FIRM_FPGA_C4E1T
-	if [ $? -ne 0 ]; then return 2; fi
-	pushd ${firmware_path}
-	local ldb_version=`echo "${2}" | sed -e "s/-svn.*//"`
-	ln -s DSP-`get_firmware_version MCR3000_1G ${ldb_version} FIRM_DSP`.bin DSP_1G.bin
-	ln -s DSP-`get_firmware_version MCR3000_2G ${ldb_version} FIRM_DSP`.bin DSP_2G.bin
-	ln -s FPGA-`get_firmware_version MCR3000_1G ${ldb_version} FIRM_FPGA`.bin FPGA_1G.bin
-	ln -s FPGA-`get_firmware_version MCR3000_2G ${ldb_version} FIRM_FPGA`.bin FPGA_2G.bin
-	ln -s FPGAC4E1-`get_firmware_version MCR3000_1G ${ldb_version} FIRM_FPGA_C4E1`.bin FPGAC4E1_1G.bin
-	ln -s FPGAC4E1-`get_firmware_version MCR3000_2G ${ldb_version} FIRM_FPGA_C4E1`.bin FPGAC4E1_2G.bin
-	ln -s FPGAC4E1-`get_firmware_version MCR3000_1G ${ldb_version} FIRM_FPGA_C4E1T`.bin FPGAC4E1T_1G.bin
-	ln -s FPGAC4E1-`get_firmware_version MCR3000_2G ${ldb_version} FIRM_FPGA_C4E1T`.bin FPGAC4E1T_2G.bin
-	popd
 
 	#===== generating the headers package (needed to generate LDB).
 	rm -f ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar.gz
