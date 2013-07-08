@@ -17,6 +17,8 @@
 #include <linux/module.h>
 
 #include <linux/iio/iio.h>
+#include <linux/iio/driver.h>
+#include <linux/iio/machine.h>
 #include <linux/iio/sysfs.h>
 #include <linux/iio/buffer.h>
 
@@ -39,6 +41,7 @@
 			.storagebits = 16,				\
 			.endianness = IIO_BE,				\
 		},							\
+		.datasheet_name = #index,				\
 	}
 
 static const struct iio_chan_spec ad7923_channels[] = {
@@ -47,6 +50,31 @@ static const struct iio_chan_spec ad7923_channels[] = {
 	AD7923_V_CHAN(2),
 	AD7923_V_CHAN(3),
 	IIO_CHAN_SOFT_TIMESTAMP(4),
+};
+
+/* default maps used by iio consumer (lp8788-charger driver) */
+static struct iio_map ad7923_default_iio_maps[] = {
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_0",
+		.adc_channel_label = "0",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_1",
+		.adc_channel_label = "1",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_2",
+		.adc_channel_label = "2",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_3",
+		.adc_channel_label = "3",
+	},
+	{ }
 };
 
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
@@ -110,6 +138,10 @@ static int ad7923_probe(struct spi_device *spi)
 
 	st = iio_priv(indio_dev);
 
+	ret = iio_map_array_register(indio_dev, ad7923_default_iio_maps);
+	if (ret)
+		goto error_free;
+
 	spi_set_drvdata(spi, indio_dev);
 
 	st->spi = spi;
@@ -144,6 +176,7 @@ static int ad7923_probe(struct spi_device *spi)
 
 error_cleanup_ring:
 	ad7923_ring_cleanup(indio_dev);
+	iio_map_array_unregister(indio_dev, ad7923_default_iio_maps);
 error_free:
 	iio_device_free(indio_dev);
 
@@ -156,6 +189,7 @@ static int ad7923_remove(struct spi_device *spi)
 
 	iio_device_unregister(indio_dev);
 	ad7923_ring_cleanup(indio_dev);
+	iio_map_array_unregister(indio_dev, ad7923_default_iio_maps);
 	iio_device_free(indio_dev);
 
 	return 0;
