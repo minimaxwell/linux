@@ -52,17 +52,18 @@ struct mpc8xxx_wdt_type {
 static struct mpc8xxx_wdt __iomem *wd_base;
 static int mpc8xxx_wdt_init_late(void);
 
-#define WD_TIMO 10			/* Default timeout = 10 seconds */
+#define WD_TIMO 60			/* Default timeout = 60 seconds */
 
 static uint timeout = WD_TIMO;
 module_param(timeout, uint, 0);
 MODULE_PARM_DESC(timeout,
 	"Watchdog SW timeout in seconds. (0 < timeout < 65536s, default = "
 				__MODULE_STRING(WD_TIMO) "s)");
-static u16 hw_timo = 0xffff;
-module_param(hw_timo, ushort, 0);
-MODULE_PARM_DESC(hw_timo,
-	"Watchdog HW timeout in ticks. (0 < hw_timo < 65536, default = 65535)");
+static u16 hw_timeout = 0xffff;
+module_param(hw_timeout, ushort, 0);
+MODULE_PARM_DESC(hw_timeout,
+	"Watchdog HW timeout in ticks. (0 < hw_timeout < 65536, "
+		"default = 65535)");
 
 static bool reset = 1;
 module_param(reset, bool, 0);
@@ -79,9 +80,13 @@ MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
  * to 0
  */
 static int prescale = 1;
-static unsigned int hw_timo_sec;
+static unsigned int hw_timeout_sec;
 
-static int wdt_auto = 1;
+/*
+ * wdt_auto is set to 1 when watchdog is automatically refreshed by the kernel
+ * (when /dev/watchdog is not open)
+ */
+static bool wdt_auto = 1;
 static unsigned long wdt_is_open;
 static DEFINE_SPINLOCK(wdt_spinlock);
 static unsigned long wdt_last_ping;
@@ -106,7 +111,7 @@ static void mpc8xxx_wdt_timer_ping(unsigned long arg)
 	if (jiffies - wdt_last_ping <= timeout * HZ) {
 		mpc8xxx_wdt_keepalive();
 		/* We're pinging it twice faster than needed, to be sure. */
-		mod_timer(&wdt_timer, jiffies + HZ * hw_timo_sec / 2);
+		mod_timer(&wdt_timer, jiffies + HZ * hw_timeout_sec / 2);
 	}
 }
 
@@ -146,7 +151,7 @@ static int mpc8xxx_wdt_open(struct inode *inode, struct file *file)
 	if (reset)
 		tmp |= SWCRR_SWRI;
 
-	tmp |= hw_timo << 16;
+	tmp |= hw_timeout << 16;
 
 	out_be32(&wd_base->swcrr, tmp);
 
@@ -176,6 +181,7 @@ static long mpc8xxx_wdt_ioctl(struct file *file, unsigned int cmd,
 		.firmware_version = 1,
 		.identity = "MPC8xxx",
 	};
+	int r;
 
 	switch (cmd) {
 	case WDIOC_GETSUPPORT:
@@ -189,7 +195,10 @@ static long mpc8xxx_wdt_ioctl(struct file *file, unsigned int cmd,
 	case WDIOC_GETTIMEOUT:
 		return put_user(timeout, p);
 	case WDIOC_SETTIMEOUT:
-		return get_user(timeout, p);
+		r = get_user(timeout, p);
+		if (timeout > UINT_MAX / HZ)
+			timeout = UINT_MAX / HZ;
+		return r;
 	default:
 		return -ENOTTY;
 	}
@@ -239,14 +248,17 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 		goto err_unmap;
 	}
 	if (enabled)
-		hw_timo = in_be32(&wd_base->swcrr) >> 16;
+		hw_timeout = in_be32(&wd_base->swcrr) >> 16;
 
 	/* Calculate the timeout in seconds */
 	if (prescale)
-		hw_timo_sec = (hw_timo * wdt_type->prescaler) / freq;
+		hw_timeout_sec = (hw_timeout * wdt_type->prescaler) / freq;
 	else
-		hw_timo_sec = hw_timo / freq;
+		hw_timeout_sec = hw_timeout / freq;
 
+	/* Make sure the timeout is not too big */
+	if (timeout > UINT_MAX / HZ)
+		timeout = UINT_MAX / HZ;
 #ifdef MODULE
 	ret = mpc8xxx_wdt_init_late();
 	if (ret)
@@ -254,7 +266,7 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 #endif
 
 	pr_info("WDT driver for MPC8xxx initialized. mode:%s timeout = %d (%d seconds)\n",
-		reset ? "reset" : "interrupt", hw_timo, hw_timo_sec);
+		reset ? "reset" : "interrupt", hw_timeout, hw_timeout_sec);
 
 	/*
 	 * If the watchdog was previously enabled or we're running on
