@@ -73,6 +73,8 @@ build_kernel()
 		fi
 	
 		make modules_install INSTALL_MOD_PATH=../debian
+		find ../debian/lib/modules -name "build" -exec rm {} \;
+		find ../debian/lib/modules -name "source" -exec rm {} \;
 	fi
 
 	return 0
@@ -258,6 +260,8 @@ make_knld()
 			fi
 	
 			make modules_install INSTALL_MOD_PATH=../debian
+			find ../debian/lib/modules -name "build" -exec rm {} \;
+			find ../debian/lib/modules -name "source" -exec rm {} \;
 		fi
 
 		find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
