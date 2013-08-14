@@ -55,6 +55,10 @@ build_kernel()
 	# mcr3000 : Generate lzma image for mcr3000_1G.
 	if [ "$config" = "mcr3000_defconfig" ]; then
 		./BuildLzma.sh
+		if [ `cat uImage.lzma | wc -c` -gt 1703936 ]; then
+			echo "make_knld: Error! uImage.lzma trop volumineux pour la MCR3000 1G"
+			return 2
+		fi
 		mv uImage.lzma ./arch/powerpc/boot
 
 		rm -rf ../debian/lib/modules/
@@ -215,13 +219,6 @@ make_knld()
 		
 	local firmware_path=$knl_path/debian/lib/firmware
 
-	rm -rf ${firmware_path}
-	mkdir -p ${firmware_path}
-	cp -a $knl_path/firmware/MCR3000_1G/* ${firmware_path}
-	if [ $? -ne 0 ]; then return 2; fi
-	cp -a $knl_path/firmware/MCR3000_2G/* ${firmware_path}
-	if [ $? -ne 0 ]; then return 2; fi
-
 	#===== generating the headers package (needed to generate LDB).
 	rm -f ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar.gz
 	find arch/powerpc/include/ -type f | sed -e "/\/\.svn\//d" | xargs tar -cf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar 
@@ -265,11 +262,16 @@ make_knld()
 
 		find ../debian/lib/modules -name "*.ko" -exec ppc-linux-strip -S {} \;
 
+		rm -rf ${firmware_path}
+		mkdir -p ${firmware_path}
+
 		# debian package 
 		pushd $knl_path/debian
 		case ${my_board} in
 		MCR3000_1G)	cp ${liv_path}/KNLD-${knl_version}/BINAIRES/KNLD-${knl_version}-uImage.lzma ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/mcr3000.dtb ./
+				cp -a $knl_path/firmware/MCR3000_1G/* ${firmware_path}
+				if [ $? -ne 0 ]; then return 2; fi
 				./pkg_knld.sh KNLD-${knl_version}-uImage.lzma MCR3000_1G mcr3000.dtb || return 1
 				rm -f KNLD-${knl_version}-uImage.lzma
 				rm -f mcr3000.dtb
@@ -279,6 +281,8 @@ make_knld()
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/cmpc885.dtb ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/mcr3000_2g.dtb ./
 				cp ${liv_path}/KNLD-${knl_version}/BINAIRES/miae.dtb ./
+				cp -a $knl_path/firmware/MCR3000_2G/* ${firmware_path}
+				if [ $? -ne 0 ]; then return 2; fi
 				./pkg_knld.sh KNLD-${knl_version}-uImage CMPC885 cmpc885.dtb mcr3000_2g.dtb miae.dtb || return 1
 				rm -f KNLD-${knl_version}-uImage
 				rm -f cmpc885.dtb
