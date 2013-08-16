@@ -63,9 +63,6 @@ build_kernel()
 
 		rm -rf ../debian/lib/modules/
 
-		sed -i -e "s/.*CONFIG_MCR3000_DRV.*/CONFIG_MCR3000_DRV=m/" .config
-		sed -i -e "s/.*CONFIG_CMPC885_DRV.*/# CONFIG_CMPC885_DRV is not set/" .config
-
 		make modules
 		if [ $? -ne 0 ] ; then
 			echo "make_delivery_knld: Error! echec make modules"
@@ -249,9 +246,6 @@ make_knld()
 
 		if [ "${my_board}" == "CMPC885" ]; then
 			rm -rf ../debian/lib/modules/
-
-			sed -i -e "s/.*CONFIG_MCR3000_DRV.*/# CONFIG_MCR3000_DRV is not set/" .config
-			sed -i -e "s/.*CONFIG_CMPC885_DRV.*/CONFIG_CMPC885_DRV=m/" .config
 
 			make modules
 			if [ $? -ne 0 ] ; then
