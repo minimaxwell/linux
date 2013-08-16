@@ -82,54 +82,49 @@ static int gpio_extcon_probe(struct platform_device *pdev)
 	struct gpio_extcon_data *extcon_data;
 	int ret = 0;
 
-	if (pdev->dev.of_node) {
-		dev_err(&pdev->dev, "Init DTS non implementee\n");
+	if (!pdata)
+		return -EBUSY;
+	if (!pdata->irq_flags) {
+		dev_err(&pdev->dev, "IRQ flag is not specified.\n");
 		return -EINVAL;
-	} else {
-		if (!pdata)
-			return -EBUSY;
-		if (!pdata->irq_flags) {
-			dev_err(&pdev->dev, "IRQ flag is not specified.\n");
-			return -EINVAL;
-		}
-
-		extcon_data = devm_kzalloc(&pdev->dev, sizeof(struct gpio_extcon_data),
-					   GFP_KERNEL);
-		if (!extcon_data)
-			return -ENOMEM;
-
-		extcon_data->edev.name = pdata->name;
-		extcon_data->gpio = pdata->gpio;
-		extcon_data->state_on = pdata->state_on;
-		extcon_data->state_off = pdata->state_off;
-		if (pdata->state_on && pdata->state_off)
-			extcon_data->edev.print_state = extcon_gpio_print_state;
-		extcon_data->debounce_jiffies = msecs_to_jiffies(pdata->debounce);
-
-		ret = extcon_dev_register(&extcon_data->edev, &pdev->dev);
-		if (ret < 0)
-			return ret;
-
-		ret = devm_gpio_request_one(&pdev->dev, extcon_data->gpio, GPIOF_DIR_IN,
-					    pdev->name);
-		if (ret < 0)
-			goto err;
-
-		INIT_DELAYED_WORK(&extcon_data->work, gpio_extcon_work);
-
-		extcon_data->irq = gpio_to_irq(extcon_data->gpio);
-		if (extcon_data->irq < 0) {
-			ret = extcon_data->irq;
-			goto err;
-		}
-
-		ret = request_any_context_irq(extcon_data->irq, gpio_irq_handler,
-					      pdata->irq_flags, pdev->name,
-					      extcon_data);
-		if (ret < 0)
-			goto err;
-
 	}
+
+	extcon_data = devm_kzalloc(&pdev->dev, sizeof(struct gpio_extcon_data),
+				   GFP_KERNEL);
+	if (!extcon_data)
+		return -ENOMEM;
+
+	extcon_data->edev.name = pdata->name;
+	extcon_data->gpio = pdata->gpio;
+	extcon_data->state_on = pdata->state_on;
+	extcon_data->state_off = pdata->state_off;
+	if (pdata->state_on && pdata->state_off)
+		extcon_data->edev.print_state = extcon_gpio_print_state;
+	extcon_data->debounce_jiffies = msecs_to_jiffies(pdata->debounce);
+
+	ret = extcon_dev_register(&extcon_data->edev, &pdev->dev);
+	if (ret < 0)
+		return ret;
+
+	ret = devm_gpio_request_one(&pdev->dev, extcon_data->gpio, GPIOF_DIR_IN,
+				    pdev->name);
+	if (ret < 0)
+		goto err;
+
+	INIT_DELAYED_WORK(&extcon_data->work, gpio_extcon_work);
+
+	extcon_data->irq = gpio_to_irq(extcon_data->gpio);
+	if (extcon_data->irq < 0) {
+		ret = extcon_data->irq;
+		goto err;
+	}
+
+	ret = request_any_context_irq(extcon_data->irq, gpio_irq_handler,
+				      pdata->irq_flags, pdev->name,
+				      extcon_data);
+	if (ret < 0)
+		goto err;
+
 	platform_set_drvdata(pdev, extcon_data);
 	/* Perform initial detection */
 	gpio_extcon_work(&extcon_data->work.work);
@@ -153,21 +148,12 @@ static int gpio_extcon_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id gpio_extcon_match[] = {
-	{
-		.compatible = "extcon-gpio",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, gpio_extcon_match);
-
 static struct platform_driver gpio_extcon_driver = {
 	.probe		= gpio_extcon_probe,
 	.remove		= gpio_extcon_remove,
 	.driver		= {
 		.name	= "extcon-gpio",
 		.owner	= THIS_MODULE,
-	  	.of_match_table	= gpio_extcon_match,
 	},
 };
 

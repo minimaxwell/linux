@@ -97,79 +97,74 @@ static int adc_jack_probe(struct platform_device *pdev)
 	struct adc_jack_pdata *pdata = pdev->dev.platform_data;
 	int i, err = 0;
 
-	if (pdev->dev.of_node) {
-		dev_err(&pdev->dev, "Init DTS non implementee\n");
-		return -EINVAL;
-	} else {
-		data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
-		if (!data)
-			return -ENOMEM;
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
 
-		data->edev.name = pdata->name;
+	data->edev.name = pdata->name;
 
-		if (!pdata->cable_names) {
-			err = -EINVAL;
-			dev_err(&pdev->dev, "error: cable_names not defined.\n");
-			goto out;
-		}
+	if (!pdata->cable_names) {
+		err = -EINVAL;
+		dev_err(&pdev->dev, "error: cable_names not defined.\n");
+		goto out;
+	}
 
-		data->edev.supported_cable = pdata->cable_names;
+	data->edev.supported_cable = pdata->cable_names;
 
-		/* Check the length of array and set num_cables */
-		for (i = 0; data->edev.supported_cable[i]; i++)
-			;
-		if (i == 0 || i > SUPPORTED_CABLE_MAX) {
-			err = -EINVAL;
-			dev_err(&pdev->dev, "error: pdata->cable_names size = %d\n",
-					i - 1);
-			goto out;
-		}
-		data->num_cables = i;
+	/* Check the length of array and set num_cables */
+	for (i = 0; data->edev.supported_cable[i]; i++)
+		;
+	if (i == 0 || i > SUPPORTED_CABLE_MAX) {
+		err = -EINVAL;
+		dev_err(&pdev->dev, "error: pdata->cable_names size = %d\n",
+				i - 1);
+		goto out;
+	}
+	data->num_cables = i;
 
-		if (!pdata->adc_conditions ||
-				!pdata->adc_conditions[0].state) {
-			err = -EINVAL;
-			dev_err(&pdev->dev, "error: adc_conditions not defined.\n");
-			goto out;
-		}
-		data->adc_conditions = pdata->adc_conditions;
+	if (!pdata->adc_conditions ||
+			!pdata->adc_conditions[0].state) {
+		err = -EINVAL;
+		dev_err(&pdev->dev, "error: adc_conditions not defined.\n");
+		goto out;
+	}
+	data->adc_conditions = pdata->adc_conditions;
 
-		/* Check the length of array and set num_conditions */
-		for (i = 0; data->adc_conditions[i].state; i++)
-			;
-		data->num_conditions = i;
+	/* Check the length of array and set num_conditions */
+	for (i = 0; data->adc_conditions[i].state; i++)
+		;
+	data->num_conditions = i;
 
-		data->chan = iio_channel_get(dev_name(&pdev->dev),
-				pdata->consumer_channel);
-		if (IS_ERR(data->chan)) {
-			err = PTR_ERR(data->chan);
-			goto out;
-		}
+	data->chan = iio_channel_get(dev_name(&pdev->dev),
+			pdata->consumer_channel);
+	if (IS_ERR(data->chan)) {
+		err = PTR_ERR(data->chan);
+		goto out;
+	}
 
-		data->handling_delay = msecs_to_jiffies(pdata->handling_delay_ms);
+	data->handling_delay = msecs_to_jiffies(pdata->handling_delay_ms);
 
-		INIT_DEFERRABLE_WORK(&data->handler, adc_jack_handler);
+	INIT_DEFERRABLE_WORK(&data->handler, adc_jack_handler);
 
-		platform_set_drvdata(pdev, data);
+	platform_set_drvdata(pdev, data);
 
-		err = extcon_dev_register(&data->edev, &pdev->dev);
-		if (err)
-			goto out;
+	err = extcon_dev_register(&data->edev, &pdev->dev);
+	if (err)
+		goto out;
 
-		data->irq = platform_get_irq(pdev, 0);
-		if (!data->irq) {
-			dev_err(&pdev->dev, "platform_get_irq failed\n");
-			err = -ENODEV;
-			goto err_irq;
-		}
+	data->irq = platform_get_irq(pdev, 0);
+	if (!data->irq) {
+		dev_err(&pdev->dev, "platform_get_irq failed\n");
+		err = -ENODEV;
+		goto err_irq;
+	}
 
-		err = request_any_context_irq(data->irq, adc_jack_irq_thread,
-				pdata->irq_flags, pdata->name, data);
+	err = request_any_context_irq(data->irq, adc_jack_irq_thread,
+			pdata->irq_flags, pdata->name, data);
 
-		if (err < 0) {
-			dev_err(&pdev->dev, "error: irq %d\n", data->irq);
-			goto err_irq;
-		}
+	if (err < 0) {
+		dev_err(&pdev->dev, "error: irq %d\n", data->irq);
+		goto err_irq;
 	}
 
 	return 0;
@@ -191,21 +186,12 @@ static int adc_jack_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id adc_jack_match[] = {
-	{
-		.compatible = "extcon-adc-jack",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, adc_jack_match);
-
 static struct platform_driver adc_jack_driver = {
 	.probe          = adc_jack_probe,
 	.remove         = adc_jack_remove,
 	.driver         = {
 		.name   = "adc-jack",
 		.owner  = THIS_MODULE,
-	  	.of_match_table	= adc_jack_match,
 	},
 };
 
