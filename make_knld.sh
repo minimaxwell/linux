@@ -150,16 +150,14 @@ make_knld()
 	#===== generating KNL headers for OFL
 	pushd $knl_path/linux
 
-	# making knl config
+	# making knl headers_install for OFL
 	make cmpc885_defconfig
-
-	rm -rf $ofl_path/knl
-	make INSTALL_HDR_PATH=$ofl_path/knl headers_install 
+	make headers_install 
 
 	#===== generating OFL
 	pushd $ofl_path
 	version_ofl=$knl_version
-	. ./gen_main.sh
+	. ./gen_main.sh $knl_path/
 	if [ "$?" != "0" ]; then exit $?; fi
 	rm -rf $knl_path/initramfs
 	cp -a livraison/ $knl_path/initramfs
