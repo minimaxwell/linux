@@ -76,11 +76,9 @@ package_knld()
 	mkdir -p $PATH_PKG/DEBIAN
 	cp ./pkg_knld.control 	$PATH_PKG/DEBIAN/control
 	cp ./pkg_knld.postinst 	$PATH_PKG/DEBIAN/postinst
-	cp ./pkg_knld.preinst 	$PATH_PKG/DEBIAN/preinst
 
 	# replace with the good file name
 	sed -i "s#LINUX_FILE_NAME#/tmp/root/${linux_file}#g" $PATH_PKG/DEBIAN/postinst
-	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/preinst
 	sed -i "s#LINUX_FILE_NAME#${linux_file}#g" $PATH_PKG/DEBIAN/control
 
 	# get KNL version
@@ -90,10 +88,10 @@ package_knld()
 	# replace with the good model
 	case ${board} in
 	"MCR3000_1G")
-		sed -i "s/KNL_MODEL_SUPPORT/MCR3000/g" $PATH_PKG/DEBIAN/preinst;;
+		sed -i "s/KNL_MODEL_SUPPORT/MCR3000/g" $PATH_PKG/DEBIAN/postinst;;
 
 	"CMPC885")
-		sed -i "s/KNL_MODEL_SUPPORT/MCR3000_2G MIAE CMPC885/g" $PATH_PKG/DEBIAN/preinst;;
+		sed -i "s/KNL_MODEL_SUPPORT/MCR3000_2G MIAE CMPC885/g" $PATH_PKG/DEBIAN/postinst;;
 
 	*)
 		echo "pkg_knl: Error model of board unknown"
