@@ -99,7 +99,6 @@ package_knld()
 	esac
 
 	chmod 755 $PATH_PKG/DEBIAN/post*
-	chmod 755 $PATH_PKG/DEBIAN/pre*
 	dpkg-deb --build knld
 
 	# rename the package
