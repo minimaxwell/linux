@@ -74,5 +74,10 @@ struct pose_delay {
 #define SAF3000_PCM_DELAY_REC			_IOW(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_DELAY_REC_IDENT, \
 						struct pose_delay)
+						
+struct tdm_map {
+	unsigned long current_time;
+	unsigned long last_read_time;
+};
 
 #endif
