@@ -74,10 +74,13 @@ struct pose_delay {
 #define SAF3000_PCM_DELAY_REC			_IOW(SAF3000_PCM_IOC_MAGIC, \
 						SAF3000_PCM_DELAY_REC_IDENT, \
 						struct pose_delay)
-						
+
+/** @brief Structure pour le mmap() sur les devices /dev/tdm_xxx */
 struct tdm_map {
-	unsigned long current_time;
-	unsigned long last_read_time;
+	unsigned long current_time; /**< @brief Donne l'heure TDM correspondant a la derniere mise a jour du compteur (en ms) */
+	unsigned long last_read_time; /**< @brief Donne l'heure TDM correspondant a la derniere lecture */
+	unsigned long current_tbl; /**< @brief Donne la valeur de la partie basse de la TIMEBASE */
+	unsigned long tb_ticks_per_msec; /**< @brief Donne le nombre de ticks TIMEBASE par miliseconde */
 };
 
 #endif
