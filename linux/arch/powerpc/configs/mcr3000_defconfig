@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 3.8.13 Kernel Configuration
+# Linux/powerpc 3.8.13.7 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -231,7 +231,7 @@ CONFIG_MCR3000=y
 CONFIG_8xx_COPYBACK=y
 CONFIG_8xx_GPIO=y
 # CONFIG_8xx_CPU6 is not set
-CONFIG_8xx_CPU15=y
+# CONFIG_8xx_CPU15 is not set
 CONFIG_NO_UCODE_PATCH=y
 # CONFIG_USB_SOF_UCODE_PATCH is not set
 # CONFIG_I2C_SPI_UCODE_PATCH is not set
