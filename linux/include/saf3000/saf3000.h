@@ -16,6 +16,7 @@
 #include <linux/device.h>
 
 extern struct class *saf3000_class_get(void);
+extern struct device *saf3000_gpio_device_get(void);
 
 extern void __init u16_gpiochip_init(const char *);
 
