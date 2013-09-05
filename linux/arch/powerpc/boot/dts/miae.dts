@@ -391,6 +391,10 @@
 				"alt_umain_b",
 				"alt_ucasque_a",
 				"alt_ucasque_b";
+			pres  = "pres_ucasque_a",
+				"pres_umain_a",
+				"pres_ucasque_b",
+				"pres_umain_b";
 			codec = "Micro Casque_a",
 				"Micro Main_a",
 				"Micro Casque_b",
@@ -453,6 +457,10 @@
 				"alt_umain_b",
 				"alt_ucasque_a",
 				"alt_ucasque_b";
+			pres  = "pres_ucasque_a",
+				"pres_umain_a",
+				"pres_ucasque_b",
+				"pres_umain_b";
 			codec = "Micro Casque_a",
 				"Micro Main_a",
 				"Micro Casque_b",
@@ -515,6 +523,10 @@
 				"none",
 				"none",
 				"none";
+			pres  = "none",
+				"none",
+				"none",
+				"none";
 			codec = "Micro Casque_a",
 				"not used",
 				"not used",
@@ -557,14 +569,14 @@
 		POT_INS_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
-			user-name = "pot_instructeur";
+			user-name = "pot_a";
 			iio-name = "ad7923";
 			iio-channel = "channel_0";
 		};
 		POT_CTL_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
-			user-name = "pot_controleur";
+			user-name = "pot_b";
 			iio-name = "ad7923";
 			iio-channel = "channel_1";
 		};
