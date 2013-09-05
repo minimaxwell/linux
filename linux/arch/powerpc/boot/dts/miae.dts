@@ -900,8 +900,6 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
-//					interrupts = <17 19 16 18>;	/* Equipt 1 et 2 */
-//					interrupt-parent = <&FPGAM_PIC>;
 				};
 				sicofi_nvcs@4 {
 					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
@@ -914,8 +912,6 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
-//					interrupts = <17 19 16 18>;	/* Equipt 1 et 2 */
-//					interrupt-parent = <&FPGAM_PIC>;
 					iio-name = "ad7923";
 					iio-channel = "channel_2", "channel_3";
 					user-name = "equipt_instructeur", "equipt_controleur";
