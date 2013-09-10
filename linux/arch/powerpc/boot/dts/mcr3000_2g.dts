@@ -249,8 +249,15 @@
 			compatible = "s3k,mcr3000-fpga";
 			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
 			// registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA
+			ranges = <0 4 0x1000000 0x0200>;
 			interrupts = <6 1>;
 			interrupt-parent = <&PIC>;
+			serie: gpio-controller@0E4 {
+				#gpio-cells = <2>;
+				compatible = "s3k,mcr3000-fpga-gpio";
+				reg = <0x0E4 2>;
+				gpio-controller;
+			};
 		};
 		
 		uart-fpga@4,1000000 {
@@ -622,6 +629,8 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
+				gpios = <&serie 9 1		/* CTS4 */
+				         &serie 11 1>;		/* RTS4 */
 			};
 
 			scc4t: tdm@a60 {
@@ -643,6 +652,8 @@
 //				fsl,cpm-brg = <3>; /* normalement mettre une clock venant du FPGA */
 				clock = "fpga";
 				fsl,cpm-command = <0xd0>;
+				gpios = <&serie 8 1		/* CTS5 */
+				         &serie 10 1>;		/* RTS5 */
 			};
 
 			spi: spi@a80 {
