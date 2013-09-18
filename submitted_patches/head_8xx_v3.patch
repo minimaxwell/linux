@@ -1,0 +1,56 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>, scottwood@freescale.com
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH v3] powerpc 8xx: Fixing issue with CONFIG_PIN_TLB
+
+Activating CONFIG_PIN_TLB is supposed to pin the IMMR and the first three
+8Mbytes pages. But the setting of the MD_CTR was missing so as the index is
+decremented every DTLB update, the pinning of the third 8Mbytes page was
+overwriting the DTLB entry for IMMR. At the same time, the last entry written
+being entry 31, next entries would possibly get overwritten after.
+We are now starting from entry 31 and decrementing.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+diff -ur linux-3.11.org/arch/powerpc/kernel/head_8xx.S linux-3.11/arch/powerpc/kernel/head_8xx.S
+--- linux-3.11.org/arch/powerpc/kernel/head_8xx.S	2013-09-02 22:46:10.000000000 +0200
++++ linux-3.11/arch/powerpc/kernel/head_8xx.S	2013-09-09 11:28:54.000000000 +0200
+@@ -796,8 +796,7 @@
+ 
+ #ifdef CONFIG_PIN_TLB
+ 	lis	r10, (MD_RSV4I | MD_RESETVAL)@h
+-	ori	r10, r10, 0x1c00
+-	mr	r8, r10
++	ori	r10, r10, 0x1f00
+ #else
+ 	lis	r10, MD_RESETVAL@h
+ #endif
+@@ -829,7 +828,7 @@
+ 	 * internal registers (among other things).
+ 	 */
+ #ifdef CONFIG_PIN_TLB
+-	addi	r10, r10, 0x0100
++	addi	r10, r10, -0x0100
+ 	mtspr	SPRN_MD_CTR, r10
+ #endif
+ 	mfspr	r9, 638			/* Get current IMMR */
+@@ -848,7 +847,7 @@
+ #ifdef CONFIG_PIN_TLB
+ 	/* Map two more 8M kernel data pages.
+ 	*/
+-	addi	r10, r10, 0x0100
++	addi	r10, r10, -0x0100
+ 	mtspr	SPRN_MD_CTR, r10
+ 
+ 	lis	r8, KERNELBASE@h	/* Create vaddr for TLB */
+@@ -862,6 +861,9 @@
+ 	addis	r11, r11, 0x0080	/* Add 8M */
+ 	mtspr	SPRN_MD_RPN, r11
+ 
++	addi	r10, r10, -0x0100
++	mtspr	SPRN_MD_CTR, r10
++
+ 	addis	r8, r8, 0x0080		/* Add 8M */
+ 	mtspr	SPRN_MD_EPN, r8
+ 	mtspr	SPRN_MD_TWC, r9
