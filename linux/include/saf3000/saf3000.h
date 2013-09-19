@@ -24,6 +24,7 @@ extern void fpga_clk_set_brg(void);
 
 extern void gest_led_debug(int led, int cmde);
 extern int type_fav(void);
+extern int fpga_read_channel(int channel, int *val);
 
 #define FAV_NVCS_LEMO		6
 #define FAV_NVCS_FISCHER	5

@@ -245,7 +245,7 @@
 				#interrupt-cells = <1>;
 				interrupts = <6 1>;
 				interrupt-parent = <&PIC>;
-				reg = <0x00 0x60>;	// Mappage registres FPGAM
+				reg = <0x00 0x60>;	/* Mappage registres FPGAM */
 				compatible = "s3k,miae-pic";
 			};
 		};
@@ -255,10 +255,10 @@
 			interrupts = <17 19 16 18>;	/* Equipt 1 et 2 */
 			interrupt-parent = <&FPGAM_PIC>;
 			reg = <4 0x44 2>;
-			gpios = <&fav   8 1	// Presence µCasque1
-				&fav   10 1	// Presence µMain1
-				&fav   12 1	// Presence µCasque2
-				&fav   14 1>;	// Presence µMain2
+			gpios = <&fav   8 1	/* Presence µCasque1 */
+				&fav   10 1	/* Presence µMain1 */
+				&fav   12 1	/* Presence µCasque2 */
+				&fav   14 1>;	/* Presence µMain2 */
 		};
 
 		led_pwr {
@@ -565,20 +565,59 @@
 				"2967",	"3156",	"-8",	"-4",	"no",	"no",	/* equipement 21 */
 				"3157",	"4095",	"-22",	"-4",	"no",	"yes";	/* sans equipement */
 		};
+
+		FAV_CS_SPI: gpio-controller@dummy0 {
+			#gpio-cells = <2>;
+			compatible = "cs-fav-poste";
+			gpio-controller;
+			reg = <4 0x44 2>;	/* necessaire mais non utilise */
+			gpios = <&fav 5 1	/* CS FAV */
+				 &fav 3 1	/* CS Ident equipement */
+				 &fav 4 1>;	/* CS FPGA */
+		};
 		
-		POT_INS_NVCS {
+		POT_A_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_a";
-			iio-name = "ad7923";
-			iio-channel = "channel_0";
+			dev-name = "ad7923";
+			dev-channel = "channel_0";
 		};
-		POT_CTL_NVCS {
+		POT_B_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_b";
-			iio-name = "ad7923";
-			iio-channel = "channel_1";
+			dev-name = "ad7923";
+			dev-channel = "channel_1";
+		};
+		
+		POT_A_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_a";
+			dev-name = "none";
+			dev-channel = "channel_0";
+		};
+		POT_B_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_b";
+			dev-name = "none";
+			dev-channel = "channel_1";
+		};
+		POT_C_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_c";
+			dev-name = "none";
+			dev-channel = "channel_2";
+		};
+		POT_D_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_d";
+			dev-name = "none";
+			dev-channel = "channel_3";
 		};
 	};
 
@@ -851,7 +890,8 @@
 					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
 					 &CPM1_PIO_B 21 1	/* EEPROM CMPC885 */
-					 &fav 5 1>;		/* FAV */
+					 &FAV_CS_SPI 1 1	/* FAV SPI */
+					 &FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 				sicofi@0 {
 					compatible = "infineon,mcr3000-sicofi";
 					spi-max-frequency = <1000000>;
@@ -891,7 +931,7 @@
 				};
 				sicofi@4 {
 					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
-					fav-id = <0 1 2 3 4 7>;
+					fav-id = <0 1 2 4 7>;
 					spi-max-frequency = <1000000>;
 					reg = <4>;
 					spi-cs-high;
@@ -914,7 +954,20 @@
 					analog_out = "6dB 6dB 6dB 6dB";
 					iio-name = "ad7923";
 					iio-channel = "channel_2", "channel_3";
-					user-name = "equipt_instructeur", "equipt_controleur";
+				};
+				sicofi_postes@4 {
+					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
+					fav-id = <3>;
+					spi-max-frequency = <1000000>;
+					reg = <4>;
+					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec_3";
+					analog_in = "12dB -7dB 12dB -7dB";
+					analog_out = "6dB 6dB 6dB 6dB";
+					iio-name = "ad7923";
+					iio-channel = "channel_0", "channel_1";
 				};
 				lm74@5 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -931,13 +984,13 @@
 					at25,addr-mode = <2>;
 					at25,page-size = <32>;
 				};
-				csfavnvcs@7 {
+				csfav@7 {
 					compatible = "iio,ad7923", "cs,mia-fav";
 					spi-max-frequency = <2000000>;
 					reg = <7>;
 					spi-cs-high;
 					spi-cpol;
-					fav-id = <5 6>;
+					fav-id = <3 5 6>;
 				};
 				gpiofav: csfavgw@7 {
 					compatible = "gpio,max7301", "cs,mia-fav";
@@ -947,6 +1000,13 @@
 					#gpio-cells = <2>;
 					gpio-controller;
 					fav-id = <4>;
+				};
+				csfavfpga@8 {
+					compatible = "cs,fpga-poste", "cs,mia-fav";
+					spi-max-frequency = <2000000>;
+					reg = <8>;
+					spi-cs-high;
+					fav-id = <3>;
 				};
 			};
 			
