@@ -1,6 +1,10 @@
 if X86
 source "drivers/platform/x86/Kconfig"
 endif
+if GOLDFISH
+source "drivers/platform/goldfish/Kconfig"
+endif
+
 if SAF3000
 source "drivers/platform/saf3000/Kconfig"
 endif
