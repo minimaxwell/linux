@@ -1374,7 +1374,7 @@ static void si_select_se_sh(struct radeon_device *rdev,
 	u32 data = INSTANCE_BROADCAST_WRITES;
 
 	if ((se_num == 0xffffffff) && (sh_num == 0xffffffff))
-		data |= SH_BROADCAST_WRITES | SE_BROADCAST_WRITES;
+		data = SH_BROADCAST_WRITES | SE_BROADCAST_WRITES;
 	else if (se_num == 0xffffffff)
 		data |= SE_BROADCAST_WRITES | SH_INDEX(sh_num);
 	else if (sh_num == 0xffffffff)
@@ -1556,7 +1556,7 @@ static void si_gpu_init(struct radeon_device *rdev)
 	default:
 		rdev->config.si.max_shader_engines = 1;
 		rdev->config.si.max_tile_pipes = 4;
-		rdev->config.si.max_cu_per_sh = 5;
+		rdev->config.si.max_cu_per_sh = 2;
 		rdev->config.si.max_sh_per_se = 2;
 		rdev->config.si.max_backends_per_se = 4;
 		rdev->config.si.max_texture_channel_caches = 4;
@@ -1659,7 +1659,6 @@ static void si_gpu_init(struct radeon_device *rdev)
 
 	WREG32(GB_ADDR_CONFIG, gb_addr_config);
 	WREG32(DMIF_ADDR_CONFIG, gb_addr_config);
-	WREG32(DMIF_ADDR_CALC, gb_addr_config);
 	WREG32(HDP_ADDR_CONFIG, gb_addr_config);
 	WREG32(DMA_TILING_CONFIG + DMA0_REGISTER_OFFSET, gb_addr_config);
 	WREG32(DMA_TILING_CONFIG + DMA1_REGISTER_OFFSET, gb_addr_config);
@@ -2411,8 +2410,8 @@ static int si_mc_init(struct radeon_device *rdev)
 	rdev->mc.aper_base = pci_resource_start(rdev->pdev, 0);
 	rdev->mc.aper_size = pci_resource_len(rdev->pdev, 0);
 	/* size in MB on si */
-	rdev->mc.mc_vram_size = RREG32(CONFIG_MEMSIZE) * 1024ULL * 1024ULL;
-	rdev->mc.real_vram_size = RREG32(CONFIG_MEMSIZE) * 1024ULL * 1024ULL;
+	rdev->mc.mc_vram_size = RREG32(CONFIG_MEMSIZE) * 1024 * 1024;
+	rdev->mc.real_vram_size = RREG32(CONFIG_MEMSIZE) * 1024 * 1024;
 	rdev->mc.visible_vram_size = rdev->mc.aper_size;
 	si_vram_gtt_location(rdev, &rdev->mc);
 	radeon_update_bandwidth_info(rdev);
@@ -4137,12 +4136,6 @@ static int si_startup(struct radeon_device *rdev)
 	}
 
 	/* Enable IRQ */
-	if (!rdev->irq.installed) {
-		r = radeon_irq_kms_init(rdev);
-		if (r)
-			return r;
-	}
-
 	r = si_irq_init(rdev);
 	if (r) {
 		DRM_ERROR("radeon: IH init failed (%d).\n", r);
@@ -4239,7 +4232,6 @@ int si_resume(struct radeon_device *rdev)
 
 int si_suspend(struct radeon_device *rdev)
 {
-	radeon_vm_manager_fini(rdev);
 	si_cp_enable(rdev, false);
 	cayman_dma_stop(rdev);
 	si_irq_suspend(rdev);
@@ -4300,6 +4292,10 @@ int si_init(struct radeon_device *rdev)
 		return r;
 	/* Memory manager */
 	r = radeon_bo_init(rdev);
+	if (r)
+		return r;
+
+	r = radeon_irq_kms_init(rdev);
 	if (r)
 		return r;
 

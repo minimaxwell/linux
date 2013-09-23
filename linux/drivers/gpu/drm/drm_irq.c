@@ -704,10 +704,7 @@ int drm_calc_vbltimestamp_from_scanoutpos(struct drm_device *dev, int crtc,
 	/* Subtract time delta from raw timestamp to get final
 	 * vblank_time timestamp for end of vblank.
 	 */
-	if (delta_ns < 0)
-		etime = ktime_add_ns(etime, -delta_ns);
-	else
-		etime = ktime_sub_ns(etime, delta_ns);
+	etime = ktime_sub_ns(etime, delta_ns);
 	*vblank_time = ktime_to_timeval(etime);
 
 	DRM_DEBUG("crtc %d : v %d p(%d,%d)@ %ld.%ld -> %ld.%ld [e %d us, %d rep]\n",
@@ -1052,7 +1049,7 @@ EXPORT_SYMBOL(drm_vblank_off);
  */
 void drm_vblank_pre_modeset(struct drm_device *dev, int crtc)
 {
-	/* vblank is not initialized (IRQ not installed ?), or has been freed */
+	/* vblank is not initialized (IRQ not installed ?) */
 	if (!dev->num_crtcs)
 		return;
 	/*
@@ -1073,10 +1070,6 @@ EXPORT_SYMBOL(drm_vblank_pre_modeset);
 void drm_vblank_post_modeset(struct drm_device *dev, int crtc)
 {
 	unsigned long irqflags;
-
-	/* vblank is not initialized (IRQ not installed ?), or has been freed */
-	if (!dev->num_crtcs)
-		return;
 
 	if (dev->vblank_inmodeset[crtc]) {
 		spin_lock_irqsave(&dev->vbl_lock, irqflags);

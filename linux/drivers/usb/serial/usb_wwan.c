@@ -38,6 +38,7 @@
 
 void usb_wwan_dtr_rts(struct usb_serial_port *port, int on)
 {
+	struct usb_serial *serial = port->serial;
 	struct usb_wwan_port_private *portdata;
 	struct usb_wwan_intf_private *intfdata;
 
@@ -47,11 +48,12 @@ void usb_wwan_dtr_rts(struct usb_serial_port *port, int on)
 		return;
 
 	portdata = usb_get_serial_port_data(port);
-	/* FIXME: locking */
+	mutex_lock(&serial->disc_mutex);
 	portdata->rts_state = on;
 	portdata->dtr_state = on;
-
-	intfdata->send_setup(port);
+	if (serial->dev)
+		intfdata->send_setup(port);
+	mutex_unlock(&serial->disc_mutex);
 }
 EXPORT_SYMBOL(usb_wwan_dtr_rts);
 
@@ -296,18 +298,18 @@ static void usb_wwan_indat_callback(struct urb *urb)
 				dev_dbg(dev, "%s: empty read urb received\n", __func__);
 			tty_kref_put(tty);
 		}
-	}
-	/* Resubmit urb so we continue receiving */
-	err = usb_submit_urb(urb, GFP_ATOMIC);
-	if (err) {
-		if (err != -EPERM) {
-			dev_err(dev, "%s: resubmit read urb failed. (%d)\n",
-				__func__, err);
-			/* busy also in error unless we are killed */
+
+		/* Resubmit urb so we continue receiving */
+		err = usb_submit_urb(urb, GFP_ATOMIC);
+		if (err) {
+			if (err != -EPERM) {
+				dev_err(dev, "%s: resubmit read urb failed. (%d)\n", __func__, err);
+				/* busy also in error unless we are killed */
+				usb_mark_last_busy(port->serial->dev);
+			}
+		} else {
 			usb_mark_last_busy(port->serial->dev);
 		}
-	} else {
-		usb_mark_last_busy(port->serial->dev);
 	}
 }
 

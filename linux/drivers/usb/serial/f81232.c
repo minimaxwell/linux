@@ -47,6 +47,7 @@ MODULE_DEVICE_TABLE(usb, id_table);
 
 struct f81232_private {
 	spinlock_t lock;
+	wait_queue_head_t delta_msr_wait;
 	u8 line_control;
 	u8 line_status;
 };
@@ -111,7 +112,7 @@ static void f81232_process_read_urb(struct urb *urb)
 	line_status = priv->line_status;
 	priv->line_status &= ~UART_STATE_TRANSIENT_MASK;
 	spin_unlock_irqrestore(&priv->lock, flags);
-	wake_up_interruptible(&port->delta_msr_wait);
+	wake_up_interruptible(&priv->delta_msr_wait);
 
 	if (!urb->actual_length)
 		return;
@@ -170,12 +171,11 @@ static void f81232_set_termios(struct tty_struct *tty,
 	/* FIXME - Stubbed out for now */
 
 	/* Don't change anything if nothing has changed */
-	if (old_termios && !tty_termios_hw_change(&tty->termios, old_termios))
+	if (!tty_termios_hw_change(&tty->termios, old_termios))
 		return;
 
 	/* Do the real work here... */
-	if (old_termios)
-		tty_termios_copy_hw(&tty->termios, old_termios);
+	tty_termios_copy_hw(&tty->termios, old_termios);
 }
 
 static int f81232_tiocmget(struct tty_struct *tty)
@@ -193,11 +193,12 @@ static int f81232_tiocmset(struct tty_struct *tty,
 
 static int f81232_open(struct tty_struct *tty, struct usb_serial_port *port)
 {
+	struct ktermios tmp_termios;
 	int result;
 
 	/* Setup termios */
 	if (tty)
-		f81232_set_termios(tty, port, NULL);
+		f81232_set_termios(tty, port, &tmp_termios);
 
 	result = usb_submit_urb(port->interrupt_in_urb, GFP_KERNEL);
 	if (result) {
@@ -260,13 +261,10 @@ static int wait_modem_info(struct usb_serial_port *port, unsigned int arg)
 	spin_unlock_irqrestore(&priv->lock, flags);
 
 	while (1) {
-		interruptible_sleep_on(&port->delta_msr_wait);
+		interruptible_sleep_on(&priv->delta_msr_wait);
 		/* see if a signal did it */
 		if (signal_pending(current))
 			return -ERESTARTSYS;
-
-		if (port->serial->disconnected)
-			return -EIO;
 
 		spin_lock_irqsave(&priv->lock, flags);
 		status = priv->line_status;
@@ -329,6 +327,7 @@ static int f81232_port_probe(struct usb_serial_port *port)
 		return -ENOMEM;
 
 	spin_lock_init(&priv->lock);
+	init_waitqueue_head(&priv->delta_msr_wait);
 
 	usb_set_serial_port_data(port, priv);
 

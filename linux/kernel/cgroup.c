@@ -162,9 +162,6 @@ struct cfent {
 	struct list_head		node;
 	struct dentry			*dentry;
 	struct cftype			*type;
-
-	/* file xattrs */
-	struct simple_xattrs		xattrs;
 };
 
 /*
@@ -429,20 +426,12 @@ static void __put_css_set(struct css_set *cg, int taskexit)
 		struct cgroup *cgrp = link->cgrp;
 		list_del(&link->cg_link_list);
 		list_del(&link->cgrp_link_list);
-
-		/*
-		 * We may not be holding cgroup_mutex, and if cgrp->count is
-		 * dropped to 0 the cgroup can be destroyed at any time, hence
-		 * rcu_read_lock is used to keep it alive.
-		 */
-		rcu_read_lock();
 		if (atomic_dec_and_test(&cgrp->count) &&
 		    notify_on_release(cgrp)) {
 			if (taskexit)
 				set_bit(CGRP_RELEASABLE, &cgrp->flags);
 			check_for_release(cgrp);
 		}
-		rcu_read_unlock();
 
 		kfree(link);
 	}
@@ -911,12 +900,13 @@ static void cgroup_diput(struct dentry *dentry, struct inode *inode)
 	} else {
 		struct cfent *cfe = __d_cfe(dentry);
 		struct cgroup *cgrp = dentry->d_parent->d_fsdata;
+		struct cftype *cft = cfe->type;
 
 		WARN_ONCE(!list_empty(&cfe->node) &&
 			  cgrp != &cgrp->root->top_cgroup,
 			  "cfe still linked for %s\n", cfe->type->name);
-		simple_xattrs_free(&cfe->xattrs);
 		kfree(cfe);
+		simple_xattrs_free(&cft->xattrs);
 	}
 	iput(inode);
 }
@@ -2068,7 +2058,7 @@ static int cgroup_attach_proc(struct cgroup *cgrp, struct task_struct *leader)
 	if (!group)
 		return -ENOMEM;
 	/* pre-allocate to guarantee space while iterating in rcu read-side. */
-	retval = flex_array_prealloc(group, 0, group_size, GFP_KERNEL);
+	retval = flex_array_prealloc(group, 0, group_size - 1, GFP_KERNEL);
 	if (retval)
 		goto out_free_group_list;
 
@@ -2555,7 +2545,7 @@ static struct simple_xattrs *__d_xattrs(struct dentry *dentry)
 	if (S_ISDIR(dentry->d_inode->i_mode))
 		return &__d_cgrp(dentry)->xattrs;
 	else
-		return &__d_cfe(dentry)->xattrs;
+		return &__d_cft(dentry)->xattrs;
 }
 
 static inline int xattr_enabled(struct dentry *dentry)
@@ -2731,6 +2721,8 @@ static int cgroup_add_file(struct cgroup *cgrp, struct cgroup_subsys *subsys,
 	umode_t mode;
 	char name[MAX_CGROUP_TYPE_NAMELEN + MAX_CFTYPE_NAME + 2] = { 0 };
 
+	simple_xattrs_init(&cft->xattrs);
+
 	if (subsys && !test_bit(ROOT_NOPREFIX, &cgrp->root->flags)) {
 		strcpy(name, subsys->name);
 		strcat(name, ".");
@@ -2755,7 +2747,6 @@ static int cgroup_add_file(struct cgroup *cgrp, struct cgroup_subsys *subsys,
 		cfe->type = (void *)cft;
 		cfe->dentry = dentry;
 		dentry->d_fsdata = cfe;
-		simple_xattrs_init(&cfe->xattrs);
 		list_add_tail(&cfe->node, &parent->files);
 		cfe = NULL;
 	}
@@ -2813,17 +2804,13 @@ static void cgroup_cfts_commit(struct cgroup_subsys *ss,
 {
 	LIST_HEAD(pending);
 	struct cgroup *cgrp, *n;
-	struct super_block *sb = ss->root->sb;
 
 	/* %NULL @cfts indicates abort and don't bother if @ss isn't attached */
-	if (cfts && ss->root != &rootnode &&
-	    atomic_inc_not_zero(&sb->s_active)) {
+	if (cfts && ss->root != &rootnode) {
 		list_for_each_entry(cgrp, &ss->root->allcg_list, allcg_node) {
 			dget(cgrp->dentry);
 			list_add_tail(&cgrp->cft_q_node, &pending);
 		}
-	} else {
-		sb = NULL;
 	}
 
 	mutex_unlock(&cgroup_mutex);
@@ -2845,9 +2832,6 @@ static void cgroup_cfts_commit(struct cgroup_subsys *ss,
 		list_del_init(&cgrp->cft_q_node);
 		dput(cgrp->dentry);
 	}
-
-	if (sb)
-		deactivate_super(sb);
 
 	mutex_unlock(&cgroup_cft_mutex);
 }
@@ -3008,8 +2992,11 @@ struct cgroup *cgroup_next_descendant_pre(struct cgroup *pos,
 	WARN_ON_ONCE(!rcu_read_lock_held());
 
 	/* if first iteration, pretend we just visited @cgroup */
-	if (!pos)
+	if (!pos) {
+		if (list_empty(&cgroup->children))
+			return NULL;
 		pos = cgroup;
+	}
 
 	/* visit the first child if exists */
 	next = list_first_or_null_rcu(&pos->children, struct cgroup, sibling);
@@ -3017,14 +3004,14 @@ struct cgroup *cgroup_next_descendant_pre(struct cgroup *pos,
 		return next;
 
 	/* no child, visit my or the closest ancestor's next sibling */
-	while (pos != cgroup) {
+	do {
 		next = list_entry_rcu(pos->sibling.next, struct cgroup,
 				      sibling);
 		if (&next->sibling != &pos->parent->children)
 			return next;
 
 		pos = pos->parent;
-	}
+	} while (pos != cgroup);
 
 	return NULL;
 }
@@ -3755,23 +3742,6 @@ static int cgroup_write_notify_on_release(struct cgroup *cgrp,
 }
 
 /*
- * When dput() is called asynchronously, if umount has been done and
- * then deactivate_super() in cgroup_free_fn() kills the superblock,
- * there's a small window that vfs will see the root dentry with non-zero
- * refcnt and trigger BUG().
- *
- * That's why we hold a reference before dput() and drop it right after.
- */
-static void cgroup_dput(struct cgroup *cgrp)
-{
-	struct super_block *sb = cgrp->root->sb;
-
-	atomic_inc(&sb->s_active);
-	dput(cgrp->dentry);
-	deactivate_super(sb);
-}
-
-/*
  * Unregister event and free resources.
  *
  * Gets called from workqueue.
@@ -3786,7 +3756,7 @@ static void cgroup_event_remove(struct work_struct *work)
 
 	eventfd_ctx_put(event->eventfd);
 	kfree(event);
-	cgroup_dput(cgrp);
+	dput(cgrp->dentry);
 }
 
 /*
@@ -4048,8 +4018,12 @@ static void css_dput_fn(struct work_struct *work)
 {
 	struct cgroup_subsys_state *css =
 		container_of(work, struct cgroup_subsys_state, dput_work);
+	struct dentry *dentry = css->cgroup->dentry;
+	struct super_block *sb = dentry->d_sb;
 
-	cgroup_dput(css->cgroup);
+	atomic_inc(&sb->s_active);
+	dput(dentry);
+	deactivate_super(sb);
 }
 
 static void init_cgroup_css(struct cgroup_subsys_state *css,

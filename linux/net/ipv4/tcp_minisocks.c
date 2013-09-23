@@ -581,13 +581,8 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 		 *
 		 * Note that even if there is new data in the SYN packet
 		 * they will be thrown away too.
-		 *
-		 * Reset timer after retransmitting SYNACK, similar to
-		 * the idea of fast retransmit in recovery.
 		 */
-		if (!inet_rtx_syn_ack(sk, req))
-			req->expires = min(TCP_TIMEOUT_INIT << req->num_timeout,
-					   TCP_RTO_MAX) + jiffies;
+		inet_rtx_syn_ack(sk, req);
 		return NULL;
 	}
 

@@ -1213,13 +1213,11 @@ static bool intel_sdvo_get_hw_state(struct intel_encoder *encoder,
 	struct drm_device *dev = encoder->base.dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct intel_sdvo *intel_sdvo = to_intel_sdvo(&encoder->base);
-	u16 active_outputs;
 	u32 tmp;
 
 	tmp = I915_READ(intel_sdvo->sdvo_reg);
-	intel_sdvo_get_active_outputs(intel_sdvo, &active_outputs);
 
-	if (!(tmp & SDVO_ENABLE) && (active_outputs == 0))
+	if (!(tmp & SDVO_ENABLE))
 		return false;
 
 	if (HAS_PCH_CPT(dev))
@@ -1745,14 +1743,11 @@ static void intel_sdvo_get_lvds_modes(struct drm_connector *connector)
 	 * Assume that the preferred modes are
 	 * arranged in priority order.
 	 */
-	intel_ddc_get_modes(connector, &intel_sdvo->ddc);
+	intel_ddc_get_modes(connector, intel_sdvo->i2c);
+	if (list_empty(&connector->probed_modes) == false)
+		goto end;
 
-	/*
-	 * Fetch modes from VBT. For SDVO prefer the VBT mode since some
-	 * SDVO->LVDS transcoders can't cope with the EDID mode. Since
-	 * drm_mode_probed_add adds the mode at the head of the list we add it
-	 * last.
-	 */
+	/* Fetch modes from VBT */
 	if (dev_priv->sdvo_lvds_vbt_mode != NULL) {
 		newmode = drm_mode_duplicate(connector->dev,
 					     dev_priv->sdvo_lvds_vbt_mode);
@@ -1764,6 +1759,7 @@ static void intel_sdvo_get_lvds_modes(struct drm_connector *connector)
 		}
 	}
 
+end:
 	list_for_each_entry(newmode, &connector->probed_modes, head) {
 		if (newmode->type & DRM_MODE_TYPE_PREFERRED) {
 			intel_sdvo->sdvo_lvds_fixed_mode =
@@ -2708,6 +2704,7 @@ bool intel_sdvo_init(struct drm_device *dev, uint32_t sdvo_reg, bool is_sdvob)
 	struct intel_sdvo *intel_sdvo;
 	u32 hotplug_mask;
 	int i;
+
 	intel_sdvo = kzalloc(sizeof(struct intel_sdvo), GFP_KERNEL);
 	if (!intel_sdvo)
 		return false;

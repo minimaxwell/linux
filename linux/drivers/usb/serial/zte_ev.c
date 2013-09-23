@@ -41,6 +41,9 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	int len;
 	unsigned char *buf;
 
+	if (port->number != 0)
+		return -ENODEV;
+
 	buf = kmalloc(MAX_SETUP_DATA_SIZE, GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
@@ -50,7 +53,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0001, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	/* send  2st cmd and recieve data */
@@ -62,7 +65,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 				 0x21, 0xa1,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 3 cmd */
@@ -81,7 +84,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x20, 0x21,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 4 cmd */
@@ -92,7 +95,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0003, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	/* send 5 cmd */
@@ -104,7 +107,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 				 0x21, 0xa1,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 6 cmd */
@@ -123,7 +126,7 @@ static int zte_ev_usb_serial_open(struct tty_struct *tty,
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x20, 0x21,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 	kfree(buf);
 
@@ -163,6 +166,9 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	int len;
 	unsigned char *buf;
 
+	if (port->number != 0)
+		return;
+
 	buf = kmalloc(MAX_SETUP_DATA_SIZE, GFP_KERNEL);
 	if (!buf)
 		return;
@@ -172,7 +178,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0002, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	/* send 2st ctl cmd(CTL    21 22 03 00  00 00 00 00 ) */
@@ -180,7 +186,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0003, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	/* send  3st cmd and recieve data */
@@ -192,7 +198,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 				 0x21, 0xa1,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 4 cmd */
@@ -211,7 +217,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x20, 0x21,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 5 cmd */
@@ -222,7 +228,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0003, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	/* send 6 cmd */
@@ -234,7 +240,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 				 0x21, 0xa1,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 7 cmd */
@@ -253,7 +259,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x20, 0x21,
 				 0x0000, 0x0000, buf, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	debug_data(dev, __func__, len, buf, result);
 
 	/* send 8 cmd */
@@ -264,7 +270,7 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 	result = usb_control_msg(udev, usb_sndctrlpipe(udev, 0),
 				 0x22, 0x21,
 				 0x0003, 0x0000, NULL, len,
-				 USB_CTRL_GET_TIMEOUT);
+				 HZ * USB_CTRL_GET_TIMEOUT);
 	dev_dbg(dev, "result = %d\n", result);
 
 	kfree(buf);
@@ -273,29 +279,11 @@ static void zte_ev_usb_serial_close(struct usb_serial_port *port)
 }
 
 static const struct usb_device_id id_table[] = {
-	/* AC8710, AC8710T */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x19d2, 0xffff, 0xff, 0xff, 0xff) },
-	 /* AC8700 */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x19d2, 0xfffe, 0xff, 0xff, 0xff) },
-	/* MG880 */
-	{ USB_DEVICE(0x19d2, 0xfffd) },
-	{ USB_DEVICE(0x19d2, 0xfffc) },
-	{ USB_DEVICE(0x19d2, 0xfffb) },
-	/* AC2726, AC8710_V3 */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x19d2, 0xfff1, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE(0x19d2, 0xfff6) },
-	{ USB_DEVICE(0x19d2, 0xfff7) },
-	{ USB_DEVICE(0x19d2, 0xfff8) },
-	{ USB_DEVICE(0x19d2, 0xfff9) },
-	{ USB_DEVICE(0x19d2, 0xffee) },
-	/* AC2716, MC2716 */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x19d2, 0xffed, 0xff, 0xff, 0xff) },
-	/* AD3812 */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x19d2, 0xffeb, 0xff, 0xff, 0xff) },
-	{ USB_DEVICE(0x19d2, 0xffec) },
+	{ USB_DEVICE(0x19d2, 0xffff) },	/* AC8700 */
+	{ USB_DEVICE(0x19d2, 0xfffe) },
+	{ USB_DEVICE(0x19d2, 0xfffd) }, /* MG880 */
 	{ USB_DEVICE(0x05C6, 0x3197) },
 	{ USB_DEVICE(0x05C6, 0x6000) },
-	{ USB_DEVICE(0x05C6, 0x9008) },
 	{ },
 };
 MODULE_DEVICE_TABLE(usb, id_table);

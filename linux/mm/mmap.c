@@ -800,7 +800,7 @@ again:			remove_next = 1 + (end > next->vm_end);
 		anon_vma_interval_tree_post_update_vma(vma);
 		if (adjust_next)
 			anon_vma_interval_tree_post_update_vma(next);
-		anon_vma_unlock_write(anon_vma);
+		anon_vma_unlock(anon_vma);
 	}
 	if (mapping)
 		mutex_unlock(&mapping->i_mmap_mutex);
@@ -1296,24 +1296,15 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 		file = fget(fd);
 		if (!file)
 			goto out;
-		if (is_file_hugepages(file))
-			len = ALIGN(len, huge_page_size(hstate_file(file)));
 	} else if (flags & MAP_HUGETLB) {
 		struct user_struct *user = NULL;
-		struct hstate *hs = hstate_sizelog((flags >> MAP_HUGE_SHIFT) &
-						   SHM_HUGE_MASK);
-
-		if (!hs)
-			return -EINVAL;
-
-		len = ALIGN(len, huge_page_size(hs));
 		/*
 		 * VM_NORESERVE is used because the reservations will be
 		 * taken when vm_ops->mmap() is called
 		 * A dummy user value is used because we are not locking
 		 * memory so no accounting is necessary
 		 */
-		file = hugetlb_file_setup(HUGETLB_ANON_FILE, len,
+		file = hugetlb_file_setup(HUGETLB_ANON_FILE, addr, len,
 				VM_NORESERVE,
 				&user, HUGETLB_ANONHUGE_INODE,
 				(flags >> MAP_HUGE_SHIFT) & MAP_HUGE_MASK);
@@ -1931,7 +1922,7 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 
 	/* Check the cache first. */
 	/* (Cache hit rate is typically around 35%.) */
-	vma = ACCESS_ONCE(mm->mmap_cache);
+	vma = mm->mmap_cache;
 	if (!(vma && vma->vm_end > addr && vma->vm_start <= addr)) {
 		struct rb_node *rb_node;
 
@@ -2178,28 +2169,9 @@ int expand_downwards(struct vm_area_struct *vma,
 	return error;
 }
 
-/*
- * Note how expand_stack() refuses to expand the stack all the way to
- * abut the next virtual mapping, *unless* that mapping itself is also
- * a stack mapping. We want to leave room for a guard page, after all
- * (the guard page itself is not added here, that is done by the
- * actual page faulting logic)
- *
- * This matches the behavior of the guard page logic (see mm/memory.c:
- * check_stack_guard_page()), which only allows the guard page to be
- * removed under these circumstances.
- */
 #ifdef CONFIG_STACK_GROWSUP
 int expand_stack(struct vm_area_struct *vma, unsigned long address)
 {
-	struct vm_area_struct *next;
-
-	address &= PAGE_MASK;
-	next = vma->vm_next;
-	if (next && next->vm_start == address + PAGE_SIZE) {
-		if (!(next->vm_flags & VM_GROWSUP))
-			return -ENOMEM;
-	}
 	return expand_upwards(vma, address);
 }
 
@@ -2222,14 +2194,6 @@ find_extend_vma(struct mm_struct *mm, unsigned long addr)
 #else
 int expand_stack(struct vm_area_struct *vma, unsigned long address)
 {
-	struct vm_area_struct *prev;
-
-	address &= PAGE_MASK;
-	prev = vma->vm_prev;
-	if (prev && prev->vm_end == address) {
-		if (!(prev->vm_flags & VM_GROWSDOWN))
-			return -ENOMEM;
-	}
 	return expand_downwards(vma, address);
 }
 
@@ -2294,11 +2258,11 @@ static void unmap_region(struct mm_struct *mm,
 	struct mmu_gather tlb;
 
 	lru_add_drain();
-	tlb_gather_mmu(&tlb, mm, start, end);
+	tlb_gather_mmu(&tlb, mm, 0);
 	update_hiwater_rss(mm);
 	unmap_vmas(&tlb, vma, start, end);
 	free_pgtables(&tlb, vma, prev ? prev->vm_end : FIRST_USER_ADDRESS,
-				 next ? next->vm_start : USER_PGTABLES_CEILING);
+				 next ? next->vm_start : 0);
 	tlb_finish_mmu(&tlb, start, end);
 }
 
@@ -2671,12 +2635,12 @@ void exit_mmap(struct mm_struct *mm)
 
 	lru_add_drain();
 	flush_cache_mm(mm);
-	tlb_gather_mmu(&tlb, mm, 0, -1);
+	tlb_gather_mmu(&tlb, mm, 1);
 	/* update_hiwater_rss(mm) here? but nobody should be looking */
 	/* Use -1 here to ensure all VMAs in the mm are unmapped */
 	unmap_vmas(&tlb, vma, 0, -1);
 
-	free_pgtables(&tlb, vma, FIRST_USER_ADDRESS, USER_PGTABLES_CEILING);
+	free_pgtables(&tlb, vma, FIRST_USER_ADDRESS, 0);
 	tlb_finish_mmu(&tlb, 0, -1);
 
 	/*
@@ -3037,7 +3001,7 @@ static void vm_unlock_anon_vma(struct anon_vma *anon_vma)
 		if (!__test_and_clear_bit(0, (unsigned long *)
 					  &anon_vma->root->rb_root.rb_node))
 			BUG();
-		anon_vma_unlock_write(anon_vma);
+		anon_vma_unlock(anon_vma);
 	}
 }
 

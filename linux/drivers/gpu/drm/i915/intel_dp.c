@@ -379,7 +379,7 @@ intel_dp_aux_ch(struct intel_dp *intel_dp,
 	 * clock divider.
 	 */
 	if (is_cpu_edp(intel_dp)) {
-		if (HAS_DDI(dev))
+		if (IS_HASWELL(dev))
 			aux_clock_divider = intel_ddi_get_cdclk_freq(dev_priv) >> 1;
 		else if (IS_VALLEYVIEW(dev))
 			aux_clock_divider = 100;
@@ -788,7 +788,6 @@ intel_dp_set_m_n(struct drm_crtc *crtc, struct drm_display_mode *mode,
 	struct intel_dp_m_n m_n;
 	int pipe = intel_crtc->pipe;
 	enum transcoder cpu_transcoder = intel_crtc->cpu_transcoder;
-	int target_clock;
 
 	/*
 	 * Find the lane count in the intel_encoder private
@@ -804,22 +803,13 @@ intel_dp_set_m_n(struct drm_crtc *crtc, struct drm_display_mode *mode,
 		}
 	}
 
-	target_clock = mode->clock;
-	for_each_encoder_on_crtc(dev, crtc, intel_encoder) {
-		if (intel_encoder->type == INTEL_OUTPUT_EDP) {
-			target_clock = intel_edp_target_clock(intel_encoder,
-							      mode);
-			break;
-		}
-	}
-
 	/*
 	 * Compute the GMCH and Link ratios. The '3' here is
 	 * the number of bytes_per_pixel post-LUT, which we always
 	 * set up for 8-bits of R/G/B, or 3 bytes total.
 	 */
 	intel_dp_compute_m_n(intel_crtc->bpp, lane_count,
-			     target_clock, adjusted_mode->clock, &m_n);
+			     mode->clock, adjusted_mode->clock, &m_n);
 
 	if (IS_HASWELL(dev)) {
 		I915_WRITE(PIPE_DATA_M1(cpu_transcoder),
@@ -1801,7 +1791,7 @@ intel_dp_start_link_train(struct intel_dp *intel_dp)
 	int voltage_tries, loop_tries;
 	uint32_t DP = intel_dp->DP;
 
-	if (HAS_DDI(dev))
+	if (IS_HASWELL(dev))
 		intel_ddi_prepare_link_retrain(encoder);
 
 	/* Write the link configuration data */
@@ -1860,7 +1850,7 @@ intel_dp_start_link_train(struct intel_dp *intel_dp)
 		for (i = 0; i < intel_dp->lane_count; i++)
 			if ((intel_dp->train_set[i] & DP_TRAIN_MAX_SWING_REACHED) == 0)
 				break;
-		if (i == intel_dp->lane_count) {
+		if (i == intel_dp->lane_count && voltage_tries == 5) {
 			++loop_tries;
 			if (loop_tries == 5) {
 				DRM_DEBUG_KMS("too many full retries, give up\n");
@@ -1991,7 +1981,7 @@ intel_dp_link_down(struct intel_dp *intel_dp)
 	 *   intel_ddi_prepare_link_retrain will take care of redoing the link
 	 *   train.
 	 */
-	if (HAS_DDI(dev))
+	if (IS_HASWELL(dev))
 		return;
 
 	if (WARN_ON((I915_READ(intel_dp->output_reg) & DP_PORT_EN) == 0))
@@ -2467,14 +2457,17 @@ done:
 static void
 intel_dp_destroy(struct drm_connector *connector)
 {
+	struct drm_device *dev = connector->dev;
 	struct intel_dp *intel_dp = intel_attached_dp(connector);
 	struct intel_connector *intel_connector = to_intel_connector(connector);
 
 	if (!IS_ERR_OR_NULL(intel_connector->edid))
 		kfree(intel_connector->edid);
 
-	if (is_edp(intel_dp))
+	if (is_edp(intel_dp)) {
+		intel_panel_destroy_backlight(dev);
 		intel_panel_fini(&intel_connector->panel);
+	}
 
 	drm_sysfs_connector_remove(connector);
 	drm_connector_cleanup(connector);
@@ -2762,7 +2755,7 @@ intel_dp_init_connector(struct intel_digital_port *intel_dig_port,
 	intel_connector_attach_encoder(intel_connector, intel_encoder);
 	drm_sysfs_connector_add(connector);
 
-	if (HAS_DDI(dev))
+	if (IS_HASWELL(dev))
 		intel_connector->get_hw_state = intel_ddi_connector_get_hw_state;
 	else
 		intel_connector->get_hw_state = intel_connector_get_hw_state;

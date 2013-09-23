@@ -138,74 +138,74 @@ extern int intel_agp_enabled;
 	.driver_data = (unsigned long) info }
 
 static const struct intel_device_info intel_i830_info = {
-	.gen = 2, .is_mobile = 1, .cursor_needs_physical = 1, .num_pipes = 2,
+	.gen = 2, .is_mobile = 1, .cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 
 static const struct intel_device_info intel_845g_info = {
-	.gen = 2, .num_pipes = 1,
+	.gen = 2,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 
 static const struct intel_device_info intel_i85x_info = {
-	.gen = 2, .is_i85x = 1, .is_mobile = 1, .num_pipes = 2,
+	.gen = 2, .is_i85x = 1, .is_mobile = 1,
 	.cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 
 static const struct intel_device_info intel_i865g_info = {
-	.gen = 2, .num_pipes = 1,
+	.gen = 2,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 
 static const struct intel_device_info intel_i915g_info = {
-	.gen = 3, .is_i915g = 1, .cursor_needs_physical = 1, .num_pipes = 2,
+	.gen = 3, .is_i915g = 1, .cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 static const struct intel_device_info intel_i915gm_info = {
-	.gen = 3, .is_mobile = 1, .num_pipes = 2,
+	.gen = 3, .is_mobile = 1,
 	.cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 	.supports_tv = 1,
 };
 static const struct intel_device_info intel_i945g_info = {
-	.gen = 3, .has_hotplug = 1, .cursor_needs_physical = 1, .num_pipes = 2,
+	.gen = 3, .has_hotplug = 1, .cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 };
 static const struct intel_device_info intel_i945gm_info = {
-	.gen = 3, .is_i945gm = 1, .is_mobile = 1, .num_pipes = 2,
+	.gen = 3, .is_i945gm = 1, .is_mobile = 1,
 	.has_hotplug = 1, .cursor_needs_physical = 1,
 	.has_overlay = 1, .overlay_needs_physical = 1,
 	.supports_tv = 1,
 };
 
 static const struct intel_device_info intel_i965g_info = {
-	.gen = 4, .is_broadwater = 1, .num_pipes = 2,
+	.gen = 4, .is_broadwater = 1,
 	.has_hotplug = 1,
 	.has_overlay = 1,
 };
 
 static const struct intel_device_info intel_i965gm_info = {
-	.gen = 4, .is_crestline = 1, .num_pipes = 2,
+	.gen = 4, .is_crestline = 1,
 	.is_mobile = 1, .has_fbc = 1, .has_hotplug = 1,
 	.has_overlay = 1,
 	.supports_tv = 1,
 };
 
 static const struct intel_device_info intel_g33_info = {
-	.gen = 3, .is_g33 = 1, .num_pipes = 2,
+	.gen = 3, .is_g33 = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_overlay = 1,
 };
 
 static const struct intel_device_info intel_g45_info = {
-	.gen = 4, .is_g4x = 1, .need_gfx_hws = 1, .num_pipes = 2,
+	.gen = 4, .is_g4x = 1, .need_gfx_hws = 1,
 	.has_pipe_cxsr = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 };
 
 static const struct intel_device_info intel_gm45_info = {
-	.gen = 4, .is_g4x = 1, .num_pipes = 2,
+	.gen = 4, .is_g4x = 1,
 	.is_mobile = 1, .need_gfx_hws = 1, .has_fbc = 1,
 	.has_pipe_cxsr = 1, .has_hotplug = 1,
 	.supports_tv = 1,
@@ -213,26 +213,26 @@ static const struct intel_device_info intel_gm45_info = {
 };
 
 static const struct intel_device_info intel_pineview_info = {
-	.gen = 3, .is_g33 = 1, .is_pineview = 1, .is_mobile = 1, .num_pipes = 2,
+	.gen = 3, .is_g33 = 1, .is_pineview = 1, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_overlay = 1,
 };
 
 static const struct intel_device_info intel_ironlake_d_info = {
-	.gen = 5, .num_pipes = 2,
+	.gen = 5,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 };
 
 static const struct intel_device_info intel_ironlake_m_info = {
-	.gen = 5, .is_mobile = 1, .num_pipes = 2,
+	.gen = 5, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_fbc = 1,
 	.has_bsd_ring = 1,
 };
 
 static const struct intel_device_info intel_sandybridge_d_info = {
-	.gen = 6, .num_pipes = 2,
+	.gen = 6,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 	.has_blt_ring = 1,
@@ -241,7 +241,7 @@ static const struct intel_device_info intel_sandybridge_d_info = {
 };
 
 static const struct intel_device_info intel_sandybridge_m_info = {
-	.gen = 6, .is_mobile = 1, .num_pipes = 2,
+	.gen = 6, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_fbc = 1,
 	.has_bsd_ring = 1,
@@ -251,7 +251,7 @@ static const struct intel_device_info intel_sandybridge_m_info = {
 };
 
 static const struct intel_device_info intel_ivybridge_d_info = {
-	.is_ivybridge = 1, .gen = 7, .num_pipes = 3,
+	.is_ivybridge = 1, .gen = 7,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 	.has_blt_ring = 1,
@@ -260,7 +260,7 @@ static const struct intel_device_info intel_ivybridge_d_info = {
 };
 
 static const struct intel_device_info intel_ivybridge_m_info = {
-	.is_ivybridge = 1, .gen = 7, .is_mobile = 1, .num_pipes = 3,
+	.is_ivybridge = 1, .gen = 7, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_fbc = 0,	/* FBC is not enabled on Ivybridge mobile yet */
 	.has_bsd_ring = 1,
@@ -270,7 +270,7 @@ static const struct intel_device_info intel_ivybridge_m_info = {
 };
 
 static const struct intel_device_info intel_valleyview_m_info = {
-	.gen = 7, .is_mobile = 1, .num_pipes = 2,
+	.gen = 7, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_fbc = 0,
 	.has_bsd_ring = 1,
@@ -279,7 +279,7 @@ static const struct intel_device_info intel_valleyview_m_info = {
 };
 
 static const struct intel_device_info intel_valleyview_d_info = {
-	.gen = 7, .num_pipes = 2,
+	.gen = 7,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_fbc = 0,
 	.has_bsd_ring = 1,
@@ -288,7 +288,7 @@ static const struct intel_device_info intel_valleyview_d_info = {
 };
 
 static const struct intel_device_info intel_haswell_d_info = {
-	.is_haswell = 1, .gen = 7, .num_pipes = 3,
+	.is_haswell = 1, .gen = 7,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 	.has_blt_ring = 1,
@@ -297,7 +297,7 @@ static const struct intel_device_info intel_haswell_d_info = {
 };
 
 static const struct intel_device_info intel_haswell_m_info = {
-	.is_haswell = 1, .gen = 7, .is_mobile = 1, .num_pipes = 3,
+	.is_haswell = 1, .gen = 7, .is_mobile = 1,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.has_bsd_ring = 1,
 	.has_blt_ring = 1,
@@ -352,68 +352,41 @@ static const struct pci_device_id pciidlist[] = {		/* aka */
 	INTEL_VGA_DEVICE(0x016a, &intel_ivybridge_d_info), /* GT2 server */
 	INTEL_VGA_DEVICE(0x0402, &intel_haswell_d_info), /* GT1 desktop */
 	INTEL_VGA_DEVICE(0x0412, &intel_haswell_d_info), /* GT2 desktop */
-	INTEL_VGA_DEVICE(0x0422, &intel_haswell_d_info), /* GT3 desktop */
+	INTEL_VGA_DEVICE(0x0422, &intel_haswell_d_info), /* GT2 desktop */
 	INTEL_VGA_DEVICE(0x040a, &intel_haswell_d_info), /* GT1 server */
 	INTEL_VGA_DEVICE(0x041a, &intel_haswell_d_info), /* GT2 server */
-	INTEL_VGA_DEVICE(0x042a, &intel_haswell_d_info), /* GT3 server */
+	INTEL_VGA_DEVICE(0x042a, &intel_haswell_d_info), /* GT2 server */
 	INTEL_VGA_DEVICE(0x0406, &intel_haswell_m_info), /* GT1 mobile */
 	INTEL_VGA_DEVICE(0x0416, &intel_haswell_m_info), /* GT2 mobile */
 	INTEL_VGA_DEVICE(0x0426, &intel_haswell_m_info), /* GT2 mobile */
-	INTEL_VGA_DEVICE(0x040B, &intel_haswell_d_info), /* GT1 reserved */
-	INTEL_VGA_DEVICE(0x041B, &intel_haswell_d_info), /* GT2 reserved */
-	INTEL_VGA_DEVICE(0x042B, &intel_haswell_d_info), /* GT3 reserved */
-	INTEL_VGA_DEVICE(0x040E, &intel_haswell_d_info), /* GT1 reserved */
-	INTEL_VGA_DEVICE(0x041E, &intel_haswell_d_info), /* GT2 reserved */
-	INTEL_VGA_DEVICE(0x042E, &intel_haswell_d_info), /* GT3 reserved */
 	INTEL_VGA_DEVICE(0x0C02, &intel_haswell_d_info), /* SDV GT1 desktop */
 	INTEL_VGA_DEVICE(0x0C12, &intel_haswell_d_info), /* SDV GT2 desktop */
-	INTEL_VGA_DEVICE(0x0C22, &intel_haswell_d_info), /* SDV GT3 desktop */
+	INTEL_VGA_DEVICE(0x0C22, &intel_haswell_d_info), /* SDV GT2 desktop */
 	INTEL_VGA_DEVICE(0x0C0A, &intel_haswell_d_info), /* SDV GT1 server */
 	INTEL_VGA_DEVICE(0x0C1A, &intel_haswell_d_info), /* SDV GT2 server */
-	INTEL_VGA_DEVICE(0x0C2A, &intel_haswell_d_info), /* SDV GT3 server */
+	INTEL_VGA_DEVICE(0x0C2A, &intel_haswell_d_info), /* SDV GT2 server */
 	INTEL_VGA_DEVICE(0x0C06, &intel_haswell_m_info), /* SDV GT1 mobile */
 	INTEL_VGA_DEVICE(0x0C16, &intel_haswell_m_info), /* SDV GT2 mobile */
-	INTEL_VGA_DEVICE(0x0C26, &intel_haswell_m_info), /* SDV GT3 mobile */
-	INTEL_VGA_DEVICE(0x0C0B, &intel_haswell_d_info), /* SDV GT1 reserved */
-	INTEL_VGA_DEVICE(0x0C1B, &intel_haswell_d_info), /* SDV GT2 reserved */
-	INTEL_VGA_DEVICE(0x0C2B, &intel_haswell_d_info), /* SDV GT3 reserved */
-	INTEL_VGA_DEVICE(0x0C0E, &intel_haswell_d_info), /* SDV GT1 reserved */
-	INTEL_VGA_DEVICE(0x0C1E, &intel_haswell_d_info), /* SDV GT2 reserved */
-	INTEL_VGA_DEVICE(0x0C2E, &intel_haswell_d_info), /* SDV GT3 reserved */
+	INTEL_VGA_DEVICE(0x0C26, &intel_haswell_m_info), /* SDV GT2 mobile */
 	INTEL_VGA_DEVICE(0x0A02, &intel_haswell_d_info), /* ULT GT1 desktop */
 	INTEL_VGA_DEVICE(0x0A12, &intel_haswell_d_info), /* ULT GT2 desktop */
-	INTEL_VGA_DEVICE(0x0A22, &intel_haswell_d_info), /* ULT GT3 desktop */
+	INTEL_VGA_DEVICE(0x0A22, &intel_haswell_d_info), /* ULT GT2 desktop */
 	INTEL_VGA_DEVICE(0x0A0A, &intel_haswell_d_info), /* ULT GT1 server */
 	INTEL_VGA_DEVICE(0x0A1A, &intel_haswell_d_info), /* ULT GT2 server */
-	INTEL_VGA_DEVICE(0x0A2A, &intel_haswell_d_info), /* ULT GT3 server */
+	INTEL_VGA_DEVICE(0x0A2A, &intel_haswell_d_info), /* ULT GT2 server */
 	INTEL_VGA_DEVICE(0x0A06, &intel_haswell_m_info), /* ULT GT1 mobile */
 	INTEL_VGA_DEVICE(0x0A16, &intel_haswell_m_info), /* ULT GT2 mobile */
-	INTEL_VGA_DEVICE(0x0A26, &intel_haswell_m_info), /* ULT GT3 mobile */
-	INTEL_VGA_DEVICE(0x0A0B, &intel_haswell_d_info), /* ULT GT1 reserved */
-	INTEL_VGA_DEVICE(0x0A1B, &intel_haswell_d_info), /* ULT GT2 reserved */
-	INTEL_VGA_DEVICE(0x0A2B, &intel_haswell_d_info), /* ULT GT3 reserved */
-	INTEL_VGA_DEVICE(0x0A0E, &intel_haswell_m_info), /* ULT GT1 reserved */
-	INTEL_VGA_DEVICE(0x0A1E, &intel_haswell_m_info), /* ULT GT2 reserved */
-	INTEL_VGA_DEVICE(0x0A2E, &intel_haswell_m_info), /* ULT GT3 reserved */
-	INTEL_VGA_DEVICE(0x0D02, &intel_haswell_d_info), /* CRW GT1 desktop */
-	INTEL_VGA_DEVICE(0x0D12, &intel_haswell_d_info), /* CRW GT2 desktop */
-	INTEL_VGA_DEVICE(0x0D22, &intel_haswell_d_info), /* CRW GT3 desktop */
-	INTEL_VGA_DEVICE(0x0D0A, &intel_haswell_d_info), /* CRW GT1 server */
-	INTEL_VGA_DEVICE(0x0D1A, &intel_haswell_d_info), /* CRW GT2 server */
-	INTEL_VGA_DEVICE(0x0D2A, &intel_haswell_d_info), /* CRW GT3 server */
-	INTEL_VGA_DEVICE(0x0D06, &intel_haswell_m_info), /* CRW GT1 mobile */
-	INTEL_VGA_DEVICE(0x0D16, &intel_haswell_m_info), /* CRW GT2 mobile */
-	INTEL_VGA_DEVICE(0x0D26, &intel_haswell_m_info), /* CRW GT3 mobile */
-	INTEL_VGA_DEVICE(0x0D0B, &intel_haswell_d_info), /* CRW GT1 reserved */
-	INTEL_VGA_DEVICE(0x0D1B, &intel_haswell_d_info), /* CRW GT2 reserved */
-	INTEL_VGA_DEVICE(0x0D2B, &intel_haswell_d_info), /* CRW GT3 reserved */
-	INTEL_VGA_DEVICE(0x0D0E, &intel_haswell_d_info), /* CRW GT1 reserved */
-	INTEL_VGA_DEVICE(0x0D1E, &intel_haswell_d_info), /* CRW GT2 reserved */
-	INTEL_VGA_DEVICE(0x0D2E, &intel_haswell_d_info), /* CRW GT3 reserved */
+	INTEL_VGA_DEVICE(0x0A26, &intel_haswell_m_info), /* ULT GT2 mobile */
+	INTEL_VGA_DEVICE(0x0D12, &intel_haswell_d_info), /* CRW GT1 desktop */
+	INTEL_VGA_DEVICE(0x0D22, &intel_haswell_d_info), /* CRW GT2 desktop */
+	INTEL_VGA_DEVICE(0x0D32, &intel_haswell_d_info), /* CRW GT2 desktop */
+	INTEL_VGA_DEVICE(0x0D1A, &intel_haswell_d_info), /* CRW GT1 server */
+	INTEL_VGA_DEVICE(0x0D2A, &intel_haswell_d_info), /* CRW GT2 server */
+	INTEL_VGA_DEVICE(0x0D3A, &intel_haswell_d_info), /* CRW GT2 server */
+	INTEL_VGA_DEVICE(0x0D16, &intel_haswell_m_info), /* CRW GT1 mobile */
+	INTEL_VGA_DEVICE(0x0D26, &intel_haswell_m_info), /* CRW GT2 mobile */
+	INTEL_VGA_DEVICE(0x0D36, &intel_haswell_m_info), /* CRW GT2 mobile */
 	INTEL_VGA_DEVICE(0x0f30, &intel_valleyview_m_info),
-	INTEL_VGA_DEVICE(0x0f31, &intel_valleyview_m_info),
-	INTEL_VGA_DEVICE(0x0f32, &intel_valleyview_m_info),
-	INTEL_VGA_DEVICE(0x0f33, &intel_valleyview_m_info),
 	INTEL_VGA_DEVICE(0x0157, &intel_valleyview_m_info),
 	INTEL_VGA_DEVICE(0x0155, &intel_valleyview_d_info),
 	{0, 0, 0}
@@ -617,7 +590,7 @@ static int i915_drm_thaw(struct drm_device *dev)
 {
 	int error = 0;
 
-	intel_gt_sanitize(dev);
+	intel_gt_reset(dev);
 
 	if (drm_core_check_feature(dev, DRIVER_MODESET)) {
 		mutex_lock(&dev->struct_mutex);
@@ -643,7 +616,7 @@ int i915_resume(struct drm_device *dev)
 
 	pci_set_master(dev->pdev);
 
-	intel_gt_sanitize(dev);
+	intel_gt_reset(dev);
 
 	/*
 	 * Platforms with opregion should have sane BIOS, older ones (gen3 and
@@ -1247,23 +1220,23 @@ ilk_dummy_write(struct drm_i915_private *dev_priv)
 
 #define __i915_read(x, y) \
 u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg) { \
-	unsigned long irqflags; \
 	u##x val = 0; \
-	spin_lock_irqsave(&dev_priv->gt_lock, irqflags); \
 	if (IS_GEN5(dev_priv->dev)) \
 		ilk_dummy_write(dev_priv); \
 	if (NEEDS_FORCE_WAKE((dev_priv), (reg))) { \
+		unsigned long irqflags; \
+		spin_lock_irqsave(&dev_priv->gt_lock, irqflags); \
 		if (dev_priv->forcewake_count == 0) \
 			dev_priv->gt.force_wake_get(dev_priv); \
 		val = read##y(dev_priv->regs + reg); \
 		if (dev_priv->forcewake_count == 0) \
 			dev_priv->gt.force_wake_put(dev_priv); \
+		spin_unlock_irqrestore(&dev_priv->gt_lock, irqflags); \
 	} else if (IS_VALLEYVIEW(dev_priv->dev) && IS_DISPLAYREG(reg)) { \
 		val = read##y(dev_priv->regs + reg + 0x180000);		\
 	} else { \
 		val = read##y(dev_priv->regs + reg); \
 	} \
-	spin_unlock_irqrestore(&dev_priv->gt_lock, irqflags); \
 	trace_i915_reg_rw(false, reg, val, sizeof(val)); \
 	return val; \
 }
@@ -1276,10 +1249,8 @@ __i915_read(64, q)
 
 #define __i915_write(x, y) \
 void i915_write##x(struct drm_i915_private *dev_priv, u32 reg, u##x val) { \
-	unsigned long irqflags; \
 	u32 __fifo_ret = 0; \
 	trace_i915_reg_rw(true, reg, val, sizeof(val)); \
-	spin_lock_irqsave(&dev_priv->gt_lock, irqflags); \
 	if (NEEDS_FORCE_WAKE((dev_priv), (reg))) { \
 		__fifo_ret = __gen6_gt_wait_for_fifo(dev_priv); \
 	} \
@@ -1301,7 +1272,6 @@ void i915_write##x(struct drm_i915_private *dev_priv, u32 reg, u##x val) { \
 		DRM_ERROR("Unclaimed write to %x\n", reg); \
 		writel(ERR_INT_MMIO_UNCLAIMED, dev_priv->regs + GEN7_ERR_INT);	\
 	} \
-	spin_unlock_irqrestore(&dev_priv->gt_lock, irqflags); \
 }
 __i915_write(8, b)
 __i915_write(16, w)

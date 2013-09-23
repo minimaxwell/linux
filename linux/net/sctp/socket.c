@@ -4002,12 +4002,6 @@ SCTP_STATIC void sctp_destroy_sock(struct sock *sk)
 
 	/* Release our hold on the endpoint. */
 	sp = sctp_sk(sk);
-	/* This could happen during socket init, thus we bail out
-	 * early, since the rest of the below is not setup either.
-	 */
-	if (sp->ep == NULL)
-		return;
-
 	if (sp->do_auto_asconf) {
 		sp->do_auto_asconf = 0;
 		list_del(&sp->auto_asconf_list);
@@ -5659,9 +5653,6 @@ static int sctp_getsockopt_assoc_stats(struct sock *sk, int len,
 	if (len < sizeof(sctp_assoc_t))
 		return -EINVAL;
 
-	/* Allow the struct to grow and fill in as much as possible */
-	len = min_t(size_t, len, sizeof(sas));
-
 	if (copy_from_user(&sas, optval, len))
 		return -EFAULT;
 
@@ -5694,6 +5685,9 @@ static int sctp_getsockopt_assoc_stats(struct sock *sk, int len,
 
 	/* Mark beginning of a new observation period */
 	asoc->stats.max_obs_rto = asoc->rto_min;
+
+	/* Allow the struct to grow and fill in as much as possible */
+	len = min_t(size_t, len, sizeof(sas));
 
 	if (put_user(len, optlen))
 		return -EFAULT;

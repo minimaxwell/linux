@@ -200,8 +200,8 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 	}
 
 	if (*min_uV > *max_uV) {
-		rdev_err(rdev, "Restricting voltage, %u-%uuV\n",
-			*min_uV, *max_uV);
+		dev_err(regulator->dev, "Restricting voltage, %u-%uuV\n",
+			regulator->min_uV, regulator->max_uV);
 		return -EINVAL;
 	}
 
@@ -3032,13 +3032,9 @@ int regulator_bulk_enable(int num_consumers,
 	return 0;
 
 err:
-	for (i = 0; i < num_consumers; i++) {
-		if (consumers[i].ret < 0)
-			pr_err("Failed to enable %s: %d\n", consumers[i].supply,
-			       consumers[i].ret);
-		else
-			regulator_disable(consumers[i].consumer);
-	}
+	pr_err("Failed to enable %s: %d\n", consumers[i].supply, ret);
+	while (--i >= 0)
+		regulator_disable(consumers[i].consumer);
 
 	return ret;
 }

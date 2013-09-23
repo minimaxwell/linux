@@ -693,6 +693,8 @@ void nd_jump_link(struct nameidata *nd, struct path *path)
 	nd->path = *path;
 	nd->inode = nd->path.dentry->d_inode;
 	nd->flags |= LOOKUP_JUMPED;
+
+	BUG_ON(nd->inode->i_op->follow_link);
 }
 
 static inline void put_link(struct nameidata *nd, struct path *link, void *cookie)
@@ -2749,7 +2751,7 @@ static int do_last(struct nameidata *nd, struct path *path,
 		if (error)
 			return error;
 
-		audit_inode(name, dir, LOOKUP_PARENT);
+		audit_inode(name, dir, 0);
 		error = -EISDIR;
 		/* trailing slashes? */
 		if (nd->last.name[nd->last.len])

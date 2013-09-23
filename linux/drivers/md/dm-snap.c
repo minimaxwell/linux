@@ -1119,7 +1119,6 @@ static int snapshot_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	s->pending_pool = mempool_create_slab_pool(MIN_IOS, pending_cache);
 	if (!s->pending_pool) {
 		ti->error = "Could not allocate mempool for pending exceptions";
-		r = -ENOMEM;
 		goto bad_pending_pool;
 	}
 
@@ -1838,8 +1837,8 @@ static void snapshot_merge_resume(struct dm_target *ti)
 	start_merge(s);
 }
 
-static void snapshot_status(struct dm_target *ti, status_type_t type,
-			    unsigned status_flags, char *result, unsigned maxlen)
+static int snapshot_status(struct dm_target *ti, status_type_t type,
+			   unsigned status_flags, char *result, unsigned maxlen)
 {
 	unsigned sz = 0;
 	struct dm_snapshot *snap = ti->private;
@@ -1885,6 +1884,8 @@ static void snapshot_status(struct dm_target *ti, status_type_t type,
 					  maxlen - sz);
 		break;
 	}
+
+	return 0;
 }
 
 static int snapshot_iterate_devices(struct dm_target *ti,
@@ -2138,8 +2139,8 @@ static void origin_resume(struct dm_target *ti)
 	ti->max_io_len = get_origin_minimum_chunksize(dev->bdev);
 }
 
-static void origin_status(struct dm_target *ti, status_type_t type,
-			  unsigned status_flags, char *result, unsigned maxlen)
+static int origin_status(struct dm_target *ti, status_type_t type,
+			 unsigned status_flags, char *result, unsigned maxlen)
 {
 	struct dm_dev *dev = ti->private;
 
@@ -2152,6 +2153,8 @@ static void origin_status(struct dm_target *ti, status_type_t type,
 		snprintf(result, maxlen, "%s", dev->name);
 		break;
 	}
+
+	return 0;
 }
 
 static int origin_merge(struct dm_target *ti, struct bvec_merge_data *bvm,
@@ -2178,7 +2181,7 @@ static int origin_iterate_devices(struct dm_target *ti,
 
 static struct target_type origin_target = {
 	.name    = "snapshot-origin",
-	.version = {1, 8, 1},
+	.version = {1, 8, 0},
 	.module  = THIS_MODULE,
 	.ctr     = origin_ctr,
 	.dtr     = origin_dtr,
@@ -2191,7 +2194,7 @@ static struct target_type origin_target = {
 
 static struct target_type snapshot_target = {
 	.name    = "snapshot",
-	.version = {1, 11, 1},
+	.version = {1, 11, 0},
 	.module  = THIS_MODULE,
 	.ctr     = snapshot_ctr,
 	.dtr     = snapshot_dtr,
@@ -2304,5 +2307,3 @@ module_exit(dm_snapshot_exit);
 MODULE_DESCRIPTION(DM_NAME " snapshot target");
 MODULE_AUTHOR("Joe Thornber");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("dm-snapshot-origin");
-MODULE_ALIAS("dm-snapshot-merge");

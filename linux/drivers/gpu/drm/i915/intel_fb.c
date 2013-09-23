@@ -233,7 +233,7 @@ int intel_fbdev_init(struct drm_device *dev)
 	ifbdev->helper.funcs = &intel_fb_helper_funcs;
 
 	ret = drm_fb_helper_init(dev, &ifbdev->helper,
-				 INTEL_INFO(dev)->num_pipes,
+				 dev_priv->num_pipe,
 				 INTELFB_CONN_LIMIT);
 	if (ret) {
 		kfree(ifbdev);

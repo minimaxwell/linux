@@ -584,16 +584,17 @@ static int data_ep_set_params(struct snd_usb_endpoint *ep,
 	ep->stride = frame_bits >> 3;
 	ep->silence_value = pcm_format == SNDRV_PCM_FORMAT_U8 ? 0x80 : 0;
 
-	/* assume max. frequency is 25% higher than nominal */
-	ep->freqmax = ep->freqn + (ep->freqn >> 2);
-	maxsize = ((ep->freqmax + 0xffff) * (frame_bits >> 3))
-				>> (16 - ep->datainterval);
-	/* but wMaxPacketSize might reduce this */
-	if (ep->maxpacksize && ep->maxpacksize < maxsize) {
+	/* calculate max. frequency */
+	if (ep->maxpacksize) {
 		/* whatever fits into a max. size packet */
 		maxsize = ep->maxpacksize;
 		ep->freqmax = (maxsize / (frame_bits >> 3))
 				<< (16 - ep->datainterval);
+	} else {
+		/* no max. packet size: just take 25% higher than nominal */
+		ep->freqmax = ep->freqn + (ep->freqn >> 2);
+		maxsize = ((ep->freqmax + 0xffff) * (frame_bits >> 3))
+				>> (16 - ep->datainterval);
 	}
 
 	if (ep->fill_max)
@@ -676,7 +677,7 @@ static int data_ep_set_params(struct snd_usb_endpoint *ep,
 		if (!u->urb->transfer_buffer)
 			goto out_of_memory;
 		u->urb->pipe = ep->pipe;
-		u->urb->transfer_flags = URB_NO_TRANSFER_DMA_MAP;
+		u->urb->transfer_flags = URB_ISO_ASAP | URB_NO_TRANSFER_DMA_MAP;
 		u->urb->interval = 1 << ep->datainterval;
 		u->urb->context = u;
 		u->urb->complete = snd_complete_urb;
@@ -715,7 +716,8 @@ static int sync_ep_set_params(struct snd_usb_endpoint *ep,
 		u->urb->transfer_dma = ep->sync_dma + i * 4;
 		u->urb->transfer_buffer_length = 4;
 		u->urb->pipe = ep->pipe;
-		u->urb->transfer_flags = URB_NO_TRANSFER_DMA_MAP;
+		u->urb->transfer_flags = URB_ISO_ASAP |
+					 URB_NO_TRANSFER_DMA_MAP;
 		u->urb->number_of_packets = 1;
 		u->urb->interval = 1 << ep->syncinterval;
 		u->urb->context = u;

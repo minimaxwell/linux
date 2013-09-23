@@ -339,8 +339,7 @@ static void handle_tx(struct vhost_net *net)
 				msg.msg_controllen = 0;
 				ubufs = NULL;
 			} else {
-				struct ubuf_info *ubuf;
-				ubuf = vq->ubuf_info + vq->upend_idx;
+				struct ubuf_info *ubuf = &vq->ubuf_info[head];
 
 				vq->heads[vq->upend_idx].len =
 					VHOST_DMA_IN_PROGRESS;
@@ -353,8 +352,7 @@ static void handle_tx(struct vhost_net *net)
 				kref_get(&ubufs->kref);
 			}
 			vq->upend_idx = (vq->upend_idx + 1) % UIO_MAXIOV;
-		} else
-			msg.msg_control = NULL;
+		}
 		/* TODO: Check specific error and bomb out unless ENOBUFS? */
 		err = sock->ops->sendmsg(NULL, sock, &msg, len);
 		if (unlikely(err < 0)) {

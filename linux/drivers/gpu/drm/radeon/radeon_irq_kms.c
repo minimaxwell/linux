@@ -241,6 +241,9 @@ int radeon_irq_kms_init(struct radeon_device *rdev)
 {
 	int r = 0;
 
+	INIT_WORK(&rdev->hotplug_work, radeon_hotplug_work_func);
+	INIT_WORK(&rdev->audio_work, r600_audio_update_hdmi);
+
 	spin_lock_init(&rdev->irq.lock);
 	r = drm_vblank_init(rdev->ddev, rdev->num_crtc);
 	if (r) {
@@ -262,10 +265,6 @@ int radeon_irq_kms_init(struct radeon_device *rdev)
 		rdev->irq.installed = false;
 		return r;
 	}
-
-	INIT_WORK(&rdev->hotplug_work, radeon_hotplug_work_func);
-	INIT_WORK(&rdev->audio_work, r600_audio_update_hdmi);
-
 	DRM_INFO("radeon: irq initialized.\n");
 	return 0;
 }
@@ -285,8 +284,8 @@ void radeon_irq_kms_fini(struct radeon_device *rdev)
 		rdev->irq.installed = false;
 		if (rdev->msi_enabled)
 			pci_disable_msi(rdev->pdev);
-		flush_work(&rdev->hotplug_work);
 	}
+	flush_work(&rdev->hotplug_work);
 }
 
 /**
@@ -401,9 +400,6 @@ void radeon_irq_kms_enable_afmt(struct radeon_device *rdev, int block)
 {
 	unsigned long irqflags;
 
-	if (!rdev->ddev->irq_enabled)
-		return;
-
 	spin_lock_irqsave(&rdev->irq.lock, irqflags);
 	rdev->irq.afmt[block] = true;
 	radeon_irq_set(rdev);
@@ -422,9 +418,6 @@ void radeon_irq_kms_enable_afmt(struct radeon_device *rdev, int block)
 void radeon_irq_kms_disable_afmt(struct radeon_device *rdev, int block)
 {
 	unsigned long irqflags;
-
-	if (!rdev->ddev->irq_enabled)
-		return;
 
 	spin_lock_irqsave(&rdev->irq.lock, irqflags);
 	rdev->irq.afmt[block] = false;
@@ -445,9 +438,6 @@ void radeon_irq_kms_enable_hpd(struct radeon_device *rdev, unsigned hpd_mask)
 	unsigned long irqflags;
 	int i;
 
-	if (!rdev->ddev->irq_enabled)
-		return;
-
 	spin_lock_irqsave(&rdev->irq.lock, irqflags);
 	for (i = 0; i < RADEON_MAX_HPD_PINS; ++i)
 		rdev->irq.hpd[i] |= !!(hpd_mask & (1 << i));
@@ -467,9 +457,6 @@ void radeon_irq_kms_disable_hpd(struct radeon_device *rdev, unsigned hpd_mask)
 {
 	unsigned long irqflags;
 	int i;
-
-	if (!rdev->ddev->irq_enabled)
-		return;
 
 	spin_lock_irqsave(&rdev->irq.lock, irqflags);
 	for (i = 0; i < RADEON_MAX_HPD_PINS; ++i)

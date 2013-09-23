@@ -38,7 +38,7 @@ ENTRY(_start)
 	  movei r2, TILE_CHIP_REV
 	}
 	{
-	  moveli r0, _HV_VERSION_OLD_HV_INIT
+	  moveli r0, _HV_VERSION
 	  jal hv_init
 	}
 	/* Get a reasonable default ASID in r0 */

@@ -651,8 +651,6 @@ tree_mod_log_insert_root(struct btrfs_fs_info *fs_info,
 	if (tree_mod_dont_log(fs_info, NULL))
 		return 0;
 
-	__tree_mod_log_free_eb(fs_info, old_root);
-
 	ret = tree_mod_alloc(fs_info, flags, &tm);
 	if (ret < 0)
 		goto out;
@@ -738,7 +736,7 @@ tree_mod_log_search(struct btrfs_fs_info *fs_info, u64 start, u64 min_seq)
 static noinline void
 tree_mod_log_eb_copy(struct btrfs_fs_info *fs_info, struct extent_buffer *dst,
 		     struct extent_buffer *src, unsigned long dst_offset,
-		     unsigned long src_offset, int nr_items, int log_removal)
+		     unsigned long src_offset, int nr_items)
 {
 	int ret;
 	int i;
@@ -752,12 +750,10 @@ tree_mod_log_eb_copy(struct btrfs_fs_info *fs_info, struct extent_buffer *dst,
 	}
 
 	for (i = 0; i < nr_items; i++) {
-		if (log_removal) {
-			ret = tree_mod_log_insert_key_locked(fs_info, src,
-							i + src_offset,
-							MOD_LOG_KEY_REMOVE);
-			BUG_ON(ret < 0);
-		}
+		ret = tree_mod_log_insert_key_locked(fs_info, src,
+						     i + src_offset,
+						     MOD_LOG_KEY_REMOVE);
+		BUG_ON(ret < 0);
 		ret = tree_mod_log_insert_key_locked(fs_info, dst,
 						     i + dst_offset,
 						     MOD_LOG_KEY_ADD);
@@ -931,6 +927,7 @@ static noinline int update_ref_for_cow(struct btrfs_trans_handle *trans,
 			ret = btrfs_dec_ref(trans, root, buf, 1, 1);
 			BUG_ON(ret); /* -ENOMEM */
 		}
+		tree_mod_log_free_eb(root->fs_info, buf);
 		clean_tree_block(trans, root, buf);
 		*last_ref = 1;
 	}
@@ -1049,8 +1046,6 @@ static noinline int __btrfs_cow_block(struct btrfs_trans_handle *trans,
 		btrfs_set_node_ptr_generation(parent, parent_slot,
 					      trans->transid);
 		btrfs_mark_buffer_dirty(parent);
-		if (last_ref)
-			tree_mod_log_free_eb(root->fs_info, buf);
 		btrfs_free_tree_block(trans, root, buf, parent_start,
 				      last_ref);
 	}
@@ -1123,8 +1118,8 @@ __tree_mod_log_oldest_root(struct btrfs_fs_info *fs_info,
  * time_seq).
  */
 static void
-__tree_mod_log_rewind(struct btrfs_fs_info *fs_info, struct extent_buffer *eb,
-		      u64 time_seq, struct tree_mod_elem *first_tm)
+__tree_mod_log_rewind(struct extent_buffer *eb, u64 time_seq,
+		      struct tree_mod_elem *first_tm)
 {
 	u32 n;
 	struct rb_node *next;
@@ -1134,7 +1129,6 @@ __tree_mod_log_rewind(struct btrfs_fs_info *fs_info, struct extent_buffer *eb,
 	unsigned long p_size = sizeof(struct btrfs_key_ptr);
 
 	n = btrfs_header_nritems(eb);
-	tree_mod_log_read_lock(fs_info);
 	while (tm && tm->seq >= time_seq) {
 		/*
 		 * all the operations are recorded with the operator used for
@@ -1188,17 +1182,9 @@ __tree_mod_log_rewind(struct btrfs_fs_info *fs_info, struct extent_buffer *eb,
 		if (tm->index != first_tm->index)
 			break;
 	}
-	tree_mod_log_read_unlock(fs_info);
 	btrfs_set_header_nritems(eb, n);
 }
 
-/*
- * Called with eb read locked. If the buffer cannot be rewinded, the same buffer
- * is returned. If rewind operations happen, a fresh buffer is returned. The
- * returned buffer is always read-locked. If the returned buffer is not the
- * input buffer, the lock on the input buffer is released and the input buffer
- * is freed (its refcount is decremented).
- */
 static struct extent_buffer *
 tree_mod_log_rewind(struct btrfs_fs_info *fs_info, struct extent_buffer *eb,
 		    u64 time_seq)
@@ -1232,12 +1218,9 @@ tree_mod_log_rewind(struct btrfs_fs_info *fs_info, struct extent_buffer *eb,
 	}
 
 	extent_buffer_get(eb_rewin);
-	btrfs_tree_read_unlock(eb);
 	free_extent_buffer(eb);
 
-	extent_buffer_get(eb_rewin);
-	btrfs_tree_read_lock(eb_rewin);
-	__tree_mod_log_rewind(fs_info, eb_rewin, time_seq, tm);
+	__tree_mod_log_rewind(eb_rewin, time_seq, tm);
 	WARN_ON(btrfs_header_nritems(eb_rewin) >
 		BTRFS_NODEPTRS_PER_BLOCK(fs_info->fs_root));
 
@@ -1311,7 +1294,7 @@ get_old_root(struct btrfs_root *root, u64 time_seq)
 		btrfs_set_header_generation(eb, old_generation);
 	}
 	if (tm)
-		__tree_mod_log_rewind(root->fs_info, eb, time_seq, tm);
+		__tree_mod_log_rewind(eb, time_seq, tm);
 	else
 		WARN_ON(btrfs_header_level(eb) != 0);
 	WARN_ON(btrfs_header_nritems(eb) > BTRFS_NODEPTRS_PER_BLOCK(root));
@@ -1772,6 +1755,7 @@ static noinline int balance_level(struct btrfs_trans_handle *trans,
 			goto enospc;
 		}
 
+		tree_mod_log_free_eb(root->fs_info, root->node);
 		tree_mod_log_set_root_pointer(root, child);
 		rcu_assign_pointer(root->node, child);
 
@@ -2813,9 +2797,15 @@ again:
 				btrfs_clear_path_blocking(p, b,
 							  BTRFS_READ_LOCK);
 			}
-			b = tree_mod_log_rewind(root->fs_info, b, time_seq);
 			p->locks[level] = BTRFS_READ_LOCK;
 			p->nodes[level] = b;
+			b = tree_mod_log_rewind(root->fs_info, b, time_seq);
+			if (b != p->nodes[level]) {
+				btrfs_tree_unlock_rw(p->nodes[level],
+						     p->locks[level]);
+				p->locks[level] = 0;
+				p->nodes[level] = b;
+			}
 		} else {
 			p->slots[level] = slot;
 			unlock_up(p, level, lowest_unlock, 0, NULL);
@@ -3010,7 +3000,7 @@ static int push_node_left(struct btrfs_trans_handle *trans,
 		push_items = min(src_nritems - 8, push_items);
 
 	tree_mod_log_eb_copy(root->fs_info, dst, src, dst_nritems, 0,
-			     push_items, 1);
+			     push_items);
 	copy_extent_buffer(dst, src,
 			   btrfs_node_key_ptr_offset(dst_nritems),
 			   btrfs_node_key_ptr_offset(0),
@@ -3081,7 +3071,7 @@ static int balance_node_right(struct btrfs_trans_handle *trans,
 				      sizeof(struct btrfs_key_ptr));
 
 	tree_mod_log_eb_copy(root->fs_info, dst, src, 0,
-			     src_nritems - push_items, push_items, 1);
+			     src_nritems - push_items, push_items);
 	copy_extent_buffer(dst, src,
 			   btrfs_node_key_ptr_offset(0),
 			   btrfs_node_key_ptr_offset(src_nritems - push_items),
@@ -3233,18 +3223,12 @@ static noinline int split_node(struct btrfs_trans_handle *trans,
 	int mid;
 	int ret;
 	u32 c_nritems;
-	int tree_mod_log_removal = 1;
 
 	c = path->nodes[level];
 	WARN_ON(btrfs_header_generation(c) != trans->transid);
 	if (c == root->node) {
 		/* trying to split the root, lets make a new one */
 		ret = insert_new_root(trans, root, path, level + 1);
-		/*
-		 * removal of root nodes has been logged by
-		 * tree_mod_log_set_root_pointer due to locking
-		 */
-		tree_mod_log_removal = 0;
 		if (ret)
 			return ret;
 	} else {
@@ -3282,8 +3266,7 @@ static noinline int split_node(struct btrfs_trans_handle *trans,
 			    (unsigned long)btrfs_header_chunk_tree_uuid(split),
 			    BTRFS_UUID_SIZE);
 
-	tree_mod_log_eb_copy(root->fs_info, split, c, 0, mid, c_nritems - mid,
-			     tree_mod_log_removal);
+	tree_mod_log_eb_copy(root->fs_info, split, c, 0, mid, c_nritems - mid);
 	copy_extent_buffer(split, c,
 			   btrfs_node_key_ptr_offset(0),
 			   btrfs_node_key_ptr_offset(mid),

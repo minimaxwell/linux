@@ -574,16 +574,10 @@ static void iwl_pcie_txq_unmap(struct iwl_trans *trans, int txq_id)
 
 	spin_lock_bh(&txq->lock);
 	while (q->write_ptr != q->read_ptr) {
-		IWL_DEBUG_TX_REPLY(trans, "Q %d Free %d\n",
-				   txq_id, q->read_ptr);
 		iwl_pcie_txq_free_tfd(trans, txq, dma_dir);
 		q->read_ptr = iwl_queue_inc_wrap(q->read_ptr, q->n_bd);
 	}
-	txq->active = false;
 	spin_unlock_bh(&txq->lock);
-
-	/* just in case - this queue may have been stopped */
-	iwl_wake_queue(trans, txq);
 }
 
 /*
@@ -913,12 +907,6 @@ void iwl_trans_pcie_reclaim(struct iwl_trans *trans, int txq_id, int ssn,
 
 	spin_lock(&txq->lock);
 
-	if (!txq->active) {
-		IWL_DEBUG_TX_QUEUES(trans, "Q %d inactive - ignoring idx %d\n",
-				    txq_id, ssn);
-		goto out;
-	}
-
 	if (txq->q.read_ptr == tfd_num)
 		goto out;
 
@@ -1095,7 +1083,6 @@ void iwl_trans_pcie_txq_enable(struct iwl_trans *trans, int txq_id, int fifo,
 		       (fifo << SCD_QUEUE_STTS_REG_POS_TXF) |
 		       (1 << SCD_QUEUE_STTS_REG_POS_WSL) |
 		       SCD_QUEUE_STTS_REG_MSK);
-	trans_pcie->txq[txq_id].active = true;
 	IWL_DEBUG_TX_QUEUES(trans, "Activate queue %d on FIFO %d WrPtr: %d\n",
 			    txq_id, fifo, ssn & 0xff);
 }
@@ -1144,12 +1131,10 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 	void *dup_buf = NULL;
 	dma_addr_t phys_addr;
 	int idx;
-	u16 copy_size, cmd_size, dma_size;
+	u16 copy_size, cmd_size;
 	bool had_nocopy = false;
 	int i;
 	u32 cmd_pos;
-	const u8 *cmddata[IWL_MAX_CMD_TFDS];
-	u16 cmdlen[IWL_MAX_CMD_TFDS];
 
 	copy_size = sizeof(out_cmd->hdr);
 	cmd_size = sizeof(out_cmd->hdr);
@@ -1158,23 +1143,8 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 	BUILD_BUG_ON(IWL_MAX_CMD_TFDS > IWL_NUM_OF_TBS - 1);
 
 	for (i = 0; i < IWL_MAX_CMD_TFDS; i++) {
-		cmddata[i] = cmd->data[i];
-		cmdlen[i] = cmd->len[i];
-
 		if (!cmd->len[i])
 			continue;
-
-		/* need at least IWL_HCMD_MIN_COPY_SIZE copied */
-		if (copy_size < IWL_HCMD_MIN_COPY_SIZE) {
-			int copy = IWL_HCMD_MIN_COPY_SIZE - copy_size;
-
-			if (copy > cmdlen[i])
-				copy = cmdlen[i];
-			cmdlen[i] -= copy;
-			cmddata[i] += copy;
-			copy_size += copy;
-		}
-
 		if (cmd->dataflags[i] & IWL_HCMD_DFL_NOCOPY) {
 			had_nocopy = true;
 			if (WARN_ON(cmd->dataflags[i] & IWL_HCMD_DFL_DUP)) {
@@ -1194,7 +1164,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 				goto free_dup_buf;
 			}
 
-			dup_buf = kmemdup(cmddata[i], cmdlen[i],
+			dup_buf = kmemdup(cmd->data[i], cmd->len[i],
 					  GFP_ATOMIC);
 			if (!dup_buf)
 				return -ENOMEM;
@@ -1204,7 +1174,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 				idx = -EINVAL;
 				goto free_dup_buf;
 			}
-			copy_size += cmdlen[i];
+			copy_size += cmd->len[i];
 		}
 		cmd_size += cmd->len[i];
 	}
@@ -1251,31 +1221,14 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 
 	/* and copy the data that needs to be copied */
 	cmd_pos = offsetof(struct iwl_device_cmd, payload);
-	copy_size = sizeof(out_cmd->hdr);
 	for (i = 0; i < IWL_MAX_CMD_TFDS; i++) {
-		int copy = 0;
-
 		if (!cmd->len[i])
 			continue;
-
-		/* need at least IWL_HCMD_MIN_COPY_SIZE copied */
-		if (copy_size < IWL_HCMD_MIN_COPY_SIZE) {
-			copy = IWL_HCMD_MIN_COPY_SIZE - copy_size;
-
-			if (copy > cmd->len[i])
-				copy = cmd->len[i];
-		}
-
-		/* copy everything if not nocopy/dup */
-		if (!(cmd->dataflags[i] & (IWL_HCMD_DFL_NOCOPY |
-					   IWL_HCMD_DFL_DUP)))
-			copy = cmd->len[i];
-
-		if (copy) {
-			memcpy((u8 *)out_cmd + cmd_pos, cmd->data[i], copy);
-			cmd_pos += copy;
-			copy_size += copy;
-		}
+		if (cmd->dataflags[i] & (IWL_HCMD_DFL_NOCOPY |
+					 IWL_HCMD_DFL_DUP))
+			break;
+		memcpy((u8 *)out_cmd + cmd_pos, cmd->data[i], cmd->len[i]);
+		cmd_pos += cmd->len[i];
 	}
 
 	WARN_ON_ONCE(txq->entries[idx].copy_cmd);
@@ -1301,14 +1254,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 		     out_cmd->hdr.cmd, le16_to_cpu(out_cmd->hdr.sequence),
 		     cmd_size, q->write_ptr, idx, trans_pcie->cmd_queue);
 
-	/*
-	 * If the entire command is smaller than IWL_HCMD_MIN_COPY_SIZE, we must
-	 * still map at least that many bytes for the hardware to write back to.
-	 * We have enough space, so that's not a problem.
-	 */
-	dma_size = max_t(u16, copy_size, IWL_HCMD_MIN_COPY_SIZE);
-
-	phys_addr = dma_map_single(trans->dev, &out_cmd->hdr, dma_size,
+	phys_addr = dma_map_single(trans->dev, &out_cmd->hdr, copy_size,
 				   DMA_BIDIRECTIONAL);
 	if (unlikely(dma_mapping_error(trans->dev, phys_addr))) {
 		idx = -ENOMEM;
@@ -1316,15 +1262,14 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 	}
 
 	dma_unmap_addr_set(out_meta, mapping, phys_addr);
-	dma_unmap_len_set(out_meta, len, dma_size);
+	dma_unmap_len_set(out_meta, len, copy_size);
 
 	iwl_pcie_txq_build_tfd(trans, txq, phys_addr, copy_size, 1);
 
-	/* map the remaining (adjusted) nocopy/dup fragments */
 	for (i = 0; i < IWL_MAX_CMD_TFDS; i++) {
-		const void *data = cmddata[i];
+		const void *data = cmd->data[i];
 
-		if (!cmdlen[i])
+		if (!cmd->len[i])
 			continue;
 		if (!(cmd->dataflags[i] & (IWL_HCMD_DFL_NOCOPY |
 					   IWL_HCMD_DFL_DUP)))
@@ -1332,7 +1277,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 		if (cmd->dataflags[i] & IWL_HCMD_DFL_DUP)
 			data = dup_buf;
 		phys_addr = dma_map_single(trans->dev, (void *)data,
-					   cmdlen[i], DMA_BIDIRECTIONAL);
+					   cmd->len[i], DMA_BIDIRECTIONAL);
 		if (dma_mapping_error(trans->dev, phys_addr)) {
 			iwl_pcie_tfd_unmap(trans, out_meta,
 					   &txq->tfds[q->write_ptr],
@@ -1341,7 +1286,7 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 			goto out;
 		}
 
-		iwl_pcie_txq_build_tfd(trans, txq, phys_addr, cmdlen[i], 0);
+		iwl_pcie_txq_build_tfd(trans, txq, phys_addr, cmd->len[i], 0);
 	}
 
 	out_meta->flags = cmd->flags;
@@ -1351,7 +1296,8 @@ static int iwl_pcie_enqueue_hcmd(struct iwl_trans *trans,
 
 	txq->need_update = 1;
 
-	trace_iwlwifi_dev_hcmd(trans->dev, cmd, cmd_size, &out_cmd->hdr);
+	trace_iwlwifi_dev_hcmd(trans->dev, cmd, cmd_size,
+			       &out_cmd->hdr, copy_size);
 
 	/* start timer if queue currently empty */
 	if (q->read_ptr == q->write_ptr && trans_pcie->wd_timeout)

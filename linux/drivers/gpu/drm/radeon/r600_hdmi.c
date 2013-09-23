@@ -322,9 +322,6 @@ void r600_hdmi_setmode(struct drm_encoder *encoder, struct drm_display_mode *mod
 	struct radeon_encoder_atom_dig *dig = radeon_encoder->enc_priv;
 	uint32_t offset;
 
-	if (!dig || !dig->afmt)
-		return;
-
 	/* Silent, r600_hdmi_enable will raise WARN for us */
 	if (!dig->afmt->enabled)
 		return;
@@ -483,9 +480,6 @@ void r600_hdmi_enable(struct drm_encoder *encoder)
 	uint32_t offset;
 	u32 hdmi;
 
-	if (!dig || !dig->afmt)
-		return;
-
 	if (ASIC_IS_DCE6(rdev))
 		return;
 
@@ -495,7 +489,7 @@ void r600_hdmi_enable(struct drm_encoder *encoder)
 	offset = dig->afmt->offset;
 
 	/* Older chipsets require setting HDMI and routing manually */
-	if (ASIC_IS_DCE2(rdev) && !ASIC_IS_DCE3(rdev)) {
+	if (rdev->family >= CHIP_R600 && !ASIC_IS_DCE3(rdev)) {
 		hdmi = HDMI0_ERROR_ACK | HDMI0_ENABLE;
 		switch (radeon_encoder->encoder_id) {
 		case ENCODER_OBJECT_ID_INTERNAL_KLDSCP_TMDS1:
@@ -550,6 +544,7 @@ void r600_hdmi_disable(struct drm_encoder *encoder)
 
 	/* Called for ATOM_ENCODER_MODE_HDMI only */
 	if (!dig || !dig->afmt) {
+		WARN_ON(1);
 		return;
 	}
 	if (!dig->afmt->enabled)
@@ -563,7 +558,7 @@ void r600_hdmi_disable(struct drm_encoder *encoder)
 	radeon_irq_kms_disable_afmt(rdev, dig->afmt->id);
 
 	/* Older chipsets not handled by AtomBIOS */
-	if (ASIC_IS_DCE2(rdev) && !ASIC_IS_DCE3(rdev)) {
+	if (rdev->family >= CHIP_R600 && !ASIC_IS_DCE3(rdev)) {
 		switch (radeon_encoder->encoder_id) {
 		case ENCODER_OBJECT_ID_INTERNAL_KLDSCP_TMDS1:
 			WREG32_P(AVIVO_TMDSA_CNTL, 0,

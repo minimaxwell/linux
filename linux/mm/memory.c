@@ -207,16 +207,15 @@ static int tlb_next_batch(struct mmu_gather *tlb)
  *	tear-down from @mm. The @fullmm argument is used when @mm is without
  *	users and we're going to destroy the full address space (exit/execve).
  */
-void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm, unsigned long start, unsigned long end)
+void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm, bool fullmm)
 {
 	tlb->mm = mm;
 
-	/* Is it from 0 to ~0? */
-	tlb->fullmm     = !(start | (end+1));
-	tlb->need_flush_all = 0;
-	tlb->start	= start;
-	tlb->end	= end;
+	tlb->fullmm     = fullmm;
+	tlb->start	= -1UL;
+	tlb->end	= 0;
 	tlb->need_flush = 0;
+	tlb->fast_mode  = (num_possible_cpus() == 1);
 	tlb->local.next = NULL;
 	tlb->local.nr   = 0;
 	tlb->local.max  = ARRAY_SIZE(tlb->__pages);
@@ -240,6 +239,9 @@ void tlb_flush_mmu(struct mmu_gather *tlb)
 	tlb_table_flush(tlb);
 #endif
 
+	if (tlb_fast_mode(tlb))
+		return;
+
 	for (batch = &tlb->local; batch; batch = batch->next) {
 		free_pages_and_swap_cache(batch->pages, batch->nr);
 		batch->nr = 0;
@@ -255,6 +257,8 @@ void tlb_finish_mmu(struct mmu_gather *tlb, unsigned long start, unsigned long e
 {
 	struct mmu_gather_batch *batch, *next;
 
+	tlb->start = start;
+	tlb->end   = end;
 	tlb_flush_mmu(tlb);
 
 	/* keep the page table cache within bounds */
@@ -278,6 +282,11 @@ int __tlb_remove_page(struct mmu_gather *tlb, struct page *page)
 	struct mmu_gather_batch *batch;
 
 	VM_BUG_ON(!tlb->need_flush);
+
+	if (tlb_fast_mode(tlb)) {
+		free_page_and_swap_cache(page);
+		return 1; /* avoid calling tlb_flush_mmu() */
+	}
 
 	batch = tlb->active;
 	batch->pages[batch->nr++] = page;
@@ -1198,23 +1207,13 @@ again:
 	 * and page-free while holding it.
 	 */
 	if (force_flush) {
-		unsigned long old_end;
-
 		force_flush = 0;
 
-		/*
-		 * Flush the TLB just for the previous segment,
-		 * then update the range to be the remaining
-		 * TLB range.
-		 */
-		old_end = tlb->end;
-		tlb->end = addr;
-
-		tlb_flush_mmu(tlb);
-
+#ifdef HAVE_GENERIC_MMU_GATHER
 		tlb->start = addr;
-		tlb->end = old_end;
-
+		tlb->end = end;
+#endif
+		tlb_flush_mmu(tlb);
 		if (addr != end)
 			goto again;
 	}
@@ -1401,7 +1400,7 @@ void zap_page_range(struct vm_area_struct *vma, unsigned long start,
 	unsigned long end = start + size;
 
 	lru_add_drain();
-	tlb_gather_mmu(&tlb, mm, start, end);
+	tlb_gather_mmu(&tlb, mm, 0);
 	update_hiwater_rss(mm);
 	mmu_notifier_invalidate_range_start(mm, start, end);
 	for ( ; vma && vma->vm_start < end; vma = vma->vm_next)
@@ -1427,7 +1426,7 @@ static void zap_page_range_single(struct vm_area_struct *vma, unsigned long addr
 	unsigned long end = address + size;
 
 	lru_add_drain();
-	tlb_gather_mmu(&tlb, mm, address, end);
+	tlb_gather_mmu(&tlb, mm, 0);
 	update_hiwater_rss(mm);
 	mmu_notifier_invalidate_range_start(mm, address, end);
 	unmap_single_vma(&tlb, vma, address, end, details);
@@ -2357,53 +2356,6 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	return err;
 }
 EXPORT_SYMBOL(remap_pfn_range);
-
-/**
- * vm_iomap_memory - remap memory to userspace
- * @vma: user vma to map to
- * @start: start of area
- * @len: size of area
- *
- * This is a simplified io_remap_pfn_range() for common driver use. The
- * driver just needs to give us the physical memory range to be mapped,
- * we'll figure out the rest from the vma information.
- *
- * NOTE! Some drivers might want to tweak vma->vm_page_prot first to get
- * whatever write-combining details or similar.
- */
-int vm_iomap_memory(struct vm_area_struct *vma, phys_addr_t start, unsigned long len)
-{
-	unsigned long vm_len, pfn, pages;
-
-	/* Check that the physical memory area passed in looks valid */
-	if (start + len < start)
-		return -EINVAL;
-	/*
-	 * You *really* shouldn't map things that aren't page-aligned,
-	 * but we've historically allowed it because IO memory might
-	 * just have smaller alignment.
-	 */
-	len += start & ~PAGE_MASK;
-	pfn = start >> PAGE_SHIFT;
-	pages = (len + ~PAGE_MASK) >> PAGE_SHIFT;
-	if (pfn + pages < pfn)
-		return -EINVAL;
-
-	/* We start the mapping 'vm_pgoff' pages into the area */
-	if (vma->vm_pgoff > pages)
-		return -EINVAL;
-	pfn += vma->vm_pgoff;
-	pages -= vma->vm_pgoff;
-
-	/* Can we fit all of the mapping? */
-	vm_len = vma->vm_end - vma->vm_start;
-	if (vm_len >> PAGE_SHIFT > pages)
-		return -EINVAL;
-
-	/* Ok, let it rip */
-	return io_remap_pfn_range(vma, vma->vm_start, pfn, vm_len, vma->vm_page_prot);
-}
-EXPORT_SYMBOL(vm_iomap_memory);
 
 static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				     unsigned long addr, unsigned long end,

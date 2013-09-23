@@ -85,7 +85,7 @@ enum port {
 
 #define I915_GEM_GPU_DOMAINS	(~(I915_GEM_DOMAIN_CPU | I915_GEM_DOMAIN_GTT))
 
-#define for_each_pipe(p) for ((p) = 0; (p) < INTEL_INFO(dev)->num_pipes; (p)++)
+#define for_each_pipe(p) for ((p) = 0; (p) < dev_priv->num_pipe; (p)++)
 
 #define for_each_encoder_on_crtc(dev, __crtc, intel_encoder) \
 	list_for_each_entry((intel_encoder), &(dev)->mode_config.encoder_list, base.head) \
@@ -318,7 +318,6 @@ struct drm_i915_gt_funcs {
 	DEV_INFO_FLAG(has_llc)
 
 struct intel_device_info {
-	u8 num_pipes:3;
 	u8 gen;
 	u8 is_mobile:1;
 	u8 is_i85x:1;
@@ -394,7 +393,6 @@ enum intel_sbi_destination {
 #define QUIRK_PIPEA_FORCE (1<<0)
 #define QUIRK_LVDS_SSC_DISABLE (1<<1)
 #define QUIRK_INVERT_BRIGHTNESS (1<<2)
-#define QUIRK_NO_PCH_PWM_ENABLE (1<<3)
 
 struct intel_fbdev;
 struct intel_fbc_work;
@@ -675,6 +673,7 @@ typedef struct drm_i915_private {
 	u32 hotplug_supported_mask;
 	struct work_struct hotplug_work;
 
+	int num_pipe;
 	int num_pch_pll;
 
 	/* For hangcheck timer */
@@ -712,7 +711,6 @@ typedef struct drm_i915_private {
 	unsigned int int_crt_support:1;
 	unsigned int lvds_use_ssc:1;
 	unsigned int display_clock_mode:1;
-	unsigned int fdi_rx_polarity_inverted:1;
 	int lvds_ssc_freq;
 	unsigned int bios_lvds_val; /* initial [PCH_]LVDS reg val in VBIOS */
 	unsigned int lvds_val; /* used for checking LVDS channel mode */
@@ -776,7 +774,6 @@ typedef struct drm_i915_private {
 		unsigned long gtt_start;
 		unsigned long gtt_mappable_end;
 		unsigned long gtt_end;
-		unsigned long stolen_base; /* limited to low memory (32-bit) */
 
 		struct io_mapping *gtt_mapping;
 		phys_addr_t gtt_base_addr;
@@ -922,7 +919,7 @@ typedef struct drm_i915_private {
 	bool hw_contexts_disabled;
 	uint32_t hw_context_size;
 
-	u32 fdi_rx_config;
+	bool fdi_rx_polarity_reversed;
 
 	struct i915_suspend_saved_registers regfile;
 
@@ -1230,8 +1227,6 @@ struct drm_i915_file_private {
 
 #define HAS_PIPE_CONTROL(dev) (INTEL_INFO(dev)->gen >= 5)
 
-#define HAS_DDI(dev)		(IS_HASWELL(dev))
-
 #define INTEL_PCH_DEVICE_ID_MASK		0xff00
 #define INTEL_PCH_IBX_DEVICE_ID_TYPE		0x3b00
 #define INTEL_PCH_CPT_DEVICE_ID_TYPE		0x1c00
@@ -1328,9 +1323,8 @@ void i915_hangcheck_elapsed(unsigned long data);
 void i915_handle_error(struct drm_device *dev, bool wedged);
 
 extern void intel_irq_init(struct drm_device *dev);
-extern void intel_pm_init(struct drm_device *dev);
 extern void intel_gt_init(struct drm_device *dev);
-extern void intel_gt_sanitize(struct drm_device *dev);
+extern void intel_gt_reset(struct drm_device *dev);
 
 void i915_error_state_free(struct kref *error_ref);
 

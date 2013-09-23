@@ -295,17 +295,6 @@ void intel_panel_disable_backlight(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
-	/*
-	 * Do not disable backlight on the vgaswitcheroo path. When switching
-	 * away from i915, the other client may depend on i915 to handle the
-	 * backlight. This will leave the backlight on unnecessarily when
-	 * another client is not activated.
-	 */
-	if (dev->switch_power_state == DRM_SWITCH_POWER_CHANGING) {
-		DRM_DEBUG_DRIVER("Skipping backlight disable on vga switch\n");
-		return;
-	}
-
 	dev_priv->backlight_enabled = false;
 	intel_panel_actually_set_backlight(dev, 0);
 
@@ -346,7 +335,7 @@ void intel_panel_enable_backlight(struct drm_device *dev,
 		if (tmp & BLM_PWM_ENABLE)
 			goto set_level;
 
-		if (INTEL_INFO(dev)->num_pipes == 3)
+		if (dev_priv->num_pipe == 3)
 			tmp &= ~BLM_PIPE_SELECT_IVB;
 		else
 			tmp &= ~BLM_PIPE_SELECT;
@@ -358,8 +347,7 @@ void intel_panel_enable_backlight(struct drm_device *dev,
 		POSTING_READ(reg);
 		I915_WRITE(reg, tmp | BLM_PWM_ENABLE);
 
-		if (HAS_PCH_SPLIT(dev) &&
-		    !(dev_priv->quirks & QUIRK_NO_PCH_PWM_ENABLE)) {
+		if (HAS_PCH_SPLIT(dev)) {
 			tmp = I915_READ(BLC_PWM_PCH_CTL1);
 			tmp |= BLM_PCH_PWM_ENABLE;
 			tmp &= ~BLM_PCH_OVERRIDE_ENABLE;
@@ -434,9 +422,6 @@ int intel_panel_setup_backlight(struct drm_connector *connector)
 
 	intel_panel_init_backlight(dev);
 
-	if (WARN_ON(dev_priv->backlight))
-		return -ENODEV;
-
 	memset(&props, 0, sizeof(props));
 	props.type = BACKLIGHT_RAW;
 	props.max_brightness = _intel_panel_get_max_backlight(dev);
@@ -462,10 +447,8 @@ int intel_panel_setup_backlight(struct drm_connector *connector)
 void intel_panel_destroy_backlight(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	if (dev_priv->backlight) {
+	if (dev_priv->backlight)
 		backlight_device_unregister(dev_priv->backlight);
-		dev_priv->backlight = NULL;
-	}
 }
 #else
 int intel_panel_setup_backlight(struct drm_connector *connector)

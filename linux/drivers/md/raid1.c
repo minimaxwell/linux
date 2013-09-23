@@ -427,17 +427,7 @@ static void raid1_end_write_request(struct bio *bio, int error)
 
 		r1_bio->bios[mirror] = NULL;
 		to_put = bio;
-		/*
-		 * Do not set R1BIO_Uptodate if the current device is
-		 * rebuilding or Faulty. This is because we cannot use
-		 * such device for properly reading the data back (we could
-		 * potentially use it, if the current write would have felt
-		 * before rdev->recovery_offset, but for simplicity we don't
-		 * check this here.
-		 */
-		if (test_bit(In_sync, &conf->mirrors[mirror].rdev->flags) &&
-		    !test_bit(Faulty, &conf->mirrors[mirror].rdev->flags))
-			set_bit(R1BIO_Uptodate, &r1_bio->state);
+		set_bit(R1BIO_Uptodate, &r1_bio->state);
 
 		/* Maybe we can clear some bad blocks. */
 		if (is_badblock(conf->mirrors[mirror].rdev,
@@ -890,17 +880,17 @@ static void allow_barrier(struct r1conf *conf)
 	wake_up(&conf->wait_barrier);
 }
 
-static void freeze_array(struct r1conf *conf, int extra)
+static void freeze_array(struct r1conf *conf)
 {
 	/* stop syncio and normal IO and wait for everything to
 	 * go quite.
 	 * We increment barrier and nr_waiting, and then
-	 * wait until nr_pending match nr_queued+extra
+	 * wait until nr_pending match nr_queued+1
 	 * This is called in the context of one normal IO request
 	 * that has failed. Thus any sync request that might be pending
 	 * will be blocked by nr_pending, and we need to wait for
 	 * pending IO requests to complete or be queued for re-try.
-	 * Thus the number queued (nr_queued) plus this request (extra)
+	 * Thus the number queued (nr_queued) plus this request (1)
 	 * must match the number of pending IOs (nr_pending) before
 	 * we continue.
 	 */
@@ -908,7 +898,7 @@ static void freeze_array(struct r1conf *conf, int extra)
 	conf->barrier++;
 	conf->nr_waiting++;
 	wait_event_lock_irq_cmd(conf->wait_barrier,
-				conf->nr_pending == conf->nr_queued+extra,
+				conf->nr_pending == conf->nr_queued+1,
 				conf->resync_lock,
 				flush_pending_writes(conf));
 	spin_unlock_irq(&conf->resync_lock);
@@ -977,7 +967,6 @@ static void raid1_unplug(struct blk_plug_cb *cb, bool from_schedule)
 		bio_list_merge(&conf->pending_bio_list, &plug->pending);
 		conf->pending_count += plug->pending_cnt;
 		spin_unlock_irq(&conf->device_lock);
-		wake_up(&conf->wait_barrier);
 		md_wakeup_thread(mddev->thread);
 		kfree(plug);
 		return;
@@ -991,12 +980,7 @@ static void raid1_unplug(struct blk_plug_cb *cb, bool from_schedule)
 	while (bio) { /* submit pending writes */
 		struct bio *next = bio->bi_next;
 		bio->bi_next = NULL;
-		if (unlikely((bio->bi_rw & REQ_DISCARD) &&
-		    !blk_queue_discard(bdev_get_queue(bio->bi_bdev))))
-			/* Just ignore it */
-			bio_endio(bio, 0);
-		else
-			generic_make_request(bio);
+		generic_make_request(bio);
 		bio = next;
 	}
 	kfree(plug);
@@ -1016,7 +1000,6 @@ static void make_request(struct mddev *mddev, struct bio * bio)
 	const unsigned long do_flush_fua = (bio->bi_rw & (REQ_FLUSH | REQ_FUA));
 	const unsigned long do_discard = (bio->bi_rw
 					  & (REQ_DISCARD | REQ_SECURE));
-	const unsigned long do_same = (bio->bi_rw & REQ_WRITE_SAME);
 	struct md_rdev *blocked_rdev;
 	struct blk_plug_cb *cb;
 	struct raid1_plug_cb *plug = NULL;
@@ -1306,7 +1289,7 @@ read_again:
 			 * know the original bi_idx, so we just free
 			 * them all
 			 */
-			bio_for_each_segment_all(bvec, mbio, j)
+			__bio_for_each_segment(bvec, mbio, j, 0)
 				bvec->bv_page = r1_bio->behind_bvecs[j].bv_page;
 			if (test_bit(WriteMostly, &conf->mirrors[i].rdev->flags))
 				atomic_inc(&r1_bio->behind_remaining);
@@ -1318,8 +1301,7 @@ read_again:
 				   conf->mirrors[i].rdev->data_offset);
 		mbio->bi_bdev = conf->mirrors[i].rdev->bdev;
 		mbio->bi_end_io	= raid1_end_write_request;
-		mbio->bi_rw =
-			WRITE | do_flush_fua | do_sync | do_discard | do_same;
+		mbio->bi_rw = WRITE | do_flush_fua | do_sync | do_discard;
 		mbio->bi_private = r1_bio;
 
 		atomic_inc(&r1_bio->remaining);
@@ -1568,8 +1550,8 @@ static int raid1_add_disk(struct mddev *mddev, struct md_rdev *rdev)
 		 * we wait for all outstanding requests to complete.
 		 */
 		synchronize_sched();
-		freeze_array(conf, 0);
-		unfreeze_array(conf);
+		raise_barrier(conf);
+		lower_barrier(conf);
 		clear_bit(Unmerged, &rdev->flags);
 	}
 	md_integrity_add_rdev(rdev, mddev);
@@ -1619,11 +1601,11 @@ static int raid1_remove_disk(struct mddev *mddev, struct md_rdev *rdev)
 			 */
 			struct md_rdev *repl =
 				conf->mirrors[conf->raid_disks + number].rdev;
-			freeze_array(conf, 0);
+			raise_barrier(conf);
 			clear_bit(Replacement, &repl->flags);
 			p->rdev = repl;
 			conf->mirrors[conf->raid_disks + number].rdev = NULL;
-			unfreeze_array(conf);
+			lower_barrier(conf);
 			clear_bit(WantReplacement, &rdev->flags);
 		} else
 			clear_bit(WantReplacement, &rdev->flags);
@@ -2240,7 +2222,7 @@ static void handle_read_error(struct r1conf *conf, struct r1bio *r1_bio)
 	 * frozen
 	 */
 	if (mddev->ro == 0) {
-		freeze_array(conf, 1);
+		freeze_array(conf);
 		fix_read_error(conf, r1_bio->read_disk,
 			       r1_bio->sector, r1_bio->sectors);
 		unfreeze_array(conf);
@@ -2836,9 +2818,6 @@ static int run(struct mddev *mddev)
 	if (IS_ERR(conf))
 		return PTR_ERR(conf);
 
-	if (mddev->queue)
-		blk_queue_max_write_same_sectors(mddev->queue, 0);
-
 	rdev_for_each(rdev, mddev) {
 		if (!mddev->gendisk)
 			continue;
@@ -3019,7 +2998,7 @@ static int raid1_reshape(struct mddev *mddev)
 		return -ENOMEM;
 	}
 
-	freeze_array(conf, 0);
+	raise_barrier(conf);
 
 	/* ok, everything is stopped */
 	oldpool = conf->r1bio_pool;
@@ -3050,7 +3029,7 @@ static int raid1_reshape(struct mddev *mddev)
 	conf->raid_disks = mddev->raid_disks = raid_disks;
 	mddev->delta_disks = 0;
 
-	unfreeze_array(conf);
+	lower_barrier(conf);
 
 	set_bit(MD_RECOVERY_NEEDED, &mddev->recovery);
 	md_wakeup_thread(mddev->thread);

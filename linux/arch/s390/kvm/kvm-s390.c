@@ -613,25 +613,14 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 		kvm_s390_deliver_pending_interrupts(vcpu);
 
 	vcpu->arch.sie_block->icptcode = 0;
+	preempt_disable();
+	kvm_guest_enter();
+	preempt_enable();
 	VCPU_EVENT(vcpu, 6, "entering sie flags %x",
 		   atomic_read(&vcpu->arch.sie_block->cpuflags));
 	trace_kvm_s390_sie_enter(vcpu,
 				 atomic_read(&vcpu->arch.sie_block->cpuflags));
-
-	/*
-	 * As PF_VCPU will be used in fault handler, between guest_enter
-	 * and guest_exit should be no uaccess.
-	 */
-	preempt_disable();
-	kvm_guest_enter();
-	preempt_enable();
 	rc = sie64a(vcpu->arch.sie_block, vcpu->run->s.regs.gprs);
-	kvm_guest_exit();
-
-	VCPU_EVENT(vcpu, 6, "exit sie icptcode %d",
-		   vcpu->arch.sie_block->icptcode);
-	trace_kvm_s390_sie_exit(vcpu, vcpu->arch.sie_block->icptcode);
-
 	if (rc) {
 		if (kvm_is_ucontrol(vcpu->kvm)) {
 			rc = SIE_INTERCEPT_UCONTROL;
@@ -642,6 +631,10 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			rc = 0;
 		}
 	}
+	VCPU_EVENT(vcpu, 6, "exit sie icptcode %d",
+		   vcpu->arch.sie_block->icptcode);
+	trace_kvm_s390_sie_exit(vcpu, vcpu->arch.sie_block->icptcode);
+	kvm_guest_exit();
 
 	memcpy(&vcpu->run->s.regs.gprs[14], &vcpu->arch.sie_block->gg14, 16);
 	return rc;
@@ -772,14 +765,6 @@ int kvm_s390_vcpu_store_status(struct kvm_vcpu *vcpu, unsigned long addr)
 		prefix = 1;
 	} else
 		prefix = 0;
-
-	/*
-	 * The guest FPRS and ACRS are in the host FPRS/ACRS due to the lazy
-	 * copying in vcpu load/put. Lets update our copies before we save
-	 * it into the save area
-	 */
-	save_fp_regs(&vcpu->arch.guest_fpregs);
-	save_access_regs(vcpu->run->s.regs.acrs);
 
 	if (__guestcopy(vcpu, addr + offsetof(struct save_area, fp_regs),
 			vcpu->arch.guest_fpregs.fprs, 128, prefix))

@@ -213,7 +213,7 @@ static inline unsigned char tt_start_uframe(struct ehci_hcd *ehci, __hc32 mask)
 }
 
 static const unsigned char
-max_tt_usecs[] = { 125, 125, 125, 125, 125, 125, 30, 0 };
+max_tt_usecs[] = { 125, 125, 125, 125, 125, 125, 125, 25 };
 
 /* carryover low/fullspeed bandwidth that crosses uframe boundries */
 static inline void carryover_tt_bandwidth(unsigned short tt_usecs[8])
@@ -1214,7 +1214,6 @@ itd_urb_transaction (
 
 		memset (itd, 0, sizeof *itd);
 		itd->itd_dma = itd_dma;
-		itd->frame = 9999;		/* an invalid value */
 		list_add (&itd->itd_list, &sched->td_list);
 	}
 	spin_unlock_irqrestore (&ehci->lock, flags);
@@ -1394,20 +1393,21 @@ iso_stream_schedule (
 
 		/* Behind the scheduling threshold? */
 		if (unlikely(start < next)) {
-			unsigned now2 = (now - base) & (mod - 1);
 
 			/* USB_ISO_ASAP: Round up to the first available slot */
 			if (urb->transfer_flags & URB_ISO_ASAP)
 				start += (next - start + period - 1) & -period;
 
 			/*
-			 * Not ASAP: Use the next slot in the stream,
-			 * no matter what.
+			 * Not ASAP: Use the next slot in the stream.  If
+			 * the entire URB falls before the threshold, fail.
 			 */
-			else if (start + span - period < now2) {
-				ehci_dbg(ehci, "iso underrun %p (%u+%u < %u)\n",
+			else if (start + span - period < next) {
+				ehci_dbg(ehci, "iso urb late %p (%u+%u < %u)\n",
 						urb, start + base,
-						span - period, now2 + base);
+						span - period, next + base);
+				status = -EXDEV;
+				goto fail;
 			}
 		}
 
@@ -1915,7 +1915,6 @@ sitd_urb_transaction (
 
 		memset (sitd, 0, sizeof *sitd);
 		sitd->sitd_dma = sitd_dma;
-		sitd->frame = 9999;		/* an invalid value */
 		list_add (&sitd->sitd_list, &iso_sched->td_list);
 	}
 

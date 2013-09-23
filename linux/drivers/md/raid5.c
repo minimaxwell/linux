@@ -674,11 +674,9 @@ static void ops_run_io(struct stripe_head *sh, struct stripe_head_state *s)
 			bi->bi_next = NULL;
 			if (rrdev)
 				set_bit(R5_DOUBLE_LOCKED, &sh->dev[i].flags);
-
-			if (conf->mddev->gendisk)
-				trace_block_bio_remap(bdev_get_queue(bi->bi_bdev),
-						      bi, disk_devt(conf->mddev->gendisk),
-						      sh->dev[i].sector);
+			trace_block_bio_remap(bdev_get_queue(bi->bi_bdev),
+					      bi, disk_devt(conf->mddev->gendisk),
+					      sh->dev[i].sector);
 			generic_make_request(bi);
 		}
 		if (rrdev) {
@@ -706,10 +704,9 @@ static void ops_run_io(struct stripe_head *sh, struct stripe_head_state *s)
 			rbi->bi_io_vec[0].bv_offset = 0;
 			rbi->bi_size = STRIPE_SIZE;
 			rbi->bi_next = NULL;
-			if (conf->mddev->gendisk)
-				trace_block_bio_remap(bdev_get_queue(rbi->bi_bdev),
-						      rbi, disk_devt(conf->mddev->gendisk),
-						      sh->dev[i].sector);
+			trace_block_bio_remap(bdev_get_queue(rbi->bi_bdev),
+					      rbi, disk_devt(conf->mddev->gendisk),
+					      sh->dev[i].sector);
 			generic_make_request(rbi);
 		}
 		if (!rdev && !rrdev) {
@@ -2322,6 +2319,17 @@ schedule_reconstruction(struct stripe_head *sh, struct stripe_head_state *s,
 	int level = conf->level;
 
 	if (rcw) {
+		/* if we are not expanding this is a proper write request, and
+		 * there will be bios with new data to be drained into the
+		 * stripe cache
+		 */
+		if (!expand) {
+			sh->reconstruct_state = reconstruct_state_drain_run;
+			set_bit(STRIPE_OP_BIODRAIN, &s->ops_request);
+		} else
+			sh->reconstruct_state = reconstruct_state_run;
+
+		set_bit(STRIPE_OP_RECONSTRUCT, &s->ops_request);
 
 		for (i = disks; i--; ) {
 			struct r5dev *dev = &sh->dev[i];
@@ -2334,21 +2342,6 @@ schedule_reconstruction(struct stripe_head *sh, struct stripe_head_state *s,
 				s->locked++;
 			}
 		}
-		/* if we are not expanding this is a proper write request, and
-		 * there will be bios with new data to be drained into the
-		 * stripe cache
-		 */
-		if (!expand) {
-			if (!s->locked)
-				/* False alarm, nothing to do */
-				return;
-			sh->reconstruct_state = reconstruct_state_drain_run;
-			set_bit(STRIPE_OP_BIODRAIN, &s->ops_request);
-		} else
-			sh->reconstruct_state = reconstruct_state_run;
-
-		set_bit(STRIPE_OP_RECONSTRUCT, &s->ops_request);
-
 		if (s->locked + conf->max_degraded == disks)
 			if (!test_and_set_bit(STRIPE_FULL_WRITE, &sh->state))
 				atomic_inc(&conf->pending_full_writes);
@@ -2356,6 +2349,11 @@ schedule_reconstruction(struct stripe_head *sh, struct stripe_head_state *s,
 		BUG_ON(level == 6);
 		BUG_ON(!(test_bit(R5_UPTODATE, &sh->dev[pd_idx].flags) ||
 			test_bit(R5_Wantcompute, &sh->dev[pd_idx].flags)));
+
+		sh->reconstruct_state = reconstruct_state_prexor_drain_run;
+		set_bit(STRIPE_OP_PREXOR, &s->ops_request);
+		set_bit(STRIPE_OP_BIODRAIN, &s->ops_request);
+		set_bit(STRIPE_OP_RECONSTRUCT, &s->ops_request);
 
 		for (i = disks; i--; ) {
 			struct r5dev *dev = &sh->dev[i];
@@ -2371,13 +2369,6 @@ schedule_reconstruction(struct stripe_head *sh, struct stripe_head_state *s,
 				s->locked++;
 			}
 		}
-		if (!s->locked)
-			/* False alarm - nothing to do */
-			return;
-		sh->reconstruct_state = reconstruct_state_prexor_drain_run;
-		set_bit(STRIPE_OP_PREXOR, &s->ops_request);
-		set_bit(STRIPE_OP_BIODRAIN, &s->ops_request);
-		set_bit(STRIPE_OP_RECONSTRUCT, &s->ops_request);
 	}
 
 	/* keep the parity disk(s) locked while asynchronous operations
@@ -2612,8 +2603,6 @@ handle_failed_sync(struct r5conf *conf, struct stripe_head *sh,
 	int i;
 
 	clear_bit(STRIPE_SYNCING, &sh->state);
-	if (test_and_clear_bit(R5_Overlap, &sh->dev[sh->pd_idx].flags))
-		wake_up(&conf->wait_for_overlap);
 	s->syncing = 0;
 	s->replacing = 0;
 	/* There is nothing more to do for sync/check/repair.
@@ -2787,7 +2776,6 @@ static void handle_stripe_clean_event(struct r5conf *conf,
 {
 	int i;
 	struct r5dev *dev;
-	int discard_pending = 0;
 
 	for (i = disks; i--; )
 		if (sh->dev[i].written) {
@@ -2816,23 +2804,9 @@ static void handle_stripe_clean_event(struct r5conf *conf,
 						STRIPE_SECTORS,
 					 !test_bit(STRIPE_DEGRADED, &sh->state),
 						0);
-			} else if (test_bit(R5_Discard, &dev->flags))
-				discard_pending = 1;
-		}
-	if (!discard_pending &&
-	    test_bit(R5_Discard, &sh->dev[sh->pd_idx].flags)) {
-		clear_bit(R5_Discard, &sh->dev[sh->pd_idx].flags);
-		clear_bit(R5_UPTODATE, &sh->dev[sh->pd_idx].flags);
-		if (sh->qd_idx >= 0) {
-			clear_bit(R5_Discard, &sh->dev[sh->qd_idx].flags);
-			clear_bit(R5_UPTODATE, &sh->dev[sh->qd_idx].flags);
-		}
-		/* now that discard is done we can proceed with any sync */
-		clear_bit(STRIPE_DISCARD, &sh->state);
-		if (test_bit(STRIPE_SYNC_REQUESTED, &sh->state))
-			set_bit(STRIPE_HANDLE, &sh->state);
-
-	}
+			}
+		} else if (test_bit(R5_Discard, &sh->dev[i].flags))
+			clear_bit(R5_Discard, &sh->dev[i].flags);
 
 	if (test_and_clear_bit(STRIPE_FULL_WRITE, &sh->state))
 		if (atomic_dec_and_test(&conf->pending_full_writes))
@@ -2891,10 +2865,8 @@ static void handle_stripe_dirtying(struct r5conf *conf,
 	set_bit(STRIPE_HANDLE, &sh->state);
 	if (rmw < rcw && rmw > 0) {
 		/* prefer read-modify-write, but need to get some data */
-		if (conf->mddev->queue)
-			blk_add_trace_msg(conf->mddev->queue,
-					  "raid5 rmw %llu %d",
-					  (unsigned long long)sh->sector, rmw);
+		blk_add_trace_msg(conf->mddev->queue, "raid5 rmw %llu %d",
+				  (unsigned long long)sh->sector, rmw);
 		for (i = disks; i--; ) {
 			struct r5dev *dev = &sh->dev[i];
 			if ((dev->towrite || i == sh->pd_idx) &&
@@ -2944,7 +2916,7 @@ static void handle_stripe_dirtying(struct r5conf *conf,
 				}
 			}
 		}
-		if (rcw && conf->mddev->queue)
+		if (rcw)
 			blk_add_trace_msg(conf->mddev->queue, "raid5 rcw %llu %d %d %d",
 					  (unsigned long long)sh->sector,
 					  rcw, qread, test_bit(STRIPE_DELAYED, &sh->state));
@@ -3484,16 +3456,9 @@ static void handle_stripe(struct stripe_head *sh)
 		return;
 	}
 
-	if (test_bit(STRIPE_SYNC_REQUESTED, &sh->state)) {
-		spin_lock(&sh->stripe_lock);
-		/* Cannot process 'sync' concurrently with 'discard' */
-		if (!test_bit(STRIPE_DISCARD, &sh->state) &&
-		    test_and_clear_bit(STRIPE_SYNC_REQUESTED, &sh->state)) {
-			set_bit(STRIPE_SYNCING, &sh->state);
-			clear_bit(STRIPE_INSYNC, &sh->state);
-			clear_bit(STRIPE_REPLACED, &sh->state);
-		}
-		spin_unlock(&sh->stripe_lock);
+	if (test_and_clear_bit(STRIPE_SYNC_REQUESTED, &sh->state)) {
+		set_bit(STRIPE_SYNCING, &sh->state);
+		clear_bit(STRIPE_INSYNC, &sh->state);
 	}
 	clear_bit(STRIPE_DELAYED, &sh->state);
 
@@ -3637,28 +3602,22 @@ static void handle_stripe(struct stripe_head *sh)
 			handle_parity_checks5(conf, sh, &s, disks);
 	}
 
-	if ((s.replacing || s.syncing) && s.locked == 0
-	    && !test_bit(STRIPE_COMPUTE_RUN, &sh->state)
-	    && !test_bit(STRIPE_REPLACED, &sh->state)) {
+	if (s.replacing && s.locked == 0
+	    && !test_bit(STRIPE_INSYNC, &sh->state)) {
 		/* Write out to replacement devices where possible */
 		for (i = 0; i < conf->raid_disks; i++)
-			if (test_bit(R5_NeedReplace, &sh->dev[i].flags)) {
-				WARN_ON(!test_bit(R5_UPTODATE, &sh->dev[i].flags));
+			if (test_bit(R5_UPTODATE, &sh->dev[i].flags) &&
+			    test_bit(R5_NeedReplace, &sh->dev[i].flags)) {
 				set_bit(R5_WantReplace, &sh->dev[i].flags);
 				set_bit(R5_LOCKED, &sh->dev[i].flags);
 				s.locked++;
 			}
-		if (s.replacing)
-			set_bit(STRIPE_INSYNC, &sh->state);
-		set_bit(STRIPE_REPLACED, &sh->state);
+		set_bit(STRIPE_INSYNC, &sh->state);
 	}
 	if ((s.syncing || s.replacing) && s.locked == 0 &&
-	    !test_bit(STRIPE_COMPUTE_RUN, &sh->state) &&
 	    test_bit(STRIPE_INSYNC, &sh->state)) {
 		md_done_sync(conf->mddev, STRIPE_SECTORS, 1);
 		clear_bit(STRIPE_SYNCING, &sh->state);
-		if (test_and_clear_bit(R5_Overlap, &sh->dev[sh->pd_idx].flags))
-			wake_up(&conf->wait_for_overlap);
 	}
 
 	/* If the failed drives are just a ReadError, then we might need
@@ -4064,10 +4023,9 @@ static int chunk_aligned_read(struct mddev *mddev, struct bio * raid_bio)
 		atomic_inc(&conf->active_aligned_reads);
 		spin_unlock_irq(&conf->device_lock);
 
-		if (mddev->gendisk)
-			trace_block_bio_remap(bdev_get_queue(align_bi->bi_bdev),
-					      align_bi, disk_devt(mddev->gendisk),
-					      raid_bio->bi_sector);
+		trace_block_bio_remap(bdev_get_queue(align_bi->bi_bdev),
+				      align_bi, disk_devt(mddev->gendisk),
+				      raid_bio->bi_sector);
 		generic_make_request(align_bi);
 		return 1;
 	} else {
@@ -4161,8 +4119,7 @@ static void raid5_unplug(struct blk_plug_cb *blk_cb, bool from_schedule)
 		}
 		spin_unlock_irq(&conf->device_lock);
 	}
-	if (mddev->queue)
-		trace_block_unplug(mddev->queue, cnt, !from_schedule);
+	trace_block_unplug(mddev->queue, cnt, !from_schedule);
 	kfree(cb);
 }
 
@@ -4225,13 +4182,6 @@ static void make_discard_request(struct mddev *mddev, struct bio *bi)
 		sh = get_active_stripe(conf, logical_sector, 0, 0, 0);
 		prepare_to_wait(&conf->wait_for_overlap, &w,
 				TASK_UNINTERRUPTIBLE);
-		set_bit(R5_Overlap, &sh->dev[sh->pd_idx].flags);
-		if (test_bit(STRIPE_SYNCING, &sh->state)) {
-			release_stripe(sh);
-			schedule();
-			goto again;
-		}
-		clear_bit(R5_Overlap, &sh->dev[sh->pd_idx].flags);
 		spin_lock_irq(&sh->stripe_lock);
 		for (d = 0; d < conf->raid_disks; d++) {
 			if (d == sh->pd_idx || d == sh->qd_idx)
@@ -4244,7 +4194,6 @@ static void make_discard_request(struct mddev *mddev, struct bio *bi)
 				goto again;
 			}
 		}
-		set_bit(STRIPE_DISCARD, &sh->state);
 		finish_wait(&conf->wait_for_overlap, &w);
 		for (d = 0; d < conf->raid_disks; d++) {
 			if (d == sh->pd_idx || d == sh->qd_idx)
@@ -5499,7 +5448,7 @@ static int run(struct mddev *mddev)
 		if (mddev->major_version == 0 &&
 		    mddev->minor_version > 90)
 			rdev->recovery_offset = reshape_offset;
-
+			
 		if (rdev->recovery_offset < reshape_offset) {
 			/* We need to check old and new layout */
 			if (!only_parity(rdev->raid_disk,
@@ -5621,8 +5570,6 @@ static int run(struct mddev *mddev)
 		 * guarantee discard_zerors_data
 		 */
 		mddev->queue->limits.discard_zeroes_data = 0;
-
-		blk_queue_max_write_same_sectors(mddev->queue, 0);
 
 		rdev_for_each(rdev, mddev) {
 			disk_stack_limits(mddev->gendisk, rdev->bdev,

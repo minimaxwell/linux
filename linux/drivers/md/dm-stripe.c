@@ -94,7 +94,7 @@ static int get_stripe(struct dm_target *ti, struct stripe_c *sc,
 static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 {
 	struct stripe_c *sc;
-	sector_t width, tmp_len;
+	sector_t width;
 	uint32_t stripes;
 	uint32_t chunk_size;
 	int r;
@@ -116,16 +116,15 @@ static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	}
 
 	width = ti->len;
-	if (sector_div(width, stripes)) {
+	if (sector_div(width, chunk_size)) {
 		ti->error = "Target length not divisible by "
-		    "number of stripes";
+		    "chunk size";
 		return -EINVAL;
 	}
 
-	tmp_len = width;
-	if (sector_div(tmp_len, chunk_size)) {
+	if (sector_div(width, stripes)) {
 		ti->error = "Target length not divisible by "
-		    "chunk size";
+		    "number of stripes";
 		return -EINVAL;
 	}
 
@@ -313,8 +312,8 @@ static int stripe_map(struct dm_target *ti, struct bio *bio)
  *
  */
 
-static void stripe_status(struct dm_target *ti, status_type_t type,
-			  unsigned status_flags, char *result, unsigned maxlen)
+static int stripe_status(struct dm_target *ti, status_type_t type,
+			 unsigned status_flags, char *result, unsigned maxlen)
 {
 	struct stripe_c *sc = (struct stripe_c *) ti->private;
 	char buffer[sc->stripes + 1];
@@ -341,6 +340,7 @@ static void stripe_status(struct dm_target *ti, status_type_t type,
 			    (unsigned long long)sc->stripe[i].physical_start);
 		break;
 	}
+	return 0;
 }
 
 static int stripe_end_io(struct dm_target *ti, struct bio *bio, int error)
@@ -428,7 +428,7 @@ static int stripe_merge(struct dm_target *ti, struct bvec_merge_data *bvm,
 
 static struct target_type stripe_target = {
 	.name   = "striped",
-	.version = {1, 5, 1},
+	.version = {1, 5, 0},
 	.module = THIS_MODULE,
 	.ctr    = stripe_ctr,
 	.dtr    = stripe_dtr,

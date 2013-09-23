@@ -54,10 +54,16 @@ int mwifiex_copy_mcast_addr(struct mwifiex_multicast_list *mlist,
  * This function waits on a cmd wait queue. It also cancels the pending
  * request after waking up, in case of errors.
  */
-int mwifiex_wait_queue_complete(struct mwifiex_adapter *adapter,
-				struct cmd_ctrl_node *cmd_queued)
+int mwifiex_wait_queue_complete(struct mwifiex_adapter *adapter)
 {
 	int status;
+	struct cmd_ctrl_node *cmd_queued;
+
+	if (!adapter->cmd_queued)
+		return 0;
+
+	cmd_queued = adapter->cmd_queued;
+	adapter->cmd_queued = NULL;
 
 	dev_dbg(adapter->dev, "cmd pending\n");
 	atomic_inc(&adapter->cmd_pending);
@@ -99,7 +105,7 @@ int mwifiex_request_set_multicast_list(struct mwifiex_private *priv,
 	} else {
 		/* Multicast */
 		priv->curr_pkt_filter &= ~HostCmd_ACT_MAC_PROMISCUOUS_ENABLE;
-		if (mcast_list->mode == MWIFIEX_ALL_MULTI_MODE) {
+		if (mcast_list->mode == MWIFIEX_MULTICAST_MODE) {
 			dev_dbg(priv->adapter->dev,
 				"info: Enabling All Multicast!\n");
 			priv->curr_pkt_filter |=
@@ -111,11 +117,20 @@ int mwifiex_request_set_multicast_list(struct mwifiex_private *priv,
 				dev_dbg(priv->adapter->dev,
 					"info: Set multicast list=%d\n",
 				       mcast_list->num_multicast_addr);
-				/* Send multicast addresses to firmware */
-				ret = mwifiex_send_cmd_async(priv,
-					HostCmd_CMD_MAC_MULTICAST_ADR,
-					HostCmd_ACT_GEN_SET, 0,
-					mcast_list);
+				/* Set multicast addresses to firmware */
+				if (old_pkt_filter == priv->curr_pkt_filter) {
+					/* Send request to firmware */
+					ret = mwifiex_send_cmd_async(priv,
+						HostCmd_CMD_MAC_MULTICAST_ADR,
+						HostCmd_ACT_GEN_SET, 0,
+						mcast_list);
+				} else {
+					/* Send request to firmware */
+					ret = mwifiex_send_cmd_async(priv,
+						HostCmd_CMD_MAC_MULTICAST_ADR,
+						HostCmd_ACT_GEN_SET, 0,
+						mcast_list);
+				}
 			}
 		}
 	}

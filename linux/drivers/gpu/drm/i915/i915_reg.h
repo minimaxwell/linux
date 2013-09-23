@@ -596,8 +596,6 @@
 					will not assert AGPBUSY# and will only
 					be delivered when out of C3. */
 #define   INSTPM_FORCE_ORDERING				(1<<7) /* GEN6+ */
-#define   INSTPM_TLB_INVALIDATE	(1<<9)
-#define   INSTPM_SYNC_FLUSH	(1<<5)
 #define ACTHD	        0x020c8
 #define FW_BLC		0x020d8
 #define FW_BLC2		0x020dc
@@ -1525,13 +1523,14 @@
 					 GEN7_CXT_EXTENDED_SIZE(ctx_reg) + \
 					 GEN7_CXT_GT1_SIZE(ctx_reg) + \
 					 GEN7_CXT_VFSTATE_SIZE(ctx_reg))
-/* Haswell does have the CXT_SIZE register however it does not appear to be
- * valid. Now, docs explain in dwords what is in the context object. The full
- * size is 70720 bytes, however, the power context and execlist context will
- * never be saved (power context is stored elsewhere, and execlists don't work
- * on HSW) - so the final size is 66944 bytes, which rounds to 17 pages.
- */
-#define HSW_CXT_TOTAL_SIZE		(17 * PAGE_SIZE)
+#define HSW_CXT_POWER_SIZE(ctx_reg)	((ctx_reg >> 26) & 0x3f)
+#define HSW_CXT_RING_SIZE(ctx_reg)	((ctx_reg >> 23) & 0x7)
+#define HSW_CXT_RENDER_SIZE(ctx_reg)	((ctx_reg >> 15) & 0xff)
+#define HSW_CXT_TOTAL_SIZE(ctx_reg)	(HSW_CXT_POWER_SIZE(ctx_reg) + \
+					 HSW_CXT_RING_SIZE(ctx_reg) + \
+					 HSW_CXT_RENDER_SIZE(ctx_reg) + \
+					 GEN7_CXT_VFSTATE_SIZE(ctx_reg))
+
 
 /*
  * Overlay regs
@@ -2604,14 +2603,14 @@
 #define _PIPEB_GMCH_DATA_M			0x71050
 
 /* Transfer unit size for display port - 1, default is 0x3f (for TU size 64) */
-#define  TU_SIZE(x)             (((x)-1) << 25) /* default size 64 */
-#define  TU_SIZE_MASK           (0x3f << 25)
+#define   PIPE_GMCH_DATA_M_TU_SIZE_MASK		(0x3f << 25)
+#define   PIPE_GMCH_DATA_M_TU_SIZE_SHIFT	25
 
-#define  DATA_LINK_M_N_MASK	(0xffffff)
-#define  DATA_LINK_N_MAX	(0x800000)
+#define   PIPE_GMCH_DATA_M_MASK			(0xffffff)
 
 #define _PIPEA_GMCH_DATA_N			0x70054
 #define _PIPEB_GMCH_DATA_N			0x71054
+#define   PIPE_GMCH_DATA_N_MASK			(0xffffff)
 
 /*
  * Computing Link M and N values for the Display Port link
@@ -2626,9 +2625,11 @@
 
 #define _PIPEA_DP_LINK_M				0x70060
 #define _PIPEB_DP_LINK_M				0x71060
+#define   PIPEA_DP_LINK_M_MASK			(0xffffff)
 
 #define _PIPEA_DP_LINK_N				0x70064
 #define _PIPEB_DP_LINK_N				0x71064
+#define   PIPEA_DP_LINK_N_MASK			(0xffffff)
 
 #define PIPE_GMCH_DATA_M(pipe) _PIPE(pipe, _PIPEA_GMCH_DATA_M, _PIPEB_GMCH_DATA_M)
 #define PIPE_GMCH_DATA_N(pipe) _PIPE(pipe, _PIPEA_GMCH_DATA_N, _PIPEB_GMCH_DATA_N)
@@ -3294,6 +3295,8 @@
 
 
 #define _PIPEA_DATA_M1           0x60030
+#define  TU_SIZE(x)             (((x)-1) << 25) /* default size 64 */
+#define  TU_SIZE_MASK           0x7e000000
 #define  PIPE_DATA_M1_OFFSET    0
 #define _PIPEA_DATA_N1           0x60034
 #define  PIPE_DATA_N1_OFFSET    0
@@ -3836,7 +3839,7 @@
 #define _TRANSB_CHICKEN2	 0xf1064
 #define TRANS_CHICKEN2(pipe) _PIPE(pipe, _TRANSA_CHICKEN2, _TRANSB_CHICKEN2)
 #define  TRANS_CHICKEN2_TIMING_OVERRIDE		(1<<31)
-#define  TRANS_CHICKEN2_FDI_POLARITY_REVERSED	(1<<29)
+
 
 #define SOUTH_CHICKEN1		0xc2000
 #define  FDIA_PHASE_SYNC_SHIFT_OVR	19
@@ -3924,7 +3927,7 @@
 #define  FDI_10BPC                      (1<<16)
 #define  FDI_6BPC                       (2<<16)
 #define  FDI_12BPC                      (3<<16)
-#define  FDI_RX_LINK_REVERSAL_OVERRIDE  (1<<15)
+#define  FDI_LINK_REVERSE_OVERWRITE     (1<<15)
 #define  FDI_DMI_LINK_REVERSE_MASK      (1<<14)
 #define  FDI_RX_PLL_ENABLE              (1<<13)
 #define  FDI_FS_ERR_CORRECT_ENABLE      (1<<11)
@@ -4208,9 +4211,7 @@
 #define GEN6_RP_INTERRUPT_LIMITS		0xA014
 #define GEN6_RPSTAT1				0xA01C
 #define   GEN6_CAGF_SHIFT			8
-#define   HSW_CAGF_SHIFT			7
 #define   GEN6_CAGF_MASK			(0x7f << GEN6_CAGF_SHIFT)
-#define   HSW_CAGF_MASK				(0x7f << HSW_CAGF_SHIFT)
 #define GEN6_RP_CONTROL				0xA024
 #define   GEN6_RP_MEDIA_TURBO			(1<<11)
 #define   GEN6_RP_MEDIA_MODE_MASK		(3<<9)
@@ -4279,8 +4280,8 @@
 #define   GEN6_PCODE_READ_MIN_FREQ_TABLE	0x9
 #define	  GEN6_PCODE_WRITE_RC6VIDS		0x4
 #define	  GEN6_PCODE_READ_RC6VIDS		0x5
-#define   GEN6_ENCODE_RC6_VID(mv)		(((mv) - 245) / 5)
-#define   GEN6_DECODE_RC6_VID(vids)		(((vids) * 5) + 245)
+#define   GEN6_ENCODE_RC6_VID(mv)		(((mv) / 5) - 245) < 0 ?: 0
+#define   GEN6_DECODE_RC6_VID(vids)		(((vids) * 5) > 0 ? ((vids) * 5) + 245 : 0)
 #define GEN6_PCODE_DATA				0x138128
 #define   GEN6_PCODE_FREQ_IA_RATIO_SHIFT	8
 
@@ -4523,7 +4524,6 @@
 #define  DDI_BUF_EMP_800MV_0DB_HSW		(7<<24)   /* Sel7 */
 #define  DDI_BUF_EMP_800MV_3_5DB_HSW		(8<<24)   /* Sel8 */
 #define  DDI_BUF_EMP_MASK			(0xf<<24)
-#define  DDI_BUF_PORT_REVERSAL			(1<<16)
 #define  DDI_BUF_IS_IDLE			(1<<7)
 #define  DDI_A_4_LANES				(1<<4)
 #define  DDI_PORT_WIDTH_X1			(0<<1)

@@ -334,7 +334,7 @@ struct dip_infoframe {
 } __attribute__((packed));
 
 struct intel_hdmi {
-	u32 hdmi_reg;
+	u32 sdvox_reg;
 	int ddc_bus;
 	uint32_t color_range;
 	bool has_hdmi_sink;
@@ -377,7 +377,6 @@ struct intel_dp {
 struct intel_digital_port {
 	struct intel_encoder base;
 	enum port port;
-	u32 saved_port_bits;
 	struct intel_dp dp;
 	struct intel_hdmi hdmi;
 };
@@ -427,7 +426,7 @@ extern void intel_attach_broadcast_rgb_property(struct drm_connector *connector)
 
 extern void intel_crt_init(struct drm_device *dev);
 extern void intel_hdmi_init(struct drm_device *dev,
-			    int hdmi_reg, enum port port);
+			    int sdvox_reg, enum port port);
 extern void intel_hdmi_init_connector(struct intel_digital_port *intel_dig_port,
 				      struct intel_connector *intel_connector);
 extern struct intel_hdmi *enc_to_intel_hdmi(struct drm_encoder *encoder);
@@ -440,8 +439,9 @@ extern bool intel_sdvo_init(struct drm_device *dev, uint32_t sdvo_reg,
 extern void intel_dvo_init(struct drm_device *dev);
 extern void intel_tv_init(struct drm_device *dev);
 extern void intel_mark_busy(struct drm_device *dev);
-extern void intel_mark_fb_busy(struct drm_i915_gem_object *obj);
 extern void intel_mark_idle(struct drm_device *dev);
+extern void intel_mark_fb_busy(struct drm_i915_gem_object *obj);
+extern void intel_mark_fb_idle(struct drm_i915_gem_object *obj);
 extern bool intel_lvds_init(struct drm_device *dev);
 extern void intel_dp_init(struct drm_device *dev, int output_reg,
 			  enum port port);
@@ -627,10 +627,9 @@ extern void intel_update_sprite_watermarks(struct drm_device *dev, int pipe,
 extern void intel_update_linetime_watermarks(struct drm_device *dev, int pipe,
 			 struct drm_display_mode *mode);
 
-extern unsigned long intel_gen4_compute_page_offset(int *x, int *y,
-						    unsigned int tiling_mode,
-						    unsigned int bpp,
-						    unsigned int pitch);
+extern unsigned long intel_gen4_compute_offset_xtiled(int *x, int *y,
+						      unsigned int bpp,
+						      unsigned int pitch);
 
 extern int intel_sprite_set_colorkey(struct drm_device *dev, void *data,
 				     struct drm_file *file_priv);

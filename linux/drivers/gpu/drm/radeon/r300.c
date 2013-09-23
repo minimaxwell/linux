@@ -1382,12 +1382,6 @@ static int r300_startup(struct radeon_device *rdev)
 	}
 
 	/* Enable IRQ */
-	if (!rdev->irq.installed) {
-		r = radeon_irq_kms_init(rdev);
-		if (r)
-			return r;
-	}
-
 	r100_irq_set(rdev);
 	rdev->config.r300.hdp_cntl = RREG32(RADEON_HOST_PATH_CNTL);
 	/* 1M ring buffer */
@@ -1520,6 +1514,9 @@ int r300_init(struct radeon_device *rdev)
 	r300_mc_init(rdev);
 	/* Fence driver */
 	r = radeon_fence_driver_init(rdev);
+	if (r)
+		return r;
+	r = radeon_irq_kms_init(rdev);
 	if (r)
 		return r;
 	/* Memory manager */

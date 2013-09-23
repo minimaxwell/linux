@@ -19,28 +19,23 @@
 
 static efi_system_table_t *sys_table;
 
-static void efi_char16_printk(efi_char16_t *str)
-{
-	struct efi_simple_text_output_protocol *out;
-
-	out = (struct efi_simple_text_output_protocol *)sys_table->con_out;
-	efi_call_phys2(out->output_string, out, str);
-}
-
 static void efi_printk(char *str)
 {
 	char *s8;
 
 	for (s8 = str; *s8; s8++) {
+		struct efi_simple_text_output_protocol *out;
 		efi_char16_t ch[2] = { 0 };
 
 		ch[0] = *s8;
+		out = (struct efi_simple_text_output_protocol *)sys_table->con_out;
+
 		if (*s8 == '\n') {
 			efi_char16_t nl[2] = { '\r', 0 };
-			efi_char16_printk(nl);
+			efi_call_phys2(out->output_string, out, nl);
 		}
 
-		efi_char16_printk(ch);
+		efi_call_phys2(out->output_string, out, ch);
 	}
 }
 
@@ -714,12 +709,7 @@ static efi_status_t handle_ramdisks(efi_loaded_image_t *image,
 			if ((u8 *)p >= (u8 *)filename_16 + sizeof(filename_16))
 				break;
 
-			if (*str == '/') {
-				*p++ = '\\';
-				*str++;
-			} else {
-				*p++ = *str++;
-			}
+			*p++ = *str++;
 		}
 
 		*p = '\0';
@@ -747,9 +737,7 @@ static efi_status_t handle_ramdisks(efi_loaded_image_t *image,
 		status = efi_call_phys5(fh->open, fh, &h, filename_16,
 					EFI_FILE_MODE_READ, (u64)0);
 		if (status != EFI_SUCCESS) {
-			efi_printk("Failed to open initrd file: ");
-			efi_char16_printk(filename_16);
-			efi_printk("\n");
+			efi_printk("Failed to open initrd file\n");
 			goto close_handles;
 		}
 
@@ -992,20 +980,18 @@ static efi_status_t exit_boot(struct boot_params *boot_params,
 	efi_memory_desc_t *mem_map;
 	efi_status_t status;
 	__u32 desc_version;
-	bool called_exit = false;
 	u8 nr_entries;
 	int i;
 
 	size = sizeof(*mem_map) * 32;
 
 again:
-	size += sizeof(*mem_map) * 2;
+	size += sizeof(*mem_map);
 	_size = size;
 	status = low_alloc(size, 1, (unsigned long *)&mem_map);
 	if (status != EFI_SUCCESS)
 		return status;
 
-get_map:
 	status = efi_call_phys5(sys_table->boottime->get_memory_map, &size,
 				mem_map, &key, &desc_size, &desc_version);
 	if (status == EFI_BUFFER_TOO_SMALL) {
@@ -1031,20 +1017,8 @@ get_map:
 	/* Might as well exit boot services now */
 	status = efi_call_phys2(sys_table->boottime->exit_boot_services,
 				handle, key);
-	if (status != EFI_SUCCESS) {
-		/*
-		 * ExitBootServices() will fail if any of the event
-		 * handlers change the memory map. In which case, we
-		 * must be prepared to retry, but only once so that
-		 * we're guaranteed to exit on repeated failures instead
-		 * of spinning forever.
-		 */
-		if (called_exit)
-			goto free_mem_map;
-
-		called_exit = true;
-		goto get_map;
-	}
+	if (status != EFI_SUCCESS)
+		goto free_mem_map;
 
 	/* Historic? */
 	boot_params->alt_mem_k = 32 * 1024;

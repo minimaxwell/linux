@@ -311,7 +311,7 @@ static int ext4_find_unwritten_pgoff(struct inode *inode,
 	blkbits = inode->i_sb->s_blocksize_bits;
 	startoff = *offset;
 	lastoff = startoff;
-	endoff = (loff_t)(map->m_lblk + map->m_len) << blkbits;
+	endoff = (map->m_lblk + map->m_len) << blkbits;
 
 	index = startoff >> PAGE_CACHE_SHIFT;
 	end = endoff >> PAGE_CACHE_SHIFT;
@@ -456,7 +456,7 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 		ret = ext4_map_blocks(NULL, inode, &map, 0);
 		if (ret > 0 && !(map.m_flags & EXT4_MAP_UNWRITTEN)) {
 			if (last != start)
-				dataoff = (loff_t)last << blkbits;
+				dataoff = last << blkbits;
 			break;
 		}
 
@@ -469,7 +469,7 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 		if (last >= es.start &&
 		    last < es.start + es.len) {
 			if (last != start)
-				dataoff = (loff_t)last << blkbits;
+				dataoff = last << blkbits;
 			break;
 		}
 
@@ -487,7 +487,7 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 		}
 
 		last++;
-		dataoff = (loff_t)last << blkbits;
+		dataoff = last << blkbits;
 	} while (last <= end);
 
 	mutex_unlock(&inode->i_mutex);
@@ -541,7 +541,7 @@ static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 		ret = ext4_map_blocks(NULL, inode, &map, 0);
 		if (ret > 0 && !(map.m_flags & EXT4_MAP_UNWRITTEN)) {
 			last += ret;
-			holeoff = (loff_t)last << blkbits;
+			holeoff = last << blkbits;
 			continue;
 		}
 
@@ -554,7 +554,7 @@ static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 		if (last >= es.start &&
 		    last < es.start + es.len) {
 			last = es.start + es.len;
-			holeoff = (loff_t)last << blkbits;
+			holeoff = last << blkbits;
 			continue;
 		}
 
@@ -569,7 +569,7 @@ static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 							      &map, &holeoff);
 			if (!unwritten) {
 				last += ret;
-				holeoff = (loff_t)last << blkbits;
+				holeoff = last << blkbits;
 				continue;
 			}
 		}

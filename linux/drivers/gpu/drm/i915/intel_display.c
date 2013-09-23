@@ -154,8 +154,8 @@ static const intel_limit_t intel_limits_i9xx_sdvo = {
 	.vco = { .min = 1400000, .max = 2800000 },
 	.n = { .min = 1, .max = 6 },
 	.m = { .min = 70, .max = 120 },
-	.m1 = { .min = 8, .max = 18 },
-	.m2 = { .min = 3, .max = 7 },
+	.m1 = { .min = 10, .max = 22 },
+	.m2 = { .min = 5, .max = 9 },
 	.p = { .min = 5, .max = 80 },
 	.p1 = { .min = 1, .max = 8 },
 	.p2 = { .dot_limit = 200000,
@@ -1125,8 +1125,8 @@ static void assert_fdi_tx(struct drm_i915_private *dev_priv,
 	enum transcoder cpu_transcoder = intel_pipe_to_cpu_transcoder(dev_priv,
 								      pipe);
 
-	if (HAS_DDI(dev_priv->dev)) {
-		/* DDI does not have a specific FDI_TX register */
+	if (IS_HASWELL(dev_priv->dev)) {
+		/* On Haswell, DDI is used instead of FDI_TX_CTL */
 		reg = TRANS_DDI_FUNC_CTL(cpu_transcoder);
 		val = I915_READ(reg);
 		cur_state = !!(val & TRANS_DDI_FUNC_ENABLE);
@@ -1170,7 +1170,7 @@ static void assert_fdi_tx_pll_enabled(struct drm_i915_private *dev_priv,
 		return;
 
 	/* On Haswell, DDI ports are responsible for the FDI PLL setup */
-	if (HAS_DDI(dev_priv->dev))
+	if (IS_HASWELL(dev_priv->dev))
 		return;
 
 	reg = FDI_TX_CTL(pipe);
@@ -2017,29 +2017,18 @@ void intel_unpin_fb_obj(struct drm_i915_gem_object *obj)
 
 /* Computes the linear offset to the base tile and adjusts x, y. bytes per pixel
  * is assumed to be a power-of-two. */
-unsigned long intel_gen4_compute_page_offset(int *x, int *y,
-					     unsigned int tiling_mode,
-					     unsigned int cpp,
-					     unsigned int pitch)
+unsigned long intel_gen4_compute_offset_xtiled(int *x, int *y,
+					       unsigned int bpp,
+					       unsigned int pitch)
 {
-	if (tiling_mode != I915_TILING_NONE) {
-		unsigned int tile_rows, tiles;
+	int tile_rows, tiles;
 
-		tile_rows = *y / 8;
-		*y %= 8;
+	tile_rows = *y / 8;
+	*y %= 8;
+	tiles = *x / (512/bpp);
+	*x %= 512/bpp;
 
-		tiles = *x / (512/cpp);
-		*x %= 512/cpp;
-
-		return tile_rows * pitch * 8 + tiles * 4096;
-	} else {
-		unsigned int offset;
-
-		offset = *y * pitch + *x * cpp;
-		*y = 0;
-		*x = (offset & 4095) / cpp;
-		return offset & -4096;
-	}
+	return tile_rows * pitch * 8 + tiles * 4096;
 }
 
 static int i9xx_update_plane(struct drm_crtc *crtc, struct drm_framebuffer *fb,
@@ -2116,9 +2105,9 @@ static int i9xx_update_plane(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 
 	if (INTEL_INFO(dev)->gen >= 4) {
 		intel_crtc->dspaddr_offset =
-			intel_gen4_compute_page_offset(&x, &y, obj->tiling_mode,
-						       fb->bits_per_pixel / 8,
-						       fb->pitches[0]);
+			intel_gen4_compute_offset_xtiled(&x, &y,
+							 fb->bits_per_pixel / 8,
+							 fb->pitches[0]);
 		linear_offset -= intel_crtc->dspaddr_offset;
 	} else {
 		intel_crtc->dspaddr_offset = linear_offset;
@@ -2209,9 +2198,9 @@ static int ironlake_update_plane(struct drm_crtc *crtc,
 
 	linear_offset = y * fb->pitches[0] + x * (fb->bits_per_pixel / 8);
 	intel_crtc->dspaddr_offset =
-		intel_gen4_compute_page_offset(&x, &y, obj->tiling_mode,
-					       fb->bits_per_pixel / 8,
-					       fb->pitches[0]);
+		intel_gen4_compute_offset_xtiled(&x, &y,
+						 fb->bits_per_pixel / 8,
+						 fb->pitches[0]);
 	linear_offset -= intel_crtc->dspaddr_offset;
 
 	DRM_DEBUG_KMS("Writing base %08X %08lX %d %d %d\n",
@@ -2315,10 +2304,10 @@ intel_pipe_set_base(struct drm_crtc *crtc, int x, int y,
 		return 0;
 	}
 
-	if (intel_crtc->plane > INTEL_INFO(dev)->num_pipes) {
+	if(intel_crtc->plane > dev_priv->num_pipe) {
 		DRM_ERROR("no plane for crtc: plane %d, num_pipes %d\n",
 				intel_crtc->plane,
-				INTEL_INFO(dev)->num_pipes);
+				dev_priv->num_pipe);
 		return -EINVAL;
 	}
 
@@ -3697,7 +3686,6 @@ static void i9xx_crtc_disable(struct drm_crtc *crtc)
 	struct intel_encoder *encoder;
 	int pipe = intel_crtc->pipe;
 	int plane = intel_crtc->plane;
-	u32 pctl;
 
 
 	if (!intel_crtc->active)
@@ -3717,13 +3705,6 @@ static void i9xx_crtc_disable(struct drm_crtc *crtc)
 
 	intel_disable_plane(dev_priv, plane, pipe);
 	intel_disable_pipe(dev_priv, pipe);
-
-	/* Disable pannel fitter if it is on this pipe. */
-	pctl = I915_READ(PFIT_CONTROL);
-	if ((pctl & PFIT_ENABLE) &&
-	    ((pctl & PFIT_PIPE_MASK) >> PFIT_PIPE_SHIFT) == pipe)
-		I915_WRITE(PFIT_CONTROL, 0);
-
 	intel_disable_pll(dev_priv, pipe);
 
 	intel_crtc->active = false;
@@ -4042,19 +4023,10 @@ struct fdi_m_n {
 static void
 fdi_reduce_ratio(u32 *num, u32 *den)
 {
-	while (*num > DATA_LINK_M_N_MASK ||
-	       *den > DATA_LINK_M_N_MASK) {
+	while (*num > 0xffffff || *den > 0xffffff) {
 		*num >>= 1;
 		*den >>= 1;
 	}
-}
-
-static void compute_m_n(unsigned int m, unsigned int n,
-			uint32_t *ret_m, uint32_t *ret_n)
-{
-	*ret_n = min_t(unsigned int, roundup_pow_of_two(n), DATA_LINK_N_MAX);
-	*ret_m = div_u64((uint64_t) m * *ret_n, n);
-	fdi_reduce_ratio(ret_m, ret_n);
 }
 
 static void
@@ -4063,12 +4035,14 @@ ironlake_compute_m_n(int bits_per_pixel, int nlanes, int pixel_clock,
 {
 	m_n->tu = 64; /* default size */
 
-	compute_m_n(bits_per_pixel * pixel_clock,
-		    link_clock * nlanes * 8,
-		    &m_n->gmch_m, &m_n->gmch_n);
+	/* BUG_ON(pixel_clock > INT_MAX / 36); */
+	m_n->gmch_m = bits_per_pixel * pixel_clock;
+	m_n->gmch_n = link_clock * nlanes * 8;
+	fdi_reduce_ratio(&m_n->gmch_m, &m_n->gmch_n);
 
-	compute_m_n(pixel_clock, link_clock,
-		    &m_n->link_m, &m_n->link_n);
+	m_n->link_m = pixel_clock;
+	m_n->link_n = link_clock;
+	fdi_reduce_ratio(&m_n->link_m, &m_n->link_n);
 }
 
 static inline bool intel_panel_use_ssc(struct drm_i915_private *dev_priv)
@@ -5360,7 +5334,7 @@ static bool ironlake_check_fdi_lanes(struct intel_crtc *intel_crtc)
 		return false;
 	}
 
-	if (INTEL_INFO(dev)->num_pipes == 2)
+	if (dev_priv->num_pipe == 2)
 		return true;
 
 	switch (intel_crtc->pipe) {
@@ -7019,17 +6993,6 @@ void intel_mark_busy(struct drm_device *dev)
 
 void intel_mark_idle(struct drm_device *dev)
 {
-	struct drm_crtc *crtc;
-
-	if (!i915_powersave)
-		return;
-
-	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
-		if (!crtc->fb)
-			continue;
-
-		intel_decrease_pllclock(crtc);
-	}
 }
 
 void intel_mark_fb_busy(struct drm_i915_gem_object *obj)
@@ -7046,6 +7009,23 @@ void intel_mark_fb_busy(struct drm_i915_gem_object *obj)
 
 		if (to_intel_framebuffer(crtc->fb)->obj == obj)
 			intel_increase_pllclock(crtc);
+	}
+}
+
+void intel_mark_fb_idle(struct drm_i915_gem_object *obj)
+{
+	struct drm_device *dev = obj->base.dev;
+	struct drm_crtc *crtc;
+
+	if (!i915_powersave)
+		return;
+
+	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
+		if (!crtc->fb)
+			continue;
+
+		if (to_intel_framebuffer(crtc->fb)->obj == obj)
+			intel_decrease_pllclock(crtc);
 	}
 }
 
@@ -7427,8 +7407,8 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 {
 	struct drm_device *dev = crtc->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
-	struct drm_framebuffer *old_fb = crtc->fb;
-	struct drm_i915_gem_object *obj = to_intel_framebuffer(fb)->obj;
+	struct intel_framebuffer *intel_fb;
+	struct drm_i915_gem_object *obj;
 	struct intel_crtc *intel_crtc = to_intel_crtc(crtc);
 	struct intel_unpin_work *work;
 	unsigned long flags;
@@ -7453,7 +7433,8 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 
 	work->event = event;
 	work->crtc = crtc;
-	work->old_fb_obj = to_intel_framebuffer(old_fb)->obj;
+	intel_fb = to_intel_framebuffer(crtc->fb);
+	work->old_fb_obj = intel_fb->obj;
 	INIT_WORK(&work->work, intel_unpin_work_fn);
 
 	ret = drm_vblank_get(dev, intel_crtc->pipe);
@@ -7472,6 +7453,9 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 	}
 	intel_crtc->unpin_work = work;
 	spin_unlock_irqrestore(&dev->event_lock, flags);
+
+	intel_fb = to_intel_framebuffer(fb);
+	obj = intel_fb->obj;
 
 	if (atomic_read(&intel_crtc->unpin_work_count) >= 2)
 		flush_workqueue(dev_priv->wq);
@@ -7510,7 +7494,6 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 
 cleanup_pending:
 	atomic_dec(&intel_crtc->unpin_work_count);
-	crtc->fb = old_fb;
 	atomic_sub(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
 	drm_gem_object_unreference(&work->old_fb_obj->base);
 	drm_gem_object_unreference(&obj->base);
@@ -7739,25 +7722,22 @@ intel_modeset_affected_pipes(struct drm_crtc *crtc, unsigned *modeset_pipes,
 	if (crtc->enabled)
 		*prepare_pipes |= 1 << intel_crtc->pipe;
 
-	/*
-	 * For simplicity do a full modeset on any pipe where the output routing
-	 * changed. We could be more clever, but that would require us to be
-	 * more careful with calling the relevant encoder->mode_set functions.
-	 */
+	/* We only support modeset on one single crtc, hence we need to do that
+	 * only for the passed in crtc iff we change anything else than just
+	 * disable crtcs.
+	 *
+	 * This is actually not true, to be fully compatible with the old crtc
+	 * helper we automatically disable _any_ output (i.e. doesn't need to be
+	 * connected to the crtc we're modesetting on) if it's disconnected.
+	 * Which is a rather nutty api (since changed the output configuration
+	 * without userspace's explicit request can lead to confusion), but
+	 * alas. Hence we currently need to modeset on all pipes we prepare. */
 	if (*prepare_pipes)
 		*modeset_pipes = *prepare_pipes;
 
 	/* ... and mask these out. */
 	*modeset_pipes &= ~(*disable_pipes);
 	*prepare_pipes &= ~(*disable_pipes);
-
-	/*
-	 * HACK: We don't (yet) fully support global modesets. intel_set_config
-	 * obies this rule, but the modeset restore mode of
-	 * intel_modeset_setup_hw_state does not.
-	 */
-	*modeset_pipes &= 1 << intel_crtc->pipe;
-	*prepare_pipes &= 1 << intel_crtc->pipe;
 }
 
 static bool intel_crtc_in_use(struct drm_crtc *crtc)
@@ -8323,7 +8303,7 @@ static const struct drm_crtc_funcs intel_crtc_funcs = {
 
 static void intel_cpu_pll_init(struct drm_device *dev)
 {
-	if (HAS_DDI(dev))
+	if (IS_HASWELL(dev))
 		intel_ddi_pll_init(dev);
 }
 
@@ -8459,10 +8439,11 @@ static void intel_setup_outputs(struct drm_device *dev)
 		I915_WRITE(PFIT_CONTROL, 0);
 	}
 
-	if (!IS_ULT(dev))
+	if (!(IS_HASWELL(dev) &&
+	      (I915_READ(DDI_BUF_CTL(PORT_A)) & DDI_A_4_LANES)))
 		intel_crt_init(dev);
 
-	if (HAS_DDI(dev)) {
+	if (IS_HASWELL(dev)) {
 		int found;
 
 		/* Haswell uses DDI functions to detect digital outputs */
@@ -8722,7 +8703,7 @@ static void intel_init_display(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
 	/* We always want a DPMS function */
-	if (HAS_DDI(dev)) {
+	if (IS_HASWELL(dev)) {
 		dev_priv->display.crtc_mode_set = haswell_crtc_mode_set;
 		dev_priv->display.crtc_enable = haswell_crtc_enable;
 		dev_priv->display.crtc_disable = haswell_crtc_disable;
@@ -8850,17 +8831,6 @@ static void quirk_invert_brightness(struct drm_device *dev)
 	DRM_INFO("applying inverted panel brightness quirk\n");
 }
 
-/*
- * Some machines (Dell XPS13) suffer broken backlight controls if
- * BLM_PCH_PWM_ENABLE is set.
- */
-static void quirk_no_pcm_pwm_enable(struct drm_device *dev)
-{
-	struct drm_i915_private *dev_priv = dev->dev_private;
-	dev_priv->quirks |= QUIRK_NO_PCH_PWM_ENABLE;
-	DRM_INFO("applying no-PCH_PWM_ENABLE quirk\n");
-}
-
 struct intel_quirk {
 	int device;
 	int subsystem_vendor;
@@ -8918,26 +8888,6 @@ static struct intel_quirk intel_quirks[] = {
 
 	/* Acer Aspire 5734Z must invert backlight brightness */
 	{ 0x2a42, 0x1025, 0x0459, quirk_invert_brightness },
-
-	/* Acer Aspire 4736Z */
-	{ 0x2a42, 0x1025, 0x0260, quirk_invert_brightness },
-
-	/* Acer/eMachines G725 */
-	{ 0x2a42, 0x1025, 0x0210, quirk_invert_brightness },
-
-	/* Acer/eMachines e725 */
-	{ 0x2a42, 0x1025, 0x0212, quirk_invert_brightness },
-
-	/* Acer/Packard Bell NCL20 */
-	{ 0x2a42, 0x1025, 0x034b, quirk_invert_brightness },
-
-	/* Acer Aspire 4736Z */
-	{ 0x2a42, 0x1025, 0x0260, quirk_invert_brightness },
-
-	/* Dell XPS13 HD Sandy Bridge */
-	{ 0x0116, 0x1028, 0x052e, quirk_no_pcm_pwm_enable },
-	/* Dell XPS13 HD and XPS13 FHD Ivy Bridge */
-	{ 0x0166, 0x1028, 0x058b, quirk_no_pcm_pwm_enable },
 };
 
 static void intel_init_quirks(struct drm_device *dev)
@@ -9034,10 +8984,9 @@ void intel_modeset_init(struct drm_device *dev)
 	dev->mode_config.fb_base = dev_priv->mm.gtt_base_addr;
 
 	DRM_DEBUG_KMS("%d display pipe%s available.\n",
-		      INTEL_INFO(dev)->num_pipes,
-		      INTEL_INFO(dev)->num_pipes > 1 ? "s" : "");
+		      dev_priv->num_pipe, dev_priv->num_pipe > 1 ? "s" : "");
 
-	for (i = 0; i < INTEL_INFO(dev)->num_pipes; i++) {
+	for (i = 0; i < dev_priv->num_pipe; i++) {
 		intel_crtc_init(dev, i);
 		ret = intel_plane_init(dev, i);
 		if (ret)
@@ -9091,11 +9040,10 @@ static void intel_enable_pipe_a(struct drm_device *dev)
 static bool
 intel_check_plane_mapping(struct intel_crtc *crtc)
 {
-	struct drm_device *dev = crtc->base.dev;
-	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct drm_i915_private *dev_priv = crtc->base.dev->dev_private;
 	u32 reg, val;
 
-	if (INTEL_INFO(dev)->num_pipes == 1)
+	if (dev_priv->num_pipe == 1)
 		return true;
 
 	reg = DSPCNTR(!crtc->plane);
@@ -9261,7 +9209,7 @@ void intel_modeset_setup_hw_state(struct drm_device *dev,
 	struct intel_encoder *encoder;
 	struct intel_connector *connector;
 
-	if (HAS_DDI(dev)) {
+	if (IS_HASWELL(dev)) {
 		tmp = I915_READ(TRANS_DDI_FUNC_CTL(TRANSCODER_EDP));
 
 		if (tmp & TRANS_DDI_FUNC_ENABLE) {
@@ -9302,7 +9250,7 @@ void intel_modeset_setup_hw_state(struct drm_device *dev,
 			      crtc->active ? "enabled" : "disabled");
 	}
 
-	if (HAS_DDI(dev))
+	if (IS_HASWELL(dev))
 		intel_ddi_setup_hw_pll_state(dev);
 
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list,
@@ -9418,9 +9366,6 @@ void intel_modeset_cleanup(struct drm_device *dev)
 	/* flush any delayed tasks or pending work */
 	flush_scheduled_work();
 
-	/* destroy backlight, if any, before the connectors */
-	intel_panel_destroy_backlight(dev);
-
 	drm_mode_config_cleanup(dev);
 }
 
@@ -9461,9 +9406,6 @@ int intel_modeset_vga_set_state(struct drm_device *dev, bool state)
 #include <linux/seq_file.h>
 
 struct intel_display_error_state {
-
-	int num_transcoders;
-
 	struct intel_cursor_error_state {
 		u32 control;
 		u32 position;
@@ -9472,7 +9414,15 @@ struct intel_display_error_state {
 	} cursor[I915_MAX_PIPES];
 
 	struct intel_pipe_error_state {
+		u32 conf;
 		u32 source;
+
+		u32 htotal;
+		u32 hblank;
+		u32 hsync;
+		u32 vtotal;
+		u32 vblank;
+		u32 vsync;
 	} pipe[I915_MAX_PIPES];
 
 	struct intel_plane_error_state {
@@ -9484,19 +9434,6 @@ struct intel_display_error_state {
 		u32 surface;
 		u32 tile_offset;
 	} plane[I915_MAX_PIPES];
-
-	struct intel_transcoder_error_state {
-		enum transcoder cpu_transcoder;
-
-		u32 conf;
-
-		u32 htotal;
-		u32 hblank;
-		u32 hsync;
-		u32 vtotal;
-		u32 vblank;
-		u32 vsync;
-	} transcoder[4];
 };
 
 struct intel_display_error_state *
@@ -9504,22 +9441,16 @@ intel_display_capture_error_state(struct drm_device *dev)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
 	struct intel_display_error_state *error;
-	int transcoders[] = {
-		TRANSCODER_A,
-		TRANSCODER_B,
-		TRANSCODER_C,
-		TRANSCODER_EDP,
-	};
+	enum transcoder cpu_transcoder;
 	int i;
-
-	if (INTEL_INFO(dev)->num_pipes == 0)
-		return NULL;
 
 	error = kmalloc(sizeof(*error), GFP_ATOMIC);
 	if (error == NULL)
 		return NULL;
 
 	for_each_pipe(i) {
+		cpu_transcoder = intel_pipe_to_cpu_transcoder(dev_priv, i);
+
 		error->cursor[i].control = I915_READ(CURCNTR(i));
 		error->cursor[i].position = I915_READ(CURPOS(i));
 		error->cursor[i].base = I915_READ(CURBASE(i));
@@ -9534,25 +9465,14 @@ intel_display_capture_error_state(struct drm_device *dev)
 			error->plane[i].tile_offset = I915_READ(DSPTILEOFF(i));
 		}
 
+		error->pipe[i].conf = I915_READ(PIPECONF(cpu_transcoder));
 		error->pipe[i].source = I915_READ(PIPESRC(i));
-	}
-
-	error->num_transcoders = INTEL_INFO(dev)->num_pipes;
-	if (HAS_DDI(dev_priv->dev))
-		error->num_transcoders++; /* Account for eDP. */
-
-	for (i = 0; i < error->num_transcoders; i++) {
-		enum transcoder cpu_transcoder = transcoders[i];
-
-		error->transcoder[i].cpu_transcoder = cpu_transcoder;
-
-		error->transcoder[i].conf = I915_READ(PIPECONF(cpu_transcoder));
-		error->transcoder[i].htotal = I915_READ(HTOTAL(cpu_transcoder));
-		error->transcoder[i].hblank = I915_READ(HBLANK(cpu_transcoder));
-		error->transcoder[i].hsync = I915_READ(HSYNC(cpu_transcoder));
-		error->transcoder[i].vtotal = I915_READ(VTOTAL(cpu_transcoder));
-		error->transcoder[i].vblank = I915_READ(VBLANK(cpu_transcoder));
-		error->transcoder[i].vsync = I915_READ(VSYNC(cpu_transcoder));
+		error->pipe[i].htotal = I915_READ(HTOTAL(cpu_transcoder));
+		error->pipe[i].hblank = I915_READ(HBLANK(cpu_transcoder));
+		error->pipe[i].hsync = I915_READ(HSYNC(cpu_transcoder));
+		error->pipe[i].vtotal = I915_READ(VTOTAL(cpu_transcoder));
+		error->pipe[i].vblank = I915_READ(VBLANK(cpu_transcoder));
+		error->pipe[i].vsync = I915_READ(VSYNC(cpu_transcoder));
 	}
 
 	return error;
@@ -9563,15 +9483,20 @@ intel_display_print_error_state(struct seq_file *m,
 				struct drm_device *dev,
 				struct intel_display_error_state *error)
 {
+	drm_i915_private_t *dev_priv = dev->dev_private;
 	int i;
 
-	if (!error)
-		return;
-
-	seq_printf(m, "Num Pipes: %d\n", INTEL_INFO(dev)->num_pipes);
+	seq_printf(m, "Num Pipes: %d\n", dev_priv->num_pipe);
 	for_each_pipe(i) {
 		seq_printf(m, "Pipe [%d]:\n", i);
+		seq_printf(m, "  CONF: %08x\n", error->pipe[i].conf);
 		seq_printf(m, "  SRC: %08x\n", error->pipe[i].source);
+		seq_printf(m, "  HTOTAL: %08x\n", error->pipe[i].htotal);
+		seq_printf(m, "  HBLANK: %08x\n", error->pipe[i].hblank);
+		seq_printf(m, "  HSYNC: %08x\n", error->pipe[i].hsync);
+		seq_printf(m, "  VTOTAL: %08x\n", error->pipe[i].vtotal);
+		seq_printf(m, "  VBLANK: %08x\n", error->pipe[i].vblank);
+		seq_printf(m, "  VSYNC: %08x\n", error->pipe[i].vsync);
 
 		seq_printf(m, "Plane [%d]:\n", i);
 		seq_printf(m, "  CNTR: %08x\n", error->plane[i].control);
@@ -9588,18 +9513,6 @@ intel_display_print_error_state(struct seq_file *m,
 		seq_printf(m, "  CNTR: %08x\n", error->cursor[i].control);
 		seq_printf(m, "  POS: %08x\n", error->cursor[i].position);
 		seq_printf(m, "  BASE: %08x\n", error->cursor[i].base);
-	}
-
-	for (i = 0; i < error->num_transcoders; i++) {
-		seq_printf(m, "  CPU transcoder: %c\n",
-			   transcoder_name(error->transcoder[i].cpu_transcoder));
-		seq_printf(m, "  CONF: %08x\n", error->transcoder[i].conf);
-		seq_printf(m, "  HTOTAL: %08x\n", error->transcoder[i].htotal);
-		seq_printf(m, "  HBLANK: %08x\n", error->transcoder[i].hblank);
-		seq_printf(m, "  HSYNC: %08x\n", error->transcoder[i].hsync);
-		seq_printf(m, "  VTOTAL: %08x\n", error->transcoder[i].vtotal);
-		seq_printf(m, "  VBLANK: %08x\n", error->transcoder[i].vblank);
-		seq_printf(m, "  VSYNC: %08x\n", error->transcoder[i].vsync);
 	}
 }
 #endif

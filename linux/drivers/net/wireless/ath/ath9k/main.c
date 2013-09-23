@@ -1236,7 +1236,6 @@ static int ath9k_sta_add(struct ieee80211_hw *hw,
 	struct ath_common *common = ath9k_hw_common(sc->sc_ah);
 	struct ath_node *an = (struct ath_node *) sta->drv_priv;
 	struct ieee80211_key_conf ps_key = { };
-	int key;
 
 	ath_node_attach(sc, sta, vif);
 
@@ -1244,9 +1243,7 @@ static int ath9k_sta_add(struct ieee80211_hw *hw,
 	    vif->type != NL80211_IFTYPE_AP_VLAN)
 		return 0;
 
-	key = ath_key_config(common, vif, sta, &ps_key);
-	if (key > 0)
-		an->ps_key = key;
+	an->ps_key = ath_key_config(common, vif, sta, &ps_key);
 
 	return 0;
 }
@@ -1263,7 +1260,6 @@ static void ath9k_del_ps_key(struct ath_softc *sc,
 	    return;
 
 	ath_key_delete(common, &ps_key);
-	an->ps_key = 0;
 }
 
 static int ath9k_sta_remove(struct ieee80211_hw *hw,

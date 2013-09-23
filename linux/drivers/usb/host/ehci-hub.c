@@ -328,7 +328,7 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	ehci->rh_state = EHCI_RH_SUSPENDED;
 
 	end_unlink_async(ehci);
-	unlink_empty_async_suspended(ehci);
+	unlink_empty_async(ehci);
 	ehci_handle_intr_unlinks(ehci);
 	end_free_itds(ehci);
 
@@ -856,7 +856,6 @@ static int ehci_hub_control (
 				ehci->reset_done[wIndex] = jiffies
 						+ msecs_to_jiffies(20);
 				usb_hcd_start_port_resume(&hcd->self, wIndex);
-				set_bit(wIndex, &ehci->resuming_ports);
 				/* check the port again */
 				mod_timer(&ehci_to_hcd(ehci)->rh_timer,
 						ehci->reset_done[wIndex]);

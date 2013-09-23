@@ -73,11 +73,11 @@
 #define LIS302_IRQ1_GPIO 181
 #define LIS302_IRQ2_GPIO 180  /* Not yet in use */
 
-/* List all SPI devices here. Note that the list/probe order seems to matter! */
+/* list all spi devices here */
 enum {
 	RX51_SPI_WL1251,
-	RX51_SPI_TSC2005,	/* Touch Controller */
 	RX51_SPI_MIPID,		/* LCD panel */
+	RX51_SPI_TSC2005,	/* Touch Controller */
 };
 
 static struct wl12xx_platform_data wl1251_pdata;

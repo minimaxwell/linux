@@ -74,6 +74,7 @@ struct ti_port {
 	int			tp_flags;
 	int			tp_closing_wait;/* in .01 secs */
 	struct async_icount	tp_icount;
+	wait_queue_head_t	tp_msr_wait;	/* wait for msr change */
 	wait_queue_head_t	tp_write_wait;
 	struct ti_device	*tp_tdev;
 	struct usb_serial_port	*tp_port;
@@ -178,8 +179,7 @@ static struct usb_device_id ti_id_table_3410[15+TI_EXTRA_VID_PID_COUNT+1] = {
 	{ USB_DEVICE(IBM_VENDOR_ID, IBM_4543_PRODUCT_ID) },
 	{ USB_DEVICE(IBM_VENDOR_ID, IBM_454B_PRODUCT_ID) },
 	{ USB_DEVICE(IBM_VENDOR_ID, IBM_454C_PRODUCT_ID) },
-	{ USB_DEVICE(ABBOTT_VENDOR_ID, ABBOTT_STEREO_PLUG_ID) },
-	{ USB_DEVICE(ABBOTT_VENDOR_ID, ABBOTT_STRIP_PORT_ID) },
+	{ USB_DEVICE(ABBOTT_VENDOR_ID, ABBOTT_PRODUCT_ID) },
 	{ USB_DEVICE(TI_VENDOR_ID, FRI2_PRODUCT_ID) },
 };
 
@@ -373,7 +373,7 @@ static int ti_startup(struct usb_serial *serial)
 	usb_set_serial_data(serial, tdev);
 
 	/* determine device type */
-	if (serial->type == &ti_1port_device)
+	if (usb_match_id(serial->interface, ti_id_table_3410))
 		tdev->td_is_3410 = 1;
 	dev_dbg(&dev->dev, "%s - device type is %s\n", __func__,
 		tdev->td_is_3410 ? "3410" : "5052");
@@ -432,6 +432,7 @@ static int ti_port_probe(struct usb_serial_port *port)
 	else
 		tport->tp_uart_base_addr = TI_UART2_BASE_ADDR;
 	tport->tp_closing_wait = closing_wait;
+	init_waitqueue_head(&tport->tp_msr_wait);
 	init_waitqueue_head(&tport->tp_write_wait);
 	if (kfifo_alloc(&tport->write_fifo, TI_WRITE_BUF_SIZE, GFP_KERNEL)) {
 		kfree(tport);
@@ -783,13 +784,9 @@ static int ti_ioctl(struct tty_struct *tty,
 		dev_dbg(&port->dev, "%s - TIOCMIWAIT\n", __func__);
 		cprev = tport->tp_icount;
 		while (1) {
-			interruptible_sleep_on(&port->delta_msr_wait);
+			interruptible_sleep_on(&tport->tp_msr_wait);
 			if (signal_pending(current))
 				return -ERESTARTSYS;
-
-			if (port->serial->disconnected)
-				return -EIO;
-
 			cnow = tport->tp_icount;
 			if (cnow.rng == cprev.rng && cnow.dsr == cprev.dsr &&
 			    cnow.dcd == cprev.dcd && cnow.cts == cprev.cts)
@@ -1403,7 +1400,7 @@ static void ti_handle_new_msr(struct ti_port *tport, __u8 msr)
 			icount->dcd++;
 		if (msr & TI_MSR_DELTA_RI)
 			icount->rng++;
-		wake_up_interruptible(&tport->tp_port->delta_msr_wait);
+		wake_up_interruptible(&tport->tp_msr_wait);
 		spin_unlock_irqrestore(&tport->tp_lock, flags);
 	}
 
@@ -1627,15 +1624,14 @@ static int ti_download_firmware(struct ti_device *tdev)
 	char buf[32];
 
 	/* try ID specific firmware first, then try generic firmware */
-	sprintf(buf, "ti_usb-v%04x-p%04x.fw",
-			le16_to_cpu(dev->descriptor.idVendor),
-			le16_to_cpu(dev->descriptor.idProduct));
+	sprintf(buf, "ti_usb-v%04x-p%04x.fw", dev->descriptor.idVendor,
+	    dev->descriptor.idProduct);
 	status = request_firmware(&fw_p, buf, &dev->dev);
 
 	if (status != 0) {
 		buf[0] = '\0';
-		if (le16_to_cpu(dev->descriptor.idVendor) == MTS_VENDOR_ID) {
-			switch (le16_to_cpu(dev->descriptor.idProduct)) {
+		if (dev->descriptor.idVendor == MTS_VENDOR_ID) {
+			switch (dev->descriptor.idProduct) {
 			case MTS_CDMA_PRODUCT_ID:
 				strcpy(buf, "mts_cdma.fw");
 				break;

@@ -556,6 +556,7 @@ static void intel_lvds_destroy(struct drm_connector *connector)
 	if (!IS_ERR_OR_NULL(lvds_connector->base.edid))
 		kfree(lvds_connector->base.edid);
 
+	intel_panel_destroy_backlight(connector->dev);
 	intel_panel_fini(&lvds_connector->base.panel);
 
 	drm_sysfs_connector_remove(connector);
@@ -743,10 +744,10 @@ static const struct dmi_system_id intel_no_lvds[] = {
 	},
 	{
 		.callback = intel_no_lvds_dmi_callback,
-		.ident = "Hewlett-Packard HP t5740",
+		.ident = "Hewlett-Packard HP t5740e Thin Client",
 		.matches = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "Hewlett-Packard"),
-			DMI_MATCH(DMI_PRODUCT_NAME, " t5740"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "HP t5740e Thin Client"),
 		},
 	},
 	{
@@ -787,14 +788,6 @@ static const struct dmi_system_id intel_no_lvds[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Supermicro"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "X7SPA-H"),
-		},
-	},
-	{
-		.callback = intel_no_lvds_dmi_callback,
-		.ident = "Fujitsu Esprimo Q900",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "FUJITSU"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "ESPRIMO Q900"),
 		},
 	},
 

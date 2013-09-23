@@ -107,12 +107,7 @@ armpmu_map_cache_event(const unsigned (*cache_map)
 static int
 armpmu_map_event(const unsigned (*event_map)[PERF_COUNT_HW_MAX], u64 config)
 {
-	int mapping;
-
-	if (config >= PERF_COUNT_HW_MAX)
-		return -EINVAL;
-
-	mapping = (*event_map)[config];
+	int mapping = (*event_map)[config];
 	return mapping == HW_OP_UNSUPPORTED ? -ENOENT : mapping;
 }
 
@@ -321,9 +316,6 @@ validate_event(struct pmu_hw_events *hw_events,
 	struct arm_pmu *armpmu = to_arm_pmu(event->pmu);
 	struct hw_perf_event fake_event = event->hw;
 	struct pmu *leader_pmu = event->group_leader->pmu;
-
-	if (is_software_event(event))
-		return 1;
 
 	if (event->pmu != leader_pmu || event->state <= PERF_EVENT_STATE_OFF)
 		return 1;
@@ -1339,7 +1331,6 @@ void perf_callchain_user(struct perf_callchain_entry *entry,
 {
 	struct frame_tail __user *tail;
 
-	perf_callchain_store(entry, regs->pc);
 	tail = (struct frame_tail __user *)regs->regs[29];
 
 	while (entry->nr < PERF_MAX_STACK_DEPTH &&

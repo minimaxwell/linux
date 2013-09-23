@@ -1465,13 +1465,6 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	dev_priv->dev = dev;
 	dev_priv->info = info;
 
-	spin_lock_init(&dev_priv->irq_lock);
-	spin_lock_init(&dev_priv->error_lock);
-	spin_lock_init(&dev_priv->rps.lock);
-	spin_lock_init(&dev_priv->dpio_lock);
-	spin_lock_init(&dev_priv->gt_lock);
-	mutex_init(&dev_priv->rps.hw_lock);
-
 	i915_dump_device_info(dev_priv);
 
 	if (i915_get_bridge_dev(dev)) {
@@ -1561,8 +1554,6 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	intel_detect_pch(dev);
 
 	intel_irq_init(dev);
-	intel_pm_init(dev);
-	intel_gt_sanitize(dev);
 	intel_gt_init(dev);
 
 	/* Try to make sure MCHBAR is enabled before poking at it */
@@ -1588,7 +1579,21 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	if (!IS_I945G(dev) && !IS_I945GM(dev))
 		pci_enable_msi(dev->pdev);
 
-	ret = drm_vblank_init(dev, INTEL_INFO(dev)->num_pipes);
+	spin_lock_init(&dev_priv->irq_lock);
+	spin_lock_init(&dev_priv->error_lock);
+	spin_lock_init(&dev_priv->rps.lock);
+	spin_lock_init(&dev_priv->dpio_lock);
+
+	mutex_init(&dev_priv->rps.hw_lock);
+
+	if (IS_IVYBRIDGE(dev) || IS_HASWELL(dev))
+		dev_priv->num_pipe = 3;
+	else if (IS_MOBILE(dev) || !IS_GEN2(dev))
+		dev_priv->num_pipe = 2;
+	else
+		dev_priv->num_pipe = 1;
+
+	ret = drm_vblank_init(dev, dev_priv->num_pipe);
 	if (ret)
 		goto out_gem_unload;
 

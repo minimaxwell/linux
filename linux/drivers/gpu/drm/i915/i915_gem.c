@@ -1164,8 +1164,7 @@ i915_gem_object_wait_rendering__nonblocking(struct drm_i915_gem_object *obj,
 	/* Manually manage the write flush as we may have not yet
 	 * retired the buffer.
 	 */
-	if (ret == 0 &&
-	    obj->last_write_seqno &&
+	if (obj->last_write_seqno &&
 	    i915_seqno_passed(seqno, obj->last_write_seqno)) {
 		obj->last_write_seqno = 0;
 		obj->base.write_domain &= ~I915_GEM_GPU_DOMAINS;
@@ -1882,10 +1881,6 @@ i915_gem_object_move_to_active(struct drm_i915_gem_object *obj,
 	u32 seqno = intel_ring_get_seqno(ring);
 
 	BUG_ON(ring == NULL);
-	if (obj->ring != ring && obj->last_write_seqno) {
-		/* Keep the seqno relative to the current ring */
-		obj->last_write_seqno = seqno;
-	}
 	obj->ring = ring;
 
 	/* Add a reference if we're newly entering the active list. */
@@ -1922,6 +1917,9 @@ i915_gem_object_move_to_inactive(struct drm_i915_gem_object *obj)
 
 	BUG_ON(obj->base.write_domain & ~I915_GEM_GPU_DOMAINS);
 	BUG_ON(!obj->active);
+
+	if (obj->pin_count) /* are we a framebuffer? */
+		intel_mark_fb_idle(obj);
 
 	list_move_tail(&obj->mm_list, &dev_priv->mm.inactive_list);
 
@@ -2523,56 +2521,52 @@ int i915_gpu_idle(struct drm_device *dev)
 	return 0;
 }
 
-static void i965_write_fence_reg(struct drm_device *dev, int reg,
-				 struct drm_i915_gem_object *obj)
+static void sandybridge_write_fence_reg(struct drm_device *dev, int reg,
+					struct drm_i915_gem_object *obj)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
-	int fence_reg;
-	int fence_pitch_shift;
-
-	if (INTEL_INFO(dev)->gen >= 6) {
-		fence_reg = FENCE_REG_SANDYBRIDGE_0;
-		fence_pitch_shift = SANDYBRIDGE_FENCE_PITCH_SHIFT;
-	} else {
-		fence_reg = FENCE_REG_965_0;
-		fence_pitch_shift = I965_FENCE_PITCH_SHIFT;
-	}
-
-	fence_reg += reg * 8;
-
-	/* To w/a incoherency with non-atomic 64-bit register updates,
-	 * we split the 64-bit update into two 32-bit writes. In order
-	 * for a partial fence not to be evaluated between writes, we
-	 * precede the update with write to turn off the fence register,
-	 * and only enable the fence as the last step.
-	 *
-	 * For extra levels of paranoia, we make sure each step lands
-	 * before applying the next step.
-	 */
-	I915_WRITE(fence_reg, 0);
-	POSTING_READ(fence_reg);
+	uint64_t val;
 
 	if (obj) {
 		u32 size = obj->gtt_space->size;
-		uint64_t val;
 
 		val = (uint64_t)((obj->gtt_offset + size - 4096) &
 				 0xfffff000) << 32;
 		val |= obj->gtt_offset & 0xfffff000;
-		val |= (uint64_t)((obj->stride / 128) - 1) << fence_pitch_shift;
+		val |= (uint64_t)((obj->stride / 128) - 1) <<
+			SANDYBRIDGE_FENCE_PITCH_SHIFT;
+
 		if (obj->tiling_mode == I915_TILING_Y)
 			val |= 1 << I965_FENCE_TILING_Y_SHIFT;
 		val |= I965_FENCE_REG_VALID;
+	} else
+		val = 0;
 
-		I915_WRITE(fence_reg + 4, val >> 32);
-		POSTING_READ(fence_reg + 4);
+	I915_WRITE64(FENCE_REG_SANDYBRIDGE_0 + reg * 8, val);
+	POSTING_READ(FENCE_REG_SANDYBRIDGE_0 + reg * 8);
+}
 
-		I915_WRITE(fence_reg + 0, val);
-		POSTING_READ(fence_reg);
-	} else {
-		I915_WRITE(fence_reg + 4, 0);
-		POSTING_READ(fence_reg + 4);
-	}
+static void i965_write_fence_reg(struct drm_device *dev, int reg,
+				 struct drm_i915_gem_object *obj)
+{
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	uint64_t val;
+
+	if (obj) {
+		u32 size = obj->gtt_space->size;
+
+		val = (uint64_t)((obj->gtt_offset + size - 4096) &
+				 0xfffff000) << 32;
+		val |= obj->gtt_offset & 0xfffff000;
+		val |= ((obj->stride / 128) - 1) << I965_FENCE_PITCH_SHIFT;
+		if (obj->tiling_mode == I915_TILING_Y)
+			val |= 1 << I965_FENCE_TILING_Y_SHIFT;
+		val |= I965_FENCE_REG_VALID;
+	} else
+		val = 0;
+
+	I915_WRITE64(FENCE_REG_965_0 + reg * 8, val);
+	POSTING_READ(FENCE_REG_965_0 + reg * 8);
 }
 
 static void i915_write_fence_reg(struct drm_device *dev, int reg,
@@ -2656,7 +2650,7 @@ static void i915_gem_write_fence(struct drm_device *dev, int reg,
 {
 	switch (INTEL_INFO(dev)->gen) {
 	case 7:
-	case 6:
+	case 6: sandybridge_write_fence_reg(dev, reg, obj); break;
 	case 5:
 	case 4: i965_write_fence_reg(dev, reg, obj); break;
 	case 3: i915_write_fence_reg(dev, reg, obj); break;
@@ -3854,7 +3848,7 @@ void i915_gem_l3_remap(struct drm_device *dev)
 	u32 misccpctl;
 	int i;
 
-	if (!HAS_L3_GPU_CACHE(dev))
+	if (!IS_IVYBRIDGE(dev))
 		return;
 
 	if (!dev_priv->l3_parity.remap_info)
@@ -4419,7 +4413,7 @@ i915_gem_inactive_shrink(struct shrinker *shrinker, struct shrink_control *sc)
 	list_for_each_entry(obj, &dev_priv->mm.unbound_list, gtt_list)
 		if (obj->pages_pin_count == 0)
 			cnt += obj->base.size >> PAGE_SHIFT;
-	list_for_each_entry(obj, &dev_priv->mm.inactive_list, mm_list)
+	list_for_each_entry(obj, &dev_priv->mm.inactive_list, gtt_list)
 		if (obj->pin_count == 0 && obj->pages_pin_count == 0)
 			cnt += obj->base.size >> PAGE_SHIFT;
 

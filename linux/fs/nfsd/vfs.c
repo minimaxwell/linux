@@ -802,10 +802,9 @@ nfsd_open(struct svc_rqst *rqstp, struct svc_fh *fhp, umode_t type,
 			flags = O_WRONLY|O_LARGEFILE;
 	}
 	*filp = dentry_open(&path, flags, current_cred());
-	if (IS_ERR(*filp)) {
+	if (IS_ERR(*filp))
 		host_err = PTR_ERR(*filp);
-		*filp = NULL;
-	} else {
+	else {
 		host_err = ima_file_check(*filp, may_flags);
 
 		if (may_flags & NFSD_MAY_64BIT_COOKIE)
@@ -1014,7 +1013,6 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 	int			host_err;
 	int			stable = *stablep;
 	int			use_wgather;
-	loff_t			pos = offset;
 
 	dentry = file->f_path.dentry;
 	inode = dentry->d_inode;
@@ -1027,7 +1025,7 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 
 	/* Write the data. */
 	oldfs = get_fs(); set_fs(KERNEL_DS);
-	host_err = vfs_writev(file, (struct iovec __user *)vec, vlen, &pos);
+	host_err = vfs_writev(file, (struct iovec __user *)vec, vlen, &offset);
 	set_fs(oldfs);
 	if (host_err < 0)
 		goto out_nfserr;

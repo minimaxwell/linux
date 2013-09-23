@@ -475,17 +475,7 @@ static void raid10_end_write_request(struct bio *bio, int error)
 		sector_t first_bad;
 		int bad_sectors;
 
-		/*
-		 * Do not set R10BIO_Uptodate if the current device is
-		 * rebuilding or Faulty. This is because we cannot use
-		 * such device for properly reading the data back (we could
-		 * potentially use it, if the current write would have felt
-		 * before rdev->recovery_offset, but for simplicity we don't
-		 * check this here.
-		 */
-		if (test_bit(In_sync, &rdev->flags) &&
-		    !test_bit(Faulty, &rdev->flags))
-			set_bit(R10BIO_Uptodate, &r10_bio->state);
+		set_bit(R10BIO_Uptodate, &r10_bio->state);
 
 		/* Maybe we can clear some bad blocks. */
 		if (is_badblock(rdev,
@@ -1019,17 +1009,17 @@ static void allow_barrier(struct r10conf *conf)
 	wake_up(&conf->wait_barrier);
 }
 
-static void freeze_array(struct r10conf *conf, int extra)
+static void freeze_array(struct r10conf *conf)
 {
 	/* stop syncio and normal IO and wait for everything to
 	 * go quiet.
 	 * We increment barrier and nr_waiting, and then
-	 * wait until nr_pending match nr_queued+extra
+	 * wait until nr_pending match nr_queued+1
 	 * This is called in the context of one normal IO request
 	 * that has failed. Thus any sync request that might be pending
 	 * will be blocked by nr_pending, and we need to wait for
 	 * pending IO requests to complete or be queued for re-try.
-	 * Thus the number queued (nr_queued) plus this request (extra)
+	 * Thus the number queued (nr_queued) plus this request (1)
 	 * must match the number of pending IOs (nr_pending) before
 	 * we continue.
 	 */
@@ -1037,7 +1027,7 @@ static void freeze_array(struct r10conf *conf, int extra)
 	conf->barrier++;
 	conf->nr_waiting++;
 	wait_event_lock_irq_cmd(conf->wait_barrier,
-				conf->nr_pending == conf->nr_queued+extra,
+				conf->nr_pending == conf->nr_queued+1,
 				conf->resync_lock,
 				flush_pending_writes(conf));
 
@@ -1083,7 +1073,6 @@ static void raid10_unplug(struct blk_plug_cb *cb, bool from_schedule)
 		bio_list_merge(&conf->pending_bio_list, &plug->pending);
 		conf->pending_count += plug->pending_cnt;
 		spin_unlock_irq(&conf->device_lock);
-		wake_up(&conf->wait_barrier);
 		md_wakeup_thread(mddev->thread);
 		kfree(plug);
 		return;
@@ -1097,12 +1086,7 @@ static void raid10_unplug(struct blk_plug_cb *cb, bool from_schedule)
 	while (bio) { /* submit pending writes */
 		struct bio *next = bio->bi_next;
 		bio->bi_next = NULL;
-		if (unlikely((bio->bi_rw & REQ_DISCARD) &&
-		    !blk_queue_discard(bdev_get_queue(bio->bi_bdev))))
-			/* Just ignore it */
-			bio_endio(bio, 0);
-		else
-			generic_make_request(bio);
+		generic_make_request(bio);
 		bio = next;
 	}
 	kfree(plug);
@@ -1121,7 +1105,6 @@ static void make_request(struct mddev *mddev, struct bio * bio)
 	const unsigned long do_fua = (bio->bi_rw & REQ_FUA);
 	const unsigned long do_discard = (bio->bi_rw
 					  & (REQ_DISCARD | REQ_SECURE));
-	const unsigned long do_same = (bio->bi_rw & REQ_WRITE_SAME);
 	unsigned long flags;
 	struct md_rdev *blocked_rdev;
 	struct blk_plug_cb *cb;
@@ -1477,8 +1460,7 @@ retry_write:
 							      rdev));
 			mbio->bi_bdev = rdev->bdev;
 			mbio->bi_end_io	= raid10_end_write_request;
-			mbio->bi_rw =
-				WRITE | do_sync | do_fua | do_discard | do_same;
+			mbio->bi_rw = WRITE | do_sync | do_fua | do_discard;
 			mbio->bi_private = r10_bio;
 
 			atomic_inc(&r10_bio->remaining);
@@ -1520,8 +1502,7 @@ retry_write:
 						   r10_bio, rdev));
 			mbio->bi_bdev = rdev->bdev;
 			mbio->bi_end_io	= raid10_end_write_request;
-			mbio->bi_rw =
-				WRITE | do_sync | do_fua | do_discard | do_same;
+			mbio->bi_rw = WRITE | do_sync | do_fua | do_discard;
 			mbio->bi_private = r10_bio;
 
 			atomic_inc(&r10_bio->remaining);
@@ -1803,8 +1784,8 @@ static int raid10_add_disk(struct mddev *mddev, struct md_rdev *rdev)
 		 * we wait for all outstanding requests to complete.
 		 */
 		synchronize_sched();
-		freeze_array(conf, 0);
-		unfreeze_array(conf);
+		raise_barrier(conf, 0);
+		lower_barrier(conf);
 		clear_bit(Unmerged, &rdev->flags);
 	}
 	md_integrity_add_rdev(rdev, mddev);
@@ -2221,18 +2202,12 @@ static void recovery_request_write(struct mddev *mddev, struct r10bio *r10_bio)
 	d = r10_bio->devs[1].devnum;
 	wbio = r10_bio->devs[1].bio;
 	wbio2 = r10_bio->devs[1].repl_bio;
-	/* Need to test wbio2->bi_end_io before we call
-	 * generic_make_request as if the former is NULL,
-	 * the latter is free to free wbio2.
-	 */
-	if (wbio2 && !wbio2->bi_end_io)
-		wbio2 = NULL;
 	if (wbio->bi_end_io) {
 		atomic_inc(&conf->mirrors[d].rdev->nr_pending);
 		md_sync_acct(conf->mirrors[d].rdev->bdev, wbio->bi_size >> 9);
 		generic_make_request(wbio);
 	}
-	if (wbio2) {
+	if (wbio2 && wbio2->bi_end_io) {
 		atomic_inc(&conf->mirrors[d].replacement->nr_pending);
 		md_sync_acct(conf->mirrors[d].replacement->bdev,
 			     wbio2->bi_size >> 9);
@@ -2606,7 +2581,7 @@ static void handle_read_error(struct mddev *mddev, struct r10bio *r10_bio)
 	r10_bio->devs[slot].bio = NULL;
 
 	if (mddev->ro == 0) {
-		freeze_array(conf, 1);
+		freeze_array(conf);
 		fix_read_error(conf, mddev, r10_bio);
 		unfreeze_array(conf);
 	} else
@@ -3507,7 +3482,7 @@ static struct r10conf *setup_conf(struct mddev *mddev)
 
 	/* FIXME calc properly */
 	conf->mirrors = kzalloc(sizeof(struct raid10_info)*(mddev->raid_disks +
-							    max(0,-mddev->delta_disks)),
+							    max(0,mddev->delta_disks)),
 				GFP_KERNEL);
 	if (!conf->mirrors)
 		goto out;
@@ -3594,7 +3569,6 @@ static int run(struct mddev *mddev)
 	if (mddev->queue) {
 		blk_queue_max_discard_sectors(mddev->queue,
 					      mddev->chunk_sectors);
-		blk_queue_max_write_same_sectors(mddev->queue, 0);
 		blk_queue_io_min(mddev->queue, chunk_size);
 		if (conf->geo.raid_disks % conf->geo.near_copies)
 			blk_queue_io_opt(mddev->queue, chunk_size * conf->geo.raid_disks);
@@ -3666,7 +3640,7 @@ static int run(struct mddev *mddev)
 		    conf->geo.far_offset == 0)
 			goto out_free_conf;
 		if (conf->prev.far_copies != 1 &&
-		    conf->prev.far_offset == 0)
+		    conf->geo.far_offset == 0)
 			goto out_free_conf;
 	}
 

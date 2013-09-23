@@ -329,8 +329,8 @@ static const struct block_device_operations rbd_bd_ops = {
 };
 
 /*
- * Initialize an rbd client instance.  Success or not, this function
- * consumes ceph_opts.
+ * Initialize an rbd client instance.
+ * We own *ceph_opts.
  */
 static struct rbd_client *rbd_client_create(struct ceph_options *ceph_opts)
 {
@@ -469,8 +469,7 @@ static int parse_rbd_opts_token(char *c, void *private)
 
 /*
  * Get a ceph client with specific addr and configuration, if one does
- * not exist create it.  Either way, ceph_opts is consumed by this
- * function.
+ * not exist create it.
  */
 static struct rbd_client *rbd_get_client(struct ceph_options *ceph_opts)
 {
@@ -867,7 +866,7 @@ static struct bio *bio_clone_range(struct bio *bio_src,
 	/* Find first affected segment... */
 
 	resid = offset;
-	bio_for_each_segment(bv, bio_src, idx) {
+	__bio_for_each_segment(bv, bio_src, idx, 0) {
 		if (resid < bv->bv_len)
 			break;
 		resid -= bv->bv_len;
@@ -3630,6 +3629,7 @@ static ssize_t rbd_add(struct bus_type *bus,
 		rc = PTR_ERR(rbdc);
 		goto err_out_args;
 	}
+	ceph_opts = NULL;	/* rbd_dev client now owns this */
 
 	/* pick the pool */
 	osdc = &rbdc->client->osdc;
@@ -3658,6 +3658,8 @@ err_out_rbd_dev:
 err_out_client:
 	rbd_put_client(rbdc);
 err_out_args:
+	if (ceph_opts)
+		ceph_destroy_options(ceph_opts);
 	kfree(rbd_opts);
 	rbd_spec_put(spec);
 err_out_module:

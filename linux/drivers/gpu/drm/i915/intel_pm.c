@@ -2572,7 +2572,7 @@ static void gen6_enable_rps(struct drm_device *dev)
 	I915_WRITE(GEN6_RC_SLEEP, 0);
 	I915_WRITE(GEN6_RC1e_THRESHOLD, 1000);
 	I915_WRITE(GEN6_RC6_THRESHOLD, 50000);
-	I915_WRITE(GEN6_RC6p_THRESHOLD, 150000);
+	I915_WRITE(GEN6_RC6p_THRESHOLD, 100000);
 	I915_WRITE(GEN6_RC6pp_THRESHOLD, 64000); /* unused */
 
 	/* Check if we are enabling RC6 */
@@ -3560,7 +3560,6 @@ static void cpt_init_clock_gating(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	int pipe;
-	uint32_t val;
 
 	/*
 	 * On Ibex Peak and Cougar Point, we need to disable clock
@@ -3573,12 +3572,8 @@ static void cpt_init_clock_gating(struct drm_device *dev)
 	/* The below fixes the weird display corruption, a few pixels shifted
 	 * downward, on (only) LVDS of some HP laptops with IVY.
 	 */
-	for_each_pipe(pipe) {
-		val = TRANS_CHICKEN2_TIMING_OVERRIDE;
-		if (dev_priv->fdi_rx_polarity_inverted)
-			val |= TRANS_CHICKEN2_FDI_POLARITY_REVERSED;
-		I915_WRITE(TRANS_CHICKEN2(pipe), val);
-	}
+	for_each_pipe(pipe)
+		I915_WRITE(TRANS_CHICKEN2(pipe), TRANS_CHICKEN2_TIMING_OVERRIDE);
 	/* WADP0ClockGatingDisable */
 	for_each_pipe(pipe) {
 		I915_WRITE(TRANS_CHICKEN1(pipe),
@@ -4387,7 +4382,7 @@ static void vlv_force_wake_put(struct drm_i915_private *dev_priv)
 	gen6_gt_check_fifodbg(dev_priv);
 }
 
-void intel_gt_sanitize(struct drm_device *dev)
+void intel_gt_reset(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
@@ -4398,61 +4393,26 @@ void intel_gt_sanitize(struct drm_device *dev)
 		if (IS_IVYBRIDGE(dev) || IS_HASWELL(dev))
 			__gen6_gt_force_wake_mt_reset(dev_priv);
 	}
-
-	/* BIOS often leaves RC6 enabled, but disable it for hw init */
-	if (INTEL_INFO(dev)->gen >= 6)
-		intel_disable_gt_powersave(dev);
 }
 
 void intel_gt_init(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
+	spin_lock_init(&dev_priv->gt_lock);
+
+	intel_gt_reset(dev);
+
 	if (IS_VALLEYVIEW(dev)) {
 		dev_priv->gt.force_wake_get = vlv_force_wake_get;
 		dev_priv->gt.force_wake_put = vlv_force_wake_put;
-	} else if (IS_HASWELL(dev)) {
+	} else if (IS_IVYBRIDGE(dev) || IS_HASWELL(dev)) {
 		dev_priv->gt.force_wake_get = __gen6_gt_force_wake_mt_get;
 		dev_priv->gt.force_wake_put = __gen6_gt_force_wake_mt_put;
-	} else if (IS_IVYBRIDGE(dev)) {
-		u32 ecobus;
-
-		/* IVB configs may use multi-threaded forcewake */
-
-		/* A small trick here - if the bios hasn't configured
-		 * MT forcewake, and if the device is in RC6, then
-		 * force_wake_mt_get will not wake the device and the
-		 * ECOBUS read will return zero. Which will be
-		 * (correctly) interpreted by the test below as MT
-		 * forcewake being disabled.
-		 */
-		mutex_lock(&dev->struct_mutex);
-		__gen6_gt_force_wake_mt_get(dev_priv);
-		ecobus = I915_READ_NOTRACE(ECOBUS);
-		__gen6_gt_force_wake_mt_put(dev_priv);
-		mutex_unlock(&dev->struct_mutex);
-
-		if (ecobus & FORCEWAKE_MT_ENABLE) {
-			dev_priv->gt.force_wake_get =
-						__gen6_gt_force_wake_mt_get;
-			dev_priv->gt.force_wake_put =
-						__gen6_gt_force_wake_mt_put;
-		} else {
-			DRM_INFO("No MT forcewake available on Ivybridge, this can result in issues\n");
-			DRM_INFO("when using vblank-synced partial screen updates.\n");
-			dev_priv->gt.force_wake_get = __gen6_gt_force_wake_get;
-			dev_priv->gt.force_wake_put = __gen6_gt_force_wake_put;
-		}
 	} else if (IS_GEN6(dev)) {
 		dev_priv->gt.force_wake_get = __gen6_gt_force_wake_get;
 		dev_priv->gt.force_wake_put = __gen6_gt_force_wake_put;
 	}
-}
-
-void intel_pm_init(struct drm_device *dev)
-{
-	struct drm_i915_private *dev_priv = dev->dev_private;
-
 	INIT_DELAYED_WORK(&dev_priv->rps.delayed_resume_work,
 			  intel_gen6_powersave_work);
 }

@@ -725,7 +725,6 @@ ext4_ext_find_extent(struct inode *inode, ext4_lblk_t block,
 	struct ext4_extent_header *eh;
 	struct buffer_head *bh;
 	short int depth, i, ppos = 0, alloc = 0;
-	int ret;
 
 	eh = ext_inode_hdr(inode);
 	depth = ext_depth(inode);
@@ -753,15 +752,12 @@ ext4_ext_find_extent(struct inode *inode, ext4_lblk_t block,
 		path[ppos].p_ext = NULL;
 
 		bh = sb_getblk(inode->i_sb, path[ppos].p_block);
-		if (unlikely(!bh)) {
-			ret = -ENOMEM;
+		if (unlikely(!bh))
 			goto err;
-		}
 		if (!bh_uptodate_or_lock(bh)) {
 			trace_ext4_ext_load_extent(inode, block,
 						path[ppos].p_block);
-			ret = bh_submit_read(bh);
-			if (ret < 0) {
+			if (bh_submit_read(bh) < 0) {
 				put_bh(bh);
 				goto err;
 			}
@@ -772,15 +768,13 @@ ext4_ext_find_extent(struct inode *inode, ext4_lblk_t block,
 			put_bh(bh);
 			EXT4_ERROR_INODE(inode,
 					 "ppos %d > depth %d", ppos, depth);
-			ret = -EIO;
 			goto err;
 		}
 		path[ppos].p_bh = bh;
 		path[ppos].p_hdr = eh;
 		i--;
 
-		ret = ext4_ext_check_block(inode, eh, i, bh);
-		if (ret < 0)
+		if (ext4_ext_check_block(inode, eh, i, bh))
 			goto err;
 	}
 
@@ -802,7 +796,7 @@ err:
 	ext4_ext_drop_refs(path);
 	if (alloc)
 		kfree(path);
-	return ERR_PTR(ret);
+	return ERR_PTR(-EIO);
 }
 
 /*
@@ -957,7 +951,7 @@ static int ext4_ext_split(handle_t *handle, struct inode *inode,
 	}
 	bh = sb_getblk(inode->i_sb, newblock);
 	if (!bh) {
-		err = -ENOMEM;
+		err = -EIO;
 		goto cleanup;
 	}
 	lock_buffer(bh);
@@ -1030,7 +1024,7 @@ static int ext4_ext_split(handle_t *handle, struct inode *inode,
 		newblock = ablocks[--a];
 		bh = sb_getblk(inode->i_sb, newblock);
 		if (!bh) {
-			err = -ENOMEM;
+			err = -EIO;
 			goto cleanup;
 		}
 		lock_buffer(bh);
@@ -1142,8 +1136,11 @@ static int ext4_ext_grow_indepth(handle_t *handle, struct inode *inode,
 		return err;
 
 	bh = sb_getblk(inode->i_sb, newblock);
-	if (!bh)
-		return -ENOMEM;
+	if (!bh) {
+		err = -EIO;
+		ext4_std_error(inode->i_sb, err);
+		return err;
+	}
 	lock_buffer(bh);
 
 	err = ext4_journal_get_create_access(handle, bh);
@@ -3089,7 +3086,6 @@ static int ext4_split_extent(handle_t *handle,
 	int err = 0;
 	int uninitialized;
 	int split_flag1, flags1;
-	int allocated = map->m_len;
 
 	depth = ext_depth(inode);
 	ex = path[depth].p_ext;
@@ -3109,8 +3105,6 @@ static int ext4_split_extent(handle_t *handle,
 				map->m_lblk + map->m_len, split_flag1, flags1);
 		if (err)
 			goto out;
-	} else {
-		allocated = ee_len - (map->m_lblk - ee_block);
 	}
 
 	ext4_ext_drop_refs(path);
@@ -3133,7 +3127,7 @@ static int ext4_split_extent(handle_t *handle,
 
 	ext4_ext_show_leaf(inode, path);
 out:
-	return err ? err : allocated;
+	return err ? err : map->m_len;
 }
 
 /*
@@ -3278,7 +3272,7 @@ static int ext4_ext_convert_to_initialized(handle_t *handle,
 
 	if (EXT4_EXT_MAY_ZEROOUT & split_flag)
 		max_zeroout = sbi->s_extent_max_zeroout_kb >>
-			(inode->i_sb->s_blocksize_bits - 10);
+			inode->i_sb->s_blocksize_bits;
 
 	/* If extent is less than s_max_zeroout_kb, zeroout directly */
 	if (max_zeroout && (ee_len <= max_zeroout)) {
@@ -3723,7 +3717,6 @@ out:
 					allocated - map->m_len);
 		allocated = map->m_len;
 	}
-	map->m_len = allocated;
 
 	/*
 	 * If we have done fallocate with the offset that is already
@@ -4326,20 +4319,9 @@ void ext4_ext_truncate(struct inode *inode)
 
 	last_block = (inode->i_size + sb->s_blocksize - 1)
 			>> EXT4_BLOCK_SIZE_BITS(sb);
-retry:
 	err = ext4_es_remove_extent(inode, last_block,
 				    EXT_MAX_BLOCKS - last_block);
-	if (err == -ENOMEM) {
-		cond_resched();
-		congestion_wait(BLK_RW_ASYNC, HZ/50);
-		goto retry;
-	}
-	if (err) {
-		ext4_std_error(inode->i_sb, err);
-		return;
-	}
 	err = ext4_ext_remove_space(inode, last_block, EXT_MAX_BLOCKS - 1);
-	ext4_std_error(inode->i_sb, err);
 
 	/* In a multi-transaction truncate, we only make the final
 	 * transaction synchronous.
@@ -4629,7 +4611,7 @@ static int ext4_xattr_fiemap(struct inode *inode,
 		error = ext4_get_inode_loc(inode, &iloc);
 		if (error)
 			return error;
-		physical = (__u64)iloc.bh->b_blocknr << blockbits;
+		physical = iloc.bh->b_blocknr << blockbits;
 		offset = EXT4_GOOD_OLD_INODE_SIZE +
 				EXT4_I(inode)->i_extra_isize;
 		physical += offset;
@@ -4637,7 +4619,7 @@ static int ext4_xattr_fiemap(struct inode *inode,
 		flags |= FIEMAP_EXTENT_DATA_INLINE;
 		brelse(iloc.bh);
 	} else { /* external block */
-		physical = (__u64)EXT4_I(inode)->i_file_acl << blockbits;
+		physical = EXT4_I(inode)->i_file_acl << blockbits;
 		length = inode->i_sb->s_blocksize;
 	}
 

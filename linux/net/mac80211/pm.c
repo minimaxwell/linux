@@ -52,8 +52,8 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 	ieee80211_stop_queues_by_reason(hw,
 			IEEE80211_QUEUE_STOP_REASON_SUSPEND);
 
-	/* flush out all packets and station cleanup call_rcu()s */
-	rcu_barrier();
+	/* flush out all packets */
+	synchronize_net();
 
 	drv_flush(local, false);
 
@@ -92,7 +92,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 			return err;
 		} else if (err > 0) {
 			WARN_ON(err != 1);
-			return err;
+			local->wowlan = false;
 		} else {
 			list_for_each_entry(sdata, &local->interfaces, list) {
 				cancel_work_sync(&sdata->work);

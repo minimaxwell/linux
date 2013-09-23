@@ -103,10 +103,8 @@ static int xfrm6_fill_dst(struct xfrm_dst *xdst, struct net_device *dev,
 	dev_hold(dev);
 
 	xdst->u.rt6.rt6i_idev = in6_dev_get(dev);
-	if (!xdst->u.rt6.rt6i_idev) {
-		dev_put(dev);
+	if (!xdst->u.rt6.rt6i_idev)
 		return -ENODEV;
-	}
 
 	rt6_transfer_peer(&xdst->u.rt6, rt);
 
@@ -238,8 +236,6 @@ static void xfrm6_dst_destroy(struct dst_entry *dst)
 {
 	struct xfrm_dst *xdst = (struct xfrm_dst *)dst;
 
-	if (likely(xdst->u.rt6.n))
-		neigh_release(xdst->u.rt6.n);
 	if (likely(xdst->u.rt6.rt6i_idev))
 		in6_dev_put(xdst->u.rt6.rt6i_idev);
 	dst_destroy_metrics_generic(dst);

@@ -405,6 +405,7 @@ struct dwc3_event_buffer {
  * @number: endpoint number (1 - 15)
  * @type: set to bmAttributes & USB_ENDPOINT_XFERTYPE_MASK
  * @resource_index: Resource transfer index
+ * @current_uf: Current uf received through last event parameter
  * @interval: the intervall on which the ISOC transfer is started
  * @name: a human readable name e.g. ep1out-bulk
  * @direction: true for TX, false for RX
@@ -438,6 +439,7 @@ struct dwc3_ep {
 	u8			number;
 	u8			type;
 	u8			resource_index;
+	u16			current_uf;
 	u32			interval;
 
 	char			name[20];
@@ -730,8 +732,8 @@ struct dwc3 {
 
 struct dwc3_event_type {
 	u32	is_devspec:1;
-	u32	type:7;
-	u32	reserved8_31:24;
+	u32	type:6;
+	u32	reserved8_31:25;
 } __packed;
 
 #define DWC3_DEPEVT_XFERCOMPLETE	0x01
