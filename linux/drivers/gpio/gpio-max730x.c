@@ -163,7 +163,6 @@ static void max7301_set(struct gpio_chip *chip, unsigned offset, int value)
 int __max730x_probe(struct max7301 *ts)
 {
 	struct device *dev = ts->dev;
-	struct device_node *np = dev->of_node;
 	struct max7301_platform_data *pdata;
 	int i, ret;
 
