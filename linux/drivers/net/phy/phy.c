@@ -820,30 +820,11 @@ void phy_state_machine(struct work_struct *work)
 				phydev->adjust_link(phydev->attached_dev);
 
 			} else if (0 == phydev->link_timeout--) {
-				int idx;
-
 				needs_aneg = 1;
 				/* If we have the magic_aneg bit,
 				 * we try again */
 				if (phydev->drv->flags & PHY_HAS_MAGICANEG)
 					break;
-
-				/* The timer expired, and we still
-				 * don't have a setting, so we try
-				 * forcing it until we find one that
-				 * works, starting from the fastest speed,
-				 * and working our way down */
-				idx = phy_find_valid(0, phydev->supported);
-
-				phydev->speed = settings[idx].speed;
-				phydev->duplex = settings[idx].duplex;
-
-				phydev->autoneg = AUTONEG_DISABLE;
-
-				pr_info("Trying %d/%s\n",
-					phydev->speed,
-					DUPLEX_FULL == phydev->duplex ?
-					"FULL" : "HALF");
 			}
 			break;
 		case PHY_NOLINK:
@@ -868,10 +849,8 @@ void phy_state_machine(struct work_struct *work)
 				phydev->state = PHY_RUNNING;
 				netif_carrier_on(phydev->attached_dev);
 			} else {
-				if (0 == phydev->link_timeout--) {
-					phy_force_reduction(phydev);
+				if (0 == phydev->link_timeout--)
 					needs_aneg = 1;
-				}
 			}
 
 			phydev->adjust_link(phydev->attached_dev);
@@ -1094,7 +1073,7 @@ int phy_init_eee(struct phy_device *phydev, bool clk_stop_enable)
 		adv = mmd_eee_adv_to_ethtool_adv_t(eee_adv);
 		lp = mmd_eee_adv_to_ethtool_adv_t(eee_lp);
 		idx = phy_find_setting(phydev->speed, phydev->duplex);
-		if ((lp & adv & settings[idx].setting))
+		if (!(lp & adv & settings[idx].setting))
 			goto eee_exit;
 
 		if (clk_stop_enable) {
@@ -1190,3 +1169,19 @@ int phy_ethtool_set_eee(struct phy_device *phydev, struct ethtool_eee *data)
 	return 0;
 }
 EXPORT_SYMBOL(phy_ethtool_set_eee);
+
+int phy_ethtool_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
+{
+	if (phydev->drv->set_wol)
+		return phydev->drv->set_wol(phydev, wol);
+
+	return -EOPNOTSUPP;
+}
+EXPORT_SYMBOL(phy_ethtool_set_wol);
+
+void phy_ethtool_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
+{
+	if (phydev->drv->get_wol)
+		phydev->drv->get_wol(phydev, wol);
+}
+EXPORT_SYMBOL(phy_ethtool_get_wol);

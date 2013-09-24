@@ -828,9 +828,11 @@ initial_mmu:
 	/* Map another 8 MByte at the IMMR to get the processor
 	 * internal registers (among other things).
 	 */
+	mfspr	r20, SPRN_MD_CTR
 #ifdef CONFIG_PIN_TLB
 	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
+	mfspr	r24, SPRN_MD_CTR
 #endif
 	mfspr	r9, 638			/* Get current IMMR */
 	andis.	r9, r9, 0xff80		/* Get 8Mbyte boundary */
@@ -848,8 +850,10 @@ initial_mmu:
 #ifdef CONFIG_PIN_TLB
 	/* Map two more 8M kernel data pages.
 	*/
+	mfspr	r21, SPRN_MD_CTR
 	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
+	mfspr	r25, SPRN_MD_CTR
 
 	lis	r8, KERNELBASE@h	/* Create vaddr for TLB */
 	addis	r8, r8, 0x0080		/* Add 8M */
@@ -862,14 +866,17 @@ initial_mmu:
 	addis	r11, r11, 0x0080	/* Add 8M */
 	mtspr	SPRN_MD_RPN, r11
 
+	mfspr	r22, SPRN_MD_CTR
 	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
+	mfspr	r26, SPRN_MD_CTR
 
 	addis	r8, r8, 0x0080		/* Add 8M */
 	mtspr	SPRN_MD_EPN, r8
 	mtspr	SPRN_MD_TWC, r9
 	addis	r11, r11, 0x0080	/* Add 8M */
 	mtspr	SPRN_MD_RPN, r11
+	mfspr	r23, SPRN_MD_CTR
 #endif
 
 	/* Since the cache is enabled according to the information we

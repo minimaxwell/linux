@@ -71,8 +71,6 @@ static int max7301_probe(struct spi_device *spi)
 	ts->dev = &spi->dev;
 
 	ret = __max730x_probe(ts);
-	if (ret)
-		kfree(ts);
 	return ret;
 }
 
