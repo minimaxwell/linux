@@ -796,7 +796,8 @@ initial_mmu:
 
 #ifdef CONFIG_PIN_TLB
 	lis	r10, (MD_RSV4I | MD_RESETVAL)@h
-	ori	r10, r10, 0x1f00
+	ori	r10, r10, 0x1c00
+	mr	r8, r10
 #else
 	lis	r10, MD_RESETVAL@h
 #endif
@@ -828,7 +829,7 @@ initial_mmu:
 	 * internal registers (among other things).
 	 */
 #ifdef CONFIG_PIN_TLB
-	addi	r10, r10, -0x0100
+	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
 #endif
 	mfspr	r9, 638			/* Get current IMMR */
@@ -847,7 +848,7 @@ initial_mmu:
 #ifdef CONFIG_PIN_TLB
 	/* Map two more 8M kernel data pages.
 	*/
-	addi	r10, r10, -0x0100
+	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
 
 	lis	r8, KERNELBASE@h	/* Create vaddr for TLB */
@@ -861,7 +862,7 @@ initial_mmu:
 	addis	r11, r11, 0x0080	/* Add 8M */
 	mtspr	SPRN_MD_RPN, r11
 
-	addi	r10, r10, -0x0100
+	addi	r10, r10, 0x0100
 	mtspr	SPRN_MD_CTR, r10
 
 	addis	r8, r8, 0x0080		/* Add 8M */
