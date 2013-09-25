@@ -26,6 +26,8 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 
+#define AD7923_NAME	"ad7923"
+
 #define AD7923_WRITE_CR		(1 << 11)	/* write control register */
 #define AD7923_RANGE		(1 << 1)	/* range to REFin */
 #define AD7923_CODING		(1 << 0)	/* coding is straight binary */
@@ -198,25 +200,25 @@ done:
 	return IRQ_HANDLED;
 }
 
-/* default maps used by iio consumer (lp8788-charger driver) */
+/* default maps used by iio consumer */
 static struct iio_map ad7923_default_iio_maps[] = {
 	{
-		.consumer_dev_name = "ad7923",
+		.consumer_dev_name = AD7923_NAME,
 		.consumer_channel = "channel_0",
 		.adc_channel_label = "0",
 	},
 	{
-		.consumer_dev_name = "ad7923",
+		.consumer_dev_name = AD7923_NAME,
 		.consumer_channel = "channel_1",
 		.adc_channel_label = "1",
 	},
 	{
-		.consumer_dev_name = "ad7923",
+		.consumer_dev_name = AD7923_NAME,
 		.consumer_channel = "channel_2",
 		.adc_channel_label = "2",
 	},
 	{
-		.consumer_dev_name = "ad7923",
+		.consumer_dev_name = AD7923_NAME,
 		.consumer_channel = "channel_3",
 		.adc_channel_label = "3",
 	},
@@ -403,7 +405,7 @@ MODULE_DEVICE_TABLE(spi, ad7923_id);
 
 static struct spi_driver ad7923_driver = {
 	.driver = {
-		.name	= "ad7923",
+		.name	= AD7923_NAME,
 		.owner	= THIS_MODULE,
 	},
 	.probe		= ad7923_probe,
