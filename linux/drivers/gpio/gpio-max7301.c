@@ -62,7 +62,7 @@ static int max7301_probe(struct spi_device *spi)
 	if (ret < 0)
 		return ret;
 
-	ts = kzalloc(sizeof(struct max7301), GFP_KERNEL);
+	ts = devm_kzalloc(&spi->dev, sizeof(struct max7301), GFP_KERNEL);
 	if (!ts)
 		return -ENOMEM;
 
