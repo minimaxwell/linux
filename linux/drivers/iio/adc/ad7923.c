@@ -19,6 +19,8 @@
 #include <linux/interrupt.h>
 
 #include <linux/iio/iio.h>
+#include <linux/iio/driver.h>
+#include <linux/iio/machine.h>
 #include <linux/iio/sysfs.h>
 #include <linux/iio/buffer.h>
 #include <linux/iio/trigger_consumer.h>
@@ -96,6 +98,7 @@ enum ad7923_id {
 			.storagebits = 16,				\
 			.endianness = IIO_BE,				\
 		},							\
+		.datasheet_name = #index,				\
 	}
 
 #define DECLARE_AD7923_CHANNELS(name, bits) \
@@ -195,6 +198,31 @@ done:
 	return IRQ_HANDLED;
 }
 
+/* default maps used by iio consumer (lp8788-charger driver) */
+static struct iio_map ad7923_default_iio_maps[] = {
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_0",
+		.adc_channel_label = "0",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_1",
+		.adc_channel_label = "1",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_2",
+		.adc_channel_label = "2",
+	},
+	{
+		.consumer_dev_name = "ad7923",
+		.consumer_channel = "channel_3",
+		.adc_channel_label = "3",
+	},
+	{ }
+};
+
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
 	int ret, cmd;
@@ -284,6 +312,10 @@ static int ad7923_probe(struct spi_device *spi)
 
 	st = iio_priv(indio_dev);
 
+	ret = iio_map_array_register(indio_dev, ad7923_default_iio_maps);
+	if (ret)
+		goto error_free;
+
 	spi_set_drvdata(spi, indio_dev);
 
 	st->spi = spi;
@@ -314,7 +346,7 @@ static int ad7923_probe(struct spi_device *spi)
 	st->reg = regulator_get(&spi->dev, "refin");
 	if (IS_ERR(st->reg)) {
 		ret = PTR_ERR(st->reg);
-		goto error_free;
+		goto error_unmap;
 	}
 	ret = regulator_enable(st->reg);
 	if (ret)
@@ -337,6 +369,8 @@ error_disable_reg:
 	regulator_disable(st->reg);
 error_put_reg:
 	regulator_put(st->reg);
+error_unmap:
+ 	iio_map_array_unregister(indio_dev);
 error_free:
 	iio_device_free(indio_dev);
 
@@ -352,6 +386,7 @@ static int ad7923_remove(struct spi_device *spi)
 	iio_triggered_buffer_cleanup(indio_dev);
 	regulator_disable(st->reg);
 	regulator_put(st->reg);
+ 	iio_map_array_unregister(indio_dev);
 	iio_device_free(indio_dev);
 
 	return 0;
