@@ -12,10 +12,6 @@ ad799x-y := ad799x_core.o
 ad799x-$(CONFIG_AD799X_RING_BUFFER) += ad799x_ring.o
 obj-$(CONFIG_AD799X) += ad799x.o
 
-ad7923-y := ad7923_core.o
-ad7923-$(CONFIG_IIO_BUFFER) += ad7923_ring.o
-obj-$(CONFIG_AD7923) += ad7923.o
-
 obj-$(CONFIG_AD7291) += ad7291.o
 obj-$(CONFIG_AD7780) += ad7780.o
 obj-$(CONFIG_AD7816) += ad7816.o

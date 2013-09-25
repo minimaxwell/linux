@@ -1228,7 +1228,6 @@ CONFIG_STAGING=y
 #
 # Analog to digital converters
 #
-# CONFIG_AD7923 is not set
 # CONFIG_AD7606 is not set
 # CONFIG_AD7780 is not set
 # CONFIG_AD7816 is not set
@@ -1364,6 +1363,7 @@ CONFIG_IIO_CONSUMERS_PER_TRIGGER=2
 #
 # CONFIG_AD7266 is not set
 # CONFIG_AD7298 is not set
+# CONFIG_AD7923 is not set
 # CONFIG_AD7791 is not set
 # CONFIG_AD7793 is not set
 # CONFIG_AD7476 is not set
