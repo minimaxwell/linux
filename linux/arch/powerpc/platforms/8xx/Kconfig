@@ -72,6 +72,7 @@ config MCR3000
 config CMPC885
 	bool "Support for CMPC885 (MCR 2G, MIAe / VGoIP)"
 	depends on SAF3000
+	select PPC_CLOCK
 	
 config MCR3000_2G
 	bool "Support for MCR3000 2G (MCR 2G)"
