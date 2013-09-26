@@ -893,7 +893,7 @@
 					 &FAV_CS_SPI 1 1	/* FAV SPI */
 					 &FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 				sicofi@0 {
-					compatible = "infineon,mcr3000-sicofi";
+					compatible = "infineon,miae-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <0>;
 					spi-cs-high;
@@ -910,7 +910,7 @@
 					spi-cs-high;
 				};
 				sicofi@2 {
-					compatible = "infineon,mcr3000-sicofi";
+					compatible = "infineon,miae-sicofi";
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
@@ -930,7 +930,7 @@
 					at25,page-size = <32>;
 				};
 				sicofi@4 {
-					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
+					compatible = "infineon,miae-sicofi", "cs,mia-fav";
 					fav-id = <0 1 2 4 7>;
 					spi-max-frequency = <1000000>;
 					reg = <4>;
@@ -942,7 +942,7 @@
 					analog_out = "6dB 6dB 6dB 6dB";
 				};
 				sicofi_nvcs@4 {
-					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
+					compatible = "infineon,miae-sicofi", "cs,mia-fav";
 					fav-id = <5 6>;
 					spi-max-frequency = <1000000>;
 					reg = <4>;
@@ -956,7 +956,7 @@
 					iio-channel = "channel_2", "channel_3";
 				};
 				sicofi_postes@4 {
-					compatible = "infineon,mcr3000-sicofi", "cs,mia-fav";
+					compatible = "infineon,miae-sicofi", "cs,mia-fav";
 					fav-id = <3>;
 					spi-max-frequency = <1000000>;
 					reg = <4>;
