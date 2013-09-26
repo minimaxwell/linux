@@ -234,18 +234,18 @@
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
 			autoload;
 			reg = <5 0x9c 1 5 0x9d 1>; /* Version ; addresse carte */
-			gpios = <&FPGA_CS0 1 1	// INITFPGA\
-				&CPM1_PIO_B 17 1	// DONEFPGA\
-				&rst2 1 1 >;		// RST_FPGA\
+			gpios = <&FPGA_CS0 1 1	// INITFPGA|
+				&CPM1_PIO_B 17 1	// DONEFPGA|
+				&rst2 1 1 >;		// RST_FPGA|
 		};
 		fpga-loader@6,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mezz-loader";
 			reg = <6 0x501 1>; /* Version */
-			gpios = <&FPGA_CS1 1 1	// INIT\
-				&CPM1_PIO_A 1 1	// DONE\
-				&rst1 4 1 >;	// RST\
+			gpios = <&FPGA_CS1 1 1	// INIT|
+				&CPM1_PIO_A 1 1	// DONE|
+				&rst1 4 1 >;	// RST|
 		};
 		c4e1@6,0 {
 			#address-cells = <1>;
@@ -355,16 +355,16 @@
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x0 0x1>; /* necessaire mais non utilise */
-			gpios = <&CPM1_PIO_B 14 1	// PROGFPGA\
-				&CPM1_PIO_B 16 1>;	// INITFPGA\
+			gpios = <&CPM1_PIO_B 14 1	// PROGFPGA|
+				&CPM1_PIO_B 16 1>;	// INITFPGA|
 		};
 		FPGA_CS1: gpio-controller@dummy1 {
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x1 0x1>; /* necessaire mais non utilise */
-			gpios = <&cmd1 4 1	// PROG\
-				&stw2 3 1>;	// INIT\
+			gpios = <&cmd1 4 1	// PROG|
+				&stw2 3 1>;	// INIT|
 		};
 
 		cpm@9c0 {
