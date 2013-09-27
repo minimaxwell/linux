@@ -580,44 +580,48 @@
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_a";
-			dev-name = "ad7923";
-			dev-channel = "channel_0";
+			iio-name = "ad7923";
+			io-channels = <&iio 0>;
+			io-channel-names = "channel_0";
+			iio-channel = "channel_0";
 		};
 		POT_B_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_b";
-			dev-name = "ad7923";
-			dev-channel = "channel_1";
+			iio-name = "ad7923";
+			io-channels = <&iio 1>;
+			io-channel-names = "channel_1";
+			iio-channel = "channel_1";
 		};
 		
 		POT_A_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_a";
-			dev-name = "none";
-			dev-channel = "channel_0";
+			iio-name = "none";
+			iio-channel = "channel_0";
 		};
 		POT_B_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_b";
-			dev-name = "none";
-			dev-channel = "channel_1";
+			iio-name = "none";
+			iio-channel = "channel_1";
 		};
 		POT_C_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_c";
-			dev-name = "none";
-			dev-channel = "channel_2";
+			iio-name = "none";
+			iio-channel = "channel_2";
 		};
 		POT_D_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_d";
-			dev-name = "none";
-			dev-channel = "channel_3";
+			iio-name = "none";
+			iio-channel = "channel_3";
 		};
 	};
 
@@ -952,7 +956,9 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					io-channels = <&iio 2>, <&iio 3>;
 					iio-name = "ad7923";
+					io-channel-names = "channel_2", "channel_3";
 					iio-channel = "channel_2", "channel_3";
 				};
 				sicofi_postes@4 {
@@ -966,7 +972,9 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					io-channels = <&iio 0>, <&iio 1>;
 					iio-name = "ad7923";
+					io-channel-names = "channel_0", "channel_1";
 					iio-channel = "channel_0", "channel_1";
 				};
 				lm74@5 {
@@ -984,13 +992,14 @@
 					at25,addr-mode = <2>;
 					at25,page-size = <32>;
 				};
-				csfav@7 {
+				iio: csfav@7 {
 					compatible = "iio,ad7923", "cs,mia-fav";
 					spi-max-frequency = <2000000>;
 					reg = <7>;
 					spi-cs-high;
 					spi-cpol;
 					fav-id = <3 5 6>;
+					#io-channel-cells = <1>;
 				};
 				gpiofav: csfavgw@7 {
 					compatible = "gpio,max7301", "cs,mia-fav";
