@@ -539,64 +539,51 @@ unsigned int irq_find_mapping(struct irq_domain *domain,
 	if (domain == NULL)
 		return 0;
 
-	switch (domain->revmap_type) {
-	case IRQ_DOMAIN_MAP_LEGACY:
-		return irq_domain_legacy_revmap(domain, hwirq);
-	case IRQ_DOMAIN_MAP_LINEAR:
-		return irq_linear_revmap(domain, hwirq);
-	case IRQ_DOMAIN_MAP_TREE:
-		rcu_read_lock();
-		data = radix_tree_lookup(&domain->revmap_data.tree, hwirq);
-		rcu_read_unlock();
-		if (data)
-			return data->irq;
-		break;
-	case IRQ_DOMAIN_MAP_NOMAP:
+	if (hwirq < domain->revmap_direct_max_irq) {
 		data = irq_get_irq_data(hwirq);
 		if (data && (data->domain == domain) && (data->hwirq == hwirq))
 			return hwirq;
-		break;
 	}
 
-	return 0;
+	/* Check if the hwirq is in the linear revmap. */
+	if (hwirq < domain->revmap_size)
+		return domain->linear_revmap[hwirq];
+
+	rcu_read_lock();
+	data = radix_tree_lookup(&domain->revmap_tree, hwirq);
+	rcu_read_unlock();
+	return data ? data->irq : 0;
 }
 EXPORT_SYMBOL_GPL(irq_find_mapping);
-
-/**
- * irq_linear_revmap() - Find a linux irq from a hw irq number.
- * @domain: domain owning this hardware interrupt
- * @hwirq: hardware irq number in that domain space
- *
- * This is a fast path that can be called directly by irq controller code to
- * save a handful of instructions.
- */
-unsigned int irq_linear_revmap(struct irq_domain *domain,
-			       irq_hw_number_t hwirq)
-{
-	BUG_ON(domain->revmap_type != IRQ_DOMAIN_MAP_LINEAR);
-
-	/* Check revmap bounds; complain if exceeded */
-	/* 255 is a trick to allow UNDEF value in DTS */
-	if (hwirq == 255 || WARN_ON(hwirq >= domain->revmap_data.linear.size))
-		return 0;
-
-	return domain->revmap_data.linear.revmap[hwirq];
-}
-EXPORT_SYMBOL_GPL(irq_linear_revmap);
 
 #ifdef CONFIG_IRQ_DOMAIN_DEBUG
 static int virq_debug_show(struct seq_file *m, void *private)
 {
 	unsigned long flags;
 	struct irq_desc *desc;
-	const char *p;
-	static const char none[] = "none";
-	void *data;
+	struct irq_domain *domain;
+	struct radix_tree_iter iter;
+	void *data, **slot;
 	int i;
 
-	seq_printf(m, "%-5s  %-7s  %-15s  %-*s  %s\n", "irq", "hwirq",
+	seq_printf(m, " %-16s  %-6s  %-10s  %-10s  %s\n",
+		   "name", "mapped", "linear-max", "direct-max", "devtree-node");
+	mutex_lock(&irq_domain_mutex);
+	list_for_each_entry(domain, &irq_domain_list, link) {
+		int count = 0;
+		radix_tree_for_each_slot(slot, &domain->revmap_tree, &iter, 0)
+			count++;
+		seq_printf(m, "%c%-16s  %6u  %10u  %10u  %s\n",
+			   domain == irq_default_domain ? '*' : ' ', domain->name,
+			   domain->revmap_size + count, domain->revmap_size,
+			   domain->revmap_direct_max_irq,
+			   domain->of_node ? of_node_full_name(domain->of_node) : "");
+	}
+	mutex_unlock(&irq_domain_mutex);
+
+	seq_printf(m, "%-5s  %-7s  %-15s  %-*s  %6s  %-14s  %s\n", "irq", "hwirq",
 		      "chip name", (int)(2 * sizeof(void *) + 2), "chip data",
-		      "domain name");
+		      "active", "type", "domain");
 
 	for (i = 1; i < nr_irqs; i++) {
 		desc = irq_to_desc(i);
