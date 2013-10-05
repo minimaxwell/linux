@@ -344,7 +344,7 @@ static int ad7923_probe(struct spi_device *spi)
 	st->reg = regulator_get(&spi->dev, "refin");
 	if (IS_ERR(st->reg)) {
 		ret = PTR_ERR(st->reg);
-		goto error_unmap;
+		goto error_free;
 	}
 	ret = regulator_enable(st->reg);
 	if (ret)
