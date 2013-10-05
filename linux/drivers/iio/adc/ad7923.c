@@ -366,7 +366,7 @@ static int ad7923_probe(struct spi_device *spi)
 	return 0;
 
 error_unmap:
- 	iio_map_array_unregister(indio_dev);
+	iio_map_array_unregister(indio_dev);
 error_cleanup_ring:
 	iio_triggered_buffer_cleanup(indio_dev);
 error_disable_reg:
