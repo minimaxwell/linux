@@ -314,10 +314,6 @@ static int ad7923_probe(struct spi_device *spi)
 
 	st = iio_priv(indio_dev);
 
-	ret = iio_map_array_register(indio_dev, ad7923_default_iio_maps);
-	if (ret)
-		goto error_free;
-
 	spi_set_drvdata(spi, indio_dev);
 
 	st->spi = spi;
@@ -359,20 +355,24 @@ static int ad7923_probe(struct spi_device *spi)
 	if (ret)
 		goto error_disable_reg;
 
-	ret = iio_device_register(indio_dev);
+	ret = iio_map_array_register(indio_dev, ad7923_default_iio_maps);
 	if (ret)
 		goto error_cleanup_ring;
 
+	ret = iio_device_register(indio_dev);
+	if (ret)
+		goto error_unmap;
+
 	return 0;
 
+error_unmap:
+ 	iio_map_array_unregister(indio_dev);
 error_cleanup_ring:
 	iio_triggered_buffer_cleanup(indio_dev);
 error_disable_reg:
 	regulator_disable(st->reg);
 error_put_reg:
 	regulator_put(st->reg);
-error_unmap:
- 	iio_map_array_unregister(indio_dev);
 error_free:
 	iio_device_free(indio_dev);
 
@@ -385,10 +385,10 @@ static int ad7923_remove(struct spi_device *spi)
 	struct ad7923_state *st = iio_priv(indio_dev);
 
 	iio_device_unregister(indio_dev);
+ 	iio_map_array_unregister(indio_dev);
 	iio_triggered_buffer_cleanup(indio_dev);
 	regulator_disable(st->reg);
 	regulator_put(st->reg);
- 	iio_map_array_unregister(indio_dev);
 	iio_device_free(indio_dev);
 
 	return 0;
