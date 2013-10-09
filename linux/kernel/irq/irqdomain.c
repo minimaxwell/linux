@@ -272,7 +272,7 @@ int irq_domain_associate(struct irq_domain *domain, unsigned int virq,
 	struct irq_data *irq_data = irq_get_irq_data(virq);
 	int ret;
 
-	if (WARN(hwirq >= domain->hwirq_max,
+	if (hwirq == 255 || WARN(hwirq >= domain->hwirq_max,
 		 "error: hwirq 0x%x is too large for %s\n", (int)hwirq, domain->name))
 		return -EINVAL;
 	if (WARN(!irq_data, "error: virq%i is not allocated", virq))
