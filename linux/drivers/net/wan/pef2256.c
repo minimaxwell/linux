@@ -6,128 +6,157 @@
  *
  */
 
+#include <linux/module.h>
+#include <linux/sched.h>
+#include <linux/types.h>
+#include <linux/errno.h>
+#include <linux/list.h>
+#include <linux/ioport.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+
+#include <linux/cache.h>
+#include <asm/byteorder.h>
+#include <linux/uaccess.h>
+#include <linux/io.h>
+#include <asm/irq.h>
+
+#include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/string.h>
+
+#include <linux/if_arp.h>
+#include <linux/netdevice.h>
+#include <linux/skbuff.h>
+#include <linux/delay.h>
+#include <linux/hdlc.h>
+#include <linux/mutex.h>
+#include <linux/of_device.h>
+#include <linux/etherdevice.h>
 #include "pef2256.h"
 
-irqreturn_t pef2256_irq(int irq, void *dev_priv);
+static irqreturn_t pef2256_irq(int irq, void *dev_priv);
 static int Config_HDLC(struct pef2256_dev_priv *priv);
 static int init_FALC(struct pef2256_dev_priv *priv);
 static int pef2256_open(struct net_device *netdev);
 static int pef2256_close(struct net_device *netdev);
 
-void print_regs(pef2256_regs *base_addr)
-{
-	printk("	mMODE = 0x%02x\n", base_addr->mMODE);
-	printk("	mRAH1 = 0x%02x\n", base_addr->mRAH1);
-	printk("	mRAH2 = 0x%02x\n", base_addr->mRAH2);
-	printk("	mRAL1 = 0x%02x\n", base_addr->mRAL1);
-	printk("	mRAL2 = 0x%02x\n", base_addr->mRAL2);
-	printk("	mIPC = 0x%02x\n", base_addr->mIPC);
-	printk("	mCCR1 = 0x%02x\n", base_addr->mCCR1);
-	printk("	mCCR2 = 0x%02x\n", base_addr->mCCR2);
-	printk("	mRTR1 = 0x%02x\n", base_addr->mRTR1);
-	printk("	mRTR2 = 0x%02x\n", base_addr->mRTR2);
-	printk("	mRTR3 = 0x%02x\n", base_addr->mRTR3);
-	printk("	mRTR4 = 0x%02x\n", base_addr->mRTR4);
-	printk("	mTTR1 = 0x%02x\n", base_addr->mTTR1);
-	printk("	mTTR2 = 0x%02x\n", base_addr->mTTR2);
-	printk("	mTTR3 = 0x%02x\n", base_addr->mTTR3);
-	printk("	mTTR4 = 0x%02x\n", base_addr->mTTR4);
-	printk("	mIMR0 = 0x%02x\n", base_addr->mIMR0);
-	printk("	mIMR1 = 0x%02x\n", base_addr->mIMR1);
-	printk("	mIMR2 = 0x%02x\n", base_addr->mIMR2);
-	printk("	mIMR3 = 0x%02x\n", base_addr->mIMR3);
-	printk("	mIMR4 = 0x%02x\n", base_addr->mIMR4);
-	printk("	mIMR5 = 0x%02x\n", base_addr->mIMR5);
-	printk("	mIERR = 0x%02x\n", base_addr->mIERR);
-	printk("	mFMR0 = 0x%02x\n", base_addr->mFMR0);
-	printk("	mFMR1 = 0x%02x\n", base_addr->mFMR1);
-	printk("	mFMR2 = 0x%02x\n", base_addr->mFMR2);
-	printk("	mLOOP = 0x%02x\n", base_addr->mLOOP);
-	printk("	mXSW = 0x%02x\n", base_addr->mXSW);
-	printk("	mXSP = 0x%02x\n", base_addr->mXSP);
-	printk("	mXC0 = 0x%02x\n", base_addr->mXC0);
-	printk("	mXC1 = 0x%02x\n", base_addr->mXC1);
-	printk("	mRC0 = 0x%02x\n", base_addr->mRC0);
-	printk("	mRC1 = 0x%02x\n", base_addr->mRC1);
-	printk("	mXPM0 = 0x%02x\n", base_addr->mXPM0);
-	printk("	mXPM1 = 0x%02x\n", base_addr->mXPM1);
-	printk("	mXPM2 = 0x%02x\n", base_addr->mXPM2);
-	printk("	mTSWM = 0x%02x\n", base_addr->mTSWM);
-	printk("	mIDLE = 0x%02x\n", base_addr->mIDLE);
-	printk("	mXSA4 = 0x%02x\n", base_addr->mXSA4);
-	printk("	mXSA5 = 0x%02x\n", base_addr->mXSA5);
-	printk("	mXSA6 = 0x%02x\n", base_addr->mXSA6);
-	printk("	mXSA7 = 0x%02x\n", base_addr->mXSA7);
-	printk("	mXSA8 = 0x%02x\n", base_addr->mXSA8);
-	printk("	mFMR3 = 0x%02x\n", base_addr->mFMR3);
-	printk("	mICB1 = 0x%02x\n", base_addr->mICB1);
-	printk("	mICB2 = 0x%02x\n", base_addr->mICB2);
-	printk("	mICB3 = 0x%02x\n", base_addr->mICB3);
-	printk("	mICB4 = 0x%02x\n", base_addr->mICB4);
-	printk("	mLIM0 = 0x%02x\n", base_addr->mLIM0);
-	printk("	mLIM1 = 0x%02x\n", base_addr->mLIM1);
-	printk("	mPCD = 0x%02x\n", base_addr->mPCD);
-	printk("	mPCR = 0x%02x\n", base_addr->mPCR);
-	printk("	mLIM2 = 0x%02x\n", base_addr->mLIM2);
-	printk("	mLCR1 = 0x%02x\n", base_addr->mLCR1);
-	printk("	mLCR2 = 0x%02x\n", base_addr->mLCR2);
-	printk("	mLCR3 = 0x%02x\n", base_addr->mLCR3);
-	printk("	mSIC1 = 0x%02x\n", base_addr->mSIC1);
-	printk("	mSIC2 = 0x%02x\n", base_addr->mSIC2);
-	printk("	mSIC3 = 0x%02x\n", base_addr->mSIC3);
-	printk("	mCMR1 = 0x%02x\n", base_addr->mCMR1);
-	printk("	mCMR2 = 0x%02x\n", base_addr->mCMR2);
-	printk("	mGCR = 0x%02x\n", base_addr->mGCR);
-	printk("	mESM = 0x%02x\n", base_addr->mESM);
-	printk("	mCMR3 = 0x%02x\n", base_addr->mCMR3);
-	printk("	mPC1 = 0x%02x\n", base_addr->mPC1);
-	printk("	mPC2 = 0x%02x\n", base_addr->mPC2);
-	printk("	mPC3 = 0x%02x\n", base_addr->mPC3);
-	printk("	mPC4 = 0x%02x\n", base_addr->mPC4);
-	printk("	mPC5 = 0x%02x\n", base_addr->mPC5);
-	printk("	mGPC1 = 0x%02x\n", base_addr->mGPC1);
-	printk("	mPC6 = 0x%02x\n", base_addr->mPC6);
-	printk("	mCCR3 = 0x%02x\n", base_addr->mCCR3);
-	printk("	mCCR4 = 0x%02x\n", base_addr->mCCR4);
-	printk("	mCCR5 = 0x%02x\n", base_addr->mCCR5);
-	printk("	mMODE2 = 0x%02x\n", base_addr->mMODE2);
-	printk("	mMODE3 = 0x%02x\n", base_addr->mMODE3);
-	printk("	mRBC2 = 0x%02x\n", base_addr->mRBC2);
-	printk("	mRBC3 = 0x%02x\n", base_addr->mRBC3);
-	printk("	mGCM1 = 0x%02x\n", base_addr->mGCM1);
-	printk("	mGCM2 = 0x%02x\n", base_addr->mGCM2);
-	printk("	mGCM3 = 0x%02x\n", base_addr->mGCM3);
-	printk("	mGCM4 = 0x%02x\n", base_addr->mGCM4);
-	printk("	mGCM5 = 0x%02x\n", base_addr->mGCM5);
-	printk("	mGCM6 = 0x%02x\n", base_addr->mGCM6);
-	printk("	SIS2/GCM7 = 0x%02x\n", base_addr->mDif1.mSIS2);
-	printk("	RSIS2/GCM8 = 0x%02x\n", base_addr->mDif2.mRSIS2);
-	printk("	mTSEO = 0x%02x\n", base_addr->mTSEO);
-	printk("	mTSBS1 = 0x%02x\n", base_addr->mTSBS1);
-	printk("	mTSBS2 = 0x%02x\n", base_addr->mTSBS2);
-	printk("	mTSBS3 = 0x%02x\n", base_addr->mTSBS3);
-	printk("	mTSS2 = 0x%02x\n", base_addr->mTSS2);
-	printk("	mTSS3 = 0x%02x\n", base_addr->mTSS3);
-	printk("	mRes10 = 0x%02x\n", base_addr->mRes10);
-	printk("	mRes11 = 0x%02x\n", base_addr->mRes11);
-	printk("	mTPC0 = 0x%02x\n", base_addr->mTPC0);
-	printk("	mGLC1 = 0x%02x\n", base_addr->mGLC1);
-}
-
-static ssize_t fs_attr_regs_show(struct device *dev, 
-			struct device_attribute *attr, char *buf)
+void print_regs(struct device *dev)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-	pef2256_regs *base_addr = (pef2256_regs *)priv->base_addr;
+	struct pef2256_regs *base_addr = (struct pef2256_regs *)priv->base_addr;
 
-	print_regs(base_addr);
+	netdev_info(ndev, "	MODE = 0x%02x\n", base_addr->MODE);
+	netdev_info(ndev, "	RAH1 = 0x%02x\n", base_addr->RAH1);
+	netdev_info(ndev, "	RAH2 = 0x%02x\n", base_addr->RAH2);
+	netdev_info(ndev, "	RAL1 = 0x%02x\n", base_addr->RAL1);
+	netdev_info(ndev, "	RAL2 = 0x%02x\n", base_addr->RAL2);
+	netdev_info(ndev, "	IPC = 0x%02x\n", base_addr->IPC);
+	netdev_info(ndev, "	CCR1 = 0x%02x\n", base_addr->CCR1);
+	netdev_info(ndev, "	CCR2 = 0x%02x\n", base_addr->CCR2);
+	netdev_info(ndev, "	RTR1 = 0x%02x\n", base_addr->RTR1);
+	netdev_info(ndev, "	RTR2 = 0x%02x\n", base_addr->RTR2);
+	netdev_info(ndev, "	RTR3 = 0x%02x\n", base_addr->RTR3);
+	netdev_info(ndev, "	RTR4 = 0x%02x\n", base_addr->RTR4);
+	netdev_info(ndev, "	TTR1 = 0x%02x\n", base_addr->TTR1);
+	netdev_info(ndev, "	TTR2 = 0x%02x\n", base_addr->TTR2);
+	netdev_info(ndev, "	TTR3 = 0x%02x\n", base_addr->TTR3);
+	netdev_info(ndev, "	TTR4 = 0x%02x\n", base_addr->TTR4);
+	netdev_info(ndev, "	IMR0 = 0x%02x\n", base_addr->IMR0);
+	netdev_info(ndev, "	IMR1 = 0x%02x\n", base_addr->IMR1);
+	netdev_info(ndev, "	IMR2 = 0x%02x\n", base_addr->IMR2);
+	netdev_info(ndev, "	IMR3 = 0x%02x\n", base_addr->IMR3);
+	netdev_info(ndev, "	IMR4 = 0x%02x\n", base_addr->IMR4);
+	netdev_info(ndev, "	IMR5 = 0x%02x\n", base_addr->IMR5);
+	netdev_info(ndev, "	IERR = 0x%02x\n", base_addr->IERR);
+	netdev_info(ndev, "	FMR0 = 0x%02x\n", base_addr->FMR0);
+	netdev_info(ndev, "	FMR1 = 0x%02x\n", base_addr->FMR1);
+	netdev_info(ndev, "	FMR2 = 0x%02x\n", base_addr->FMR2);
+	netdev_info(ndev, "	LOOP = 0x%02x\n", base_addr->LOOP);
+	netdev_info(ndev, "	XSW = 0x%02x\n", base_addr->XSW);
+	netdev_info(ndev, "	XSP = 0x%02x\n", base_addr->XSP);
+	netdev_info(ndev, "	XC0 = 0x%02x\n", base_addr->XC0);
+	netdev_info(ndev, "	XC1 = 0x%02x\n", base_addr->XC1);
+	netdev_info(ndev, "	RC0 = 0x%02x\n", base_addr->RC0);
+	netdev_info(ndev, "	RC1 = 0x%02x\n", base_addr->RC1);
+	netdev_info(ndev, "	XPM0 = 0x%02x\n", base_addr->XPM0);
+	netdev_info(ndev, "	XPM1 = 0x%02x\n", base_addr->XPM1);
+	netdev_info(ndev, "	XPM2 = 0x%02x\n", base_addr->XPM2);
+	netdev_info(ndev, "	TSWM = 0x%02x\n", base_addr->TSWM);
+	netdev_info(ndev, "	IDLE = 0x%02x\n", base_addr->IDLE);
+	netdev_info(ndev, "	XSA4 = 0x%02x\n", base_addr->XSA4);
+	netdev_info(ndev, "	XSA5 = 0x%02x\n", base_addr->XSA5);
+	netdev_info(ndev, "	XSA6 = 0x%02x\n", base_addr->XSA6);
+	netdev_info(ndev, "	XSA7 = 0x%02x\n", base_addr->XSA7);
+	netdev_info(ndev, "	XSA8 = 0x%02x\n", base_addr->XSA8);
+	netdev_info(ndev, "	FMR3 = 0x%02x\n", base_addr->FMR3);
+	netdev_info(ndev, "	ICB1 = 0x%02x\n", base_addr->ICB1);
+	netdev_info(ndev, "	ICB2 = 0x%02x\n", base_addr->ICB2);
+	netdev_info(ndev, "	ICB3 = 0x%02x\n", base_addr->ICB3);
+	netdev_info(ndev, "	ICB4 = 0x%02x\n", base_addr->ICB4);
+	netdev_info(ndev, "	LIM0 = 0x%02x\n", base_addr->LIM0);
+	netdev_info(ndev, "	LIM1 = 0x%02x\n", base_addr->LIM1);
+	netdev_info(ndev, "	PCD = 0x%02x\n", base_addr->PCD);
+	netdev_info(ndev, "	PCR = 0x%02x\n", base_addr->PCR);
+	netdev_info(ndev, "	LIM2 = 0x%02x\n", base_addr->LIM2);
+	netdev_info(ndev, "	LCR1 = 0x%02x\n", base_addr->LCR1);
+	netdev_info(ndev, "	LCR2 = 0x%02x\n", base_addr->LCR2);
+	netdev_info(ndev, "	LCR3 = 0x%02x\n", base_addr->LCR3);
+	netdev_info(ndev, "	SIC1 = 0x%02x\n", base_addr->SIC1);
+	netdev_info(ndev, "	SIC2 = 0x%02x\n", base_addr->SIC2);
+	netdev_info(ndev, "	SIC3 = 0x%02x\n", base_addr->SIC3);
+	netdev_info(ndev, "	CMR1 = 0x%02x\n", base_addr->CMR1);
+	netdev_info(ndev, "	CMR2 = 0x%02x\n", base_addr->CMR2);
+	netdev_info(ndev, "	GCR = 0x%02x\n", base_addr->GCR);
+	netdev_info(ndev, "	ESM = 0x%02x\n", base_addr->ESM);
+	netdev_info(ndev, "	CMR3 = 0x%02x\n", base_addr->CMR3);
+	netdev_info(ndev, "	PC1 = 0x%02x\n", base_addr->PC1);
+	netdev_info(ndev, "	PC2 = 0x%02x\n", base_addr->PC2);
+	netdev_info(ndev, "	PC3 = 0x%02x\n", base_addr->PC3);
+	netdev_info(ndev, "	PC4 = 0x%02x\n", base_addr->PC4);
+	netdev_info(ndev, "	PC5 = 0x%02x\n", base_addr->PC5);
+	netdev_info(ndev, "	GPC1 = 0x%02x\n", base_addr->GPC1);
+	netdev_info(ndev, "	PC6 = 0x%02x\n", base_addr->PC6);
+	netdev_info(ndev, "	CCR3 = 0x%02x\n", base_addr->CCR3);
+	netdev_info(ndev, "	CCR4 = 0x%02x\n", base_addr->CCR4);
+	netdev_info(ndev, "	CCR5 = 0x%02x\n", base_addr->CCR5);
+	netdev_info(ndev, "	MODE2 = 0x%02x\n", base_addr->MODE2);
+	netdev_info(ndev, "	MODE3 = 0x%02x\n", base_addr->MODE3);
+	netdev_info(ndev, "	RBC2 = 0x%02x\n", base_addr->RBC2);
+	netdev_info(ndev, "	RBC3 = 0x%02x\n", base_addr->RBC3);
+	netdev_info(ndev, "	GCM1 = 0x%02x\n", base_addr->GCM1);
+	netdev_info(ndev, "	GCM2 = 0x%02x\n", base_addr->GCM2);
+	netdev_info(ndev, "	GCM3 = 0x%02x\n", base_addr->GCM3);
+	netdev_info(ndev, "	GCM4 = 0x%02x\n", base_addr->GCM4);
+	netdev_info(ndev, "	GCM5 = 0x%02x\n", base_addr->GCM5);
+	netdev_info(ndev, "	GCM6 = 0x%02x\n", base_addr->GCM6);
+	netdev_info(ndev, "	SIS2/GCM7 = 0x%02x\n", base_addr->Dif1.SIS2);
+	netdev_info(ndev, "	RSIS2/GCM8 = 0x%02x\n",
+						base_addr->Dif2.RSIS2);
+	netdev_info(ndev, "	TSEO = 0x%02x\n", base_addr->TSEO);
+	netdev_info(ndev, "	TSBS1 = 0x%02x\n", base_addr->TSBS1);
+	netdev_info(ndev, "	TSBS2 = 0x%02x\n", base_addr->TSBS2);
+	netdev_info(ndev, "	TSBS3 = 0x%02x\n", base_addr->TSBS3);
+	netdev_info(ndev, "	TSS2 = 0x%02x\n", base_addr->TSS2);
+	netdev_info(ndev, "	TSS3 = 0x%02x\n", base_addr->TSS3);
+	netdev_info(ndev, "	Res10 = 0x%02x\n", base_addr->Res10);
+	netdev_info(ndev, "	Res11 = 0x%02x\n", base_addr->Res11);
+	netdev_info(ndev, "	TPC0 = 0x%02x\n", base_addr->TPC0);
+	netdev_info(ndev, "	GLC1 = 0x%02x\n", base_addr->GLC1);
+}
+
+static ssize_t fs_attr_regs_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	print_regs(dev);
 	return sprintf(buf, "*** printk DEBUG ***\n");
 }
 
 static DEVICE_ATTR(regs, S_IRUGO, fs_attr_regs_show, NULL);
 
-static ssize_t fs_attr_mode_show(struct device *dev, 
+static ssize_t fs_attr_mode_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
@@ -137,14 +166,18 @@ static ssize_t fs_attr_mode_show(struct device *dev,
 }
 
 
-static ssize_t fs_attr_mode_store(struct device *dev, 
-			struct device_attribute *attr,  const char *buf, 
+static ssize_t fs_attr_mode_store(struct device *dev,
+			struct device_attribute *attr,  const char *buf,
 			size_t count)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-	u32 value = simple_strtol(buf, NULL, 10);
+	u32 value;
+	int ret = kstrtol(buf, 10, (long int *)&value);
 	int reconfigure = (value != priv->mode);
+
+	if (ret != 0)
+		return ret;
 
 	if (value != MASTER_MODE && value != SLAVE_MODE)
 		return -EINVAL;
@@ -159,11 +192,12 @@ static ssize_t fs_attr_mode_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show,
+						fs_attr_mode_store);
 
 
 
-static ssize_t fs_attr_Tx_TS_show(struct device *dev, 
+static ssize_t fs_attr_Tx_TS_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
@@ -173,31 +207,35 @@ static ssize_t fs_attr_Tx_TS_show(struct device *dev,
 }
 
 
-static ssize_t fs_attr_Tx_TS_store(struct device *dev, 
-			struct device_attribute *attr,  const char *buf, 
+static ssize_t fs_attr_Tx_TS_store(struct device *dev,
+			struct device_attribute *attr,  const char *buf,
 			size_t count)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-	u32 value = simple_strtol(buf, NULL, 10);
-	int reconfigure = (value != priv->Tx_TS);
+	u32 value;
+	int ret = kstrtol(buf, 10, (long int *)&value);
+	int reconfigure = (value != priv->mode);
+
+	if (ret != 0)
+		return ret;
 
 	/* TS 0 is reserved */
 	if (value & 0x80000000)
 		return -EINVAL;
 
 	priv->Tx_TS = value;
-	if (reconfigure && priv->init_done) {
+	if (reconfigure && priv->init_done)
 		Config_HDLC(priv);
-	}
 
 	return count;
 }
 
-static DEVICE_ATTR(Tx_TS, S_IRUGO | S_IWUSR, fs_attr_Tx_TS_show, fs_attr_Tx_TS_store);
+static DEVICE_ATTR(Tx_TS, S_IRUGO | S_IWUSR, fs_attr_Tx_TS_show,
+			fs_attr_Tx_TS_store);
 
 
-static ssize_t fs_attr_Rx_TS_show(struct device *dev, 
+static ssize_t fs_attr_Rx_TS_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
@@ -207,395 +245,391 @@ static ssize_t fs_attr_Rx_TS_show(struct device *dev,
 }
 
 
-static ssize_t fs_attr_Rx_TS_store(struct device *dev, 
-			struct device_attribute *attr,  const char *buf, 
+static ssize_t fs_attr_Rx_TS_store(struct device *dev,
+			struct device_attribute *attr,  const char *buf,
 			size_t count)
 {
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-	u32 value = simple_strtol(buf, NULL, 10);
-	int reconfigure = (value != priv->Rx_TS);
+	u32 value;
+	int ret = kstrtol(buf, 10, (long int *)&value);
+	int reconfigure = (value != priv->mode);
+
+	if (ret != 0)
+		return ret;
 
 	/* TS 0 is reserved */
-	if (value & 0x80000000) 
+	if (value & 0x80000000)
 		return -EINVAL;
 
 	priv->Rx_TS = value;
-	if (reconfigure && priv->init_done) {
+	if (reconfigure && priv->init_done)
 		Config_HDLC(priv);
-	}
 
 	return count;
 }
 
-static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show, fs_attr_Rx_TS_store);
-
-
+static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show,
+	 fs_attr_Rx_TS_store);
 
 /*
- * Configuration canal HDLC 
+ * Setting up HDLC channel
  */
 int Config_HDLC(struct pef2256_dev_priv *priv)
 {
 	int i;
 	int TS_idx;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	u8 dummy;
 
-	/* positionnement de l'adresse du trameur E1 */
-	base_addr = (pef2256_regs *)priv->base_addr;
+	/* Set framer E1 address */
+	base_addr = (struct pef2256_regs *)priv->base_addr;
 
-	/* Lecture pour effacer les IT existantes */
-	dummy = base_addr->mISR0;
-	dummy = base_addr->mISR1;
+	/* Read to remove pending IT */
+	dummy = base_addr->ISR0;
+	dummy = base_addr->ISR1;
 
-	/* Masquage des IT HDLC 1 Emission */
-	/* IMR1 - XPR */
-	base_addr->mIMR1 |= 1;
-	/* IMR1 - XDU */
-	base_addr->mIMR1 |= 1 << 4;
-	/* IMR1 - ALLS */
-	base_addr->mIMR1 |= 1 << 5;
+	/* Mask HDLC 1 Transmit IT */
+	base_addr->IMR1 |= 1;
+	base_addr->IMR1 |= 1 << 4;
+	base_addr->IMR1 |= 1 << 5;
 
-	/* Masquage des IT HDLC 1 Reception */
-	/* IMR0 - RPF */
-	base_addr->mIMR0 |= 1;
-	/* IMR0 - RME */
-	base_addr->mIMR0 |= 1 << 7;
-	/* IMR1 - RDO */
-	base_addr->mIMR1 |= 1 << 6;
+	/* Mask HDLC 1 Receive IT */
+	base_addr->IMR0 |= 1;
+	base_addr->IMR0 |= 1 << 7;
+	base_addr->IMR1 |= 1 << 6;
 
-	/* attente vidage des fifos */
-	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
+	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
 	   MODE.DIV = 0 (Data normal operation)
-	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
 	/* MODE.MDS2:0 = 100 (No address comparison) */
 	/* MODE.HRAC = 1 (Receiver active) */
-	out_8(&(base_addr->mMODE), 1 << 3);
+	out_8(&(base_addr->MODE), 1 << 3);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
 	   CCR1.XMFA = 0 (No transmit multiframe alignment)
 	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
-	/* positionnement Interframe Time Fill */
+	/* setting up Interframe Time Fill */
 	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
-	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	out_8(&(base_addr->CCR1), 0x10 | (1 << 3));
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
 	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
 	   CCR2.RADD = 0 (No write address in RFIFO) */
-	out_8(&(base_addr->mCCR2), 0x00);
+	out_8(&(base_addr->CCR2), 0x00);
 
-	/* attente vidage des fifos */
-	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
+	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
 	   MODE.DIV = 0 (Data normal operation)
-	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
 	/* MODE.MDS2:0 = 100 (No address comparison) */
 	/* MODE.HRAC = 1 (Receiver active) */
-	out_8(&(base_addr->mMODE), 1 << 3);
+	out_8(&(base_addr->MODE), 1 << 3);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
 	   CCR1.XMFA = 0 (No transmit multiframe alignment)
 	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
-	/* positionnement Interframe Time Fill */
+	/* setting up Interframe Time Fill */
 	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
-	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	out_8(&(base_addr->CCR1), 0x10 | (1 << 3));
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
 	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
 	   CCR2.RADD = 0 (No write address in RFIFO) */
-	out_8(&(base_addr->mCCR2), 0x00);
+	out_8(&(base_addr->CCR2), 0x00);
 
-	/* attente vidage des fifos */
-	udelay((2 * M_DRV_E1_TAILLE_FIFO) * 125);
+	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
 	   MODE.DIV = 0 (Data normal operation)
-	   pour FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
+	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
 	/* MODE.MDS2:0 = 100 (No address comparison) */
 	/* MODE.HRAC = 1 (Receiver active) */
-	out_8(&(base_addr->mMODE), 1 << 3);
+	out_8(&(base_addr->MODE), 1 << 3);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
 	   CCR1.XMFA = 0 (No transmit multiframe alignment)
 	   CCR1.RFT1:0 = 00 (RFIFO sur 32 bytes) */
-	/* positionnement Interframe Time Fill */
+	/* setting up Interframe Time Fill */
 	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
-	out_8(&(base_addr->mCCR1), 0x10 | (1 << 3));
+	out_8(&(base_addr->CCR1), 0x10 | (1 << 3));
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
 	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
 	   CCR2.RADD = 0 (No write address in RFIFO) */
-	out_8(&(base_addr->mCCR2), 0x00);
-	/* Initialisation sélection Time Slot */
-	out_8(&(base_addr->mTTR1), 0x00);
-	out_8(&(base_addr->mTTR2), 0x00);
-	out_8(&(base_addr->mTTR3), 0x00);
-	out_8(&(base_addr->mTTR4), 0x00);
-	out_8(&(base_addr->mRTR1), 0x00);
-	out_8(&(base_addr->mRTR2), 0x00);
-	out_8(&(base_addr->mRTR3), 0x00);
-	out_8(&(base_addr->mRTR4), 0x00);
-	/* positionnement bits pour TS sélectionnés */
-	/* On commence au TS 1, le TS 0 est réservé */
-	for (TS_idx=1; TS_idx<32; TS_idx++) {
+	out_8(&(base_addr->CCR2), 0x00);
+
+	udelay((2 * 32) * 125);
+
+	/* Init  Time Slot select */
+	out_8(&(base_addr->TTR1), 0x00);
+	out_8(&(base_addr->TTR2), 0x00);
+	out_8(&(base_addr->TTR3), 0x00);
+	out_8(&(base_addr->TTR4), 0x00);
+	out_8(&(base_addr->RTR1), 0x00);
+	out_8(&(base_addr->RTR2), 0x00);
+	out_8(&(base_addr->RTR3), 0x00);
+	out_8(&(base_addr->RTR4), 0x00);
+	/* Set selected TS bits */
+	/* Starting at TS 1, TS 0 is reserved */
+	for (TS_idx = 1; TS_idx < 32; TS_idx++) {
 		i = 7 - (TS_idx % 8);
 		switch (TS_idx / 8) {
 		case 0:
 			if (priv->Tx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mTTR1), 1 << i);
+				setbits8(&(base_addr->TTR1), 1 << i);
 			if (priv->Rx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mRTR1), 1 << i);
+				setbits8(&(base_addr->RTR1), 1 << i);
 			break;
 		case 1:
 			if (priv->Tx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mTTR2), 1 << i);
+				setbits8(&(base_addr->TTR2), 1 << i);
 			if (priv->Rx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mRTR2), 1 << i);
+				setbits8(&(base_addr->RTR2), 1 << i);
 			break;
 		case 2:
 			if (priv->Tx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mTTR3), 1 << i);
+				setbits8(&(base_addr->TTR3), 1 << i);
 			if (priv->Rx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mRTR3), 1 << i);
+				setbits8(&(base_addr->RTR3), 1 << i);
 			break;
 		case 3:
 			if (priv->Tx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mTTR4), 1 << i);
+				setbits8(&(base_addr->TTR4), 1 << i);
 			if (priv->Rx_TS & (1 << (31 - TS_idx)))
-				setbits8(&(base_addr->mRTR4), 1 << i);
+				setbits8(&(base_addr->RTR4), 1 << i);
 			break;
 		}
 	}
 
-	/* Demasquage des IT HDLC 1 Emission */
-	/* IMR1 - XPR */
-	base_addr->mIMR1 &= ~1;
-	/* IMR1 - XDU */
-	base_addr->mIMR1 &= ~(1 << 4);
-	/* IMR1 - ALLS */
-	base_addr->mIMR1 &= ~(1 << 5);
+	/* Unmask HDLC 1 Transmit IT */
+	base_addr->IMR1 &= ~1;
+	base_addr->IMR1 &= ~(1 << 4);
+	base_addr->IMR1 &= ~(1 << 5);
 
-	/* Demasquage des IT HDLC 1 Reception */
-	/* IMR0 - RPF */
-	base_addr->mIMR0 &= ~1;
-	/* IMR0 - RME */
-	base_addr->mIMR0 &= ~(1 << 7);
-	/* IMR1 - RDO */
-	base_addr->mIMR1 &= ~(1 << 6);
+	/* Unmask HDLC 1 Receive IT */
+	base_addr->IMR0 &= ~1;
+	base_addr->IMR0 &= ~(1 << 7);
+	base_addr->IMR1 &= ~(1 << 6);
 
 	return 0;
 }
 
 
 /*
- * Initialisation du FALC56
+ * Init FALC56
  */
 static int init_FALC(struct pef2256_dev_priv *priv)
 {
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	int Version;
-	
-	/* récupération de la version du composant */
+
+	/* Get controller version */
 	Version = priv->component_id;
-	
-	/* Initialisation du composant FALC56 */
-	base_addr = (pef2256_regs *)priv->base_addr;
-	/* RCLK output : DPLL clock, DCO-X enabled, DCO-X internal reference clock */
-	out_8(&(base_addr->mCMR1), 0x00);
-	/* SCLKR selected, SCLKX selected, receive synchro pulse sourced by SYPR,
-	   transmit synchro pulse sourced by SYPX */
-	out_8(&(base_addr->mCMR2), 0x00);
+
+	/* Init FALC56 */
+	base_addr = (struct pef2256_regs *)priv->base_addr;
+	/* RCLK output : DPLL clock, DCO-X enabled, DCO-X internal reference
+	   clock */
+	out_8(&(base_addr->CMR1), 0x00);
+	/* SCLKR selected, SCLKX selected, receive synchro pulse sourced by
+	   SYPR, transmit synchro pulse sourced by SYPX */
+	out_8(&(base_addr->CMR2), 0x00);
 	/* NRZ coding, no alarm simulation */
-	out_8(&(base_addr->mFMR0), 0x00);
-	/* E1 double frame format, 2 Mbit/s system data rate, no AIS transmission
-	   to remote end or system interface, payload loop off, transmit remote alarm on */
-	out_8(&(base_addr->mFMR1), 0x00);
-	out_8(&(base_addr->mFMR2), 0x02);
+	out_8(&(base_addr->FMR0), 0x00);
+	/* E1 double frame format, 2 Mbit/s system data rate, no AIS
+	   transmission to remote end or system interface, payload loop
+	   off, transmit remote alarm on */
+	out_8(&(base_addr->FMR1), 0x00);
+	out_8(&(base_addr->FMR2), 0x02);
 	/* E1 default for LIM2 */
-	out_8(&(base_addr->mLIM2), 0x20);
+	out_8(&(base_addr->LIM2), 0x20);
 	if (priv->mode == MASTER_MODE)
 		/* SEC input, active high */
-		out_8(&(base_addr->mGPC1), 0x00);
+		out_8(&(base_addr->GPC1), 0x00);
 	else
 		/* FSC output, active high */
-		out_8(&(base_addr->mGPC1), 0x40);
+		out_8(&(base_addr->GPC1), 0x40);
 	/* internal second timer, power on */
-	out_8(&(base_addr->mGCR), 0x00);
+	out_8(&(base_addr->GCR), 0x00);
 	/* slave mode, local loop off, mode short-haul */
-	if (Version == E_DRV_E1_VERSION_1_2)
-		out_8(&(base_addr->mLIM0), 0x00);
+	if (Version == VERSION_1_2)
+		out_8(&(base_addr->LIM0), 0x00);
 	else
-		out_8(&(base_addr->mLIM0), 0x08);
+		out_8(&(base_addr->LIM0), 0x08);
 	/* analog interface selected, remote loop off */
-	out_8(&(base_addr->mLIM1), 0x00);
-	if (Version == E_DRV_E1_VERSION_1_2) {
+	out_8(&(base_addr->LIM1), 0x00);
+	if (Version == VERSION_1_2) {
 		/* function of ports RP(A to D) : output receive sync pulse
 		   function of ports XP(A to D) : output transmit line clock */
-		out_8(&(base_addr->mPC1), 0x77);
-		out_8(&(base_addr->mPC2), 0x77);
-		out_8(&(base_addr->mPC3), 0x77);
-		out_8(&(base_addr->mPC4), 0x77);
-	}
-	else {
+		out_8(&(base_addr->PC1), 0x77);
+		out_8(&(base_addr->PC2), 0x77);
+		out_8(&(base_addr->PC3), 0x77);
+		out_8(&(base_addr->PC4), 0x77);
+	} else {
 		/* function of ports RP(A to D) : output high
 		   function of ports XP(A to D) : output high */
-		out_8(&(base_addr->mPC1), 0xAA);
-		out_8(&(base_addr->mPC2), 0xAA);
-		out_8(&(base_addr->mPC3), 0xAA);
-		out_8(&(base_addr->mPC4), 0xAA);
+		out_8(&(base_addr->PC1), 0xAA);
+		out_8(&(base_addr->PC2), 0xAA);
+		out_8(&(base_addr->PC3), 0xAA);
+		out_8(&(base_addr->PC4), 0xAA);
 	}
 	/* function of port RPA : input SYPR
 	   function of port XPA : input SYPX */
-	out_8(&(base_addr->mPC1), 0x00);
+	out_8(&(base_addr->PC1), 0x00);
 	/* SCLKR, SCLKX, RCLK configured to inputs,
 	   XFMS active low, CLK1 and CLK2 pin configuration */
-	out_8(&(base_addr->mPC5), 0x00);
-	out_8(&(base_addr->mPC6), 0x00);
+	out_8(&(base_addr->PC5), 0x00);
+	out_8(&(base_addr->PC6), 0x00);
 	/* the receive clock offset is cleared
 	   the receive time slot offset is cleared */
-	out_8(&(base_addr->mRC0), 0x00);
-	out_8(&(base_addr->mRC1), 0x9C);
-	/* 2.048 MHz system clocking rate, receive buffer 2 frames, transmit buffer
-	   bypass, data sampled and transmitted on the falling edge of SCLKR/X,
-	   automatic freeze signaling, data is active in the first channel phase */
-	out_8(&(base_addr->mSIC1), 0x00);
-	out_8(&(base_addr->mSIC2), 0x00);
-	out_8(&(base_addr->mSIC3), 0x00);
+	out_8(&(base_addr->RC0), 0x00);
+	out_8(&(base_addr->RC1), 0x9C);
+	/* 2.048 MHz system clocking rate, receive buffer 2 frames, transmit
+	   buffer bypass, data sampled and transmitted on the falling edge of
+	   SCLKR/X, automatic freeze signaling, data is active in the first
+	   channel phase */
+	out_8(&(base_addr->SIC1), 0x00);
+	out_8(&(base_addr->SIC2), 0x00);
+	out_8(&(base_addr->SIC3), 0x00);
 	/* channel loop-back and single frame mode are disabled */
-	out_8(&(base_addr->mLOOP), 0x00);
+	out_8(&(base_addr->LOOP), 0x00);
 	/* all bits of the transmitted service word are cleared */
-	out_8(&(base_addr->mXSW), 0x1F);
+	out_8(&(base_addr->XSW), 0x1F);
 	/* spare bit values are cleared */
-	out_8(&(base_addr->mXSP), 0x00);
+	out_8(&(base_addr->XSP), 0x00);
 	/* no transparent mode active */
-	out_8(&(base_addr->mTSWM), 0x00);
+	out_8(&(base_addr->TSWM), 0x00);
 	/* the transmit clock offset is cleared
 	   the transmit time slot offset is cleared */
-	out_8(&(base_addr->mXC0), 0x00);
-	out_8(&(base_addr->mXC1), 0x9C);
+	out_8(&(base_addr->XC0), 0x00);
+	out_8(&(base_addr->XC1), 0x9C);
 	/* transmitter in tristate mode */
-	out_8(&(base_addr->mXPM2), 0x40);
+	out_8(&(base_addr->XPM2), 0x40);
 	/* transmit pulse mask */
-	if (Version != E_DRV_E1_VERSION_1_2)
-		out_8(&(base_addr->mXPM0), 0x9C);
-	
-	if (Version == E_DRV_E1_VERSION_1_2) {
+	if (Version != VERSION_1_2)
+		out_8(&(base_addr->XPM0), 0x9C);
+
+	if (Version == VERSION_1_2) {
 		/* master clock is 16,384 MHz (flexible master clock) */
-		out_8(&(base_addr->mGCM2), 0x58);
-		out_8(&(base_addr->mGCM3), 0xD2);
-		out_8(&(base_addr->mGCM4), 0xC2);
-		out_8(&(base_addr->mGCM5), 0x07);
-		out_8(&(base_addr->mGCM6), 0x10);
-	}
-	else {
+		out_8(&(base_addr->GCM2), 0x58);
+		out_8(&(base_addr->GCM3), 0xD2);
+		out_8(&(base_addr->GCM4), 0xC2);
+		out_8(&(base_addr->GCM5), 0x07);
+		out_8(&(base_addr->GCM6), 0x10);
+	} else {
 		/* master clock is 16,384 MHz (flexible master clock) */
-		out_8(&(base_addr->mGCM2), 0x18);
-		out_8(&(base_addr->mGCM3), 0xFB);
-		out_8(&(base_addr->mGCM4), 0x0B);
-		out_8(&(base_addr->mGCM5), 0x01);
-		out_8(&(base_addr->mGCM6), 0x0B);
-		out_8(&(base_addr->mDif1.mGCM7), 0xDB);
-		out_8(&(base_addr->mDif2.mGCM8), 0xDF);
+		out_8(&(base_addr->GCM2), 0x18);
+		out_8(&(base_addr->GCM3), 0xFB);
+		out_8(&(base_addr->GCM4), 0x0B);
+		out_8(&(base_addr->GCM5), 0x01);
+		out_8(&(base_addr->GCM6), 0x0B);
+		out_8(&(base_addr->Dif1.GCM7), 0xDB);
+		out_8(&(base_addr->Dif2.GCM8), 0xDF);
 	}
 
 	/* master mode => LIM0.MAS = 1 (bit 0) */
 	if (priv->mode == MASTER_MODE)
-		setbits8(&(base_addr->mLIM0), 1 << 0);
+		setbits8(&(base_addr->LIM0), 1 << 0);
 
 	/* transmit line in normal operation => XPM2.XLT = 0 (bit 6) */
-	clrbits8(&(base_addr->mXPM2), 1 << 6);
+	clrbits8(&(base_addr->XPM2), 1 << 6);
 
-	if (Version == E_DRV_E1_VERSION_1_2) {
-		/* receive input threshold = 0,21V => LIM1.RIL2:0 = 101 (bits 6, 5 et 4) */
-		setbits8(&(base_addr->mLIM1), 1 << 4);
-		setbits8(&(base_addr->mLIM1), 1 << 6);
-	}
-	else {
-		/* receive input threshold = 0,21V => LIM1.RIL2:0 = 100 (bits 6, 5 et 4) */
-		setbits8(&(base_addr->mLIM1), 1 << 6);
+	if (Version == VERSION_1_2) {
+		/* receive input threshold = 0,21V =>
+			LIM1.RIL2:0 = 101 (bits 6, 5 et 4) */
+		setbits8(&(base_addr->LIM1), 1 << 4);
+		setbits8(&(base_addr->LIM1), 1 << 6);
+	} else {
+		/* receive input threshold = 0,21V =>
+			LIM1.RIL2:0 = 100 (bits 6, 5 et 4) */
+		setbits8(&(base_addr->LIM1), 1 << 6);
 	}
 	/* transmit line coding = HDB3 => FMR0.XC1:0 = 11 (bits 7 et 6) */
-	setbits8(&(base_addr->mFMR0), 1 << 6);
-	setbits8(&(base_addr->mFMR0), 1 << 7);
+	setbits8(&(base_addr->FMR0), 1 << 6);
+	setbits8(&(base_addr->FMR0), 1 << 7);
 	/* receive line coding = HDB3 => FMR0.RC1:0 = 11 (bits 5 et 4) */
-	setbits8(&(base_addr->mFMR0), 1 << 4);
-	setbits8(&(base_addr->mFMR0), 1 << 5);
+	setbits8(&(base_addr->FMR0), 1 << 4);
+	setbits8(&(base_addr->FMR0), 1 << 5);
 	/* detection of LOS alarm = 176 pulses (soit (10 + 1) * 16) */
-	out_8(&(base_addr->mPCD), 10);
+	out_8(&(base_addr->PCD), 10);
 	/* recovery of LOS alarm = 22 pulses (soit 21 + 1) */
-	out_8(&(base_addr->mPCR), 21);
+	out_8(&(base_addr->PCR), 21);
 	/* DCO-X center frequency => CMR2.DCOXC = 1 (bit 5) */
-	setbits8(&(base_addr->mCMR2), 1 << 5);
+	setbits8(&(base_addr->CMR2), 1 << 5);
 	if (priv->mode == SLAVE_MODE) {
 		/* select RCLK source = 2M => CMR1.RS(1:0) = 10 (bits 5 et 4) */
-		setbits8(&(base_addr->mCMR1), 1 << 5);
+		setbits8(&(base_addr->CMR1), 1 << 5);
 		/* disable switching RCLK -> SYNC => CMR1.DCS = 1 (bit 3) */
-		setbits8(&(base_addr->mCMR1), 1 << 3);
+		setbits8(&(base_addr->CMR1), 1 << 3);
 	}
-	if (Version != E_DRV_E1_VERSION_1_2)
+	if (Version != VERSION_1_2)
 		/* during inactive channel phase RDO into tri-state mode */
-		setbits8(&(base_addr->mSIC3), 1 << 5);
-	if (! strcmp (priv->rising_edge_sync_pulse, "transmit")) {
+		setbits8(&(base_addr->SIC3), 1 << 5);
+	if (!strcmp(priv->rising_edge_sync_pulse, "transmit")) {
 		/* rising edge sync pulse transmit => SIC3.RESX = 1 (bit 3) */
-		setbits8(&(base_addr->mSIC3), 1 << 3);
-	}
-	else {
+		setbits8(&(base_addr->SIC3), 1 << 3);
+	} else {
 		/* rising edge sync pulse receive => SIC3.RESR = 1 (bit 2) */
-		setbits8(&(base_addr->mSIC3), 1 << 2);
+		setbits8(&(base_addr->SIC3), 1 << 2);
 	}
 	/* transmit offset counter = 4
-	   => XC0.XCO10:8 = 000 (bits 2, 1 et 0); XC1.XCO7:0 = 4 (bits 7 ... 0) */
-	out_8(&(base_addr->mXC1), 4);
+	   => XC0.XCO10:8 = 000 (bits 2, 1 et 0);
+	      XC1.XCO7:0 = 4 (bits 7 ... 0) */
+	out_8(&(base_addr->XC1), 4);
 	/* receive offset counter = 4
-	   => RC0.RCO10:8 = 000 (bits 2, 1 et 0); RC1.RCO7:0 = 4 (bits 7 ... 0) */
-	out_8(&(base_addr->mRC1), 4);
+	   => RC0.RCO10:8 = 000 (bits 2, 1 et 0);
+	      RC1.RCO7:0 = 4 (bits 7 ... 0) */
+	out_8(&(base_addr->RC1), 4);
 
 	/* clocking rate 8M and data rate 2M on the system highway */
-	setbits8(&(base_addr->mSIC1), 1 << 7);
+	setbits8(&(base_addr->SIC1), 1 << 7);
 	/* data rate 4M on the system highway */
 	if (priv->data_rate == DATA_RATE_4M)
-		setbits8(&(base_addr->mFMR1), 1 << 1);
+		setbits8(&(base_addr->FMR1), 1 << 1);
 	/* data rate 8M on the system highway */
 	if (priv->data_rate == DATA_RATE_8M)
-		setbits8(&(base_addr->mSIC1), 1 << 6);
+		setbits8(&(base_addr->SIC1), 1 << 6);
 	/* channel phase for FALC56 */
 	if ((priv->channel_phase == CHANNEL_PHASE_1)
 		|| (priv->channel_phase == CHANNEL_PHASE_3))
-		setbits8(&(base_addr->mSIC2), 1 << 1);
+		setbits8(&(base_addr->SIC2), 1 << 1);
 	if ((priv->channel_phase == CHANNEL_PHASE_2)
 		|| (priv->channel_phase == CHANNEL_PHASE_3))
-		setbits8(&(base_addr->mSIC2), 1 << 2);
-	
+		setbits8(&(base_addr->SIC2), 1 << 2);
+
 	if (priv->mode == SLAVE_MODE) {
-		/* transmit buffer size = 2 frames => SIC1.XBS1:0 = 10 (bits 1 et 0) */
-		setbits8(&(base_addr->mSIC1), 1 << 1);
+		/* transmit buffer size = 2 frames =>
+			SIC1.XBS1:0 = 10 (bits 1 et 0) */
+		setbits8(&(base_addr->SIC1), 1 << 1);
 	}
 
 	/* transmit in multiframe => FMR1.XFS = 1 (bit 3) */
-	setbits8(&(base_addr->mFMR1), 1 << 3);
+	setbits8(&(base_addr->FMR1), 1 << 3);
 	/* receive in multiframe => FMR2.RFS1:0 = 10 (bits 7 et 6) */
-	setbits8(&(base_addr->mFMR2), 1 << 7);
-	/* Automatic transmission of submultiframe status => XSP.AXS = 1 (bit 3) */
-	setbits8(&(base_addr->mXSP), 1 << 3);
+	setbits8(&(base_addr->FMR2), 1 << 7);
+	/* Automatic transmission of submultiframe status =>
+		XSP.AXS = 1 (bit 3) */
+	setbits8(&(base_addr->XSP), 1 << 3);
 
 	/* error counter mode toutes les 1s => FMR1.ECM = 1 (bit 2) */
-	setbits8(&(base_addr->mFMR1), 1 << 2);
+	setbits8(&(base_addr->FMR1), 1 << 2);
 	/* error counter mode COFA => GCR.ECMC = 1 (bit 4) */
-	setbits8(&(base_addr->mGCR), 1 << 4);
+	setbits8(&(base_addr->GCR), 1 << 4);
 	/* errors in service words with no influence => RC0.SWD = 1 (bit 7) */
-	setbits8(&(base_addr->mRC0), 1 << 7);
+	setbits8(&(base_addr->RC0), 1 << 7);
 	/* 4 consecutive incorrect FAS = loss of sync => RC0.ASY4 = 1 (bit 6) */
-	setbits8(&(base_addr->mRC0), 1 << 6);
+	setbits8(&(base_addr->RC0), 1 << 6);
 	/* Si-Bit in service word from XDI => XSW.XSIS = 1 (bit 7) */
-	setbits8(&(base_addr->mXSW), 1 << 7);
+	setbits8(&(base_addr->XSW), 1 << 7);
 	/* Si-Bit in FAS word from XDI => XSP.XSIF = 1 (bit 2) */
-	setbits8(&(base_addr->mXSP), 1 << 2);
+	setbits8(&(base_addr->XSP), 1 << 2);
 
 	/* port RCLK is output => PC5.CRP = 1 (bit 0) */
-	setbits8(&(base_addr->mPC5), 1 << 0);
+	setbits8(&(base_addr->PC5), 1 << 0);
 	/* visibility of the masked interrupts => GCR.VIS = 1 (bit 7) */
-	setbits8(&(base_addr->mGCR), 1 << 7);
-	/* reset des lignes
-	   => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4); CMDR.SRES = 1 (bit 0) */
-	out_8(&(base_addr->mCMDR), 0x51);
+	setbits8(&(base_addr->GCR), 1 << 7);
+	/* reset lines
+	   => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
+	      CMDR.SRES = 1 (bit 0) */
+	out_8(&(base_addr->CMDR), 0x51);
 
 	return 0;
 }
@@ -605,32 +639,28 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 static int pef2256_open(struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
-	pef2256_regs *base_addr = (pef2256_regs *)priv->base_addr;
+	struct pef2256_regs *base_addr = (struct pef2256_regs *)priv->base_addr;
 	int ret;
 
 	if (hdlc_open(netdev))
 		return -EAGAIN;
 
-	/* Do E1 stuff */
-	/* Enregistrement interruption FALC pour MPC */
 	ret = request_irq(priv->irq, pef2256_irq, 0, "e1-wan", priv);
 	if (ret) {
 		dev_err(priv->dev, "Cannot request irq. Device seems busy.\n");
 		return -EBUSY;
 	}
 
-	/* programmation du composant FALC */
-	if (priv->component_id != E_DRV_E1_VERSION_UNDEF) {
+	if (priv->component_id != VERSION_UNDEF) {
 		ret = init_FALC(priv);
-	}
-	else {
-		dev_err(priv->dev, "Composant ident (%X/%X) = %d\n", 
-			base_addr->mVSTR, base_addr->mWID, priv->component_id);
+	} else {
+		dev_err(priv->dev, "Composant ident (%X/%X) = %d\n",
+			base_addr->VSTR, base_addr->WID, priv->component_id);
 		ret = -ENODEV;
 	}
 
 	if (ret < 0)
-		return ret; 
+		return ret;
 
 	priv->tx_skb = NULL;
 	priv->rx_len = 0;
@@ -650,7 +680,7 @@ static int pef2256_close(struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 
-	if (! priv->init_done)
+	if (!priv->init_done)
 		return 0;
 
 	priv->init_done = 0;
@@ -667,40 +697,39 @@ static int pef2256_close(struct net_device *netdev)
 
 static int pef2256_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
-	int ret; 
+	int ret;
 
 	ret = hdlc_ioctl(dev, ifr, cmd);
 	return ret;
 }
 
-/* Handler IT lecture */
 static int pef2256_rx(struct pef2256_dev_priv *priv)
 {
 	struct sk_buff *skb;
 	int idx, size;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 
 	base_addr = priv->base_addr;
 
 	/* RDO has been received -> wait for RME */
 	if (priv->rx_len == -1) {
 		/* Acknowledge the FIFO */
-		setbits8(&(base_addr->mCMDR), 1 << 7);
+		setbits8(&(base_addr->CMDR), 1 << 7);
 
-		if (priv->ISR0 & (1 << 7)) 
+		if (priv->ISR0 & (1 << 7))
 			priv->rx_len = 0;
 
 		return 0;
 	}
 
-	/* Do E1 stuff */
 	/* RPF : a block is available in the receive FIFO */
 	if (priv->ISR0 & 1) {
-		for (idx=0; idx < 32; idx++)
-			priv->rx_buff[priv->rx_len + idx] = base_addr->mFIFO.mRFIFO[idx & 1];
+		for (idx = 0; idx < 32; idx++)
+			priv->rx_buff[priv->rx_len + idx] =
+				base_addr->FIFO.RFIFO[idx & 1];
 
 		/* Acknowledge the FIFO */
-		setbits8(&(base_addr->mCMDR), 1 << 7);
+		setbits8(&(base_addr->CMDR), 1 << 7);
 
 		priv->rx_len += 32;
 	}
@@ -708,21 +737,22 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 	/* RME : Message end : Read the receive FIFO */
 	if (priv->ISR0 & (1 << 7)) {
 		/* Get size of last block */
-		size = base_addr->mRBCL & 0x1F;
+		size = base_addr->RBCL & 0x1F;
 
 		/* Read last block */
-		for (idx=0; idx < size; idx++)
-			priv->rx_buff[priv->rx_len + idx] = base_addr->mFIFO.mRFIFO[idx & 1];
+		for (idx = 0; idx < size; idx++)
+			priv->rx_buff[priv->rx_len + idx] =
+				base_addr->FIFO.RFIFO[idx & 1];
 
 		/* Acknowledge the FIFO */
-		setbits8(&(base_addr->mCMDR), 1 << 7);
+		setbits8(&(base_addr->CMDR), 1 << 7);
 
 		priv->rx_len += size;
 
 		/* Packet received */
 		if (priv->rx_len > 0) {
 			skb = dev_alloc_skb(priv->rx_len);
-			if (! skb) {
+			if (!skb) {
 				priv->rx_len = 0;
 				priv->netdev->stats.rx_dropped++;
 				return -ENOMEM;
@@ -741,24 +771,21 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 }
 
 
-/* Handler IT ecriture */
 static int pef2256_tx(struct pef2256_dev_priv *priv)
 {
 	int idx, size;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	u8 *tx_buff = priv->tx_skb->data;
 
-	base_addr = (pef2256_regs *)priv->base_addr;
-
-	/* Do E1 stuff */
+	base_addr = (struct pef2256_regs *)priv->base_addr;
 
 	/* ALLS : transmit all done */
 	if (priv->ISR1 & (1 << 5)) {
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
-		// dev_kfree_skb(priv->tx_skb); 
-		priv->tx_skb=NULL;
-		priv->tx_len=0;
+		/* dev_kfree_skb(priv->tx_skb); */
+		priv->tx_skb = NULL;
+		priv->tx_len = 0;
 		netif_wake_queue(priv->netdev);
 	}
 	/* XPR : write a new block in transmit FIFO */
@@ -767,54 +794,52 @@ static int pef2256_tx(struct pef2256_dev_priv *priv)
 		if (size > 32)
 			size = 32;
 
-		for (idx=0; idx < size; idx++)
-			base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
+		for (idx = 0; idx < size; idx++)
+			base_addr->FIFO.XFIFO[idx & 1] =
+				tx_buff[priv->tx_len + idx];
 
 		priv->tx_len += size;
 
-		if (priv->tx_len == priv->tx_skb->len) 
-			base_addr->mCMDR |= ((1 << 3) | (1 << 1));
+		if (priv->tx_len == priv->tx_skb->len)
+			base_addr->CMDR |= ((1 << 3) | (1 << 1));
 		else
-			setbits8(&(base_addr->mCMDR), 1 << 3);
+			setbits8(&(base_addr->CMDR), 1 << 3);
 	}
 
 	return 0;
 }
 
 
-/* Handler IRQ */
 irqreturn_t pef2256_irq(int irq, void *dev_priv)
 {
 	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	u8 GIS;
 
-	/* Do E1 stuff */
-	base_addr = (pef2256_regs *)priv->base_addr;
-	GIS = base_addr->mGIS;
+	base_addr = (struct pef2256_regs *)priv->base_addr;
+	GIS = base_addr->GIS;
 
 	priv->ISR0 = priv->ISR1 = 0;
 
 	/* We only care about ISR0 and ISR1 */
 	/* ISR0 */
 	if (GIS & 1)
-		priv->ISR0 = base_addr->mISR0 & ~(base_addr->mIMR0);
+		priv->ISR0 = base_addr->ISR0 & ~(base_addr->IMR0);
 	/* ISR1 */
 	if (GIS & (1 << 1))
-		priv->ISR1 = base_addr->mISR1 & ~(base_addr->mIMR1);
+		priv->ISR1 = base_addr->ISR1 & ~(base_addr->IMR1);
 
 	/* Don't do anything else before init is done */
-	if (! priv->init_done)
+	if (!priv->init_done)
 		return IRQ_HANDLED;
 
 	/* RDO : Receive data overflow -> RX error */
 	if (priv->ISR1 & (1 << 6)) {
-printk("*********** pef2256_irq : data overflow ! \n");
 		/* Acknowledge the FIFO */
-		setbits8(&(base_addr->mCMDR), 1 << 7);
+		setbits8(&(base_addr->CMDR), 1 << 7);
 		priv->netdev->stats.rx_errors++;
 		/* RME received ? */
-		if (priv->ISR0 & (1 << 7)) 
+		if (priv->ISR0 & (1 << 7))
 			priv->rx_len = 0;
 		else
 			priv->rx_len = -1;
@@ -823,19 +848,18 @@ printk("*********** pef2256_irq : data overflow ! \n");
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (priv->ISR1 & (1 << 4)) {
-printk("*********** pef2256_irq : data underrun ! \n");
 		priv->netdev->stats.tx_errors++;
-		// dev_kfree_skb(priv->tx_skb);
-		priv->tx_skb=NULL;
+		/* dev_kfree_skb(priv->tx_skb); */
+		priv->tx_skb = NULL;
 		netif_wake_queue(priv->netdev);
 		return IRQ_HANDLED;
 	}
 
-	/* RPF or RME : FIFO received -> call pef2256_rx */
+	/* RPF or RME : FIFO received */
 	if (priv->ISR0 & (1 | (1 << 7)))
 		pef2256_rx(priv);
 
-	/* XPR or ALLS : FIFO sent -> call pef2256_tx */
+	/* XPR or ALLS : FIFO sent */
 	if (priv->ISR1 & (1 | (1 << 5)))
 		pef2256_tx(priv);
 
@@ -848,28 +872,26 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 	int idx, size;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	u8 *tx_buff = skb->data;
 
-	base_addr = (pef2256_regs *)priv->base_addr;
+	base_addr = (struct pef2256_regs *)priv->base_addr;
 
-	/* demande emission trame skb->data de longueur skb->len */
 	priv->tx_skb = skb;
 	priv->tx_len = 0;
 
-	/* Do E1 stuff */
 	size = priv->tx_skb->len - priv->tx_len;
 	if (size > 32)
 		size = 32;
 
-	for (idx=0; idx < size; idx++)
-		base_addr->mFIFO.mXFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
+	for (idx = 0; idx < size; idx++)
+		base_addr->FIFO.XFIFO[idx & 1] = tx_buff[priv->tx_len + idx];
 
 	priv->tx_len += size;
 
-	setbits8(&(base_addr->mCMDR), 1 << 3);
+	setbits8(&(base_addr->CMDR), 1 << 3);
 	if (priv->tx_len == priv->tx_skb->len)
-		setbits8(&(base_addr->mCMDR), 1 << 1);
+		setbits8(&(base_addr->CMDR), 1 << 1);
 
 	netif_stop_queue(netdev);
 	return NETDEV_TX_OK;
@@ -884,8 +906,7 @@ static const struct net_device_ops pef2256_ops = {
 };
 
 
-/* A vérifier : Qu'est ce que supporte le composant au juste ? */
-static int pef2256_hdlc_attach(struct net_device *netdev, 
+static int pef2256_hdlc_attach(struct net_device *netdev,
 				unsigned short encoding, unsigned short parity)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
@@ -911,7 +932,7 @@ static int pef2256_hdlc_attach(struct net_device *netdev,
 
 
 /*
- * Chargement du module
+ * Loading module
  */
 static const struct of_device_id pef2256_match[];
 static int pef2256_probe(struct platform_device *ofdev)
@@ -922,7 +943,7 @@ static int pef2256_probe(struct platform_device *ofdev)
 	struct net_device *netdev;
 	hdlc_device *hdlc;
 	int sys_ret;
-	pef2256_regs *base_addr;
+	struct pef2256_regs *base_addr;
 	struct device_node *np = (&ofdev->dev)->of_node;
 	const u32 *data;
 	int len;
@@ -934,93 +955,84 @@ static int pef2256_probe(struct platform_device *ofdev)
 	dev_err(&ofdev->dev, "Found PEF2256\n");
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (! priv)
+	if (!priv)
 		return ret;
 
 	priv->dev = &ofdev->dev;
 
 	data = of_get_property(np, "data-rate", &len);
 	if (!data || len != 4) {
-		dev_err(&ofdev->dev,"failed to read data-rate -> using 8Mb\n");
+		dev_err(&ofdev->dev, "failed to read data-rate -> using 8Mb\n");
 		priv->data_rate = DATA_RATE_8M;
-	}
-	else
+	} else
 		priv->data_rate = *data;
 
 	data = of_get_property(np, "channel-phase", &len);
 	if (!data || len != 4) {
-		dev_err(&ofdev->dev,"failed to read channel phase -> using 0\n");
+		dev_err(&ofdev->dev, "failed to read channel phase -> using 0\n");
 		priv->channel_phase = CHANNEL_PHASE_0;
-	}
-	else
+	} else
 		priv->channel_phase = *data;
 
 	data = of_get_property(np, "rising-edge-sync-pulse", NULL);
 	if (!data) {
 		dev_err(&ofdev->dev, "failed to read rising edge sync pulse -> using \"transmit\"\n");
-		strcpy (priv->rising_edge_sync_pulse, "transmit");
-	}
-	else if (strcmp ((char *)data, "transmit") && 
-			strcmp ((char *)data, "receive")) {
+		strcpy(priv->rising_edge_sync_pulse, "transmit");
+	} else if (strcmp((char *)data, "transmit") &&
+			strcmp((char *)data, "receive")) {
 		dev_err(&ofdev->dev, "invalid rising edge sync pulse -> using \"transmit\"\n");
-		strcpy (priv->rising_edge_sync_pulse, "transmit");
-	}
-	else
-		strncpy (priv->rising_edge_sync_pulse, (char *)data, 10);
+		strcpy(priv->rising_edge_sync_pulse, "transmit");
+	} else
+		strncpy(priv->rising_edge_sync_pulse, (char *)data, 10);
 
-	/* Do E1 stuff */
 	priv->irq = of_irq_to_resource(np, 0, NULL);
 	if (!priv->irq) {
 		dev_err(priv->dev, "no irq defined\n");
 		return -EINVAL;
 	}
 
-	/* remappage de l'adresse physique du composant E1 */
 	priv->base_addr = of_iomap(np, 0);
 	if (!priv->base_addr) {
-		dev_err(&ofdev->dev,"of_iomap failed\n");
+		dev_err(&ofdev->dev, "of_iomap failed\n");
 		kfree(priv);
 		return ret;
 	}
-	
-	/* lecture du registre d'identification */
-	base_addr = (pef2256_regs *)priv->base_addr;
-	priv->component_id = E_DRV_E1_VERSION_UNDEF;
-	if (base_addr->mVSTR == 0x00) {
-		if ((base_addr->mWID & M_DRV_E1_WID_IDENT_1) == M_DRV_E1_WID_IDENT_1_2)
-			priv->component_id = E_DRV_E1_VERSION_1_2;
-	}
-	else if (base_addr->mVSTR == 0x05) {
-		if ((base_addr->mWID & M_DRV_E1_WID_IDENT_2) == M_DRV_E1_WID_IDENT_2_1)
-			priv->component_id = E_DRV_E1_VERSION_2_1;
-		else if ((base_addr->mWID & M_DRV_E1_WID_IDENT_2) == M_DRV_E1_WID_IDENT_2_2)
-			priv->component_id = E_DRV_E1_VERSION_2_2;
+
+	/* Get the component Id */
+	base_addr = (struct pef2256_regs *)priv->base_addr;
+	priv->component_id = VERSION_UNDEF;
+	if (base_addr->VSTR == 0x00) {
+		if ((base_addr->WID & WID_IDENT_1) ==
+			WID_IDENT_1_2)
+			priv->component_id = VERSION_1_2;
+	} else if (base_addr->VSTR == 0x05) {
+		if ((base_addr->WID & WID_IDENT_2) ==
+			WID_IDENT_2_1)
+			priv->component_id = VERSION_2_1;
+		else if ((base_addr->WID & WID_IDENT_2) == WID_IDENT_2_2)
+			priv->component_id = VERSION_2_2;
 	}
 
 	priv->tx_skb = NULL;
 
-	/* Par defaut ; Tx et Rx sur TS 1 */
-	priv->Tx_TS = priv->Rx_TS = 0x40000000;
-	/* Par defaut ; mode = MASTER */
+	/* Default settings ; Rx and Tx use TS 1, mode = MASTER */
+	priv->Rx_TS = 0x40000000;
+	priv->Tx_TS = 0x40000000;
 	priv->mode = 0;
 
 	netdev = alloc_hdlcdev(priv);
-	if (! netdev) {
+	if (!netdev) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
 	priv->netdev = netdev;
 	hdlc = dev_to_hdlc(netdev);
-/* ???
-	d->base_addr = ;
-	d->irq = ;
-*/
 	netdev->netdev_ops = &pef2256_ops;
 	SET_NETDEV_DEV(netdev, &ofdev->dev);
 	hdlc->attach = pef2256_hdlc_attach;
 	hdlc->xmit = pef2256_start_xmit;
-	
+
 	dev_set_drvdata(&ofdev->dev, netdev);
 
 	ret = register_hdlc_device(netdev);
@@ -1105,7 +1117,7 @@ static void __exit pef2256_exit(void)
 module_exit(pef2256_exit);
 
 
-/* INFORMATIONS GENERALES */
+/* GENERAL INFORMATIONS */
 MODULE_AUTHOR(M_DRV_PEF2256_AUTHOR);
 MODULE_VERSION(M_DRV_PEF2256_VERSION);
 MODULE_DESCRIPTION("Infineon PEF 2256 E1 Controller");
