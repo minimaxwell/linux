@@ -1083,7 +1083,7 @@ static int pef2256_remove(struct platform_device *ofdev)
 
 static const struct of_device_id pef2256_match[] = {
 	{
-		.compatible = "s3k,mcr3000-e1-wan",
+		.compatible = "infineon,pef2256",
 	},
 	{},
 };

@@ -268,7 +268,7 @@ config FARSYNC
 
 config PEF2256
 	tristate "PEF2256 support"
-	depends on HDLC && CPM1
+	depends on HDLC && OF
 	help
 	  Driver for Infineon FALC56 E1/T1/J1 Framer and Line Interface
 	  besed on PEF2256 chipset.
