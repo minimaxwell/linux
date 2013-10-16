@@ -1,0 +1,29 @@
+* Wan on Infineon pef2256 E1 controller
+
+Required properties:
+- compatible: Should be "s3k,mcr3000-e1-wan"
+- reg: Address and length of the register set for the device
+- interrupts: Should contain interrupts
+
+Optional properties:
+- data-rate: Data rate on the system highway.
+  Supported values are: 2, 4, 8, 16.
+  8 if not defined.
+- channel-phase: First time slot transmission channel phase.
+  Supported values are: 0, 1, 2, 3, 4, 5, 6, 7.
+  0 if not defined.
+- rising-edge-sync-pulse: rising edge synchronous pulse.
+  Supported values are: "receive", "transmit".
+  "transmit" if not defined.
+
+Examples:
+
+	e1-wan@4,2000000 {
+		compatible = "s3k,mcr3000-e1-wan";
+		reg = <4 0x2000000 0xFF>;
+		interrupts = <8 1>;
+		interrupt-parent = <&PIC>;
+		data-rate = <4>;
+		channel-phase = <1>;
+		rising-edge-sync-pulse = "transmit";
+	};
