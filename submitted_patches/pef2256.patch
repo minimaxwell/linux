@@ -11,7 +11,7 @@ Acked-by: Christophe Leroy <christophe.leroy@c-s.fr>
 
 diff -urN a/drivers/net/wan/pef2256.c b/drivers/net/wan/pef2256.c
 --- a/drivers/net/wan/pef2256.c	1970-01-01 01:00:00.000000000 +0100
-+++ b/drivers/net/wan/pef2256.c	2013-10-13 12:39:14.000000000 +0200
++++ b/drivers/net/wan/pef2256.c	2013-10-13 13:05:01.000000000 +0200
 @@ -0,0 +1,1124 @@
 +/*
 + * drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
@@ -1098,7 +1098,7 @@ diff -urN a/drivers/net/wan/pef2256.c b/drivers/net/wan/pef2256.c
 +
 +static const struct of_device_id pef2256_match[] = {
 +	{
-+		.compatible = "s3k,mcr3000-e1-wan",
++		.compatible = "infineon,pef2256",
 +	},
 +	{},
 +};
@@ -1133,14 +1133,14 @@ diff -urN a/drivers/net/wan/pef2256.c b/drivers/net/wan/pef2256.c
 +
 +
 +/* GENERAL INFORMATIONS */
-+MODULE_AUTHOR(M_DRV_PEF2256_AUTHOR);
-+MODULE_VERSION(M_DRV_PEF2256_VERSION);
++MODULE_AUTHOR("CHANTELAUZE Jerome - April 2013");
++MODULE_VERSION("0.1");
 +MODULE_DESCRIPTION("Infineon PEF 2256 E1 Controller");
 +MODULE_LICENSE("GPL");
-diff -urN a/drivers/net/wan/pef2256.h wan/pef2256.h
+diff -urN a/drivers/net/wan/pef2256.h b/drivers/net/wan/pef2256.h
 --- a/drivers/net/wan/pef2256.h	1970-01-01 01:00:00.000000000 +0100
-+++ a/drivers/net/wan/pef2256.h	2013-10-13 12:39:14.000000000 +0200
-@@ -0,0 +1,270 @@
++++ b/drivers/net/wan/pef2256.h	2013-10-13 13:06:00.000000000 +0200
+@@ -0,0 +1,269 @@
 +/*
 + * drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
 + *
@@ -1149,9 +1149,8 @@ diff -urN a/drivers/net/wan/pef2256.h wan/pef2256.h
 + *
 + */
 +
-+
-+#define M_DRV_PEF2256_VERSION	"0.1"
-+#define M_DRV_PEF2256_AUTHOR	"CHANTELAUZE Jerome - April 2013"
++#ifndef _PEF2256_H
++#define _PEF2256_H
 +
 +#define MASTER_MODE 0
 +#define SLAVE_MODE  1
@@ -1410,4 +1409,68 @@ diff -urN a/drivers/net/wan/pef2256.h wan/pef2256.h
 +	unsigned char	WID;	/* 0xEC	Identification Register */
 +};
 +
++#endif /* _PEF2256_H */
+diff -urN a/Documentation/devicetree/bindings/net/pef2256.txt b/Documentation/devicetree/bindings/net/pef2256.txt
+--- a/Documentation/devicetree/bindings/net/pef2256.txt	1970-01-01 01:00:00.000000000 +0100
++++ b/Documentation/devicetree/bindings/net/pef2256.txt	2013-10-13 15:05:42.000000000 +0200
+@@ -0,0 +1,29 @@
++* Wan on Infineon pef2256 E1 controller
 +
++Required properties:
++- compatible: Should be "infineon,pef2256"
++- reg: Address and length of the register set for the device
++- interrupts: Should contain interrupts
++
++Optional properties:
++- data-rate: Data rate on the system highway.
++  Supported values are: 2, 4, 8, 16.
++  8 if not defined.
++- channel-phase: First time slot transmission channel phase.
++  Supported values are: 0, 1, 2, 3, 4, 5, 6, 7.
++  0 if not defined.
++- rising-edge-sync-pulse: rising edge synchronous pulse.
++  Supported values are: "receive", "transmit".
++  "transmit" if not defined.
++
++Examples:
++
++	e1-wan@4,2000000 {
++		compatible = "infineon,pef2256";
++		reg = <4 0x2000000 0xFF>;
++		interrupts = <8 1>;
++		interrupt-parent = <&PIC>;
++		data-rate = <4>;
++		channel-phase = <1>;
++		rising-edge-sync-pulse = "transmit";
++	};
+diff -urN a/drivers/net/wan/Makefile b/drivers/net/wan/Makefile
+--- a/drivers/net/wan/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/Makefile	2013-10-13 13:05:01.000000000 +0200
+@@ -22,6 +22,7 @@
+ obj-$(CONFIG_COSA)		+= cosa.o
+ obj-$(CONFIG_FARSYNC)		+= farsync.o
+ obj-$(CONFIG_DSCC4)             += dscc4.o
++obj-$(CONFIG_PEF2256)           += pef2256.o
+ obj-$(CONFIG_X25_ASY)		+= x25_asy.o
+ 
+ obj-$(CONFIG_LANMEDIA)		+= lmc/
+diff -urN a/drivers/net/wan/Kconfig b/drivers/net/wan/Kconfig
+--- a/drivers/net/wan/Kconfig	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/Kconfig	2013-10-13 13:05:01.000000000 +0200
+@@ -266,6 +266,16 @@
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called farsync.
+ 
++config PEF2256
++	tristate "PEF2256 support"
++	depends on HDLC && OF
++	help
++	  Driver for Infineon FALC56 E1/T1/J1 Framer and Line Interface
++	  based on PEF2256 chipset.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called pef2256.
++
+ config DSCC4
+ 	tristate "Etinc PCISYNC serial board support"
+ 	depends on HDLC && PCI && m
