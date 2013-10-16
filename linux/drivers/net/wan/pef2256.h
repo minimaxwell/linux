@@ -6,9 +6,8 @@
  *
  */
 
-
-#define M_DRV_PEF2256_VERSION	"0.1"
-#define M_DRV_PEF2256_AUTHOR	"CHANTELAUZE Jerome - April 2013"
+#ifndef _PEF2256_H
+#define _PEF2256_H
 
 #define MASTER_MODE 0
 #define SLAVE_MODE  1
@@ -267,4 +266,4 @@ struct pef2256_regs {
 	unsigned char	WID;	/* 0xEC	Identification Register */
 };
 
-
+#endif /* _PEF2256_H */
