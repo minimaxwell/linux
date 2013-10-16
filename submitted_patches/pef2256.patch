@@ -1,6 +1,7 @@
 From: Christophe Leroy <christophe.leroy@c-s.fr>
-To: Grant Likely <grant.likely@linaro.org>, Rob Herring <rob.herring@calxeda.com>, Krzysztof Halasa <khc@pm.waw.pl>
-CC: linux-kernel@vger.kernel.org, netdev@vger.kernel.org, devicetree@vger.kernel.org, jerome.chantelauze@c-s.fr
+To: Rob Herring <rob.herring@calxeda.com>, Pawel Moll <pawel.moll@arm.com>, Mark Rutland <mark.rutland@arm.com>, Stephen Warren <swarren@wwwdotorg.org>, Ian Campbell <ijc+devicetree@hellion.org.uk>, Rob Landley <rob@landley.net>, Grant Likely <grant.likely@linaro.org>
+, Krzysztof Halasa <khc@pm.waw.pl>
+CC: devicetree@vger.kernel.org, linux-doc@vger.kernel.org, linux-kernel@vger.kernel.org, netdev@vger.kernel.org, devicetree@vger.kernel.org, jerome.chantelauze@c-s.fr
 BCC: Christophe Leroy <christophe.leroy@c-s.fr>
 Subject: [PATCH] WAN: Adding support for Infineon PEF2256 E1 chipset
 
@@ -1463,7 +1464,7 @@ diff -urN a/drivers/net/wan/Kconfig b/drivers/net/wan/Kconfig
  
 +config PEF2256
 +	tristate "PEF2256 support"
-+	depends on HDLC && OF
++	depends on HDLC && OF && SYSFS
 +	help
 +	  Driver for Infineon FALC56 E1/T1/J1 Framer and Line Interface
 +	  based on PEF2256 chipset.
@@ -1474,3 +1475,4 @@ diff -urN a/drivers/net/wan/Kconfig b/drivers/net/wan/Kconfig
  config DSCC4
  	tristate "Etinc PCISYNC serial board support"
  	depends on HDLC && PCI && m
+/root/gen/trunk/knl/submitted_patches
