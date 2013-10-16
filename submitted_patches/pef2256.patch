@@ -1475,4 +1475,3 @@ diff -urN a/drivers/net/wan/Kconfig b/drivers/net/wan/Kconfig
  config DSCC4
  	tristate "Etinc PCISYNC serial board support"
  	depends on HDLC && PCI && m
-/root/gen/trunk/knl/submitted_patches
