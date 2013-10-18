@@ -539,7 +539,7 @@
 		
 		IDENT_EQUIPT_NVCS {
 			compatible = "ident-equipt-fav", "cs,mia-fav";
-			fav-id = <5 6>;
+			fav-id = <3 5 6>;
 			infos = "22",	/* nombre d'équipements possibles */
 				/* bornes min et max, niveaux in et out en dB, croissement TS, type casque */
 				"0",	"340",	"-22",	"-4",	"no",	"yes",	/* equipement 1 */
@@ -548,12 +548,12 @@
 				"503",	"578",	"-22",	"-4",	"no",	"yes",	/* equipement 4 */
 				"579",	"682",	"-22",	"-4",	"no",	"yes",	/* equipement 5 */
 				"683",	"804",	"-22",	"-4",	"no",	"yes",	/* equipement 6 */
-				"805",	"908",	"-13",	"-23",	"yes",	"yes",	/* equipement 7 */
+				"805",	"908",	"-7",	"-23",	"yes",	"yes",	/* equipement 7 */
 				"909",	"1016",	"-22",	"-4",	"no",	"yes",	/* equipement 8 */
 				"1017",	"1120",	"-22",	"-4",	"no",	"yes",	/* equipement 9 */
 				"1121",	"1232",	"-22",	"-4",	"no",	"yes",	/* equipement 10 */
 				"1233",	"1392",	"-22",	"-4",	"no",	"yes",	/* equipement 11 */
-				"1393",	"1523",	"-27",	"-7",	"no",	"yes",	/* equipement 12 */
+				"1393",	"1523",	"-25",	"-7",	"no",	"yes",	/* equipement 12 */
 				"1524",	"1664",	"-22",	"-4",	"no",	"yes",	/* equipement 13 */
 				"1665",	"1786",	"-22",	"-4",	"no",	"yes",	/* equipement 14 */
 				"1787",	"1954",	"-22",	"-4",	"no",	"yes",	/* equipement 15 */
@@ -572,8 +572,8 @@
 			gpio-controller;
 			reg = <4 0x44 2>;	/* necessaire mais non utilise */
 			gpios = <&fav 5 1	/* CS FAV */
-				 &fav 3 1	/* CS Ident equipement */
-				 &fav 4 1>;	/* CS FPGA */
+				 &fav 4 1	/* CS Ident equipement */
+				 &fav 3 1>;	/* CS FPGA */
 		};
 		
 		POT_A_NVCS {
@@ -914,15 +914,28 @@
 					spi-cs-high;
 				};
 				sicofi@2 {
-					compatible = "infineon,miae-sicofi";
+					compatible = "infineon,miae-sicofi", "cs,mia-far";
+					far-id = <0 1 2 3 5 6 7>;
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec_2";
-					analog_in = "-2dB 0dB 0dB 18dB";
+					analog_in = "-2dB 0dB 0dB 12dB";
 					analog_out = "3dB 3dB 3dB 4,5dB";
+				};
+				sicofi_gw@2 {
+					compatible = "infineon,miae-sicofi", "cs,mia-far";
+					far-id = <4>;
+					spi-max-frequency = <1000000>;
+					reg = <2>;
+					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec_2";
+					analog_in = "-3dB -3dB -3dB -3dB";
+					analog_out = "3dB 3dB 3dB 3dB";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25", "cs,eeprom";
