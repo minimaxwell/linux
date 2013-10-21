@@ -297,7 +297,6 @@ make_knld()
 	# build KNL manpages rpm package
  	if [ -d $knl_path/man ] && 
            [ -f $knl_path/man/KNL_docs.spec ]; then        
-		rm -rf ~/rpmbuild
 		mkdir -p ~/rpmbuild/BUILD
 		mkdir -p ~/rpmbuild/RPMS
 		mkdir -p ~/rpmbuild/RPMS/i386
