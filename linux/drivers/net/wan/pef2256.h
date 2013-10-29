@@ -17,8 +17,15 @@
 #define CHANNEL_PHASE_2 2
 #define CHANNEL_PHASE_3 3
 
+#define CLOCK_RATE_2M 2
+#define CLOCK_RATE_4M 4
+#define CLOCK_RATE_8M 8
+#define CLOCK_RATE_16M 16
+
+#define DATA_RATE_2M 2
 #define DATA_RATE_4M 4
 #define DATA_RATE_8M 8
+#define DATA_RATE_16M 16
 
 #define RX_TIMEOUT 500
 
@@ -50,6 +57,7 @@ struct pef2256_dev_priv {
 	int mode;	/* MASTER or SLAVE */
 	int board_type;
 	int channel_phase;
+	int clock_rate;
 	int data_rate;
 	char rising_edge_sync_pulse[10];
 

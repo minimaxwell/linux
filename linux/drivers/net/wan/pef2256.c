@@ -617,14 +617,32 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	      RC1.RCO7:0 = 4 (bits 7 ... 0) */
 	writeb(4, base_addr + RC1);
 
-	/* clocking rate 8M and data rate 2M on the system highway */
-	writeb(readb(base_addr + SIC1) | (1 << 7), base_addr + SIC1);
-	/* data rate 4M on the system highway */
+	/* Nothing to do if clock rate = 8 Mhz or data rate = 2 Mb/s */
+
+	/* clocking rate 4M  */ 
+	if (priv->clock_rate == CLOCK_RATE_4M)
+		writeb(readb(base_addr + SIC1) | (1 << 3), base_addr + SIC1);
+	/* clocking rate 8M  */ 
+	if (priv->clock_rate == CLOCK_RATE_8M)
+		writeb(readb(base_addr + SIC1) | (1 << 7), base_addr + SIC1);
+	/* clocking rate 16M  */ 
+	if (priv->clock_rate == CLOCK_RATE_16M) {
+		writeb(readb(base_addr + SIC1) | (1 << 3), base_addr + SIC1);
+		writeb(readb(base_addr + SIC1) | (1 << 7), base_addr + SIC1);
+	}
+
+	/* data rate 4M on the system data bus */
 	if (priv->data_rate == DATA_RATE_4M)
 		writeb(readb(base_addr + FMR1) | (1 << 1), base_addr + FMR1);
-	/* data rate 8M on the system highway */
+	/* data rate 8M on the system data bus */
 	if (priv->data_rate == DATA_RATE_8M)
 		writeb(readb(base_addr + SIC1) | (1 << 6), base_addr + SIC1);
+	/* data rate 16M on the system data bus */
+	if (priv->data_rate == DATA_RATE_16M) {
+		writeb(readb(base_addr + FMR1) | (1 << 1), base_addr + FMR1);
+		writeb(readb(base_addr + SIC1) | (1 << 6), base_addr + SIC1);
+	}
+
 	/* channel phase for FALC56 */
 	if ((priv->channel_phase == CHANNEL_PHASE_1)
 		|| (priv->channel_phase == CHANNEL_PHASE_3))
@@ -992,6 +1010,11 @@ static int pef2256_probe(struct platform_device *pdev)
 
 	priv->dev = &pdev->dev;
 
+	if (of_property_read_u32(np, "clock-rate", &priv->clock_rate)) {
+		dev_err(&pdev->dev, "failed to read clock-rate -> using 8Mhz\n");
+		priv->clock_rate = CLOCK_RATE_8M;
+	}
+
 	if (of_property_read_u32(np, "data-rate", &priv->data_rate)) {
 		dev_err(&pdev->dev, "failed to read data-rate -> using 8Mb\n");
 		priv->data_rate = DATA_RATE_8M;
@@ -1095,7 +1118,7 @@ remove_files:
 	device_remove_file(priv->dev, &dev_attr_Tx_TS);
 	device_remove_file(priv->dev, &dev_attr_Rx_TS);
 	device_remove_file(priv->dev, &dev_attr_mode);
-unregister_dev:
+
 	unregister_hdlc_device(priv->netdev);
 free_dev:
 	free_netdev(priv->netdev);
