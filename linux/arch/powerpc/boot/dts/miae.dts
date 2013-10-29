@@ -553,7 +553,7 @@
 				"1017",	"1120",	"-22",	"-4",	"no",	"yes",	/* equipement 9 */
 				"1121",	"1232",	"-22",	"-4",	"no",	"yes",	/* equipement 10 */
 				"1233",	"1392",	"-22",	"-4",	"no",	"yes",	/* equipement 11 */
-				"1393",	"1523",	"-25",	"-7",	"no",	"yes",	/* equipement 12 */
+				"1393",	"1523",	"-23",	"-7",	"no",	"yes",	/* equipement 12 */
 				"1524",	"1664",	"-22",	"-4",	"no",	"yes",	/* equipement 13 */
 				"1665",	"1786",	"-22",	"-4",	"no",	"yes",	/* equipement 14 */
 				"1787",	"1954",	"-22",	"-4",	"no",	"yes",	/* equipement 15 */
@@ -897,7 +897,8 @@
 					 &FAV_CS_SPI 1 1	/* FAV SPI */
 					 &FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 				sicofi@0 {
-					compatible = "infineon,miae-sicofi";
+					compatible = "infineon,miae-sicofi", "cs,mia-far";
+					far-id = <0 2 3 4 5 6 7>;
 					spi-max-frequency = <1000000>;
 					reg = <0>;
 					spi-cs-high;
@@ -907,6 +908,18 @@
 					analog_in = "-2dB -2dB -2dB -2dB";
 					analog_out = "6dB 6dB 6dB 6dB";
 				};
+				sicofi_nvcs@0 {
+					compatible = "infineon,miae-sicofi", "cs,mia-far";
+					far-id = <1>;
+					spi-max-frequency = <1000000>;
+					reg = <0>;
+					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec_1";
+					analog_in = "-2dB -2dB -2dB -2dB";
+					analog_out = "0dB 0dB 0dB 0dB";
+				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
 					spi-max-frequency = <1000000>;
@@ -915,7 +928,7 @@
 				};
 				sicofi@2 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
-					far-id = <0 1 2 3 5 6 7>;
+					far-id = <0 2 3 5 6 7>;
 					spi-max-frequency = <1000000>;
 					reg = <2>;
 					spi-cs-high;
@@ -924,6 +937,18 @@
 					name_codec = "codec_2";
 					analog_in = "-2dB 0dB 0dB 12dB";
 					analog_out = "3dB 3dB 3dB 4,5dB";
+				};
+				sicofi_nvcs@2 {
+					compatible = "infineon,miae-sicofi", "cs,mia-far";
+					far-id = <1>;
+					spi-max-frequency = <1000000>;
+					reg = <2>;
+					spi-cs-high;
+					spi-cpha;
+					spi-troll;
+					name_codec = "codec_2";
+					analog_in = "-2dB 0dB 0dB 12dB";
+					analog_out = "6dB 3dB 3dB 4,5dB";
 				};
 				sicofi_gw@2 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
