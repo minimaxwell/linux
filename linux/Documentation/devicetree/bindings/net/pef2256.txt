@@ -10,9 +10,11 @@ interfacing between analog E1 lines and the digital PCM system highway, H.100/H.
 or H-MVIP bus.
 
 Required properties:
-- compatible: Should be "infineon,pef2256"
-- reg: Address and length of the register set for the device
-- interrupts: Should contain interrupts
+- compatible: Should contain "infineon,pef2256"
+- reg: Address and length of the register set for the device. 
+  There should be a single continuous bank.
+- interrupts: Should contain the single interrupt used by the component to notify 
+  special events (error, data received, data transmitted, ...).
 
 Optional properties:
 
