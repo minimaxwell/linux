@@ -1,19 +1,19 @@
 * Wan on Infineon pef2256 E1 controller
 
-The pef2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and 
+The pef2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and
 Short-Haul Applications.
-Its datashhet can be downloaded at 
+Its datashhet can be downloaded at
 http://www.datasheetcatalog.com/datasheets_pdf/P/E/F/2/PEF2256E.shtml
 
 The FALC®56 framer and line interface component is designed to fulfill all required
-interfacing between analog E1 lines and the digital PCM system highway, H.100/H.110 
+interfacing between analog E1 lines and the digital PCM system highway, H.100/H.110
 or H-MVIP bus.
 
 Required properties:
 - compatible: Should contain "infineon,pef2256"
-- reg: Address and length of the register set for the device. 
+- reg: Address and length of the register set for the device.
   There should be a single continuous bank.
-- interrupts: Should contain the single interrupt used by the component to notify 
+- interrupts: Should contain the single interrupt used by the component to notify
   special events (error, data received, data transmitted, ...).
 
 Optional properties:
@@ -28,11 +28,11 @@ the interface to the transmit system highway is independently clocked on pin SCL
 The frequency of these working clocks and the data rate of 2.048/4.096/8.192/16.384
 Mbit/s for the receive and transmit system interface is programmable.
 
-- clock-rate: 
+- clock-rate:
   Supported values are: 2 (2.048 Mhz), 4 (4.096 Mhz), 8 (8.192 Mhz), 16 (16.384 Mhz).
   8 if not defined.
 
-- data-rate: 
+- data-rate:
   Supported values are: 2 (2.048 Mbit/sec), 4 (4.096 Mbit/sec), 8 (8.192 Mbit/sec), 16
   (16.384 Mbit/sec).
   8 if not defined.
