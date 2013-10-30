@@ -1,9 +1,7 @@
-/*
- * drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
+/* drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
  *
  * This software may be used and distributed according to the terms of the
  * GNU General Public License.
- *
  */
 
 #ifndef _PEF2256_H

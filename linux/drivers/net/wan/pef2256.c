@@ -1,9 +1,7 @@
-/*
- * drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
+/* drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
  *
  * This software may be used and distributed according to the terms of the
  * GNU General Public License.
- *
  */
 
 #include <linux/module.h>
@@ -132,8 +130,10 @@ void print_regs(struct device *dev)
 	netdev_info(ndev, "	GCM4 = 0x%02x\n", readb(base_addr + GCM4));
 	netdev_info(ndev, "	GCM5 = 0x%02x\n", readb(base_addr + GCM5));
 	netdev_info(ndev, "	GCM6 = 0x%02x\n", readb(base_addr + GCM6));
-	netdev_info(ndev, "	SIS2/GCM7 = 0x%02x\n", readb(base_addr + SIS2_1));
-	netdev_info(ndev, "	RSIS2/GCM8 = 0x%02x\n", readb(base_addr + RSIS2_1));
+	netdev_info(ndev, "	SIS2/GCM7 = 0x%02x\n",
+			readb(base_addr + SIS2_1));
+	netdev_info(ndev, "	RSIS2/GCM8 = 0x%02x\n",
+			readb(base_addr + RSIS2_1));
 	netdev_info(ndev, "	TSEO = 0x%02x\n", readb(base_addr + TSEO));
 	netdev_info(ndev, "	TSBS1 = 0x%02x\n", readb(base_addr + TSBS1));
 	netdev_info(ndev, "	TSBS2 = 0x%02x\n", readb(base_addr + TSBS2));
@@ -274,9 +274,7 @@ static ssize_t fs_attr_Rx_TS_store(struct device *dev,
 static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show,
 	 fs_attr_Rx_TS_store);
 
-/*
- * Setting up HDLC channel
- */
+/* Setting up HDLC channel */
 int Config_HDLC(struct pef2256_dev_priv *priv)
 {
 	int i;
@@ -301,78 +299,83 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 	writeb(readb(base_addr + IMR0) | (1 << 7), base_addr + IMR0);
 	writeb(readb(base_addr + IMR1) | (1 << 6), base_addr + IMR1);
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
-	   MODE.DIV = 0 (Data normal operation)
-	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
-	/* MODE.MDS2:0 = 100 (No address comparison) */
-	/* MODE.HRAC = 1 (Receiver active) */
+	 * MODE.DIV = 0 (Data normal operation)
+	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
+	 * MODE.MDS2:0 = 100 (No address comparison)
+	 * MODE.HRAC = 1 (Receiver active)
+	 */
 	writeb(1 << 3, base_addr + MODE);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
-	   CCR1.XMFA = 0 (No transmit multiframe alignment)
-	   CCR1.RFT1:0 = 00 (RFIFO is 32 bytes) */
-	/* setting up Interframe Time Fill */
-	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
+	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
+	 * setting up Interframe Time Fill
+	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
+	 */
 	writeb(0x10 | (1 << 3), base_addr + CCR1);
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
-	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
-	   CCR2.RADD = 0 (No write address in RFIFO) */
+	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	 * CCR2.RADD = 0 (No write address in RFIFO)
+	 */
 	writeb(0x00, base_addr + CCR2);
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
-	   MODE.DIV = 0 (Data normal operation)
-	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
-	/* MODE.MDS2:0 = 100 (No address comparison) */
-	/* MODE.HRAC = 1 (Receiver active) */
+	 * MODE.DIV = 0 (Data normal operation)
+	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
+	 * MODE.MDS2:0 = 100 (No address comparison)
+	 * MODE.HRAC = 1 (Receiver active)
+	 */
 	writeb(1 << 3, base_addr + MODE);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
-	   CCR1.XMFA = 0 (No transmit multiframe alignment)
-	   CCR1.RFT1:0 = 00 (RFIFO is 32 bytes) */
-	/* setting up Interframe Time Fill */
-	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
+	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
+	 * setting up Interframe Time Fill
+	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
+	 */
 	writeb(0x10 | (1 << 3), base_addr + CCR1);
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
-	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
-	   CCR2.RADD = 0 (No write address in RFIFO) */
+	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	 * CCR2.RADD = 0 (No write address in RFIFO)
+	 */
 	writeb(0x00, base_addr + CCR2);
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
 	/* MODE.HRAC = 0 (Receiver inactive)
-	   MODE.DIV = 0 (Data normal operation)
-	   for FALC V2.2 : MODE.HDLCI = 0 (normal operation) */
-	/* MODE.MDS2:0 = 100 (No address comparison) */
-	/* MODE.HRAC = 1 (Receiver active) */
+	 * MODE.DIV = 0 (Data normal operation)
+	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
+	 * MODE.MDS2:0 = 100 (No address comparison)
+	 * MODE.HRAC = 1 (Receiver active)
+	 */
 	writeb(1 << 3, base_addr + MODE);
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
-	   CCR1.XMFA = 0 (No transmit multiframe alignment)
-	   CCR1.RFT1:0 = 00 (RFIFO is 32 bytes) */
-	/* setting up Interframe Time Fill */
-	/* CCR1.ITF = 1 (Interframe Time Fill Continuous flag) */
+	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
+	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
+	 * setting up Interframe Time Fill
+	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
+	 */
 	writeb(0x10 | (1 << 3), base_addr + CCR1);
 	/* CCR2.XCRC = 0 (Transmit CRC ON)
-	   CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
-	   CCR2.RADD = 0 (No write address in RFIFO) */
+	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
+	 * CCR2.RADD = 0 (No write address in RFIFO)
+	 */
 	writeb(0x00, base_addr + CCR2);
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
@@ -425,9 +428,8 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 		}
 	}
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
@@ -441,9 +443,8 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 	writeb(readb(base_addr + IMR0) & ~(1 << 7), base_addr + IMR0);
 	writeb(readb(base_addr + IMR1) & ~(1 << 6), base_addr + IMR1);
 
-	/*
-	 * The hardware requires a delay up to 2*32*125 usec to take commands
-         *  into account
+	/* The hardware requires a delay up to 2*32*125 usec to take commands
+	 * into account
 	 */
 	udelay((2 * 32) * 125);
 
@@ -451,9 +452,7 @@ int Config_HDLC(struct pef2256_dev_priv *priv)
 }
 
 
-/*
- * Init FALC56
- */
+/* Init FALC56 */
 static int init_FALC(struct pef2256_dev_priv *priv)
 {
 	unsigned char *base_addr;
@@ -465,16 +464,19 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	/* Init FALC56 */
 	base_addr = priv->base_addr;
 	/* RCLK output : DPLL clock, DCO-X enabled, DCO-X internal reference
-	   clock */
+	 * clock
+	 */
 	writeb(0x00, base_addr + CMR1);
 	/* SCLKR selected, SCLKX selected, receive synchro pulse sourced by
-	   SYPR, transmit synchro pulse sourced by SYPX */
+	 * SYPR, transmit synchro pulse sourced by SYPX
+	 */
 	writeb(0x00, base_addr + CMR2);
 	/* NRZ coding, no alarm simulation */
 	writeb(0x00, base_addr + FMR0);
 	/* E1 double frame format, 2 Mbit/s system data rate, no AIS
-	   transmission to remote end or system interface, payload loop
-	   off, transmit remote alarm on */
+	 * transmission to remote end or system interface, payload loop
+	 * off, transmit remote alarm on
+	 */
 	writeb(0x00, base_addr + FMR1);
 	writeb(0x02, base_addr + FMR2);
 	/* E1 default for LIM2 */
@@ -496,34 +498,40 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	writeb(0x00, base_addr + LIM1);
 	if (Version == VERSION_1_2) {
 		/* function of ports RP(A to D) : output receive sync pulse
-		   function of ports XP(A to D) : output transmit line clock */
+		 * function of ports XP(A to D) : output transmit line clock
+		 */
 		writeb(0x77, base_addr + PC1);
 		writeb(0x77, base_addr + PC2);
 		writeb(0x77, base_addr + PC3);
 		writeb(0x77, base_addr + PC4);
 	} else {
 		/* function of ports RP(A to D) : output high
-		   function of ports XP(A to D) : output high */
+		 * function of ports XP(A to D) : output high
+		 */
 		writeb(0xAA, base_addr + PC1);
 		writeb(0xAA, base_addr + PC2);
 		writeb(0xAA, base_addr + PC3);
 		writeb(0xAA, base_addr + PC4);
 	}
 	/* function of port RPA : input SYPR
-	   function of port XPA : input SYPX */
+	 * function of port XPA : input SYPX
+	 */
 	writeb(0x00, base_addr + PC1);
 	/* SCLKR, SCLKX, RCLK configured to inputs,
-	   XFMS active low, CLK1 and CLK2 pin configuration */
+	 * XFMS active low, CLK1 and CLK2 pin configuration
+	 */
 	writeb(0x00, base_addr + PC5);
 	writeb(0x00, base_addr + PC6);
 	/* the receive clock offset is cleared
-	   the receive time slot offset is cleared */
+	 * the receive time slot offset is cleared
+	 */
 	writeb(0x00, base_addr + RC0);
 	writeb(0x9C, base_addr + RC1);
 	/* 2.048 MHz system clocking rate, receive buffer 2 frames, transmit
-	   buffer bypass, data sampled and transmitted on the falling edge of
-	   SCLKR/X, automatic freeze signaling, data is active in the first
-	   channel phase */
+	 * buffer bypass, data sampled and transmitted on the falling edge of
+	 * SCLKR/X, automatic freeze signaling, data is active in the first
+	 * channel phase
+	 */
 	writeb(0x00, base_addr + SIC1);
 	writeb(0x00, base_addr + SIC2);
 	writeb(0x00, base_addr + SIC3);
@@ -536,7 +544,8 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	/* no transparent mode active */
 	writeb(0x00, base_addr + TSWM);
 	/* the transmit clock offset is cleared
-	   the transmit time slot offset is cleared */
+	 * the transmit time slot offset is cleared
+	 */
 	writeb(0x00, base_addr + XC0);
 	writeb(0x9C, base_addr + XC1);
 	/* transmitter in tristate mode */
@@ -572,12 +581,14 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 
 	if (Version == VERSION_1_2) {
 		/* receive input threshold = 0,21V =>
-			LIM1.RIL2:0 = 101 (bits 6, 5 et 4) */
+		 * LIM1.RIL2:0 = 101 (bits 6, 5 et 4)
+		 */
 		writeb(readb(base_addr + LIM1) | (1 << 4), base_addr + LIM1);
 		writeb(readb(base_addr + LIM1) | (1 << 6), base_addr + LIM1);
 	} else {
 		/* receive input threshold = 0,21V =>
-			LIM1.RIL2:0 = 100 (bits 6, 5 et 4) */
+		 * LIM1.RIL2:0 = 100 (bits 6, 5 et 4)
+		 */
 		writeb(readb(base_addr + LIM1) | (1 << 6), base_addr + LIM1);
 	}
 	/* transmit line coding = HDB3 => FMR0.XC1:0 = 11 (bits 7 et 6) */
@@ -609,23 +620,25 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 		writeb(readb(base_addr + SIC3) | (1 << 2), base_addr + SIC3);
 	}
 	/* transmit offset counter = 4
-	   => XC0.XCO10:8 = 000 (bits 2, 1 et 0);
-	      XC1.XCO7:0 = 4 (bits 7 ... 0) */
+	 *  => XC0.XCO10:8 = 000 (bits 2, 1 et 0);
+	 *     XC1.XCO7:0 = 4 (bits 7 ... 0)
+	 */
 	writeb(4, base_addr + XC1);
 	/* receive offset counter = 4
-	   => RC0.RCO10:8 = 000 (bits 2, 1 et 0);
-	      RC1.RCO7:0 = 4 (bits 7 ... 0) */
+	 * => RC0.RCO10:8 = 000 (bits 2, 1 et 0);
+	 *    RC1.RCO7:0 = 4 (bits 7 ... 0)
+	 */
 	writeb(4, base_addr + RC1);
 
 	/* Nothing to do if clock rate = 8 Mhz or data rate = 2 Mb/s */
 
-	/* clocking rate 4M  */ 
+	/* clocking rate 4M  */
 	if (priv->clock_rate == CLOCK_RATE_4M)
 		writeb(readb(base_addr + SIC1) | (1 << 3), base_addr + SIC1);
-	/* clocking rate 8M  */ 
+	/* clocking rate 8M  */
 	if (priv->clock_rate == CLOCK_RATE_8M)
 		writeb(readb(base_addr + SIC1) | (1 << 7), base_addr + SIC1);
-	/* clocking rate 16M  */ 
+	/* clocking rate 16M  */
 	if (priv->clock_rate == CLOCK_RATE_16M) {
 		writeb(readb(base_addr + SIC1) | (1 << 3), base_addr + SIC1);
 		writeb(readb(base_addr + SIC1) | (1 << 7), base_addr + SIC1);
@@ -653,7 +666,8 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 
 	if (priv->mode == SLAVE_MODE) {
 		/* transmit buffer size = 2 frames =>
-			SIC1.XBS1:0 = 10 (bits 1 et 0) */
+		 * SIC1.XBS1:0 = 10 (bits 1 et 0)
+		 */
 		writeb(readb(base_addr + SIC1) | (1 << 1), base_addr + SIC1);
 	}
 
@@ -662,7 +676,8 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	/* receive in multiframe => FMR2.RFS1:0 = 10 (bits 7 et 6) */
 	writeb(readb(base_addr + FMR2) | (1 << 7), base_addr + FMR2);
 	/* Automatic transmission of submultiframe status =>
-		XSP.AXS = 1 (bit 3) */
+	 * SP.AXS = 1 (bit 3)
+	 */
 	writeb(readb(base_addr + XSP) | (1 << 3), base_addr + XSP);
 
 	/* error counter mode toutes les 1s => FMR1.ECM = 1 (bit 2) */
@@ -683,8 +698,9 @@ static int init_FALC(struct pef2256_dev_priv *priv)
 	/* visibility of the masked interrupts => GCR.VIS = 1 (bit 7) */
 	writeb(readb(base_addr + GCR) | (1 << 7), base_addr + GCR);
 	/* reset lines
-	   => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
-	      CMDR.SRES = 1 (bit 0) */
+	 *  => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
+	 *     CMDR.SRES = 1 (bit 0)
+	 */
 	writeb(0x51, base_addr + CMDR);
 
 	return 0;
@@ -757,8 +773,6 @@ static int pef2256_rx(struct pef2256_dev_priv *priv)
 	unsigned char *base_addr;
 
 	base_addr = priv->base_addr;
-
-printk("R");
 
 	/* RDO has been received -> wait for RME */
 	if (priv->rx_len == -1) {
@@ -986,9 +1000,7 @@ static int pef2256_hdlc_attach(struct net_device *netdev,
 }
 
 
-/*
- * Loading module
- */
+/* Loading module */
 static int pef2256_probe(struct platform_device *pdev)
 {
 	struct pef2256_dev_priv *priv;
@@ -1026,10 +1038,13 @@ static int pef2256_probe(struct platform_device *pdev)
 	}
 
 	if (of_property_read_string(np, "rising-edge-sync-pulse", &str_data)) {
-		dev_err(&pdev->dev, "failed to read rising edge sync pulse -> using \"transmit\"\n");
+		dev_err(&pdev->dev,
+"failed to read rising edge sync pulse -> using \"transmit\"\n");
 		strcpy(priv->rising_edge_sync_pulse, "transmit");
-	} else if (strcmp(str_data, "transmit") && strcmp(str_data, "receive")) {
-		dev_err(&pdev->dev, "invalid rising edge sync pulse \"%s\" -> using \"transmit\"\n", str_data);
+	} else if (strcmp(str_data, "transmit") &&
+		   strcmp(str_data, "receive")) {
+		dev_err(&pdev->dev,
+"invalid rising edge sync pulse \"%s\" -> using \"transmit\"\n", str_data);
 		strcpy(priv->rising_edge_sync_pulse, "transmit");
 	} else
 		strncpy(priv->rising_edge_sync_pulse, str_data, 10);
@@ -1043,7 +1058,6 @@ static int pef2256_probe(struct platform_device *pdev)
 	priv->base_addr = of_iomap(np, 0);
 	if (!priv->base_addr) {
 		dev_err(&pdev->dev, "of_iomap failed\n");
-		ret = -ENOMEM;
 		goto free_priv;
 	}
 
@@ -1092,10 +1106,9 @@ static int pef2256_probe(struct platform_device *pdev)
 		goto free_dev;
 	}
 
-	/*
-	 * These files are required to configure HDLC : mode
-         * (master or slave), time slots used to transmit and
-         * receive data. They are mandatory.
+	/* These files are required to configure HDLC : mode
+	 * (master or slave), time slots used to transmit and
+	 * receive data. They are mandatory.
 	 */
 	ret = device_create_file(priv->dev, &dev_attr_mode);
 	ret |= device_create_file(priv->dev, &dev_attr_Tx_TS);
@@ -1104,8 +1117,7 @@ static int pef2256_probe(struct platform_device *pdev)
 	if (ret)
 		goto remove_files;
 
-	/*
-	 * This file is only used to display debug infos.
+	/* This file is only used to display debug infos.
 	 * A failure can be safely ignored.
 	 */
 	device_create_file(priv->dev, &dev_attr_regs);
@@ -1131,9 +1143,7 @@ free_priv:;
 }
 
 
-/*
- * Removing module
- */
+/* Removing module */
 static int pef2256_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = dev_get_drvdata(&pdev->dev);
