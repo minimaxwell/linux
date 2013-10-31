@@ -580,48 +580,48 @@
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_a";
-			iio-name = "ad7923";
+			dev-name = "ad7923";
 			io-channels = <&iio 0>;
 			io-channel-names = "channel_0";
-			iio-channel = "channel_0";
+			dev-channel = "channel_0";
 		};
 		POT_B_NVCS {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <5 6>;
 			user-name = "pot_b";
-			iio-name = "ad7923";
+			dev-name = "ad7923";
 			io-channels = <&iio 1>;
 			io-channel-names = "channel_1";
-			iio-channel = "channel_1";
+			dev-channel = "channel_1";
 		};
 		
 		POT_A_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_a";
-			iio-name = "none";
-			iio-channel = "channel_0";
+			dev-name = "none";
+			dev-channel = "channel_0";
 		};
 		POT_B_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_b";
-			iio-name = "none";
-			iio-channel = "channel_1";
+			dev-name = "none";
+			dev-channel = "channel_1";
 		};
 		POT_C_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_c";
-			iio-name = "none";
-			iio-channel = "channel_2";
+			dev-name = "none";
+			dev-channel = "channel_2";
 		};
 		POT_D_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_d";
-			iio-name = "none";
-			iio-channel = "channel_3";
+			dev-name = "none";
+			dev-channel = "channel_3";
 		};
 	};
 
