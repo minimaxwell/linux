@@ -1,54 +1,57 @@
-* Wan on Infineon pef2256 E1 controller
+* Wan on Infineon PEF2256 E1 controller, also known as FALC56
 
-The pef2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and
+The PEF2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and
 Short-Haul Applications.
 Its datashhet can be downloaded at
 http://www.datasheetcatalog.com/datasheets_pdf/P/E/F/2/PEF2256E.shtml
 
-The FALC®56 framer and line interface component is designed to fulfill all required
-interfacing between analog E1 lines and the digital PCM system highway, H.100/H.110
-or H-MVIP bus.
+The FALC56 framer and line interface component is designed to fulfill all
+required interfacing between analog E1 lines and the digital PCM system
+highway, H.100/H.110 or H-MVIP bus.
 
 Required properties:
 - compatible: Should contain "infineon,pef2256"
 - reg: Address and length of the register set for the device.
   There should be a single continuous bank.
-- interrupts: Should contain the single interrupt used by the component to notify
-  special events (error, data received, data transmitted, ...).
+- interrupts: Should contain the single interrupt used by the component to
+  notify special events (error, data received, data transmitted, ...).
 
 Optional properties:
 
 These properties can be defined to adjust the system interface in E1 mode.
 
-The FALC®56 offers a flexible feature for system designers where for transmit and
-receive direction different system clocks and system pulses are necessary. The interface
-to the receive system highway is realized by two data buses, one for the data RDO and
-one for the signaling data RSIG. The receive highway is clocked on pin SCLKR, while
-the interface to the transmit system highway is independently clocked on pin SCLKX.
-The frequency of these working clocks and the data rate of 2.048/4.096/8.192/16.384
-Mbit/s for the receive and transmit system interface is programmable.
+The FALC56 offers a flexible feature for system designers where for transmit and
+receive direction different system clocks and system pulses are necessary. The
+interface to the receive system highway is realized by two data buses, one for
+the data RDO and one for the signaling data RSIG. The receive highway is clocked
+on pin SCLKR, while the interface to the transmit system highway is
+independently clocked on pin SCLKX. The frequency of these working clocks and
+the data rate of 2.048/4.096/8.192/16.384 Mbit/s for the receive and transmit
+system interface is programmable.
 
 - clock-rate:
-  Supported values are: 2 (2.048 Mhz), 4 (4.096 Mhz), 8 (8.192 Mhz), 16 (16.384 Mhz).
+  Supported values are: 2 (2.048 Mhz), 4 (4.096 Mhz), 8 (8.192 Mhz),
+    16 (16.384 Mhz).
   8 if not defined.
 
 - data-rate:
-  Supported values are: 2 (2.048 Mbit/sec), 4 (4.096 Mbit/sec), 8 (8.192 Mbit/sec), 16
-  (16.384 Mbit/sec).
+  Supported values are: 2 (2.048 Mbit/sec), 4 (4.096 Mbit/sec),
+    8 (8.192 Mbit/sec), 16 (16.384 Mbit/sec).
   8 if not defined.
 
-Adjusting the frame begin (time slot 0, bit 0) relative to SYPR/X or XMFS is possible in
-the range of 0 to 125 μs. The minimum shift of varying the time slot 0 begin can be
-programmed between 1 bit and 1/8 bit depending of the system clocking and data rate,
-e.g. with a clocking/data rate of 2.048 MHz shifting is done bit by bit, while running the
-FALC®56 with 16.384 MHz and 2.048 Mbit/s data rate it is done by 1/8 bit
+Adjusting the frame begin (time slot 0, bit 0) relative to SYPR/X or XMFS is
+possible in the range of 0 to 125 �s. The minimum shift of varying the
+time slot 0 begin can be programmed between 1 bit and 1/8 bit depending of the
+system clocking and data rate, e.g. with a clocking/data rate of 2.048 MHz
+shifting is done bit by bit, while running the FALC56 with 16.384 MHz and
+2.048 Mbit/s data rate it is done by 1/8 bit
 
 - channel-phase: First time slot transmission channel phase.
   Supported values are: 0, 1, 2, 3, 4, 5, 6, 7.
   0 if not defined.
 
-All transmit or receive system interface data and marker are clocked or sampled with the
-following active edge :
+All transmit or receive system interface data and marker are clocked or sampled
+with the following active edge :
 * Latched with the first falling edge of the selected PCM highway clock.
 * Latched with the first rising edge of the selected PCM highway clock.
 The behaviour of "transmit" and "receive" signals is inverse.
