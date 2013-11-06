@@ -542,28 +542,28 @@
 			fav-id = <3 5 6>;
 			infos = "22",	/* nombre d'équipements possibles */
 				/* bornes min et max, niveaux in et out en dB, croissement TS, type casque */
-				"0",	"340",	"-22",	"-4",	"no",	"yes",	/* equipement 1 */
-				"341",	"420",	"-22",	"-4",	"no",	"yes",	/* equipement 2 */
-				"421",	"502",	"-22",	"-4",	"no",	"yes",	/* equipement 3 */
-				"503",	"578",	"-22",	"-4",	"no",	"yes",	/* equipement 4 */
-				"579",	"682",	"-22",	"-4",	"no",	"yes",	/* equipement 5 */
-				"683",	"804",	"-22",	"-4",	"no",	"yes",	/* equipement 6 */
+				"0",	"340",	"-27",	"-10",	"no",	"yes",	/* equipement 1 */
+				"341",	"420",	"-27",	"-10",	"no",	"yes",	/* equipement 2 */
+				"421",	"502",	"-27",	"-10",	"no",	"yes",	/* equipement 3 */
+				"503",	"578",	"-27",	"-10",	"no",	"yes",	/* equipement 4 */
+				"579",	"682",	"-27",	"-10",	"no",	"yes",	/* equipement 5 */
+				"683",	"804",	"-27",	"-10",	"no",	"yes",	/* equipement 6 */
 				"805",	"908",	"-7",	"-23",	"yes",	"yes",	/* equipement 7 */
-				"909",	"1016",	"-22",	"-4",	"no",	"yes",	/* equipement 8 */
-				"1017",	"1120",	"-22",	"-4",	"no",	"yes",	/* equipement 9 */
-				"1121",	"1232",	"-22",	"-4",	"no",	"yes",	/* equipement 10 */
-				"1233",	"1392",	"-22",	"-4",	"no",	"yes",	/* equipement 11 */
+				"909",	"1016",	"-27",	"-10",	"no",	"yes",	/* equipement 8 */
+				"1017",	"1120",	"-27",	"-10",	"no",	"yes",	/* equipement 9 */
+				"1121",	"1232",	"-27",	"-10",	"no",	"yes",	/* equipement 10 */
+				"1233",	"1392",	"-27",	"-10",	"no",	"yes",	/* equipement 11 */
 				"1393",	"1523",	"-23",	"-7",	"no",	"yes",	/* equipement 12 */
-				"1524",	"1664",	"-22",	"-4",	"no",	"yes",	/* equipement 13 */
-				"1665",	"1786",	"-22",	"-4",	"no",	"yes",	/* equipement 14 */
-				"1787",	"1954",	"-22",	"-4",	"no",	"yes",	/* equipement 15 */
-				"1955",	"2194",	"-22",	"-4",	"no",	"yes",	/* equipement 16 */
-				"2195",	"2396",	"-22",	"-4",	"no",	"yes",	/* equipement 17 */
-				"2397",	"2556",	"-22",	"-4",	"no",	"yes",	/* equipement 18 */
-				"2557",	"2738",	"-22",	"-4",	"no",	"yes",	/* equipement 19 */
-				"2739",	"2966",	"-22",	"-4",	"no",	"yes",	/* equipement 20 */
-				"2967",	"3156",	"-8",	"-4",	"no",	"no",	/* equipement 21 */
-				"3157",	"4095",	"-22",	"-4",	"no",	"yes";	/* sans equipement */
+				"1524",	"1664",	"-27",	"-10",	"no",	"yes",	/* equipement 13 */
+				"1665",	"1786",	"-27",	"-10",	"no",	"yes",	/* equipement 14 */
+				"1787",	"1954",	"-27",	"-10",	"no",	"yes",	/* equipement 15 */
+				"1955",	"2194",	"-27",	"-10",	"no",	"yes",	/* equipement 16 */
+				"2195",	"2396",	"-27",	"-10",	"no",	"yes",	/* equipement 17 */
+				"2397",	"2556",	"-27",	"-10",	"no",	"yes",	/* equipement 18 */
+				"2557",	"2738",	"-27",	"-10",	"no",	"yes",	/* equipement 19 */
+				"2739",	"2966",	"-27",	"-10",	"no",	"yes",	/* equipement 20 */
+				"2967",	"3156",	"-8",	"-10",	"no",	"no",	/* equipement 21 */
+				"3157",	"4095",	"-27",	"-10",	"no",	"yes";	/* sans equipement */
 		};
 
 		FAV_CS_SPI: gpio-controller@dummy0 {
@@ -907,6 +907,8 @@
 					name_codec = "codec_1";
 					analog_in = "-2dB -2dB -2dB -2dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					niveau_in = "0dB 0dB 0dB 0dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				sicofi_nvcs@0 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
@@ -919,6 +921,8 @@
 					name_codec = "codec_1";
 					analog_in = "-2dB -2dB -2dB -2dB";
 					analog_out = "0dB 0dB 0dB 0dB";
+					niveau_in = "-10dB -10dB 0dB 0dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				lm74@1 {
 					compatible = "ti,tmp121", "ns,lm74";
@@ -937,6 +941,8 @@
 					name_codec = "codec_2";
 					analog_in = "-2dB 0dB 0dB 12dB";
 					analog_out = "3dB 3dB 3dB 4,5dB";
+					niveau_in = "-10dB -10dB -10dB -31dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				sicofi_nvcs@2 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
@@ -947,8 +953,10 @@
 					spi-cpha;
 					spi-troll;
 					name_codec = "codec_2";
-					analog_in = "-2dB 0dB 0dB 12dB";
+					analog_in = "-2dB 0dB 0dB 18dB";
 					analog_out = "6dB 3dB 3dB 4,5dB";
+					niveau_in = "-10dB -10dB -10dB -37dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				sicofi_gw@2 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
@@ -961,6 +969,8 @@
 					name_codec = "codec_2";
 					analog_in = "-3dB -3dB -3dB -3dB";
 					analog_out = "3dB 3dB 3dB 3dB";
+					niveau_in = "-10dB -10dB -10dB -31dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				eeprom@3 {
 					compatible = "atmel,at25", "cs,eeprom";
@@ -982,6 +992,8 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					niveau_in = "-27dB -8dB -27dB -8dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				sicofi_nvcs@4 {
 					compatible = "infineon,miae-sicofi", "cs,mia-fav";
@@ -994,6 +1006,8 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					niveau_in = "-27dB -8dB -22dB -8dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 					io-channels = <&iio 2>, <&iio 3>;
 					iio-name = "ad7923";
 					io-channel-names = "channel_2", "channel_3";
@@ -1010,6 +1024,8 @@
 					name_codec = "codec_3";
 					analog_in = "12dB -7dB 12dB -7dB";
 					analog_out = "6dB 6dB 6dB 6dB";
+					niveau_in = "-27dB -8dB -27dB -8dB";
+					niveau_out = "-10dB -10dB -10dB -10dB";
 					io-channels = <&iio 0>, <&iio 1>;
 					iio-name = "ad7923";
 					io-channel-names = "channel_0", "channel_1";
