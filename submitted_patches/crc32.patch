@@ -1,0 +1,35 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Vitaly Bordug <vitb@kernel.crashing.org>, Marcelo Tosatti <marcelo@kvack.org>, Joakim Tjernlund <joakim.tjernlund@transmode.se>, Bob Pearson <rpearson@systemfabricworks.com>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH] lib/crc32: slice by 4 is more efficient than the default slice by 8 on Powerpc 8xx.
+
+On PPC_8xx, CRC32_SLICEBY4 is more efficient (almost twice) than CRC32_SLICEBY8,
+as shown below:
+
+With CRC32_SLICEBY8:
+[    1.109204] crc32: CRC_LE_BITS = 64, CRC_BE BITS = 64
+[    1.114401] crc32: self tests passed, processed 225944 bytes in 15118910 nsec
+[    1.130655] crc32c: CRC_LE_BITS = 64
+[    1.134235] crc32c: self tests passed, processed 225944 bytes in 4479879 nsec
+
+With CRC32_SLICEBY4:
+[    1.097129] crc32: CRC_LE_BITS = 32, CRC_BE BITS = 32
+[    1.101878] crc32: self tests passed, processed 225944 bytes in 8616242 nsec
+[    1.116298] crc32c: CRC_LE_BITS = 32
+[    1.119607] crc32c: self tests passed, processed 225944 bytes in 3289576 nsec
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+Index: a/lib/Kconfig
+===================================================================
+--- a/lib/Kconfig	(révision 5325)
++++ b/lib/Kconfig	(copie de travail)
+@@ -102,6 +102,7 @@
+ choice
+ 	prompt "CRC32 implementation"
+ 	depends on CRC32
++	default CRC32_SLICEBY4 if PPC_8xx
+ 	default CRC32_SLICEBY8
+ 	help
+ 	  This option allows a kernel builder to override the default choice
