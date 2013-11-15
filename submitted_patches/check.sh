@@ -1,2 +1,2 @@
 #!/bin/sh
-../linux/scripts/checkpatch2.pl $1
+../linux/scripts/checkpatch.pl $1
