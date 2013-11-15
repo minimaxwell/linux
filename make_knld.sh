@@ -216,6 +216,20 @@ make_knld()
 		
 	local firmware_path=$knl_path/debian/lib/firmware
 
+
+	#===== generating perf_event tool
+
+	pushd $knl_path/linux/tools/perf
+	make clean
+	make ARCH=ppc CROSS_COMPILE=ppc-linux- WERROR=0 NO_SLANG=y NO_GTK2=y NO_LIBPYTHON=y NO_LIBAUDIT=y NO_LIBNUMA=y prefix=$knl_path/debian/ install	
+		
+	# we move perf to /usr/sbin
+	rm $knl_path/debian/usr/sbin
+	mkdir $knl_path/debian/usr/sbin
+	mv $knl_path/debian/bin/perf $knl_path/debian/usr/sbin/
+	popd
+
+
 	#===== generating the headers package (needed to generate LDB).
 	rm -f ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar.gz
 	find arch/powerpc/include/ -type f | sed -e "/\/\.svn\//d" | xargs tar -cf ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar 
