@@ -14,6 +14,11 @@
 #define CHANNEL_PHASE_1 1
 #define CHANNEL_PHASE_2 2
 #define CHANNEL_PHASE_3 3
+#define CHANNEL_PHASE_4 4
+#define CHANNEL_PHASE_5 5
+#define CHANNEL_PHASE_6 6
+#define CHANNEL_PHASE_7 7
+#define CHANNEL_PHASE_8 8
 
 #define CLOCK_RATE_2M 2
 #define CLOCK_RATE_4M 4
@@ -29,6 +34,11 @@
 
 #define TS_0 0x80000000
 
+/* The hardware requires a delay up to 2*32*125 usec to take commands
+ * into account
+ */
+#define FALC_HW_CMD_DELAY_US 2*32*125
+
 enum versions {
 	VERSION_UNDEF = 0,
 	VERSION_1_2 = 0x12,
@@ -42,15 +52,74 @@ enum versions {
 #define WID_IDENT_2_1		0x00
 #define WID_IDENT_2_2		0x40
 
+/* Registers' bits */
+#define GIS_ISR0			1
+#define GIS_ISR1			(1 << 1)
+#define GIS_ISR2			(1 << 2)
+#define ISR0_RPF			1
+#define ISR0_PDEN			(1 << 1)
+#define ISR0_RME			(1 << 7)
+#define ISR1_XPR			1
+#define ISR1_XDU			(1 << 4)
+#define ISR1_ALLS			(1 << 5)
+#define ISR1_RDO			(1 << 6)
+#define ISR2_LOS			(1 << 2)
+#define ISR2_AIS			(1 << 3)
+#define IMR0_RPF			1
+#define IMR0_PDEN			1
+#define IMR0_RME			(1 << 7)
+#define IMR1_XPR			1
+#define IMR1_XDU			(1 << 4)
+#define IMR1_ALLS			(1 << 5)
+#define IMR1_RDO			(1 << 6)
+#define IMR2_LOS			(1 << 2)
+#define IMR2_AIS			(1 << 3)
+#define LIM0_MAS			1
+#define LIM1_RIL0			(1 << 4)
+#define LIM1_RIL1			(1 << 5)
+#define LIM1_RIL2			(1 << 6)
+#define FMR0_RC0			(1 << 4)
+#define FMR0_RC1			(1 << 5)
+#define FMR0_XC0			(1 << 6)
+#define FMR0_XC1			(1 << 7)
+#define FMR1_SSD0			(1 << 1)
+#define FMR1_ECM			(1 << 2)
+#define FMR1_XFS			(1 << 3)
+#define FMR2_RFS0			(1 << 6)
+#define FMR2_RFS1			(1 << 7)
+#define FRS0_AIS			(1 << 7)
+#define FRS0_LOS			(1 << 6)
+#define FRS1_PDEN			(1 << 6)
+#define CMR2_DCOXC			(1 << 5)
+#define CMR1_DCS			(1 << 3)
+#define CMR1_RS0			(1 << 4)
+#define CMR1_RS1			(1 << 5)
+#define SIC3_RESR			(1 << 2)
+#define SIC3_RESX			(1 << 3)
+#define SIC2_SICS0			(1 << 1)
+#define SIC2_SICS1			(1 << 2)
+#define SIC2_SICS2			(1 << 3)
+#define SIC1_XBS0			(1 << 1)
+#define SIC1_XBS1			(1 << 1)
+#define SIC1_SSC0			(1 << 3)
+#define SIC1_SSD1			(1 << 6)
+#define SIC1_SSC1			(1 << 7)
+#define XSP_XSIF			(1 << 2)
+#define XSP_AXS				(1 << 3)
+#define GCR_ECMC			(1 << 4)
+#define GCR_SCI				(1 << 6)
+#define GCR_VIS				(1 << 7)
+#define RC0_SWD				(1 << 7)
+#define RC0_ASY4			(1 << 6)
+#define XSW_XSIS			(1 << 7)
+#define PC5_CRP				1
+#define XPM2_XLT			(1 << 6)
 
 struct pef2256_dev_priv {
 	struct sk_buff *tx_skb;
-	u16 tx_len;
 	struct device *dev;
 
-	int init_done;
-
-	unsigned char *base_addr;
+	void __iomem *ioaddr;
 	int component_id;
 	int mode;	/* MASTER or SLAVE */
 	int board_type;
@@ -59,8 +128,9 @@ struct pef2256_dev_priv {
 	int data_rate;
 	char rising_edge_sync_pulse[10];
 
-	u16 rx_len;
 	u8 rx_buff[2048];
+
+	struct net_device_stats stats;
 
 	u32 Tx_TS;	/* Transmit Time Slots */
 	u32 Rx_TS;	/* Receive Time Slots */
@@ -71,8 +141,9 @@ struct pef2256_dev_priv {
 
 	int irq;
 
-	u8 R_ISR0;			/* ISR0 register */
-	u8 R_ISR1;			/* ISR1 register */
+	u8 r_isr0;			/* ISR0 register */
+	u8 r_isr1;			/* ISR1 register */
+	u8 r_isr2;			/* ISR2 register */
 };
 
 

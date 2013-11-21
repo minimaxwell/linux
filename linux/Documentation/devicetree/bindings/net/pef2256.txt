@@ -1,4 +1,7 @@
-* Wan on Infineon PEF2256 E1 controller, also known as FALC56
+* Wan on Lantiq PEF2256 E1 controller, also known as FALC56
+
+This chip was originally called "Infineon PEF2256" before the transfer of the
+former "wire-line" business-unit into an own company.
 
 The PEF2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and
 Short-Haul Applications.
@@ -10,7 +13,7 @@ required interfacing between analog E1 lines and the digital PCM system
 highway, H.100/H.110 or H-MVIP bus.
 
 Required properties:
-- compatible: Should contain "infineon,pef2256"
+- compatible: Should contain "lantiq,pef2256"
 - reg: Address and length of the register set for the device.
   There should be a single continuous bank.
 - interrupts: Should contain the single interrupt used by the component to
@@ -47,7 +50,7 @@ shifting is done bit by bit, while running the FALC56 with 16.384 MHz and
 2.048 Mbit/s data rate it is done by 1/8 bit
 
 - channel-phase: First time slot transmission channel phase.
-  Supported values are: 0, 1, 2, 3, 4, 5, 6, 7.
+  Supported values are: 0, 1, 2, 3, 4, 5, 6, 7. 8
   0 if not defined.
 
 All transmit or receive system interface data and marker are clocked or sampled
@@ -63,7 +66,7 @@ The behaviour of "transmit" and "receive" signals is inverse.
 Examples:
 
 	e1-wan@4,2000000 {
-		compatible = "infineon,pef2256";
+		compatible = "lantiq,pef2256";
 		reg = <4 0x2000000 0xFF>;
 		interrupts = <8 1>;
 		interrupt-parent = <&PIC>;
