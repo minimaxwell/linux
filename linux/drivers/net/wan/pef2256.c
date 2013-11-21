@@ -63,112 +63,6 @@ static void pef2256_s8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
 	iowrite8(val | mask, priv->ioaddr + offset);
 }
 
-void print_regs(struct device *dev)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-
-	netdev_info(ndev, "	MODE = 0x%02x\n", pef2256_r8(priv, MODE));
-	netdev_info(ndev, "	RAH1 = 0x%02x\n", pef2256_r8(priv, RAH1));
-	netdev_info(ndev, "	RAH2 = 0x%02x\n", pef2256_r8(priv, RAH2));
-	netdev_info(ndev, "	RAL1 = 0x%02x\n", pef2256_r8(priv, RAL1));
-	netdev_info(ndev, "	RAL2 = 0x%02x\n", pef2256_r8(priv, RAL2));
-	netdev_info(ndev, "	IPC = 0x%02x\n", pef2256_r8(priv, IPC));
-	netdev_info(ndev, "	CCR1 = 0x%02x\n", pef2256_r8(priv, CCR1));
-	netdev_info(ndev, "	CCR2 = 0x%02x\n", pef2256_r8(priv, CCR2));
-	netdev_info(ndev, "	RTR1 = 0x%02x\n", pef2256_r8(priv, RTR1));
-	netdev_info(ndev, "	RTR2 = 0x%02x\n", pef2256_r8(priv, RTR2));
-	netdev_info(ndev, "	RTR3 = 0x%02x\n", pef2256_r8(priv, RTR3));
-	netdev_info(ndev, "	RTR4 = 0x%02x\n", pef2256_r8(priv, RTR4));
-	netdev_info(ndev, "	TTR1 = 0x%02x\n", pef2256_r8(priv, TTR1));
-	netdev_info(ndev, "	TTR2 = 0x%02x\n", pef2256_r8(priv, TTR2));
-	netdev_info(ndev, "	TTR3 = 0x%02x\n", pef2256_r8(priv, TTR3));
-	netdev_info(ndev, "	TTR4 = 0x%02x\n", pef2256_r8(priv, TTR4));
-	netdev_info(ndev, "	IMR0 = 0x%02x\n", pef2256_r8(priv, IMR0));
-	netdev_info(ndev, "	IMR1 = 0x%02x\n", pef2256_r8(priv, IMR1));
-	netdev_info(ndev, "	IMR2 = 0x%02x\n", pef2256_r8(priv, IMR2));
-	netdev_info(ndev, "	IMR3 = 0x%02x\n", pef2256_r8(priv, IMR3));
-	netdev_info(ndev, "	IMR4 = 0x%02x\n", pef2256_r8(priv, IMR4));
-	netdev_info(ndev, "	IMR5 = 0x%02x\n", pef2256_r8(priv, IMR5));
-	netdev_info(ndev, "	IERR = 0x%02x\n", pef2256_r8(priv, IERR));
-	netdev_info(ndev, "	FMR0 = 0x%02x\n", pef2256_r8(priv, FMR0));
-	netdev_info(ndev, "	FMR1 = 0x%02x\n", pef2256_r8(priv, FMR1));
-	netdev_info(ndev, "	FMR2 = 0x%02x\n", pef2256_r8(priv, FMR2));
-	netdev_info(ndev, "	LOOP = 0x%02x\n", pef2256_r8(priv, LOOP));
-	netdev_info(ndev, "	XSW = 0x%02x\n", pef2256_r8(priv, XSW));
-	netdev_info(ndev, "	XSP = 0x%02x\n", pef2256_r8(priv, XSP));
-	netdev_info(ndev, "	XC0 = 0x%02x\n", pef2256_r8(priv, XC0));
-	netdev_info(ndev, "	XC1 = 0x%02x\n", pef2256_r8(priv, XC1));
-	netdev_info(ndev, "	RC0 = 0x%02x\n", pef2256_r8(priv, RC0));
-	netdev_info(ndev, "	RC1 = 0x%02x\n", pef2256_r8(priv, RC1));
-	netdev_info(ndev, "	XPM0 = 0x%02x\n", pef2256_r8(priv, XPM0));
-	netdev_info(ndev, "	XPM1 = 0x%02x\n", pef2256_r8(priv, XPM1));
-	netdev_info(ndev, "	XPM2 = 0x%02x\n", pef2256_r8(priv, XPM2));
-	netdev_info(ndev, "	TSWM = 0x%02x\n", pef2256_r8(priv, TSWM));
-	netdev_info(ndev, "	IDLE = 0x%02x\n", pef2256_r8(priv, IDLE));
-	netdev_info(ndev, "	XSA4 = 0x%02x\n", pef2256_r8(priv, XSA4));
-	netdev_info(ndev, "	XSA5 = 0x%02x\n", pef2256_r8(priv, XSA5));
-	netdev_info(ndev, "	XSA6 = 0x%02x\n", pef2256_r8(priv, XSA6));
-	netdev_info(ndev, "	XSA7 = 0x%02x\n", pef2256_r8(priv, XSA7));
-	netdev_info(ndev, "	XSA8 = 0x%02x\n", pef2256_r8(priv, XSA8));
-	netdev_info(ndev, "	FMR3 = 0x%02x\n", pef2256_r8(priv, FMR3));
-	netdev_info(ndev, "	ICB1 = 0x%02x\n", pef2256_r8(priv, ICB1));
-	netdev_info(ndev, "	ICB2 = 0x%02x\n", pef2256_r8(priv, ICB2));
-	netdev_info(ndev, "	ICB3 = 0x%02x\n", pef2256_r8(priv, ICB3));
-	netdev_info(ndev, "	ICB4 = 0x%02x\n", pef2256_r8(priv, ICB4));
-	netdev_info(ndev, "	LIM0 = 0x%02x\n", pef2256_r8(priv, LIM0));
-	netdev_info(ndev, "	LIM1 = 0x%02x\n", pef2256_r8(priv, LIM1));
-	netdev_info(ndev, "	PCD = 0x%02x\n", pef2256_r8(priv, PCD));
-	netdev_info(ndev, "	PCR = 0x%02x\n", pef2256_r8(priv, PCR));
-	netdev_info(ndev, "	LIM2 = 0x%02x\n", pef2256_r8(priv, LIM2));
-	netdev_info(ndev, "	LCR1 = 0x%02x\n", pef2256_r8(priv, LCR1));
-	netdev_info(ndev, "	LCR2 = 0x%02x\n", pef2256_r8(priv, LCR2));
-	netdev_info(ndev, "	LCR3 = 0x%02x\n", pef2256_r8(priv, LCR3));
-	netdev_info(ndev, "	SIC1 = 0x%02x\n", pef2256_r8(priv, SIC1));
-	netdev_info(ndev, "	SIC2 = 0x%02x\n", pef2256_r8(priv, SIC2));
-	netdev_info(ndev, "	SIC3 = 0x%02x\n", pef2256_r8(priv, SIC3));
-	netdev_info(ndev, "	CMR1 = 0x%02x\n", pef2256_r8(priv, CMR1));
-	netdev_info(ndev, "	CMR2 = 0x%02x\n", pef2256_r8(priv, CMR2));
-	netdev_info(ndev, "	GCR = 0x%02x\n", pef2256_r8(priv, GCR));
-	netdev_info(ndev, "	ESM = 0x%02x\n", pef2256_r8(priv, ESM));
-	netdev_info(ndev, "	CMR3 = 0x%02x\n", pef2256_r8(priv, CMR3));
-	netdev_info(ndev, "	PC1 = 0x%02x\n", pef2256_r8(priv, PC1));
-	netdev_info(ndev, "	PC2 = 0x%02x\n", pef2256_r8(priv, PC2));
-	netdev_info(ndev, "	PC3 = 0x%02x\n", pef2256_r8(priv, PC3));
-	netdev_info(ndev, "	PC4 = 0x%02x\n", pef2256_r8(priv, PC4));
-	netdev_info(ndev, "	PC5 = 0x%02x\n", pef2256_r8(priv, PC5));
-	netdev_info(ndev, "	GPC1 = 0x%02x\n", pef2256_r8(priv, GPC1));
-	netdev_info(ndev, "	PC6 = 0x%02x\n", pef2256_r8(priv, PC6));
-	netdev_info(ndev, "	CCR3 = 0x%02x\n", pef2256_r8(priv, CCR3));
-	netdev_info(ndev, "	CCR4 = 0x%02x\n", pef2256_r8(priv, CCR4));
-	netdev_info(ndev, "	CCR5 = 0x%02x\n", pef2256_r8(priv, CCR5));
-	netdev_info(ndev, "	MODE2 = 0x%02x\n", pef2256_r8(priv, MODE2));
-	netdev_info(ndev, "	MODE3 = 0x%02x\n", pef2256_r8(priv, MODE3));
-	netdev_info(ndev, "	RBC2 = 0x%02x\n", pef2256_r8(priv, RBC2));
-	netdev_info(ndev, "	RBC3 = 0x%02x\n", pef2256_r8(priv, RBC3));
-	netdev_info(ndev, "	GCM1 = 0x%02x\n", pef2256_r8(priv, GCM1));
-	netdev_info(ndev, "	GCM2 = 0x%02x\n", pef2256_r8(priv, GCM2));
-	netdev_info(ndev, "	GCM3 = 0x%02x\n", pef2256_r8(priv, GCM3));
-	netdev_info(ndev, "	GCM4 = 0x%02x\n", pef2256_r8(priv, GCM4));
-	netdev_info(ndev, "	GCM5 = 0x%02x\n", pef2256_r8(priv, GCM5));
-	netdev_info(ndev, "	GCM6 = 0x%02x\n", pef2256_r8(priv, GCM6));
-	netdev_info(ndev, "	SIS2/GCM7 = 0x%02x\n",
-			pef2256_r8(priv, SIS2_1));
-	netdev_info(ndev, "	RSIS2/GCM8 = 0x%02x\n",
-			pef2256_r8(priv, RSIS2_1));
-	netdev_info(ndev, "	TSEO = 0x%02x\n", pef2256_r8(priv, TSEO));
-	netdev_info(ndev, "	TSBS1 = 0x%02x\n", pef2256_r8(priv, TSBS1));
-	netdev_info(ndev, "	TSBS2 = 0x%02x\n", pef2256_r8(priv, TSBS2));
-	netdev_info(ndev, "	TSBS3 = 0x%02x\n", pef2256_r8(priv, TSBS3));
-	netdev_info(ndev, "	TSS2 = 0x%02x\n", pef2256_r8(priv, TSS2));
-	netdev_info(ndev, "	TSS3 = 0x%02x\n", pef2256_r8(priv, TSS3));
-	netdev_info(ndev, "	Res10 = 0x%02x\n", pef2256_r8(priv, Res10));
-	netdev_info(ndev, "	Res11 = 0x%02x\n", pef2256_r8(priv, Res11));
-	netdev_info(ndev, "	TPC0 = 0x%02x\n", pef2256_r8(priv, TPC0));
-	netdev_info(ndev, "	GLC1 = 0x%02x\n", pef2256_r8(priv, GLC1));
-}
-
-
 static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 {
 	static struct {
@@ -604,15 +498,6 @@ static void init_falc(struct pef2256_dev_priv *priv)
 	 */
 	pef2256_w8(priv, CMDR, 0x51);
 }
-
-static ssize_t fs_attr_regs_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	print_regs(dev);
-	return sprintf(buf, "*** printk DEBUG ***\n");
-}
-
-static DEVICE_ATTR(regs, S_IRUGO, fs_attr_regs_show, NULL);
 
 static ssize_t fs_attr_mode_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
@@ -1158,11 +1043,6 @@ static int pef2256_probe(struct platform_device *pdev)
 	if (ret)
 		goto remove_files;
 
-	/* This file is only used to display debug infos.
-	 * A failure can be safely ignored.
-	 */
-	device_create_file(priv->dev, &dev_attr_regs);
-
 	return 0;
 
 remove_files:
@@ -1188,7 +1068,6 @@ static int pef2256_remove(struct platform_device *pdev)
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
 
 
-	device_remove_file(priv->dev, &dev_attr_regs);
 	device_remove_file(priv->dev, &dev_attr_Tx_TS);
 	device_remove_file(priv->dev, &dev_attr_Rx_TS);
 	device_remove_file(priv->dev, &dev_attr_mode);
