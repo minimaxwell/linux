@@ -37,7 +37,7 @@
 /* The hardware requires a delay up to 2*32*125 usec to take commands
  * into account
  */
-#define FALC_HW_CMD_DELAY_US 2*32*125
+#define FALC_HW_CMD_DELAY_US (2 * 32 * 125)
 
 enum versions {
 	VERSION_UNDEF = 0,

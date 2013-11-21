@@ -68,7 +68,7 @@ static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 	static struct {
 		u32 ttr;
 		u32 rtr;
-	} regs [] = {
+	} regs[] = {
 		{ TTR1, RTR1 },
 		{ TTR2, RTR2 },
 		{ TTR3, RTR3 },
@@ -83,7 +83,7 @@ static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 
 	if (priv->Tx_TS & cfg_bit)
 		pef2256_s8(priv, regs[j].ttr, 1 << reg_bit);
-		
+
 	if (priv->Rx_TS & cfg_bit)
 		pef2256_s8(priv, regs[j].rtr, 1 << reg_bit);
 }
@@ -92,7 +92,6 @@ static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 /* Setting up HDLC channel */
 static void config_hdlc(struct pef2256_dev_priv *priv)
 {
-	// int i;
 	int TS_idx;
 	u8 dummy;
 
@@ -195,7 +194,7 @@ static void config_hdlc(struct pef2256_dev_priv *priv)
 	pef2256_w8(priv, RTR4, 0x00);
 	/* Set selected TS bits */
 	/* Starting at TS 1, TS 0 is reserved */
-	for (TS_idx = 1; TS_idx < 32; TS_idx++) 
+	for (TS_idx = 1; TS_idx < 32; TS_idx++)
 		config_hdlc_timeslot(priv, TS_idx);
 
 	udelay(FALC_HW_CMD_DELAY_US);
@@ -399,7 +398,7 @@ static void init_falc(struct pef2256_dev_priv *priv)
 	/* Nothing to do for clocking rate 2M  */
 
 	/* clocking rate 4M  */
-	if (priv->clock_rate == CLOCK_RATE_4M) 
+	if (priv->clock_rate == CLOCK_RATE_4M)
 		pef2256_s8(priv, SIC1, SIC1_SSC0);
 
 	/* clocking rate 8M  */
@@ -421,7 +420,7 @@ static void init_falc(struct pef2256_dev_priv *priv)
 		pef2256_s8(priv, FMR1, FMR1_SSD0);
 
 	/* data rate 8M on the system data bus */
-	if (priv->data_rate == DATA_RATE_8M) 
+	if (priv->data_rate == DATA_RATE_8M)
 		pef2256_s8(priv, SIC1, SIC1_SSD1);
 
 	/* data rate 16M on the system data bus */
@@ -663,7 +662,8 @@ static void pef2256_rx(struct pef2256_dev_priv *priv)
 
 		/* Packet received */
 		if (priv->stats.rx_bytes > 0) {
-			struct sk_buff *skb = dev_alloc_skb(priv->stats.rx_bytes);
+			struct sk_buff *skb =
+				dev_alloc_skb(priv->stats.rx_bytes);
 
 			if (!skb) {
 				priv->stats.rx_bytes = 0;
@@ -700,13 +700,13 @@ static void pef2256_tx(struct pef2256_dev_priv *priv)
 			size = priv->tx_skb->len - priv->stats.tx_bytes;
 			if (size > 32)
 				size = 32;
-	
+
 			for (idx = 0; idx < size; idx++)
 				pef2256_w8(priv, XFIFO + (idx & 1),
 					tx_buff[priv->stats.tx_bytes + idx]);
-	
+
 			priv->stats.tx_bytes += size;
-	
+
 			if (priv->stats.tx_bytes == priv->tx_skb->len)
 				pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
 			else
@@ -759,8 +759,8 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 			pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
 
 	/* An error status has changed */
-	if (priv->r_isr0 & ISR0_PDEN || priv->r_isr2 & ISR2_LOS || 
-	    priv->r_isr2 & ISR2_AIS) 
+	if (priv->r_isr0 & ISR0_PDEN || priv->r_isr2 & ISR2_LOS ||
+	    priv->r_isr2 & ISR2_AIS)
 		pef2256_errors(priv);
 
 	/* RDO : Receive data overflow -> RX error */
