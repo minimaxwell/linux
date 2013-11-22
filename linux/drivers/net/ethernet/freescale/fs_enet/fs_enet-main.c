@@ -1754,6 +1754,8 @@ out_free_dev:
 out_put:
 	of_node_put(fpi->phy_node);
 	of_node_put(fpi->phy_node2);
+	if (fpi->clk_per)
+		clk_disable_unprepare(fpi->clk_per);
 out_free_fpi:
 	kfree(fpi);
 	return ret;
@@ -1778,6 +1780,8 @@ static int fs_enet_remove(struct platform_device *ofdev)
 	dev_set_drvdata(fep->dev, NULL);
 	of_node_put(fep->fpi->phy_node);
 	of_node_put(fep->fpi->phy_node2);
+	if (fep->fpi->clk_per)
+		clk_disable_unprepare(fep->fpi->clk_per);
 	free_netdev(ndev);
 	return 0;
 }

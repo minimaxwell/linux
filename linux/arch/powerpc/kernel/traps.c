@@ -60,6 +60,7 @@
 #include <asm/switch_to.h>
 #include <asm/tm.h>
 #include <asm/debug.h>
+#include <sysdev/fsl_pci.h>
 #ifdef CONFIG_8xx
 #include <asm/mpc8xx.h>
 #include <asm/8xx_immap.h>
