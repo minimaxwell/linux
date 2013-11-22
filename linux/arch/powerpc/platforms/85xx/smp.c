@@ -83,13 +83,11 @@ static void mpc85xx_give_timebase(void)
 	{
 		u64 prev;
 
-		asm volatile("mfspr %0, %1" : "=r" (timebase) :
-			     "i" (SPRN_TBRL));
+		asm volatile("mftb %0" : "=r" (timebase));
 
 		do {
 			prev = timebase;
-			asm volatile("mfspr %0, %1" : "=r" (timebase) :
-				     "i" (SPRN_TBRL));
+			asm volatile("mftb %0" : "=r" (timebase));
 		} while (prev != timebase);
 	}
 #else
