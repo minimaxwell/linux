@@ -37,31 +37,19 @@
 static int pef2256_open(struct net_device *netdev);
 static int pef2256_close(struct net_device *netdev);
 
-/* helper function - Read a register */
-static u8 pef2256_r8(struct pef2256_dev_priv *priv, u32 offset)
-{
-	return ioread8(priv->ioaddr + offset);
-}
+/* helper macro - Read a register */
+#define pef2256_r8(priv, offset) ioread8(priv->ioaddr + offset)
 
-/* helper function - Write a value to a register */
-static void pef2256_w8(struct pef2256_dev_priv *priv, u32 offset, u8 val)
-{
-	iowrite8(val, priv->ioaddr + offset);
-}
+/* helper macro - Write a value in a register */
+#define pef2256_w8(priv, offset, val) iowrite8(val, priv->ioaddr + offset)
 
-/* helper function - Clear bits in a register */
-static void pef2256_c8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
-{
-	u8 val = pef2256_r8(priv, offset);
-	iowrite8(val & ~mask, priv->ioaddr + offset);
-}
+/* helper macro - Clear bits in a register */
+#define pef2256_c8(priv, offset, mask) \
+	iowrite8(pef2256_r8(priv, offset) & ~mask, priv->ioaddr + offset)
 
-/* helper function - Set bits in a register */
-static void pef2256_s8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
-{
-	u8 val = pef2256_r8(priv, offset);
-	iowrite8(val | mask, priv->ioaddr + offset);
-}
+/* helper macro - Set bits in a register */
+#define pef2256_s8(priv, offset, mask) \
+	iowrite8(pef2256_r8(priv, offset) | mask, priv->ioaddr + offset)
 
 static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 {
