@@ -1,0 +1,1571 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Rob Herring <rob.herring@calxeda.com>, Pawel Moll <pawel.moll@arm.com>, Mark Rutland <mark.rutland@arm.com>, Stephen Warren <swarren@wwwdotorg.org>, Ian Campbell <ijc+devicetree@hellion.org.uk>, Rob Landley <rob@landley.net>, Grant Likely <grant.likely@linaro.org>, Krzysztof Halasa <khc@pm.waw.pl>
+CC: devicetree@vger.kernel.org, linux-doc@vger.kernel.org, linux-kernel@vger.kernel.org, netdev@vger.kernel.org, devicetree@vger.kernel.org, jerome.chantelauze.ext@c-s.fr
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH v3] WAN: Adding support for Lantiq PEF2256 E1 chipset (FALC56)
+
+The patch adds WAN support for Lantiq FALC56 - PEF2256 E1 Chipset.
+
+Signed-off-by: Jerome Chantelauze <jerome.chantelauze.ext@c-s.fr>
+Acked-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+diff -urN a/drivers/net/wan/pef2256.c b/drivers/net/wan/pef2256.c
+--- a/drivers/net/wan/pef2256.c	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/pef2256.c	2013-10-13 13:05:01.000000000 +0200
+@@ -0,0 +1,1113 @@
++/* drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
++ *
++ * This software may be used and distributed according to the terms of the
++ * GNU General Public License.
++ */
++
++#include <linux/module.h>
++#include <linux/sched.h>
++#include <linux/types.h>
++#include <linux/errno.h>
++#include <linux/list.h>
++#include <linux/ioport.h>
++#include <linux/kernel.h>
++#include <linux/mm.h>
++#include <linux/slab.h>
++
++#include <linux/cache.h>
++#include <asm/byteorder.h>
++#include <linux/uaccess.h>
++#include <linux/io.h>
++#include <asm/irq.h>
++
++#include <linux/init.h>
++#include <linux/interrupt.h>
++#include <linux/string.h>
++
++#include <linux/if_arp.h>
++#include <linux/netdevice.h>
++#include <linux/skbuff.h>
++#include <linux/delay.h>
++#include <linux/hdlc.h>
++#include <linux/mutex.h>
++#include <linux/of_device.h>
++#include <linux/etherdevice.h>
++#include "pef2256.h"
++
++static int pef2256_open(struct net_device *netdev);
++static int pef2256_close(struct net_device *netdev);
++
++/* helper function - Read a register */
++static u8 pef2256_r8(struct pef2256_dev_priv *priv, u32 offset)
++{
++	return ioread8(priv->ioaddr + offset);
++}
++
++/* helper function - Write a value to a register */
++static void pef2256_w8(struct pef2256_dev_priv *priv, u32 offset, u8 val)
++{
++	iowrite8(val, priv->ioaddr + offset);
++}
++
++/* helper function - Clear bits in a register */
++static void pef2256_c8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
++{
++	u8 val = pef2256_r8(priv, offset);
++	iowrite8(val & ~mask, priv->ioaddr + offset);
++}
++
++/* helper function - Set bits in a register */
++static void pef2256_s8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
++{
++	u8 val = pef2256_r8(priv, offset);
++	iowrite8(val | mask, priv->ioaddr + offset);
++}
++
++static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
++{
++	static struct {
++		u32 ttr;
++		u32 rtr;
++	} regs[] = {
++		{ TTR1, RTR1 },
++		{ TTR2, RTR2 },
++		{ TTR3, RTR3 },
++		{ TTR4, RTR4 },
++	};
++	int cfg_bit = 1 << (31 - ts);
++	int reg_bit = 1 << (7 - (ts % 8));
++	int j = ts / 8;
++
++	if (j >= 4)
++		return;
++
++	if (priv->Tx_TS & cfg_bit)
++		pef2256_s8(priv, regs[j].ttr, 1 << reg_bit);
++
++	if (priv->Rx_TS & cfg_bit)
++		pef2256_s8(priv, regs[j].rtr, 1 << reg_bit);
++}
++
++
++/* Setting up HDLC channel */
++static void config_hdlc(struct pef2256_dev_priv *priv)
++{
++	int TS_idx;
++	u8 dummy;
++
++	/* Read to remove pending IT */
++	dummy = pef2256_r8(priv, ISR0);
++	dummy = pef2256_r8(priv, ISR1);
++	dummy = pef2256_r8(priv, ISR2);
++
++	/* Mask HDLC 1 Transmit IT */
++	pef2256_s8(priv, IMR1, IMR1_XPR);
++	pef2256_s8(priv, IMR1, IMR1_XDU);
++	pef2256_s8(priv, IMR1, IMR1_ALLS);
++
++	/* Mask HDLC 1 Receive IT */
++	pef2256_s8(priv, IMR0, IMR0_RPF);
++	pef2256_s8(priv, IMR0, IMR0_RME);
++	pef2256_s8(priv, IMR1, IMR1_RDO);
++
++	/* Mask errors IT */
++	pef2256_s8(priv, IMR0, IMR0_PDEN);
++	pef2256_s8(priv, IMR2, IMR2_LOS);
++	pef2256_s8(priv, IMR2, IMR2_AIS);
++
++	udelay(FALC_HW_CMD_DELAY_US);
++
++	/* MODE.HRAC = 0 (Receiver inactive)
++	 * MODE.DIV = 0 (Data normal operation)
++	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
++	 * MODE.MDS2:0 = 100 (No address comparison)
++	 * MODE.HRAC = 1 (Receiver active)
++	 */
++	pef2256_w8(priv, MODE, 1 << 3);
++	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
++	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
++	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
++	 * setting up Interframe Time Fill
++	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
++	 */
++	pef2256_w8(priv, CCR1, 0x10 | (1 << 3));
++	/* CCR2.XCRC = 0 (Transmit CRC ON)
++	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
++	 * CCR2.RADD = 0 (No write address in RFIFO)
++	 */
++	pef2256_w8(priv, CCR2, 0x00);
++
++	udelay(FALC_HW_CMD_DELAY_US);
++
++	/* MODE.HRAC = 0 (Receiver inactive)
++	 * MODE.DIV = 0 (Data normal operation)
++	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
++	 * MODE.MDS2:0 = 100 (No address comparison)
++	 * MODE.HRAC = 1 (Receiver active)
++	 */
++	pef2256_w8(priv, MODE, 1 << 3);
++	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
++	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
++	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
++	 * setting up Interframe Time Fill
++	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
++	 */
++	pef2256_w8(priv, CCR1, 0x10 | (1 << 3));
++	/* CCR2.XCRC = 0 (Transmit CRC ON)
++	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
++	 * CCR2.RADD = 0 (No write address in RFIFO)
++	 */
++	pef2256_w8(priv, CCR2, 0x00);
++
++	udelay(FALC_HW_CMD_DELAY_US);
++
++	/* MODE.HRAC = 0 (Receiver inactive)
++	 * MODE.DIV = 0 (Data normal operation)
++	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
++	 * MODE.MDS2:0 = 100 (No address comparison)
++	 * MODE.HRAC = 1 (Receiver active)
++	 */
++	pef2256_w8(priv, MODE, 1 << 3);
++	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
++	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
++	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
++	 * setting up Interframe Time Fill
++	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
++	 */
++	pef2256_w8(priv, CCR1, 0x10 | (1 << 3));
++	/* CCR2.XCRC = 0 (Transmit CRC ON)
++	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
++	 * CCR2.RADD = 0 (No write address in RFIFO)
++	 */
++	pef2256_w8(priv, CCR2, 0x00);
++
++	udelay(FALC_HW_CMD_DELAY_US);
++
++	/* Init  Time Slot select */
++	pef2256_w8(priv, TTR1, 0x00);
++	pef2256_w8(priv, TTR2, 0x00);
++	pef2256_w8(priv, TTR3, 0x00);
++	pef2256_w8(priv, TTR4, 0x00);
++	pef2256_w8(priv, RTR1, 0x00);
++	pef2256_w8(priv, RTR2, 0x00);
++	pef2256_w8(priv, RTR3, 0x00);
++	pef2256_w8(priv, RTR4, 0x00);
++	/* Set selected TS bits */
++	/* Starting at TS 1, TS 0 is reserved */
++	for (TS_idx = 1; TS_idx < 32; TS_idx++)
++		config_hdlc_timeslot(priv, TS_idx);
++
++	udelay(FALC_HW_CMD_DELAY_US);
++
++	/* Unmask HDLC 1 Transmit IT */
++	pef2256_c8(priv, IMR1, IMR1_XPR);
++	pef2256_c8(priv, IMR1, IMR1_XDU);
++	pef2256_c8(priv, IMR1, IMR1_ALLS);
++
++	/* Unmask HDLC 1 Receive IT */
++	pef2256_c8(priv, IMR0, IMR0_RPF);
++	pef2256_c8(priv, IMR0, IMR0_RME);
++	pef2256_c8(priv, IMR1, IMR1_RDO);
++
++	/* Unmask errors IT */
++	pef2256_c8(priv, IMR0, IMR0_PDEN);
++	pef2256_c8(priv, IMR2, IMR2_LOS);
++	pef2256_c8(priv, IMR2, IMR2_AIS);
++}
++
++
++static void init_falc(struct pef2256_dev_priv *priv)
++{
++	int version;
++
++	/* Get controller version */
++	version = priv->component_id;
++
++	/* Init FALC56 */
++	/* RCLK output : DPLL clock, DCO-X enabled, DCO-X internal reference
++	 * clock
++	 */
++	pef2256_w8(priv, CMR1, 0x00);
++	/* SCLKR selected, SCLKX selected, receive synchro pulse sourced by
++	 * SYPR, transmit synchro pulse sourced by SYPX
++	 */
++	pef2256_w8(priv, CMR2, 0x00);
++	/* NRZ coding, no alarm simulation */
++	pef2256_w8(priv, FMR0, 0x00);
++	/* E1 double frame format, 2 Mbit/s system data rate, no AIS
++	 * transmission to remote end or system interface, payload loop
++	 * off, transmit remote alarm on
++	 */
++	pef2256_w8(priv, FMR1, 0x00);
++	pef2256_w8(priv, FMR2, 0x02);
++	/* E1 default for LIM2 */
++	pef2256_w8(priv, LIM2, 0x20);
++	if (priv->mode == MASTER_MODE)
++		/* SEC input, active high */
++		pef2256_w8(priv, GPC1, 0x00);
++	else
++		/* FSC output, active high */
++		pef2256_w8(priv, GPC1, 0x40);
++	/* internal second timer, power on */
++	pef2256_w8(priv, GCR, 0x00);
++	/* slave mode, local loop off, mode short-haul */
++	if (version == VERSION_1_2)
++		pef2256_w8(priv, LIM0, 0x00);
++	else
++		pef2256_w8(priv, LIM0, 0x08);
++	/* analog interface selected, remote loop off */
++	pef2256_w8(priv, LIM1, 0x00);
++	if (version == VERSION_1_2) {
++		/* function of ports RP(A to D) : output receive sync pulse
++		 * function of ports XP(A to D) : output transmit line clock
++		 */
++		pef2256_w8(priv, PC1, 0x77);
++		pef2256_w8(priv, PC2, 0x77);
++		pef2256_w8(priv, PC3, 0x77);
++		pef2256_w8(priv, PC4, 0x77);
++	} else {
++		/* function of ports RP(A to D) : output high
++		 * function of ports XP(A to D) : output high
++		 */
++		pef2256_w8(priv, PC1, 0xAA);
++		pef2256_w8(priv, PC2, 0xAA);
++		pef2256_w8(priv, PC3, 0xAA);
++		pef2256_w8(priv, PC4, 0xAA);
++	}
++	/* function of port RPA : input SYPR
++	 * function of port XPA : input SYPX
++	 */
++	pef2256_w8(priv, PC1, 0x00);
++	/* SCLKR, SCLKX, RCLK configured to inputs,
++	 * XFMS active low, CLK1 and CLK2 pin configuration
++	 */
++	pef2256_w8(priv, PC5, 0x00);
++	pef2256_w8(priv, PC6, 0x00);
++	/* the receive clock offset is cleared
++	 * the receive time slot offset is cleared
++	 */
++	pef2256_w8(priv, RC0, 0x00);
++	pef2256_w8(priv, RC1, 0x9C);
++	/* 2.048 MHz system clocking rate, receive buffer 2 frames, transmit
++	 * buffer bypass, data sampled and transmitted on the falling edge of
++	 * SCLKR/X, automatic freeze signaling, data is active in the first
++	 * channel phase
++	 */
++	pef2256_w8(priv, SIC1, 0x00);
++	pef2256_w8(priv, SIC2, 0x00);
++	pef2256_w8(priv, SIC3, 0x00);
++	/* channel loop-back and single frame mode are disabled */
++	pef2256_w8(priv, LOOP, 0x00);
++	/* all bits of the transmitted service word are cleared */
++	pef2256_w8(priv, XSW, 0x1F);
++	/* spare bit values are cleared */
++	pef2256_w8(priv, XSP, 0x00);
++	/* no transparent mode active */
++	pef2256_w8(priv, TSWM, 0x00);
++	/* the transmit clock offset is cleared
++	 * the transmit time slot offset is cleared
++	 */
++	pef2256_w8(priv, XC0, 0x00);
++	pef2256_w8(priv, XC1, 0x9C);
++	/* transmitter in tristate mode */
++	pef2256_w8(priv, XPM2, 0x40);
++	/* transmit pulse mask */
++	if (version != VERSION_1_2)
++		pef2256_w8(priv, XPM0, 0x9C);
++
++	if (version == VERSION_1_2) {
++		/* master clock is 16,384 MHz (flexible master clock) */
++		pef2256_w8(priv, GCM2, 0x58);
++		pef2256_w8(priv, GCM3, 0xD2);
++		pef2256_w8(priv, GCM4, 0xC2);
++		pef2256_w8(priv, GCM5, 0x07);
++		pef2256_w8(priv, GCM6, 0x10);
++	} else {
++		/* master clock is 16,384 MHz (flexible master clock) */
++		pef2256_w8(priv, GCM2, 0x18);
++		pef2256_w8(priv, GCM3, 0xFB);
++		pef2256_w8(priv, GCM4, 0x0B);
++		pef2256_w8(priv, GCM5, 0x01);
++		pef2256_w8(priv, GCM6, 0x0B);
++		pef2256_w8(priv, GCM7, 0xDB);
++		pef2256_w8(priv, GCM8, 0xDF);
++	}
++
++	/* master mode */
++	if (priv->mode == MASTER_MODE)
++		pef2256_s8(priv, LIM0, LIM0_MAS);
++
++	/* transmit line in normal operation */
++	pef2256_c8(priv, XPM2, XPM2_XLT);
++
++	if (version == VERSION_1_2) {
++		/* receive input threshold = 0,21V */
++		pef2256_s8(priv, LIM1, LIM1_RIL0);
++		pef2256_c8(priv, LIM1, LIM1_RIL1);
++		pef2256_s8(priv, LIM1, LIM1_RIL2);
++	} else {
++		/* receive input threshold = 0,21V */
++		pef2256_c8(priv, LIM1, LIM1_RIL0);
++		pef2256_c8(priv, LIM1, LIM1_RIL1);
++		pef2256_s8(priv, LIM1, LIM1_RIL2);
++	}
++	/* transmit line coding = HDB3 */
++	pef2256_s8(priv, FMR0, FMR0_XC0);
++	pef2256_s8(priv, FMR0, FMR0_XC1);
++	/* receive line coding = HDB3 */
++	pef2256_s8(priv, FMR0, FMR0_RC0);
++	pef2256_s8(priv, FMR0, FMR0_RC1);
++	/* detection of LOS alarm = 176 pulses (soit (10 + 1) * 16) */
++	pef2256_w8(priv, PCD, 10);
++	/* recovery of LOS alarm = 22 pulses (soit 21 + 1) */
++	pef2256_w8(priv, PCR, 21);
++	/* DCO-X center frequency => CMR2.DCOXC */
++	pef2256_s8(priv, CMR2, CMR2_DCOXC);
++	if (priv->mode == SLAVE_MODE) {
++		/* select RCLK source = 2M */
++		pef2256_c8(priv, CMR1, CMR1_RS0);
++		pef2256_s8(priv, CMR1, CMR1_RS1);
++		/* disable switching RCLK -> SYNC */
++		pef2256_s8(priv, CMR1, CMR1_DCS);
++	}
++	if (version != VERSION_1_2)
++		/* during inactive channel phase RDO into tri-state mode */
++		pef2256_s8(priv, SIC3, 1 << 5);
++	if (!strcmp(priv->rising_edge_sync_pulse, "transmit")) {
++		/* rising edge sync pulse transmit */
++		pef2256_c8(priv, SIC3, SIC3_RESR);
++		pef2256_s8(priv, SIC3, SIC3_RESX);
++	} else {
++		/* rising edge sync pulse receive */
++		pef2256_c8(priv, SIC3, SIC3_RESX);
++		pef2256_s8(priv, SIC3, SIC3_RESR);
++	}
++	/* transmit offset counter = 4
++	 *  => XC0.XCO10:8 = 000 (bits 2, 1 et 0);
++	 *     XC1.XCO7:0 = 4 (bits 7 ... 0)
++	 */
++	pef2256_w8(priv, XC1, 4);
++	/* receive offset counter = 4
++	 * => RC0.RCO10:8 = 000 (bits 2, 1 et 0);
++	 *    RC1.RCO7:0 = 4 (bits 7 ... 0)
++	 */
++	pef2256_w8(priv, RC1, 4);
++
++	/* Clocking rate for FALC56 */
++
++	/* Nothing to do for clocking rate 2M  */
++
++	/* clocking rate 4M  */
++	if (priv->clock_rate == CLOCK_RATE_4M)
++		pef2256_s8(priv, SIC1, SIC1_SSC0);
++
++	/* clocking rate 8M  */
++	if (priv->clock_rate == CLOCK_RATE_8M)
++		pef2256_s8(priv, SIC1, SIC1_SSC1);
++
++	/* clocking rate 16M  */
++	if (priv->clock_rate == CLOCK_RATE_16M) {
++		pef2256_s8(priv, SIC1, SIC1_SSC0);
++		pef2256_s8(priv, SIC1, SIC1_SSC1);
++	}
++
++	/* data rate for FALC56 */
++
++	/* Nothing to do for data rate 2M on the system data bus */
++
++	/* data rate 4M on the system data bus */
++	if (priv->data_rate == DATA_RATE_4M)
++		pef2256_s8(priv, FMR1, FMR1_SSD0);
++
++	/* data rate 8M on the system data bus */
++	if (priv->data_rate == DATA_RATE_8M)
++		pef2256_s8(priv, SIC1, SIC1_SSD1);
++
++	/* data rate 16M on the system data bus */
++	if (priv->data_rate == DATA_RATE_16M) {
++		pef2256_s8(priv, FMR1, FMR1_SSD0);
++		pef2256_s8(priv, SIC1, SIC1_SSD1);
++	}
++
++	/* channel phase for FALC56 */
++
++	/* Nothing to do for channel phase 1 */
++
++	if (priv->channel_phase == CHANNEL_PHASE_2)
++		pef2256_s8(priv, SIC2, SIC2_SICS0);
++
++	if (priv->channel_phase == CHANNEL_PHASE_3)
++		pef2256_s8(priv, SIC2, SIC2_SICS1);
++
++	if (priv->channel_phase == CHANNEL_PHASE_4) {
++		pef2256_s8(priv, SIC2, SIC2_SICS0);
++		pef2256_s8(priv, SIC2, SIC2_SICS1);
++	}
++
++	if (priv->channel_phase == CHANNEL_PHASE_5)
++		pef2256_s8(priv, SIC2, SIC2_SICS2);
++
++	if (priv->channel_phase == CHANNEL_PHASE_6) {
++		pef2256_s8(priv, SIC2, SIC2_SICS0);
++		pef2256_s8(priv, SIC2, SIC2_SICS2);
++	}
++
++	if (priv->channel_phase == CHANNEL_PHASE_7) {
++		pef2256_s8(priv, SIC2, SIC2_SICS1);
++		pef2256_s8(priv, SIC2, SIC2_SICS2);
++	}
++
++	if (priv->channel_phase == CHANNEL_PHASE_8) {
++		pef2256_s8(priv, SIC2, SIC2_SICS0);
++		pef2256_s8(priv, SIC2, SIC2_SICS1);
++		pef2256_s8(priv, SIC2, SIC2_SICS2);
++	}
++
++	if (priv->mode == SLAVE_MODE)
++		/* transmit buffer size = 2 frames */
++		pef2256_s8(priv, SIC1, SIC1_XBS1);
++
++	/* transmit in multiframe */
++	pef2256_s8(priv, FMR1, FMR1_XFS);
++	/* receive in multiframe */
++	pef2256_s8(priv, FMR2, FMR2_RFS1);
++	/* Automatic transmission of submultiframe status */
++	pef2256_s8(priv, XSP, XSP_AXS);
++
++	/* error counter mode toutes les 1s */
++	pef2256_s8(priv, FMR1, FMR1_ECM);
++	/* error counter mode COFA => GCR.ECMC = 1 (bit 4) */
++	pef2256_s8(priv, GCR, GCR_ECMC);
++	/* errors in service words with no influence */
++	pef2256_s8(priv, RC0, RC0_SWD);
++	/* 4 consecutive incorrect FAS = loss of sync */
++	pef2256_s8(priv, RC0, RC0_ASY4);
++	/* Si-Bit in service word from XDI */
++	pef2256_s8(priv, XSW, XSW_XSIS);
++	/* Si-Bit in FAS word from XDI */
++	pef2256_s8(priv, XSP, XSP_XSIF);
++
++	/* port RCLK is output */
++	pef2256_s8(priv, PC5, PC5_CRP);
++	/* visibility of the masked interrupts */
++	pef2256_s8(priv, GCR, GCR_VIS);
++	/* reset lines
++	 *  => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
++	 *     CMDR.SRES = 1 (bit 0)
++	 */
++	pef2256_w8(priv, CMDR, 0x51);
++}
++
++static ssize_t fs_attr_mode_show(struct device *dev,
++			struct device_attribute *attr, char *buf)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++
++	return sprintf(buf, "%d\n", priv->mode);
++}
++
++
++static ssize_t fs_attr_mode_store(struct device *dev,
++			struct device_attribute *attr,  const char *buf,
++			size_t count)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++	long int value;
++	int ret = kstrtol(buf, 10, &value);
++	int reconfigure = (value != priv->mode);
++
++	if (value != MASTER_MODE && value != SLAVE_MODE)
++		ret = -EINVAL;
++
++	if (ret < 0)
++		netdev_info(ndev, "Invalid mode (0 or 1 expected\n");
++	else {
++		priv->mode = value;
++		if (reconfigure && netif_carrier_ok(ndev))
++			init_falc(priv);
++	}
++
++	return strnlen(buf, count);
++}
++
++static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show,
++						fs_attr_mode_store);
++
++
++
++static ssize_t fs_attr_Tx_TS_show(struct device *dev,
++			struct device_attribute *attr, char *buf)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++
++	return sprintf(buf, "0x%08x\n", priv->Tx_TS);
++}
++
++
++static ssize_t fs_attr_Tx_TS_store(struct device *dev,
++			struct device_attribute *attr,  const char *buf,
++			size_t count)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++	unsigned long value;
++	int ret = kstrtoul(buf, 16, (long int *)&value);
++	int reconfigure = (value != priv->mode);
++
++	/* TS 0 is reserved */
++	if (ret < 0 || value > TS_0)
++		ret = -EINVAL;
++
++	if (ret < 0)
++		netdev_info(ndev, "Invalid Tx_TS (hex number > 0 and < 0x80000000 expected\n");
++	else {
++		priv->Tx_TS = value;
++		if (reconfigure && netif_carrier_ok(ndev))
++			config_hdlc(priv);
++	}
++
++	return strnlen(buf, count);
++}
++
++static DEVICE_ATTR(Tx_TS, S_IRUGO | S_IWUSR, fs_attr_Tx_TS_show,
++			fs_attr_Tx_TS_store);
++
++
++static ssize_t fs_attr_Rx_TS_show(struct device *dev,
++			struct device_attribute *attr, char *buf)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++
++	return sprintf(buf, "0x%08x\n", priv->Rx_TS);
++}
++
++
++static ssize_t fs_attr_Rx_TS_store(struct device *dev,
++			struct device_attribute *attr,  const char *buf,
++			size_t count)
++{
++	struct net_device *ndev = dev_get_drvdata(dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++	unsigned long value;
++	int ret = kstrtoul(buf, 16, &value);
++	int reconfigure = (value != priv->mode);
++
++	/* TS 0 is reserved */
++	if (ret < 0 || value > TS_0)
++		ret = -EINVAL;
++
++	if (ret < 0)
++		netdev_info(ndev, "Invalid Rx_TS (hex number > 0 and < 0x80000000 expected\n");
++	else {
++		priv->Rx_TS = value;
++		if (reconfigure && netif_carrier_ok(ndev))
++			config_hdlc(priv);
++	}
++
++	return strnlen(buf, count);
++}
++
++static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show,
++	 fs_attr_Rx_TS_store);
++
++
++static void pef2256_fifo_ack(struct pef2256_dev_priv *priv)
++{
++	pef2256_s8(priv, CMDR, 1 << 7);
++}
++
++
++static void pef2256_rx(struct pef2256_dev_priv *priv)
++{
++	int idx;
++
++	/* RDO has been received -> wait for RME */
++	if (priv->stats.rx_bytes == -1) {
++		pef2256_fifo_ack(priv);
++
++		if (priv->r_isr0 & ISR0_RME)
++			priv->stats.rx_bytes = 0;
++
++		return;
++	}
++
++	/* RPF : a block is available in the receive FIFO */
++	if (priv->r_isr0 & ISR0_RPF) {
++		for (idx = 0; idx < 32; idx++)
++			priv->rx_buff[priv->stats.rx_bytes + idx] =
++				pef2256_r8(priv, RFIFO + (idx & 1));
++
++		pef2256_fifo_ack(priv);
++
++		priv->stats.rx_bytes += 32;
++	}
++
++	/* RME : Message end : Read the receive FIFO */
++	if (priv->r_isr0 & ISR0_RME) {
++		/* Get size of last block */
++		int size = pef2256_r8(priv, RBCL) & 0x1F;
++
++		/* Read last block */
++		for (idx = 0; idx < size; idx++)
++			priv->rx_buff[priv->stats.rx_bytes + idx] =
++				pef2256_r8(priv, RFIFO + (idx & 1));
++
++		pef2256_fifo_ack(priv);
++
++		priv->stats.rx_bytes += size;
++
++		/* Packet received */
++		if (priv->stats.rx_bytes > 0) {
++			struct sk_buff *skb =
++				dev_alloc_skb(priv->stats.rx_bytes);
++
++			if (!skb) {
++				priv->stats.rx_bytes = 0;
++				priv->netdev->stats.rx_dropped++;
++				return;
++			}
++			memcpy(skb->data, priv->rx_buff, priv->stats.rx_bytes);
++			skb_put(skb, priv->stats.rx_bytes);
++			priv->stats.rx_bytes = 0;
++			skb->protocol = hdlc_type_trans(skb, priv->netdev);
++			priv->netdev->stats.rx_packets++;
++			priv->netdev->stats.rx_bytes += skb->len;
++			netif_rx(skb);
++		}
++	}
++}
++
++
++static void pef2256_tx(struct pef2256_dev_priv *priv)
++{
++	int idx, size;
++	u8 *tx_buff = priv->tx_skb->data;
++
++	/* ALLS : transmit all done */
++	if (priv->r_isr1 & ISR1_ALLS) {
++		priv->netdev->stats.tx_packets++;
++		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
++		priv->tx_skb = NULL;
++		priv->stats.tx_bytes = 0;
++		netif_wake_queue(priv->netdev);
++	} else
++		/* XPR : write a new block in transmit FIFO */
++		if (priv->stats.tx_bytes < priv->tx_skb->len) {
++			size = priv->tx_skb->len - priv->stats.tx_bytes;
++			if (size > 32)
++				size = 32;
++
++			for (idx = 0; idx < size; idx++)
++				pef2256_w8(priv, XFIFO + (idx & 1),
++					tx_buff[priv->stats.tx_bytes + idx]);
++
++			priv->stats.tx_bytes += size;
++
++			if (priv->stats.tx_bytes == priv->tx_skb->len)
++				pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
++			else
++				pef2256_s8(priv, CMDR, 1 << 3);
++		}
++}
++
++static void pef2256_errors(struct pef2256_dev_priv *priv)
++{
++	if (pef2256_r8(priv, FRS1) & FRS1_PDEN ||
++	    pef2256_r8(priv, FRS0) & (FRS0_LOS | FRS0_AIS)) {
++		if (priv->tx_skb) {
++			priv->netdev->stats.tx_errors++;
++			priv->tx_skb = NULL;
++			priv->stats.tx_bytes = 0;
++			netif_wake_queue(priv->netdev);
++		}
++		if (priv->stats.rx_bytes > 0) {
++			priv->netdev->stats.rx_errors++;
++			priv->stats.rx_bytes = 0;
++		}
++		netif_carrier_off(priv->netdev);
++	} else
++		netif_carrier_on(priv->netdev);
++}
++
++static irqreturn_t pef2256_irq(int irq, void *dev_priv)
++{
++	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
++	u8 r_gis;
++
++	r_gis = pef2256_r8(priv, GIS);
++
++	priv->r_isr0 = priv->r_isr1 = 0;
++
++	/* We only care about ISR0, ISR1 and ISR2 */
++	/* ISR0 */
++	if (r_gis & GIS_ISR0)
++		priv->r_isr0 =
++			pef2256_r8(priv, ISR0) & ~(pef2256_r8(priv, IMR0));
++
++	/* ISR1 */
++	if (r_gis & GIS_ISR1)
++		priv->r_isr1 =
++			pef2256_r8(priv, ISR1) & ~(pef2256_r8(priv, IMR1));
++
++	/* ISR2 */
++	if (r_gis & GIS_ISR2)
++		priv->r_isr2 =
++			pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
++
++	/* An error status has changed */
++	if (priv->r_isr0 & ISR0_PDEN || priv->r_isr2 & ISR2_LOS ||
++	    priv->r_isr2 & ISR2_AIS)
++		pef2256_errors(priv);
++
++	/* RDO : Receive data overflow -> RX error */
++	if (priv->r_isr1 & ISR1_RDO) {
++		pef2256_fifo_ack(priv);
++		priv->netdev->stats.rx_errors++;
++		/* RME received ? */
++		if (priv->r_isr0 & ISR0_RME)
++			priv->stats.rx_bytes = 0;
++		else
++			priv->stats.rx_bytes = -1;
++	} else
++		/* RPF or RME : FIFO received */
++		if (priv->r_isr0 & (ISR0_RPF | ISR0_RME))
++			pef2256_rx(priv);
++
++	/* XDU : Transmit data underrun -> TX error */
++	if (priv->r_isr1 & ISR1_XDU) {
++		priv->netdev->stats.tx_errors++;
++		priv->tx_skb = NULL;
++		netif_wake_queue(priv->netdev);
++	} else
++		/* XPR or ALLS : FIFO sent */
++		if (priv->r_isr1 & (ISR1_XPR | ISR1_ALLS))
++			pef2256_tx(priv);
++
++	return IRQ_HANDLED;
++}
++
++
++static int pef2256_open(struct net_device *netdev)
++{
++	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
++	int ret;
++	u8 dummy;
++
++	if (priv->component_id == VERSION_UNDEF) {
++		dev_err(priv->dev, "Composant ident (%X/%X) = %d\n",
++			pef2256_r8(priv, VSTR), pef2256_r8(priv, WID),
++				priv->component_id);
++		return -ENODEV;
++	}
++
++	ret = hdlc_open(netdev);
++	if (ret)
++		return ret;
++
++	/* We mask HDLC 1 receive/transmit IT to prevent the component sending
++	 * such interrupts before it is initialized and configured.
++	*/
++
++	/* Read to remove pending IT */
++	dummy = pef2256_r8(priv, ISR0);
++	dummy = pef2256_r8(priv, ISR1);
++	dummy = pef2256_r8(priv, ISR2);
++
++	/* Mask HDLC 1 Transmit IT */
++	pef2256_s8(priv, IMR1, IMR1_XPR);
++	pef2256_s8(priv, IMR1, IMR1_XDU);
++	pef2256_s8(priv, IMR1, IMR1_ALLS);
++
++	/* Mask HDLC 1 Receive IT */
++	pef2256_s8(priv, IMR0, IMR0_RPF);
++	pef2256_s8(priv, IMR0, IMR0_RME);
++	pef2256_s8(priv, IMR1, IMR1_RDO);
++
++	/* Mask errors IT */
++	pef2256_s8(priv, IMR0, IMR0_PDEN);
++	pef2256_s8(priv, IMR2, IMR2_LOS);
++	pef2256_s8(priv, IMR2, IMR2_AIS);
++
++	ret = request_irq(priv->irq, pef2256_irq, 0, "e1-wan", priv);
++	if (ret) {
++		dev_err(priv->dev, "Cannot request irq. Device seems busy.\n");
++		hdlc_close(netdev);
++		return -EBUSY;
++	}
++
++	init_falc(priv);
++
++	priv->tx_skb = NULL;
++	priv->stats.rx_bytes = 0;
++
++	config_hdlc(priv);
++
++	netif_start_queue(netdev);
++	pef2256_errors(priv);
++
++	return 0;
++}
++
++
++static int pef2256_close(struct net_device *netdev)
++{
++	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
++
++	netif_stop_queue(netdev);
++	netif_carrier_off(netdev);
++	hdlc_close(netdev);
++	free_irq(priv->irq, priv);
++
++	return 0;
++}
++
++
++
++static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
++					  struct net_device *netdev)
++{
++	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
++	int idx, size;
++	u8 *tx_buff = skb->data;
++
++	priv->tx_skb = skb;
++	priv->stats.tx_bytes = 0;
++
++	size = priv->tx_skb->len - priv->stats.tx_bytes;
++	if (size > 32)
++		size = 32;
++
++	for (idx = 0; idx < size; idx++)
++		pef2256_w8(priv, XFIFO + (idx & 1),
++			tx_buff[priv->stats.tx_bytes + idx]);
++
++	priv->stats.tx_bytes += size;
++
++	pef2256_s8(priv, CMDR, 1 << 3);
++	if (priv->stats.tx_bytes == priv->tx_skb->len)
++		pef2256_s8(priv, CMDR, 1 << 1);
++
++	netif_stop_queue(netdev);
++	return NETDEV_TX_OK;
++}
++
++static const struct net_device_ops pef2256_ops = {
++	.ndo_open       = pef2256_open,
++	.ndo_stop       = pef2256_close,
++	.ndo_change_mtu = hdlc_change_mtu,
++	.ndo_start_xmit = hdlc_start_xmit,
++	.ndo_do_ioctl   = hdlc_ioctl,
++};
++
++
++static int pef2256_hdlc_attach(struct net_device *netdev,
++				unsigned short encoding, unsigned short parity)
++{
++	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
++
++	if (encoding != ENCODING_NRZ &&
++	    encoding != ENCODING_NRZI &&
++	    encoding != ENCODING_FM_MARK &&
++	    encoding != ENCODING_FM_SPACE &&
++	    encoding != ENCODING_MANCHESTER)
++		return -EINVAL;
++
++	if (parity != PARITY_NONE &&
++	    parity != PARITY_CRC16_PR0_CCITT &&
++	    parity != PARITY_CRC16_PR1_CCITT &&
++	    parity != PARITY_CRC32_PR0_CCITT &&
++	    parity != PARITY_CRC32_PR1_CCITT)
++		return -EINVAL;
++
++	priv->encoding = encoding;
++	priv->parity = parity;
++	return 0;
++}
++
++
++static int pef2256_probe(struct platform_device *pdev)
++{
++	struct pef2256_dev_priv *priv;
++	int ret = -ENOMEM;
++	struct net_device *netdev;
++	hdlc_device *hdlc;
++	struct device_node *np = (&pdev->dev)->of_node;
++	const char *str_data;
++
++	if (!pdev->dev.of_node)
++		return -EINVAL;
++
++	dev_err(&pdev->dev, "Found PEF2256\n");
++
++	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
++	if (!priv)
++		return ret;
++
++	priv->dev = &pdev->dev;
++
++	if (of_property_read_u32(np, "clock-rate", &priv->clock_rate)) {
++		dev_err(&pdev->dev, "failed to read clock-rate -> using 8Mhz\n");
++		priv->clock_rate = CLOCK_RATE_8M;
++	}
++
++	if (of_property_read_u32(np, "data-rate", &priv->data_rate)) {
++		dev_err(&pdev->dev, "failed to read data-rate -> using 8Mb\n");
++		priv->data_rate = DATA_RATE_8M;
++	}
++
++	if (of_property_read_u32(np, "channel-phase", &priv->channel_phase)) {
++		dev_err(&pdev->dev, "failed to read channel phase -> using 0\n");
++		priv->channel_phase = CHANNEL_PHASE_0;
++	}
++
++	if (of_property_read_string(np, "rising-edge-sync-pulse", &str_data)) {
++		dev_err(&pdev->dev,
++"failed to read rising edge sync pulse -> using \"transmit\"\n");
++		strcpy(priv->rising_edge_sync_pulse, "transmit");
++	} else if (strcmp(str_data, "transmit") &&
++		   strcmp(str_data, "receive")) {
++		dev_err(&pdev->dev,
++"invalid rising edge sync pulse \"%s\" -> using \"transmit\"\n", str_data);
++		strcpy(priv->rising_edge_sync_pulse, "transmit");
++	} else
++		strncpy(priv->rising_edge_sync_pulse, str_data, 10);
++
++	priv->irq = platform_get_irq(pdev, 0);
++	if (!priv->irq) {
++		dev_err(priv->dev, "no irq defined\n");
++		goto free_priv;
++	}
++
++	priv->ioaddr = of_iomap(np, 0);
++	if (!priv->ioaddr) {
++		dev_err(&pdev->dev, "of_iomap failed\n");
++		goto free_priv;
++	}
++
++	/* Get the component Id */
++	priv->component_id = VERSION_UNDEF;
++	if (pef2256_r8(priv, VSTR) == 0x00) {
++		if ((pef2256_r8(priv, WID) & WID_IDENT_1) ==
++			WID_IDENT_1_2)
++			priv->component_id = VERSION_1_2;
++	} else if (pef2256_r8(priv, VSTR) == 0x05) {
++		if ((pef2256_r8(priv, WID) & WID_IDENT_2) ==
++			WID_IDENT_2_1)
++			priv->component_id = VERSION_2_1;
++		else if ((pef2256_r8(priv, WID) & WID_IDENT_2) ==
++			WID_IDENT_2_2)
++			priv->component_id = VERSION_2_2;
++	}
++
++	priv->tx_skb = NULL;
++
++	/* Default settings ; Rx and Tx use TS 1, mode = MASTER */
++	priv->Rx_TS = 0x40000000;
++	priv->Tx_TS = 0x40000000;
++	priv->mode = 0;
++
++	netdev = alloc_hdlcdev(priv);
++	if (!netdev) {
++		dev_err(&pdev->dev, "alloc_hdlcdev failed\n");
++		ret = -ENOMEM;
++		goto free_regs;
++	}
++
++	priv->netdev = netdev;
++	hdlc = dev_to_hdlc(netdev);
++	netdev->netdev_ops = &pef2256_ops;
++	SET_NETDEV_DEV(netdev, &pdev->dev);
++	hdlc->attach = pef2256_hdlc_attach;
++	hdlc->xmit = pef2256_start_xmit;
++
++	dev_set_drvdata(&pdev->dev, netdev);
++
++	ret = register_hdlc_device(netdev);
++	if (ret < 0) {
++		dev_err(&pdev->dev, "Can't register hdlc device\n");
++		goto free_dev;
++	}
++
++	/* These files are required to configure HDLC : mode
++	 * (master or slave), time slots used to transmit and
++	 * receive data. They are mandatory.
++	 */
++	ret = device_create_file(priv->dev, &dev_attr_mode);
++	ret |= device_create_file(priv->dev, &dev_attr_Tx_TS);
++	ret |= device_create_file(priv->dev, &dev_attr_Rx_TS);
++
++	if (ret)
++		goto remove_files;
++
++	return 0;
++
++remove_files:
++	device_remove_file(priv->dev, &dev_attr_Tx_TS);
++	device_remove_file(priv->dev, &dev_attr_Rx_TS);
++	device_remove_file(priv->dev, &dev_attr_mode);
++
++	unregister_hdlc_device(priv->netdev);
++free_dev:
++	free_netdev(priv->netdev);
++free_regs:
++	iounmap(priv->ioaddr);
++free_priv:;
++	kfree(priv);
++
++	return ret;
++}
++
++
++static int pef2256_remove(struct platform_device *pdev)
++{
++	struct net_device *ndev = dev_get_drvdata(&pdev->dev);
++	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
++
++
++	device_remove_file(priv->dev, &dev_attr_Tx_TS);
++	device_remove_file(priv->dev, &dev_attr_Rx_TS);
++	device_remove_file(priv->dev, &dev_attr_mode);
++
++	unregister_hdlc_device(priv->netdev);
++
++	free_netdev(priv->netdev);
++
++	iounmap(priv->ioaddr);
++
++	kfree(priv);
++
++	kfree(pdev);
++	return 0;
++}
++
++static const struct of_device_id pef2256_match[] = {
++	{
++		.compatible = "lantiq,pef2256",
++	},
++	{},
++};
++MODULE_DEVICE_TABLE(of, pef2256_match);
++
++
++static struct platform_driver pef2256_driver = {
++	.probe		= pef2256_probe,
++	.remove		= pef2256_remove,
++	.driver		= {
++		.name	= "pef2256",
++		.owner	= THIS_MODULE,
++		.of_match_table	= pef2256_match,
++	},
++};
++
++
++module_platform_driver(pef2256_driver);
++
++/* GENERAL INFORMATIONS */
++MODULE_AUTHOR("CHANTELAUZE Jerome - April 2013");
++MODULE_VERSION("0.1");
++MODULE_DESCRIPTION("Lantiq PEF 2256 E1 Controller");
++MODULE_LICENSE("GPL");
+diff -urN a/drivers/net/wan/pef2256.h b/drivers/net/wan/pef2256.h
+--- a/drivers/net/wan/pef2256.h	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/pef2256.h	2013-10-13 13:06:00.000000000 +0200
+@@ -0,0 +1,327 @@
++/* drivers/net/wan/pef2256.c : a PEF2256 HDLC driver for Linux
++ *
++ * This software may be used and distributed according to the terms of the
++ * GNU General Public License.
++ */
++
++#ifndef _PEF2256_H
++#define _PEF2256_H
++
++#define MASTER_MODE 0
++#define SLAVE_MODE  1
++
++#define CHANNEL_PHASE_0 0
++#define CHANNEL_PHASE_1 1
++#define CHANNEL_PHASE_2 2
++#define CHANNEL_PHASE_3 3
++#define CHANNEL_PHASE_4 4
++#define CHANNEL_PHASE_5 5
++#define CHANNEL_PHASE_6 6
++#define CHANNEL_PHASE_7 7
++#define CHANNEL_PHASE_8 8
++
++#define CLOCK_RATE_2M 2
++#define CLOCK_RATE_4M 4
++#define CLOCK_RATE_8M 8
++#define CLOCK_RATE_16M 16
++
++#define DATA_RATE_2M 2
++#define DATA_RATE_4M 4
++#define DATA_RATE_8M 8
++#define DATA_RATE_16M 16
++
++#define RX_TIMEOUT 500
++
++#define TS_0 0x80000000
++
++/* The hardware requires a delay up to 2*32*125 usec to take commands
++ * into account
++ */
++#define FALC_HW_CMD_DELAY_US (2 * 32 * 125)
++
++enum versions {
++	VERSION_UNDEF = 0,
++	VERSION_1_2 = 0x12,
++	VERSION_2_1 = 0x21,
++	VERSION_2_2 = 0x22,
++};
++
++#define WID_IDENT_1		0x03
++#define WID_IDENT_1_2		0x03
++#define WID_IDENT_2		0xC0
++#define WID_IDENT_2_1		0x00
++#define WID_IDENT_2_2		0x40
++
++/* Registers' bits */
++#define GIS_ISR0			1
++#define GIS_ISR1			(1 << 1)
++#define GIS_ISR2			(1 << 2)
++#define ISR0_RPF			1
++#define ISR0_PDEN			(1 << 1)
++#define ISR0_RME			(1 << 7)
++#define ISR1_XPR			1
++#define ISR1_XDU			(1 << 4)
++#define ISR1_ALLS			(1 << 5)
++#define ISR1_RDO			(1 << 6)
++#define ISR2_LOS			(1 << 2)
++#define ISR2_AIS			(1 << 3)
++#define IMR0_RPF			1
++#define IMR0_PDEN			1
++#define IMR0_RME			(1 << 7)
++#define IMR1_XPR			1
++#define IMR1_XDU			(1 << 4)
++#define IMR1_ALLS			(1 << 5)
++#define IMR1_RDO			(1 << 6)
++#define IMR2_LOS			(1 << 2)
++#define IMR2_AIS			(1 << 3)
++#define LIM0_MAS			1
++#define LIM1_RIL0			(1 << 4)
++#define LIM1_RIL1			(1 << 5)
++#define LIM1_RIL2			(1 << 6)
++#define FMR0_RC0			(1 << 4)
++#define FMR0_RC1			(1 << 5)
++#define FMR0_XC0			(1 << 6)
++#define FMR0_XC1			(1 << 7)
++#define FMR1_SSD0			(1 << 1)
++#define FMR1_ECM			(1 << 2)
++#define FMR1_XFS			(1 << 3)
++#define FMR2_RFS0			(1 << 6)
++#define FMR2_RFS1			(1 << 7)
++#define FRS0_AIS			(1 << 7)
++#define FRS0_LOS			(1 << 6)
++#define FRS1_PDEN			(1 << 6)
++#define CMR2_DCOXC			(1 << 5)
++#define CMR1_DCS			(1 << 3)
++#define CMR1_RS0			(1 << 4)
++#define CMR1_RS1			(1 << 5)
++#define SIC3_RESR			(1 << 2)
++#define SIC3_RESX			(1 << 3)
++#define SIC2_SICS0			(1 << 1)
++#define SIC2_SICS1			(1 << 2)
++#define SIC2_SICS2			(1 << 3)
++#define SIC1_XBS0			(1 << 1)
++#define SIC1_XBS1			(1 << 1)
++#define SIC1_SSC0			(1 << 3)
++#define SIC1_SSD1			(1 << 6)
++#define SIC1_SSC1			(1 << 7)
++#define XSP_XSIF			(1 << 2)
++#define XSP_AXS				(1 << 3)
++#define GCR_ECMC			(1 << 4)
++#define GCR_SCI				(1 << 6)
++#define GCR_VIS				(1 << 7)
++#define RC0_SWD				(1 << 7)
++#define RC0_ASY4			(1 << 6)
++#define XSW_XSIS			(1 << 7)
++#define PC5_CRP				1
++#define XPM2_XLT			(1 << 6)
++
++struct pef2256_dev_priv {
++	struct sk_buff *tx_skb;
++	struct device *dev;
++
++	void __iomem *ioaddr;
++	int component_id;
++	int mode;	/* MASTER or SLAVE */
++	int board_type;
++	int channel_phase;
++	int clock_rate;
++	int data_rate;
++	char rising_edge_sync_pulse[10];
++
++	u8 rx_buff[2048];
++
++	struct net_device_stats stats;
++
++	u32 Tx_TS;	/* Transmit Time Slots */
++	u32 Rx_TS;	/* Receive Time Slots */
++
++	unsigned short encoding;
++	unsigned short parity;
++	struct net_device *netdev;
++
++	int irq;
++
++	u8 r_isr0;			/* ISR0 register */
++	u8 r_isr1;			/* ISR1 register */
++	u8 r_isr2;			/* ISR2 register */
++};
++
++
++/* Framer E1 registers offsets */
++#define XFIFO	0x00	/* 0x00/0x01	Tx FIFO */
++#define RFIFO	0x00	/* 0x00/0x01	Rx FIFO */
++#define	CMDR	0x02	/* 0x02	Command Register */
++#define	MODE	0x03	/* 0x03	Mode Register */
++#define	RAH1	0x04	/* 0x04	Receive Address High 1 */
++#define	RAH2	0x05	/* 0x05	Receive Address High 2 */
++#define	RAL1	0x06	/* 0x06	Receive Address Low 1 */
++#define	RAL2	0x07	/* 0x07	Receive Address Low 2 */
++#define	IPC	0x08	/* 0x08	Interrupt Port Configuration */
++#define	CCR1	0x09	/* 0x09	Common Configuration Register 1 */
++#define	CCR2	0x0A	/* 0x0A	Common Configuration Register 2 */
++#define	Res1	0x0B	/* 0x0B	Free Register 1 */
++#define	RTR1	0x0C	/* 0x0C	Receive Time Slot Register 1 */
++#define	RTR2	0x0D	/* 0x0D	Receive Time Slot Register 2 */
++#define	RTR3	0x0E	/* 0x0E	Receive Time Slot Register 3 */
++#define	RTR4	0x0F	/* 0x0F	Receive Time Slot Register 4 */
++#define	TTR1	0x10	/* 0x10	Transmit Time Slot Register 1 */
++#define	TTR2	0x11	/* 0x11	Transmit Time Slot Register 2 */
++#define	TTR3	0x12	/* 0x12	Transmit Time Slot Register 3 */
++#define	TTR4	0x13	/* 0x13	Transmit Time Slot Register 4 */
++#define	IMR0	0x14	/* 0x14	Interrupt Mask Register 0 */
++#define	IMR1	0x15	/* 0x15	Interrupt Mask Register 1 */
++#define	IMR2	0x16	/* 0x16	Interrupt Mask Register 2 */
++#define	IMR3	0x17	/* 0x17	Interrupt Mask Register 3 */
++#define	IMR4	0x18	/* 0x18	Interrupt Mask Register 4 */
++#define	IMR5	0x19	/* 0x19	Interrupt Mask Register 5 */
++#define	Res2	0x1A	/* 0x1A	Free Register 2 */
++#define	IERR	0x1B	/* 0x1B	Single Bit Error Insertion Register */
++#define	FMR0	0x1C	/* 0x1C	Framer Mode Register 0 */
++#define	FMR1	0x1D	/* 0x1D	Framer Mode Register 1 */
++#define	FMR2	0x1E	/* 0x1E	Framer Mode Register 2 */
++#define	LOOP	0x1F	/* 0x1F	Channel Loop-Back */
++#define	XSW	0x20	/* 0x20	Transmit Service Word */
++#define	XSP	0x21	/* 0x21	Transmit Spare Bits */
++#define	XC0	0x22	/* 0x22	Transmit Control 0 */
++#define	XC1	0x23	/* 0x23	Transmit Control 1 */
++#define	RC0	0x24	/* 0x24	Receive Control 0 */
++#define	RC1	0x25	/* 0x25	Receive Control 1 */
++#define	XPM0	0x26	/* 0x26	Transmit Pulse Mask 0 */
++#define	XPM1	0x27	/* 0x27	Transmit Pulse Mask 1 */
++#define	XPM2	0x28	/* 0x28	Transmit Pulse Mask 2 */
++#define	TSWM	0x29	/* 0x29	Transparent Service Word Mask */
++#define	Res3	0x2A	/* 0x2A	Free Register 3 */
++#define	IDLE	0x2B	/* 0x2B	Idle Channel Code */
++#define	XSA4	0x2C	/* 0x2C	Transmit Sa4-Bit Register */
++#define	XSA5	0x2D	/* 0x2D	Transmit Sa5-Bit Register */
++#define	XSA6	0x2E	/* 0x2E	Transmit Sa6-Bit Register */
++#define	XSA7	0x2F	/* 0x2F	Transmit Sa7-Bit Register */
++#define	XSA8	0x30	/* 0x30	Transmit Sa8-Bit Register */
++#define	FMR3	0x31	/* 0x31	Framer Mode Register 3 */
++#define	ICB1	0x32	/* 0x32	Idle Channel Register 1 */
++#define	ICB2	0x33	/* 0x33	Idle Channel Register 2 */
++#define	ICB3	0x34	/* 0x34	Idle Channel Register 3 */
++#define	ICB4	0x35	/* 0x35	Idle Channel Register 4 */
++#define	LIM0	0x36	/* 0x36	Line Interface Mode 0 */
++#define	LIM1	0x37	/* 0x37	Line Interface Mode 1 */
++#define	PCD	0x38	/* 0x38	Pulse Count Detection */
++#define	PCR	0x39	/* 0x39	Pulse Count Recovery */
++#define	LIM2	0x3A	/* 0x3A	Line Interface Mode 2 */
++#define	LCR1	0x3B	/* 0x3B	Loop Code Register 1 */
++#define	LCR2	0x3C	/* 0x3C	Loop Code Register 2 */
++#define	LCR3	0x3D	/* 0x3D	Loop Code Register 3 */
++#define	SIC1	0x3E	/* 0x3E	System Interface Control 1 */
++#define	SIC2	0x3F	/* 0x3F	System Interface Control 2 */
++#define	SIC3	0x40	/* 0x40	System Interface Control 3 */
++#define	Res4	0x41	/* 0x41	Free Register 4 */
++#define	Res5	0x42	/* 0x42	Free Register 5 */
++#define	Res6	0x43	/* 0x43	Free Register 6 */
++#define	CMR1	0x44	/* 0x44	Clock Mode Register 1 */
++#define	CMR2	0x45	/* 0x45	Clock Mode Register 2 */
++#define	GCR	0x46	/* 0x46	Global Configuration Register */
++#define	ESM	0x47	/* 0x47	Errored Second Mask */
++#define	CMR3	0x48	/* 0x48	Clock Mode Register 3 en V2.2 */
++#define	RBD	0x49	/* 0x49	Receive Buffer Delay */
++#define	VSTR	0x4A	/* 0x4A	Version Status Regiter */
++#define	RES	0x4B	/* 0x4B	Receive Equalizer Status */
++#define	FRS0	0x4C	/* 0x4C	Framer Receive Status 0 */
++#define	FRS1	0x4D	/* 0x4D	Framer Receive Status 1 */
++#define	RSW	0x4E	/* 0x4E	Receive Service Word */
++#define	RSP	0x4F	/* 0x4F	Receive Spare Bits */
++#define	FEC	0x50	/* 0x50/0x51 Framing Error Counter */
++#define	CVC	0x52	/* 0x52/0x53 Code Violation Counter */
++#define	CEC1	0x54	/* 0x54/0x55 CRC Error Counter 1 */
++#define	EBC	0x56	/* 0x56/0x57 E-Bit Error Counter */
++#define	CEC2	0x58	/* 0x58/0x59 CRC Error Counter 2 */
++#define	CEC3	0x5A	/* 0x5A/0x5B CRC Error Counter 3 */
++#define	RSA4	0x5C	/* 0x5C	Receive Sa4-Bit Register */
++#define	RSA5	0x5D	/* 0x5D	Receive Sa5-Bit Register */
++#define	RSA6	0x5E	/* 0x5E	Receive Sa6-Bit Register */
++#define	RSA7	0x5F	/* 0x5F	Receive Sa7-Bit Register */
++#define DEC	0x60	/* 0x60 Common Register - Disable Error Counter */
++#define RSA8	0x60	/* 0x60 Common Register - Receive Sa8-Bit Regiter */
++#define	RSA6S	0x61	/* 0x61	Receive Sa6-Bit Status Register */
++#define	RSP1	0x62	/* 0x62	Receive Signaling Pointer 1 */
++#define	RSP2	0x63	/* 0x63	Receive Signaling Pointer 2 */
++#define	SIS	0x64	/* 0x64	Signaling Status Register */
++#define	RSIS	0x65	/* 0x65	Receive Signaling Status Register */
++#define	RBCL	0x66	/* 0x66	Receive Byte Control */
++#define	RBCH	0x67	/* 0x67	Receive Byte Control */
++#define	ISR0	0x68	/* 0x68	Interrupt Status Register 0 */
++#define	ISR1	0x69	/* 0x69	Interrupt Status Register 1 */
++#define	ISR2	0x6A	/* 0x6A	Interrupt Status Register 2 */
++#define	ISR3	0x6B	/* 0x6B	Interrupt Status Register 3 */
++#define	ISR4	0x6C	/* 0x6C	Interrupt Status Register 4 */
++#define	ISR5	0x6D	/* 0x6D	Interrupt Status Register 5 */
++#define	GIS	0x6E	/* 0x6E	Global Interrupt Status */
++#define	Res8	0x6F	/* 0x6F	Free Register 8 */
++#define	CAS1	0x70	/* 0x70	CAS Register 1 */
++#define	CAS2	0x71	/* 0x71	CAS Register 2 */
++#define	CAS3	0x72	/* 0x72	CAS Register 3 */
++#define	CAS4	0x73	/* 0x73	CAS Register 4 */
++#define	CAS5	0x74	/* 0x74	CAS Register 5 */
++#define	CAS6	0x75	/* 0x75	CAS Register 6 */
++#define	CAS7	0x76	/* 0x76	CAS Register 7 */
++#define	CAS8	0x77	/* 0x77	CAS Register 8 */
++#define	CAS9	0x78	/* 0x78	CAS Register 9 */
++#define	CAS10	0x79	/* 0x79	CAS Register 10 */
++#define	CAS11	0x7A	/* 0x7A	CAS Register 11 */
++#define	CAS12	0x7B	/* 0x7B	CAS Register 12 */
++#define	CAS13	0x7C	/* 0x7C	CAS Register 13 */
++#define	CAS14	0x7D	/* 0x7D	CAS Register 14 */
++#define	CAS15	0x7E	/* 0x7E	CAS Register 15 */
++#define	CAS16	0x7F	/* 0x7F	CAS Register 16 */
++#define	PC1	0x80	/* 0x80	Port Configuration 1 */
++#define	PC2	0x81	/* 0x81	Port Configuration 2 */
++#define	PC3	0x82	/* 0x82	Port Configuration 3 */
++#define	PC4	0x83	/* 0x83	Port Configuration 4 */
++#define	PC5	0x84	/* 0x84	Port Configuration 5 */
++#define	GPC1	0x85	/* 0x85	Global Port Configuration 1 */
++#define	PC6	0x86	/* 0x86	Port Configuration 6 */
++#define	CMDR2	0x87	/* 0x87	Command Register 2 */
++#define	CMDR3	0x88	/* 0x88	Command Register 3 */
++#define	CMDR4	0x89	/* 0x89	Command Register 4 */
++#define	Res9	0x8A	/* 0x8A	Free Register 9 */
++#define	CCR3	0x8B	/* 0x8B	Common Control Register 3 */
++#define	CCR4	0x8C	/* 0x8C	Common Control Register 4 */
++#define	CCR5	0x8D	/* 0x8D	Common Control Register 5 */
++#define	MODE2	0x8E	/* 0x8E	Mode Register 2 */
++#define	MODE3	0x8F	/* 0x8F	Mode Register 3 */
++#define	RBC2	0x90	/* 0x90	Receive Byte Count Register 2 */
++#define	RBC3	0x91	/* 0x91	Receive Byte Count Register 3 */
++#define	GCM1	0x92	/* 0x92	Global Counter Mode 1 */
++#define	GCM2	0x93	/* 0x93	Global Counter Mode 2 */
++#define	GCM3	0x94	/* 0x94	Global Counter Mode 3 */
++#define	GCM4	0x95	/* 0x95	Global Counter Mode 4 */
++#define	GCM5	0x96	/* 0x96	Global Counter Mode 5 */
++#define	GCM6	0x97	/* 0x97	Global Counter Mode 6 */
++#define SIS2_1	0x98	/* 0x98 V1.2 : Signaling Status Register 2 */
++#define GCM7	0x98	/* 0x98 V2.2 : Global Counter Mode 7 */
++#define RSIS2_1	0x99	/* 0x99 V1.2 : Rx Signaling Status Register 2 */
++#define GCM8	0x99	/* 0x99 V2.2 : Global Counter Mode 8 */
++#define	SIS3	0x9A	/* 0x9A	Signaling Status Register 3 */
++#define	RSIS3	0x9B	/* 0x9B	Receive Signaling Status Register 3 */
++#define XFIFO2	0x9C	/* 0x9C/0x9D	Tx FIFO 2 */
++#define RFIFO2	0x9C	/* 0x9C/0x9D	Rx FIFO 2 */
++#define XFIFO3	0x9E	/* 0x9E/0x9F	Tx FIFO 3 */
++#define RFIFO3	0x9E	/* 0x9E/0x9F	Rx FIFO 3 */
++#define	TSEO	0xA0	/* 0xA0	Time Slot Even/Odd select */
++#define	TSBS1	0xA1	/* 0xA1	Time Slot Bit select 1 */
++#define	TSBS2	0xA2	/* 0xA2	Time Slot Bit select 2 */
++#define	TSBS3	0xA3	/* 0xA3	Time Slot Bit select 3 */
++#define	TSS2	0xA4	/* 0xA4	Time Slot select 2 */
++#define	TSS3	0xA5	/* 0xA5	Time Slot select 3 */
++#define	Res10	0xA6	/* 0xA6	Free Register 10 */
++#define	Res11	0xA7	/* 0xA7	Free Register 11 */
++#define	TPC0	0xA8	/* 0xA8	Test Pattern Control Register 0 */
++#define	SIS2	0xA9	/* 0xA9	Signaling Status Register 2 (V2.2) */
++#define	RSIS2	0xAA	/* 0xAA	Rx Signaling Status Register 2 (V2.2) */
++#define	MFPI	0xAB	/* 0xAB	Multi Function Port Input Status */
++#define	Res12	0xAC	/* 0xAC	Free Register 12 */
++#define	Res13	0xAD	/* 0xAD	Free Register 13 */
++#define	Res14	0xAE	/* 0xAE	Free Register 14 */
++#define	GLC1	0xAF	/* 0xAF	Global Line Control Register 1 */
++#define Res15	0xB0	/* 0xB0/0xEB Free Registers */
++#define WID	0xEC	/* 0xEC	Identification Register */
++
++#endif /* _PEF2256_H */
+diff -urN a/Documentation/devicetree/bindings/net/pef2256.txt b/Documentation/devicetree/bindings/net/pef2256.txt
+--- a/Documentation/devicetree/bindings/net/pef2256.txt	1970-01-01 01:00:00.000000000 +0100
++++ b/Documentation/devicetree/bindings/net/pef2256.txt	2013-10-13 15:05:42.000000000 +0200
+@@ -0,0 +1,77 @@
++* Wan on Lantiq PEF2256 E1 controller, also known as FALC56
++
++This chip was originally called "Infineon PEF2256" before the transfer of the
++former "wire-line" business-unit into an own company.
++
++The PEF2256 is a E1/T1/J1 Framer and Line Interface Component for Long- and
++Short-Haul Applications.
++Its datashhet can be downloaded at
++http://www.datasheetcatalog.com/datasheets_pdf/P/E/F/2/PEF2256E.shtml
++
++The FALC56 framer and line interface component is designed to fulfill all
++required interfacing between analog E1 lines and the digital PCM system
++highway, H.100/H.110 or H-MVIP bus.
++
++Required properties:
++- compatible: Should contain "lantiq,pef2256"
++- reg: Address and length of the register set for the device.
++  There should be a single continuous bank.
++- interrupts: Should contain the single interrupt used by the component to
++  notify special events (error, data received, data transmitted, ...).
++
++Optional properties:
++
++These properties can be defined to adjust the system interface in E1 mode.
++
++The FALC56 offers a flexible feature for system designers where for transmit and
++receive direction different system clocks and system pulses are necessary. The
++interface to the receive system highway is realized by two data buses, one for
++the data RDO and one for the signaling data RSIG. The receive highway is clocked
++on pin SCLKR, while the interface to the transmit system highway is
++independently clocked on pin SCLKX. The frequency of these working clocks and
++the data rate of 2.048/4.096/8.192/16.384 Mbit/s for the receive and transmit
++system interface is programmable.
++
++- clock-rate:
++  Supported values are: 2 (2.048 Mhz), 4 (4.096 Mhz), 8 (8.192 Mhz),
++    16 (16.384 Mhz).
++  8 if not defined.
++
++- data-rate:
++  Supported values are: 2 (2.048 Mbit/sec), 4 (4.096 Mbit/sec),
++    8 (8.192 Mbit/sec), 16 (16.384 Mbit/sec).
++  8 if not defined.
++
++Adjusting the frame begin (time slot 0, bit 0) relative to SYPR/X or XMFS is
++possible in the range of 0 to 125 µs. The minimum shift of varying the
++time slot 0 begin can be programmed between 1 bit and 1/8 bit depending of the
++system clocking and data rate, e.g. with a clocking/data rate of 2.048 MHz
++shifting is done bit by bit, while running the FALC56 with 16.384 MHz and
++2.048 Mbit/s data rate it is done by 1/8 bit
++
++- channel-phase: First time slot transmission channel phase.
++  Supported values are: 0, 1, 2, 3, 4, 5, 6, 7. 8
++  0 if not defined.
++
++All transmit or receive system interface data and marker are clocked or sampled
++with the following active edge :
++* Latched with the first falling edge of the selected PCM highway clock.
++* Latched with the first rising edge of the selected PCM highway clock.
++The behaviour of "transmit" and "receive" signals is inverse.
++
++- rising-edge-sync-pulse: rising edge synchronous pulse.
++  Supported values are: "receive", "transmit".
++  "transmit" if not defined.
++
++Examples:
++
++	e1-wan@4,2000000 {
++		compatible = "lantiq,pef2256";
++		reg = <4 0x2000000 0xFF>;
++		interrupts = <8 1>;
++		interrupt-parent = <&PIC>;
++		clock-rate = <4>;
++		data-rate = <4>;
++		channel-phase = <1>;
++		rising-edge-sync-pulse = "transmit";
++	};
+diff -urN a/drivers/net/wan/Makefile b/drivers/net/wan/Makefile
+--- a/drivers/net/wan/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/Makefile	2013-10-13 13:05:01.000000000 +0200
+@@ -22,6 +22,7 @@
+ obj-$(CONFIG_COSA)		+= cosa.o
+ obj-$(CONFIG_FARSYNC)		+= farsync.o
+ obj-$(CONFIG_DSCC4)             += dscc4.o
++obj-$(CONFIG_PEF2256)           += pef2256.o
+ obj-$(CONFIG_X25_ASY)		+= x25_asy.o
+ 
+ obj-$(CONFIG_LANMEDIA)		+= lmc/
+diff -urN a/drivers/net/wan/Kconfig b/drivers/net/wan/Kconfig
+--- a/drivers/net/wan/Kconfig	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/net/wan/Kconfig	2013-10-13 13:05:01.000000000 +0200
+@@ -266,6 +266,16 @@
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called farsync.
+ 
++config PEF2256
++	tristate "PEF2256 support"
++	depends on HDLC && OF && SYSFS
++	help
++	  Driver for Lantiq (ex. Infineon) FALC56 E1/T1/J1 Framer and
++	  Line Interface based on PEF2256 chipset.
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called pef2256.
++
+ config DSCC4
+ 	tristate "Etinc PCISYNC serial board support"
+ 	depends on HDLC && PCI && m
