@@ -229,6 +229,9 @@ make_knld()
 	mv $knl_path/debian/bin/perf $knl_path/debian/usr/sbin/
 	popd
 
+	# stripping perf 
+	ppc-linux-strip $knl_path/debian/usr/sbin/perf
+
 
 	#===== generating the headers package (needed to generate LDB).
 	rm -f ${liv_path}/KNLD-${knl_version}/HEADERS/KNLD-${knl_version}.tar.gz
