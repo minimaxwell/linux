@@ -917,7 +917,7 @@ void phy_state_machine(struct work_struct *work)
 		phy_error(phydev);
 
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
-			PHY_STATE_TIME * HZ);
+			HZ * PHY_STATE_TIME);
 }
 
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)
