@@ -38,6 +38,28 @@ struct debugfs_regset32 {
 	void __iomem *base;
 };
 
+struct debugfs_reg16 {
+	char *name;
+	unsigned long offset;
+};
+
+struct debugfs_regset16 {
+	const struct debugfs_reg16 *regs;
+	int nregs;
+	void __iomem *base;
+};
+
+struct debugfs_reg8 {
+	char *name;
+	unsigned long offset;
+};
+
+struct debugfs_regset8 {
+	const struct debugfs_reg8 *regs;
+	int nregs;
+	void __iomem *base;
+};
+
 extern struct dentry *arch_debugfs_dir;
 
 #if defined(CONFIG_DEBUG_FS)
@@ -93,6 +115,20 @@ struct dentry *debugfs_create_regset32(const char *name, umode_t mode,
 				     struct debugfs_regset32 *regset);
 
 int debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
+			 int nregs, void __iomem *base, char *prefix);
+
+struct dentry *debugfs_create_regset16(const char *name, umode_t mode,
+				     struct dentry *parent,
+				     struct debugfs_regset16 *regset);
+
+int debugfs_print_regs16(struct seq_file *s, const struct debugfs_reg16 *regs,
+			 int nregs, void __iomem *base, char *prefix);
+
+struct dentry *debugfs_create_regset8(const char *name, umode_t mode,
+				     struct dentry *parent,
+				     struct debugfs_regset8 *regset);
+
+int debugfs_print_regs8(struct seq_file *s, const struct debugfs_reg8 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_u32_array(const char *name, umode_t mode,
@@ -223,6 +259,20 @@ static inline struct dentry *debugfs_create_blob(const char *name, umode_t mode,
 static inline struct dentry *debugfs_create_regset32(const char *name,
 				   umode_t mode, struct dentry *parent,
 				   struct debugfs_regset32 *regset)
+{
+	return ERR_PTR(-ENODEV);
+}
+
+static inline struct dentry *debugfs_create_regset16(const char *name,
+				   umode_t mode, struct dentry *parent,
+				   struct debugfs_regset16 *regset)
+{
+	return ERR_PTR(-ENODEV);
+}
+
+static inline struct dentry *debugfs_create_regset8(const char *name,
+				   umode_t mode, struct dentry *parent,
+				   struct debugfs_regset8 *regset)
 {
 	return ERR_PTR(-ENODEV);
 }

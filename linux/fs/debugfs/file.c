@@ -760,4 +760,182 @@ struct dentry *debugfs_create_regset32(const char *name, umode_t mode,
 }
 EXPORT_SYMBOL_GPL(debugfs_create_regset32);
 
+/*
+ * The regset16 stuff is used to print 16-bit registers using the
+ * seq_file utilities. We offer printing a register set in an already-opened
+ * sequential file or create a debugfs file that only prints a regset16.
+ */
+
+/**
+ * debugfs_print_regs16 - use seq_print to describe a set of registers
+ * @s: the seq_file structure being used to generate output
+ * @regs: an array if struct debugfs_reg16 structures
+ * @nregs: the length of the above array
+ * @base: the base address to be used in reading the registers
+ * @prefix: a string to be prefixed to every output line
+ *
+ * This function outputs a text block describing the current values of
+ * some 16-bit hardware registers. It is meant to be used within debugfs
+ * files based on seq_file that need to show registers, intermixed with other
+ * information. The prefix argument may be used to specify a leading string,
+ * because some peripherals have several blocks of identical registers,
+ * for example configuration of dma channels
+ */
+int debugfs_print_regs16(struct seq_file *s, const struct debugfs_reg16 *regs,
+			   int nregs, void __iomem *base, char *prefix)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < nregs; i++, regs++) {
+		if (prefix)
+			ret += seq_printf(s, "%s", prefix);
+		ret += seq_printf(s, "%s = 0x%04x\n", regs->name,
+				  readw(base + regs->offset));
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(debugfs_print_regs16);
+
+static int debugfs_show_regset16(struct seq_file *s, void *data)
+{
+	struct debugfs_regset16 *regset = s->private;
+
+	debugfs_print_regs16(s, regset->regs, regset->nregs, regset->base, "");
+	return 0;
+}
+
+static int debugfs_open_regset16(struct inode *inode, struct file *file)
+{
+	return single_open(file, debugfs_show_regset16, inode->i_private);
+}
+
+static const struct file_operations fops_regset16 = {
+	.open =		debugfs_open_regset16,
+	.read =		seq_read,
+	.llseek =	seq_lseek,
+	.release =	single_release,
+};
+
+/**
+ * debugfs_create_regset16 - create a debugfs file that returns register values
+ * @name: a pointer to a string containing the name of the file to create.
+ * @mode: the permission that the file should have
+ * @parent: a pointer to the parent dentry for this file.  This should be a
+ *          directory dentry if set.  If this parameter is %NULL, then the
+ *          file will be created in the root of the debugfs filesystem.
+ * @regset: a pointer to a struct debugfs_regset16, which contains a pointer
+ *          to an array of register definitions, the array size and the base
+ *          address where the register bank is to be found.
+ *
+ * This function creates a file in debugfs with the given name that reports
+ * the names and values of a set of 16-bit registers. If the @mode variable
+ * is so set it can be read from. Writing is not supported.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  This
+ * pointer must be passed to the debugfs_remove() function when the file is
+ * to be removed (no automatic cleanup happens if your module is unloaded,
+ * you are responsible here.)  If an error occurs, %NULL will be returned.
+ *
+ * If debugfs is not enabled in the kernel, the value -%ENODEV will be
+ * returned.  It is not wise to check for this value, but rather, check for
+ * %NULL or !%NULL instead as to eliminate the need for #ifdef in the calling
+ * code.
+ */
+struct dentry *debugfs_create_regset16(const char *name, umode_t mode,
+				       struct dentry *parent,
+				       struct debugfs_regset16 *regset)
+{
+	return debugfs_create_file(name, mode, parent, regset, &fops_regset16);
+}
+EXPORT_SYMBOL_GPL(debugfs_create_regset16);
+
+/*
+ * The regset8 stuff is used to print 8-bit registers using the
+ * seq_file utilities. We offer printing a register set in an already-opened
+ * sequential file or create a debugfs file that only prints a regset8.
+ */
+
+/**
+ * debugfs_print_regs8 - use seq_print to describe a set of registers
+ * @s: the seq_file structure being used to generate output
+ * @regs: an array if struct debugfs_reg8 structures
+ * @nregs: the length of the above array
+ * @base: the base address to be used in reading the registers
+ * @prefix: a string to be prefixed to every output line
+ *
+ * This function outputs a text block describing the current values of
+ * some 8-bit hardware registers. It is meant to be used within debugfs
+ * files based on seq_file that need to show registers, intermixed with other
+ * information. The prefix argument may be used to specify a leading string,
+ * because some peripherals have several blocks of identical registers,
+ * for example configuration of dma channels
+ */
+int debugfs_print_regs8(struct seq_file *s, const struct debugfs_reg8 *regs,
+			   int nregs, void __iomem *base, char *prefix)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < nregs; i++, regs++) {
+		if (prefix)
+			ret += seq_printf(s, "%s", prefix);
+		ret += seq_printf(s, "%s = 0x%02x\n", regs->name,
+				  readb(base + regs->offset));
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(debugfs_print_regs8);
+
+static int debugfs_show_regset8(struct seq_file *s, void *data)
+{
+	struct debugfs_regset8 *regset = s->private;
+
+	debugfs_print_regs8(s, regset->regs, regset->nregs, regset->base, "");
+	return 0;
+}
+
+static int debugfs_open_regset8(struct inode *inode, struct file *file)
+{
+	return single_open(file, debugfs_show_regset8, inode->i_private);
+}
+
+static const struct file_operations fops_regset8 = {
+	.open =		debugfs_open_regset8,
+	.read =		seq_read,
+	.llseek =	seq_lseek,
+	.release =	single_release,
+};
+
+/**
+ * debugfs_create_regset8 - create a debugfs file that returns register values
+ * @name: a pointer to a string containing the name of the file to create.
+ * @mode: the permission that the file should have
+ * @parent: a pointer to the parent dentry for this file.  This should be a
+ *          directory dentry if set.  If this parameter is %NULL, then the
+ *          file will be created in the root of the debugfs filesystem.
+ * @regset: a pointer to a struct debugfs_regset8, which contains a pointer
+ *          to an array of register definitions, the array size and the base
+ *          address where the register bank is to be found.
+ *
+ * This function creates a file in debugfs with the given name that reports
+ * the names and values of a set of 8-bit registers. If the @mode variable
+ * is so set it can be read from. Writing is not supported.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  This
+ * pointer must be passed to the debugfs_remove() function when the file is
+ * to be removed (no automatic cleanup happens if your module is unloaded,
+ * you are responsible here.)  If an error occurs, %NULL will be returned.
+ *
+ * If debugfs is not enabled in the kernel, the value -%ENODEV will be
+ * returned.  It is not wise to check for this value, but rather, check for
+ * %NULL or !%NULL instead as to eliminate the need for #ifdef in the calling
+ * code.
+ */
+struct dentry *debugfs_create_regset8(const char *name, umode_t mode,
+				       struct dentry *parent,
+				       struct debugfs_regset8 *regset)
+{
+	return debugfs_create_file(name, mode, parent, regset, &fops_regset8);
+}
+EXPORT_SYMBOL_GPL(debugfs_create_regset8);
+
 #endif /* CONFIG_HAS_IOMEM */
