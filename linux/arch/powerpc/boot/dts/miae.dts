@@ -362,7 +362,7 @@
 				"tor_out_7",
 				"tor_out_8",
 				"alt_bp",
-				"torAUDIO_OPT_in_13",		// Alternat 1
+				"tor_in_13",		// Alternat 1
 				"tor_in_14",		// Alternat 2
 				"alt_ucomb",
 				"pres_ucomb";
@@ -384,7 +384,7 @@
 				"Ecoute Combine";
 		};
 
-		GPIO_FAV_CLA {AUDIO_OPT
+		GPIO_FAV_CLA {
 			compatible = "s3k,gpios-def-fav", "cs,mia-fav";
 			fav-id = <7>;
 			names = "alt_umain_a",
@@ -551,7 +551,7 @@
 				"805",	"908",	"-7",	"-17",	"yes",	"yes",	/* equipement 7 */
 				"909",	"1016",	"-27",	"-10",	"no",	"yes",	/* equipement 8 */
 				"1017",	"1120",	"-27",	"-10",	"no",	"yes",	/* equipement 9 */
-				"1AUDIO_OPT121",	"1232",	"-27",	"-10",	"no",	"yes",	/* equipement 10 */
+				"1121",	"1232",	"-27",	"-10",	"no",	"yes",	/* equipement 10 */
 				"1233",	"1392",	"-27",	"-10",	"no",	"yes",	/* equipement 11 */
 				"1393",	"1523",	"-23",	"-1",	"no",	"yes",	/* equipement 12 */
 				"1524",	"1664",	"-27",	"-10",	"no",	"yes",	/* equipement 13 */
@@ -883,7 +883,7 @@
 				#size-cells = <0>;
 				cell-index = <0>;
 				compatible = "fsl,spi", "fsl,cpm1-spi";
-				reAUDIO_OPTg = <0xa80 0x30 0x3d80 0x30>;
+				reg = <0xa80 0x30 0x3d80 0x30>;
 				interrupts = <5>;
 				interrupt-parent = <&CPM_PIC>;
 				mode = "cpu";
