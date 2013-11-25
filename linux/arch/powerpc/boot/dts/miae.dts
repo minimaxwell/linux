@@ -452,7 +452,7 @@
 
 		GPIO_FAV_NVCS {
 			compatible = "s3k,gpios-def-fav", "cs,mia-fav";
-			fav-id = <5 6>;
+			fav-id = <3 5 6>;
 			names = "alt_umain_a",
 				"alt_umain_b",
 				"alt_ucasque_a",
