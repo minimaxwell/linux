@@ -279,7 +279,7 @@
 		e1-wan@4,2000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "lantiq,pef2256";
+			compatible = "infineon,pef2256";
 			reg = <4 0x2000000 0xFF>;
 			interrupts = <8 1>;
 			interrupt-parent = <&PIC>;
@@ -969,7 +969,7 @@
 					name_codec = "codec_2";
 					analog_in = "-3dB -3dB -3dB -3dB";
 					analog_out = "3dB 3dB 3dB 3dB";
-					niveau_in = "-10dB -10dB -10dB -31dB";
+					niveau_in = "-10dB -10dB -10dB -10dB";
 					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				eeprom@3 {
