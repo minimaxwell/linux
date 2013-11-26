@@ -107,14 +107,14 @@ static int __init declare_of_platform_devices(void)
 
 		model = of_get_property(np, "model", NULL);
 
-		pr_info("%s declare_of_platform_devices()\n", model);
-		
 		mpc8xx_early_ping_watchdog();
 		proc_mkdir("s3k",0);
 		of_platform_bus_probe(NULL, of_bus_ids, NULL);
 
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
+			pr_info("%s declare_of_platform_devices()\n", model);
+		
 			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			fpgaf_init_platform_devices();
 			
@@ -123,11 +123,15 @@ static int __init declare_of_platform_devices(void)
 		} 
 		/* MIAE configuration */
 		else if (!strcmp(model, "MIAE")) {
+			pr_info("CMM declare_of_platform_devices()\n");
+		
 			u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
 			fpgam_init_platform_devices();
 		} 
 		/* CMPC885 configuration by default */
 		else {
+			pr_info("%s declare_of_platform_devices()\n", model);
+		
 		}
 	} else {
 		pr_err("MODEL: failed to identify model\n");
