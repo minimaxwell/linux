@@ -19,14 +19,10 @@
 #include <linux/interrupt.h>
 
 #include <linux/iio/iio.h>
-#include <linux/iio/driver.h>
-#include <linux/iio/machine.h>
 #include <linux/iio/sysfs.h>
 #include <linux/iio/buffer.h>
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
-
-#define AD7923_NAME	"ad7923"
 
 #define AD7923_WRITE_CR		(1 << 11)	/* write control register */
 #define AD7923_RANGE		(1 << 1)	/* range to REFin */
@@ -100,7 +96,6 @@ enum ad7923_id {
 			.storagebits = 16,				\
 			.endianness = IIO_BE,				\
 		},							\
-		.datasheet_name = #index,				\
 	}
 
 #define DECLARE_AD7923_CHANNELS(name, bits) \
@@ -199,31 +194,6 @@ done:
 
 	return IRQ_HANDLED;
 }
-
-/* default maps used by iio consumer */
-static struct iio_map ad7923_default_iio_maps[] = {
-	{
-		.consumer_dev_name = AD7923_NAME,
-		.consumer_channel = "channel_0",
-		.adc_channel_label = "0",
-	},
-	{
-		.consumer_dev_name = AD7923_NAME,
-		.consumer_channel = "channel_1",
-		.adc_channel_label = "1",
-	},
-	{
-		.consumer_dev_name = AD7923_NAME,
-		.consumer_channel = "channel_2",
-		.adc_channel_label = "2",
-	},
-	{
-		.consumer_dev_name = AD7923_NAME,
-		.consumer_channel = "channel_3",
-		.adc_channel_label = "3",
-	},
-	{ }
-};
 
 static int ad7923_scan_direct(struct ad7923_state *st, unsigned ch)
 {
@@ -355,18 +325,12 @@ static int ad7923_probe(struct spi_device *spi)
 	if (ret)
 		goto error_disable_reg;
 
-	ret = iio_map_array_register(indio_dev, ad7923_default_iio_maps);
+	ret = iio_device_register(indio_dev);
 	if (ret)
 		goto error_cleanup_ring;
 
-	ret = iio_device_register(indio_dev);
-	if (ret)
-		goto error_unmap;
-
 	return 0;
 
-error_unmap:
-	iio_map_array_unregister(indio_dev);
 error_cleanup_ring:
 	iio_triggered_buffer_cleanup(indio_dev);
 error_disable_reg:
@@ -381,7 +345,6 @@ static int ad7923_remove(struct spi_device *spi)
 	struct ad7923_state *st = iio_priv(indio_dev);
 
 	iio_device_unregister(indio_dev);
- 	iio_map_array_unregister(indio_dev);
 	iio_triggered_buffer_cleanup(indio_dev);
 	regulator_disable(st->reg);
 
@@ -399,7 +362,7 @@ MODULE_DEVICE_TABLE(spi, ad7923_id);
 
 static struct spi_driver ad7923_driver = {
 	.driver = {
-		.name	= AD7923_NAME,
+		.name	= "ad7923",
 		.owner	= THIS_MODULE,
 	},
 	.probe		= ad7923_probe,
