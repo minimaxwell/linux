@@ -930,6 +930,39 @@ void fs_link_switch(struct fs_enet_private *fep)
 	}
 }
 
+void autoneg_handler(struct work_struct *work) {
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct fs_enet_private *fep =
+			container_of(dwork, struct fs_enet_private, link_queue);
+	struct phy_device *phydev = fep->phydev;
+	int value;
+
+	/* PHY 0 link becomes up */
+	if (fep->phydevs[0]->link && fep->phydevs[0]->link != fep->phy_oldlinks[0]) {
+		phydev = fep->phydevs[0];
+		value = phy_read(phydev, MII_BMSR);
+		if (! (value & BMSR_ANEGCOMPLETE))  {
+			phydev->autoneg = AUTONEG_ENABLE;
+			if (phydev->drv->config_aneg)
+				phydev->drv->config_aneg(phydev);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		}
+	}
+
+	/* PHY 1 link becomes up */
+	if (fep->phydevs[1]->link && fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
+		phydev = fep->phydevs[1];
+		value = phy_read(phydev, MII_BMSR);
+		if (! (value & BMSR_ANEGCOMPLETE))  {
+			phydev->autoneg = AUTONEG_ENABLE;
+			if (phydev->drv->config_aneg)
+				phydev->drv->config_aneg(phydev);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		}
+	}
+}
+
+
 // #define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
@@ -940,8 +973,6 @@ void fs_link_monitor(struct work_struct *work)
 	struct phy_device *phydev = fep->phydev;
 	struct phy_device *changed_phydevs[2] = {NULL, NULL};
 	int nb_changed_phydevs = 0;
-	int value;
-	static long PHY_B_timeout=0;
 
 	#ifdef DOUBLE_ATTACH_DEBUG
 	printk("Current PHY : %s\n", fep->phydev==fep->phydevs[0] ? "PHY 0": "PHY 1");
@@ -994,56 +1025,7 @@ void fs_link_monitor(struct work_struct *work)
 	/* If we are not in AUTO mode, don't do anything */
 	if (fep->mode != MODE_AUTO) return;
 
-	/* Autoneg stuf */
-	if ((aneg_status == 2) && (jiffies > PHY_B_timeout)) {
-		aneg_status = 4;
-	}
-
-	if (aneg_status == 0) {
-		if (! fep->phydevs[0]->link)  {
-			aneg_status = 4;
-		}
-		else
-			aneg_status = 1;
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		return;
-	}
-
-	if (aneg_status == 1) {
-		value = phy_read(fep->phydevs[0], MII_BMSR);
-		if (value & BMSR_ANEGCOMPLETE)  {
-			aneg_status = 2;
-			PHY_B_timeout = jiffies+4*HZ;
-		}
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		return;
-	}
-
-	if (aneg_status == 2) {
-		if (fep->phydevs[1]->link) {
-			phydev = fep->phydevs[1];
-			aneg_status = 3;
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		}
-	}
-
-
-	if (aneg_status == 3) {
-		value = phy_read(fep->phydevs[1], MII_BMSR);
-		if (value & BMSR_ANEGCOMPLETE) {
-			phydev = fep->phydevs[1];
-			aneg_status = 4;
-			if (fep->phydev != fep->phydevs[1]) {
-				value = phy_read(phydev, MII_BMCR);
-				phy_write(phydev, MII_BMCR, 
-				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
-			}
-		}
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-	}
+	autoneg_handler(work);
 
 	/* If elapsed time since last change is too small, wait for a while */
 	if (jiffies - fep->change_time < LINK_MONITOR_RETRY) {
