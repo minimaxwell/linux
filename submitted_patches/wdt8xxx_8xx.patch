@@ -1,0 +1,22 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Wim Van Sebroeck <wim@iguana.be>, <scottwood@freescale.com>
+CC: linux-kernel@vger.kernel.org, linux-watchdog@vger.kernel.org, linuxppc-dev@lists.ozlabs.org
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH] watchdog: mpc8xxx_wdt: MPC8xx is HW enabled
+
+MPC8xx watchdog is enabled at startup by HW.
+If the bootloader disables it, it cannot be reenabled.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+diff -ur a/drivers/watchdog/mpc8xxx_wdt.c b/drivers/watchdog/mpc8xxx_wdt.c
+--- a/drivers/watchdog/mpc8xxx_wdt.c	2013-05-11 22:57:46.000000000 +0200
++++ b/drivers/watchdog/mpc8xxx_wdt.c	2013-08-08 02:12:15.000000000 +0200
+@@ -273,6 +310,7 @@
+ 		.compatible = "fsl,mpc823-wdt",
+ 		.data = &(struct mpc8xxx_wdt_type) {
+ 			.prescaler = 0x800,
++			.hw_enabled = true,
+ 		},
+ 	},
+ 	{},
