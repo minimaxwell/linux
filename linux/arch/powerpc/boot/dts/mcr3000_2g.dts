@@ -682,7 +682,7 @@
 					spi-cs-high;
 				};
 				lm74@1 {
-					compatible = "ti,tmp121", "ns,lm74";
+					compatible = "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <1>;
 					spi-cs-high;
@@ -719,7 +719,7 @@
 					spi-troll;
 				};
 				lm74@6 {
-					compatible = "ti,tmp121", "ns,lm74";
+					compatible = "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <6>;
 					spi-cs-high;

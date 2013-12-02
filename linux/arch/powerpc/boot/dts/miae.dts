@@ -925,7 +925,7 @@
 					niveau_out = "-10dB -10dB -10dB -10dB";
 				};
 				lm74@1 {
-					compatible = "ti,tmp121", "ns,lm74";
+					compatible = "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <1>;
 					spi-cs-high;
@@ -1032,7 +1032,7 @@
 					iio-channel = "channel_0", "channel_1";
 				};
 				lm74@5 {
-					compatible = "ti,tmp121", "ns,lm74";
+					compatible = "ns,lm74";
 					spi-max-frequency = <1000000>;
 					reg = <5>;
 					spi-cs-high;
