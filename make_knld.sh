@@ -221,7 +221,7 @@ make_knld()
 
 	pushd $knl_path/linux/tools/perf
 	make clean
-	make ARCH=ppc CROSS_COMPILE=ppc-linux- WERROR=0 NO_SLANG=y NO_GTK2=y NO_LIBPYTHON=y NO_LIBAUDIT=y NO_LIBNUMA=y prefix=$knl_path/debian/ install	
+	make ARCH=powerpc CROSS_COMPILE=ppc-linux- WERROR=0 NO_SLANG=y NO_GTK2=y NO_LIBPYTHON=y NO_LIBAUDIT=y NO_LIBNUMA=y prefix=$knl_path/debian/ install	
 		
 	# we move perf to /usr/sbin
 	rm $knl_path/debian/usr/sbin
