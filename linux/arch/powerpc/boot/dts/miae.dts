@@ -285,24 +285,6 @@
 			interrupt-parent = <&PIC>;
 		};
 		
-		dpram@3,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-dpram";
-			reg = <3 0x0 0x10000>;
-			interrupts = <4 1>;
-			interrupt-parent = <&PIC>;
-		};
-
-		dsp@7,0 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-dsp";
-			reg = <7 0x0 0x0008>;
-//			interrupts = <0 1>;
-//			interrupt-parent = <&FPGAM_PIC>;
-		};
-
 		GPIO {
 			/* 0 = sortie initialisee active */
 			/* 1 = entree */
