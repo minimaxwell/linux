@@ -61,8 +61,7 @@ build_kernel()
 		fi
 		mv uImage.lzma ./arch/powerpc/boot
 
-		find ../debian/lib/modules -name "build" -exec rm {} \;
-		find ../debian/lib/modules -name "source" -exec rm {} \;
+		rm -rf ../debian/lib/modules/
 	fi
 
 	return 0
