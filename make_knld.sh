@@ -61,15 +61,6 @@ build_kernel()
 		fi
 		mv uImage.lzma ./arch/powerpc/boot
 
-		rm -rf ../debian/lib/modules/
-
-		make modules
-		if [ $? -ne 0 ] ; then
-			echo "make_delivery_knld: Error! echec make modules"
-			return 2
-		fi
-	
-		make modules_install INSTALL_MOD_PATH=../debian
 		find ../debian/lib/modules -name "build" -exec rm {} \;
 		find ../debian/lib/modules -name "source" -exec rm {} \;
 	fi
