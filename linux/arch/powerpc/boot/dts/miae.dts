@@ -856,6 +856,8 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xd0>;
+				gpios = <&liens 12 1	/* CTS */
+				         &liens 11 1>;	/* RTS */
 				far-id = <4>;
 			};
 
