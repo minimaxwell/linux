@@ -64,20 +64,11 @@ MODULE_DESCRIPTION("Freescale Ethernet Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_MODULE_VERSION);
 
-/**  
- *  double_attachement_state is not handled properly by kernel
- *  and PHY0/1 acting together (during auto-negotiation) will 
- *  set system in unstable state (where both PHY are active at the
- *  same time and therefor, packets are duplicated.
- *  
- *  we use aneg_counter and aneg_status to identify differents cases 
- *  (PHY0 connected & PHY1 not connected, PHY1 connected & PHY0 not
- *  connected, both connected ...) and we "reset" the right PHY according 
- *  to the situation in order to put system in proper state.
- */
-
-static int aneg_counter = 0; 
-static int aneg_status = 0; 
+static int aneg_status = 0; /* 0 : Init
+                               1 : PHY A autoneg started
+                               2 : starting PHY B autoneg
+                               3 : PHY B autoneg started
+                               4 : Autoneg done */
 
 static int fs_enet_debug = -1; /* -1 == use FS_ENET_DEF_MSG_ENABLE as value */
 module_param(fs_enet_debug, int, 0);
@@ -939,39 +930,6 @@ void fs_link_switch(struct fs_enet_private *fep)
 	}
 }
 
-void autoneg_handler(struct work_struct *work) {
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct fs_enet_private *fep =
-			container_of(dwork, struct fs_enet_private, link_queue);
-	struct phy_device *phydev = fep->phydev;
-	int value;
-
-	/* PHY 0 link becomes up */
-	if (fep->phydevs[0]->link && fep->phydevs[0]->link != fep->phy_oldlinks[0]) {
-		phydev = fep->phydevs[0];
-		value = phy_read(phydev, MII_BMSR);
-		if (! (value & BMSR_ANEGCOMPLETE))  {
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		} 
-	}
-
-	/* PHY 1 link becomes up */
-	if (fep->phydevs[1]->link && fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
-		phydev = fep->phydevs[1];
-		value = phy_read(phydev, MII_BMSR);
-		if (! (value & BMSR_ANEGCOMPLETE))  {
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		}
-	}
-}
-
-
 // #define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
@@ -982,13 +940,14 @@ void fs_link_monitor(struct work_struct *work)
 	struct phy_device *phydev = fep->phydev;
 	struct phy_device *changed_phydevs[2] = {NULL, NULL};
 	int nb_changed_phydevs = 0;
+	int value;
+	static long PHY_B_timeout=0;
 
 	#ifdef DOUBLE_ATTACH_DEBUG
-	int value;	
 	printk("Current PHY : %s\n", fep->phydev==fep->phydevs[0] ? "PHY 0": "PHY 1");
 	printk("PHY 0 (addr=%d) : %s ", fep->phydevs[0]->addr, fep->phydevs[0]->link ? "Up": "Down");
 	value = phy_read(fep->phydevs[0], MII_BMSR);
-	if (value & 0x0004)
+	if (value & 0x0004) 
 		printk ("(Up in MII_BMSR) ");
 	else
 		printk ("(Down in MII_BMSR) ");
@@ -1035,18 +994,55 @@ void fs_link_monitor(struct work_struct *work)
 	/* If we are not in AUTO mode, don't do anything */
 	if (fep->mode != MODE_AUTO) return;
 
-	autoneg_handler(work);
+	/* Autoneg stuf */
+	if ((aneg_status == 2) && (jiffies > PHY_B_timeout)) {
+		aneg_status = 4;
+	}
 
-	/**
-	 *  Even if both PHY are connected at the same time when starting 
-	 *  network, they are not set to link UP at the same time
-	 *  we use aneg_counter here to identify if we are in the case
-	 *  where both PHY are connected when we start or not. 
-	 *  if yes aneg_status is left to 0, if not, it's set to 2
-	 */
-	if (!fep->phydevs[1]->link && fep->phydevs[0]->link && aneg_status == 0) {
-		aneg_counter++;
-		if (aneg_counter > 4) { aneg_status = 2; }
+	if (aneg_status == 0) {
+		if (! fep->phydevs[0]->link)  {
+			aneg_status = 4;
+		}
+		else
+			aneg_status = 1;
+		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+	if (aneg_status == 1) {
+		value = phy_read(fep->phydevs[0], MII_BMSR);
+		if (value & BMSR_ANEGCOMPLETE)  {
+			aneg_status = 2;
+			PHY_B_timeout = jiffies+4*HZ;
+		}
+		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+	if (aneg_status == 2) {
+		if (fep->phydevs[1]->link) {
+			phydev = fep->phydevs[1];
+			aneg_status = 3;
+			phydev->autoneg = AUTONEG_ENABLE;
+			if (phydev->drv->config_aneg)
+				phydev->drv->config_aneg(phydev);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		}
+	}
+
+
+	if (aneg_status == 3) {
+		value = phy_read(fep->phydevs[1], MII_BMSR);
+		if (value & BMSR_ANEGCOMPLETE) {
+			phydev = fep->phydevs[1];
+			aneg_status = 4;
+			if (fep->phydev != fep->phydevs[1]) {
+				value = phy_read(phydev, MII_BMCR);
+				phy_write(phydev, MII_BMCR, 
+				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+			}
+		}
+		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
 	}
 
 	/* If elapsed time since last change is too small, wait for a while */
@@ -1077,9 +1073,9 @@ void fs_link_monitor(struct work_struct *work)
 		return;
 	}
 
-
 	/* If both PHYs obtained a new link, PHY2 must become the active link */
-	if (nb_changed_phydevs==2) {
+	if (nb_changed_phydevs==2 && fep->phydevs[0]->link && 
+	    fep->phydevs[1]->link) {
 		if (fep->phydev != fep->phydevs[0])
 			fs_link_switch(fep);
 		if (! netif_carrier_ok(fep->phydev->attached_dev))
@@ -1088,48 +1084,6 @@ void fs_link_monitor(struct work_struct *work)
 	}
 		
 
-	/** Depending on aneg_status value, a different path of action is 
-	 * choosen.
-	 *
-	 * 1 - aneg_status = 0, both links up.
-	 * 	simple "reset" of both PHY with a switch to pu
-	 * 	system in proper state
-	 *
-	 * 2 - aneg_status = 2, when second link (PHY1) become UP
-	 * 	we can't "reset" from fs_link_monitor since, during 
-	 *	our reset, there would be 1-2 seconds where packets
-	 *	would be lost/or duplicated.
-	 *	We have to handle part of the reset in phy_state_machine() 
-	 *	function, and finish it here (with aneg_status set to 3 and 4)
-	 *
-	 *	/!\ in this case, it take time for system to return to a
-	 *	clean state, but during this time, network should work fine
-	 *	during our operation
-	 *  
-	 */
-	if (aneg_status == 0 && fep->phydevs[1]->link && fep->phydevs[0]->link) {
-		phy_stop(fep->phydevs[1]);
-		fs_link_switch(fep);
-		phy_start(fep->phydevs[1]);
-		phy_stop(fep->phydevs[0]);
-		phy_start(fep->phydevs[0]);
-		aneg_status = 10;
-	}
-	if (aneg_status == 2 && fep->phydevs[1]->link && fep->phydevs[0]->link) {
-		fep->phydevs[0]->state = PHY_DOUBLE_ATTACHEMENT;
-		aneg_status = 3;
-	}
-	if (aneg_status == 3 &&	fep->phydevs[0]->state == PHY_HALTED)
-	{
-		aneg_status = 4;	
-	}
-	if (aneg_status == 4 && fep->phydevs[0]->state == PHY_RUNNING)
-	{
-		phy_stop(fep->phydevs[0]);
-		phy_start(fep->phydevs[0]);
-		aneg_status = 0;
-	} 
-	
 	/* If the active PHY has a link and carrier is off, 
 	   call netif_carrier_on */
 	if (phydev->link) {
@@ -1144,19 +1098,6 @@ void fs_link_monitor(struct work_struct *work)
 	    (phydev == fep->phydevs[1] && fep->phydevs[0]->link))
 	{
 		fs_link_switch(fep);
-		/** in case where PHY1 is UP and PHY0 become UP latter,
-		 *  we are not in the same case as before (PHY0 and PHY1
-		 *  are not symetric) and we end up here.
-		 *
-		 *  in this case, simply "reset" PHY1 while starting network
-		 *  will fix the issue
-		 *
-		 */ 
-		if (aneg_status == 0 && (fep->phydevs[1]->link || fep->phydevs[0]->link)) {
-			phy_stop(fep->phydevs[1]);
-			phy_start(fep->phydevs[1]);
-			aneg_status = 10;
-		}
 	} else {
 		fep->change_time = jiffies;
 		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
@@ -1257,9 +1198,7 @@ static int fs_enet_open(struct net_device *dev)
 		}
 	}
 
-	//  if we are here, we reset aneg_status and aneg_counter
 	aneg_status = 0;
-	aneg_counter = 0;
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
 	INIT_WORK(&fep->arp_queue, fs_send_gratuitous_arp);

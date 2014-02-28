@@ -42,19 +42,6 @@
 #include <asm/irq.h>
 #include <asm/uaccess.h>
 
-/**  
- *  double_attachement_state and phydev_backup are used as this driver handle
- *  PHYDEV separatly, but in our case, we need to considere
- *  both PHY0 and PHY1 (double attachement) at the same time
- *  to make it work
- */
-
-#define PHY1ADDR 2
-#define PHY2ADDR 3
-
-static int double_attachement_state = 0; 
-static struct phy_device *phydev_backup = NULL;
-
 /**
  * phy_print_status - Convenience function to print out the current phy status
  * @phydev: the phy_device struct
@@ -840,40 +827,6 @@ void phy_state_machine(struct work_struct *work)
 			/* Only register a CHANGE if we are
 			 * polling or ignoring interrupts
 			 */
-
-			/** double_attachement_state == 2 and PHY1 is good 
-			 *  and running, time to finish "reset" of PHY0
-			 *  we restart PHY0, and clear 
-			 *  double_attachement_state.
-			 */
-			if (double_attachement_state == 2 && phydev->addr == PHY1ADDR) {
-				phy_start(phydev_backup);
-				double_attachement_state = 0;
-				//DEBUG MESSAGE pr_err("double_attachement_state = 0 and PHY(addr: %d)->state = PHY_RUNNING\n", phydev->addr);
-			} 
-
-
-			if (!phy_interrupt_is_valid(phydev))
-				phydev->state = PHY_CHANGELINK;
-			break;
-		case PHY_DOUBLE_ATTACHEMENT:
-			/** In fs_link_monitor(), we might change PHY0->state
-			 *  to PHY_DOUBLE_ATTACHEMENT, it means that
-			 *  we will need to "reset" PHY0 (with phy_stop/start)
-			 *  as soon as PHY1 is ready, to avoid duplicating
-			 *  packets, so we set double_attachement_state to 1,
-			 *  we save phydev in phy_backup for later use
-			 *  and restore PHY0->state to PHY_RUNNING.
-			 *
-			 *  after that we resume normal PHY_RUNNING 
-			 *  operations
-			 */
-			double_attachement_state = 1;
-			phydev_backup = phydev;
-			phydev->state = PHY_RUNNING;
-			/* Only register a CHANGE if we are
-			 * polling or ignoring interrupts
-			 */
 			if (!phy_interrupt_is_valid(phydev))
 				phydev->state = PHY_CHANGELINK;
 			break;
@@ -884,23 +837,6 @@ void phy_state_machine(struct work_struct *work)
 				break;
 
 			if (phydev->link) {
-				/** if we have double_attachement_state == 1 
-				 *  and phydev is PHY1, then we need to stop
-				 *  PHY0 (first step of "reset") to prevent 
-				 *  duplicating packets.
-				 *  double_attachement_state set to 2 for 
-				 *  next step 
-				 *
-				 *  after that we resume normal 
-				 *  PHY_CHANGELINK operations
-				 */
-				if (double_attachement_state == 1 && phydev->addr == PHY1ADDR) {
-				//DEBUG MESSAGE	pr_err("double_attachement_state = 0 and PHY(addr: %d)->state = PHY_HALTED\n", phydev->addr);
-					phy_stop(phydev_backup);
-					double_attachement_state = 2;	
-				}
-
-
 				phydev->state = PHY_RUNNING;
 				netif_carrier_on(phydev->attached_dev);
 			} else {
