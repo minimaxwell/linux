@@ -64,11 +64,6 @@ MODULE_DESCRIPTION("Freescale Ethernet Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_MODULE_VERSION);
 
-static int aneg_status = 0; /* 0 : Init
-                               1 : PHY A autoneg started
-                               2 : starting PHY B autoneg
-                               3 : PHY B autoneg started
-                               4 : Autoneg done */
 
 static int fs_enet_debug = -1; /* -1 == use FS_ENET_DEF_MSG_ENABLE as value */
 module_param(fs_enet_debug, int, 0);
@@ -930,6 +925,39 @@ void fs_link_switch(struct fs_enet_private *fep)
 	}
 }
 
+void autoneg_handler(struct work_struct *work) {
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct fs_enet_private *fep =
+			container_of(dwork, struct fs_enet_private, link_queue);
+	struct phy_device *phydev = fep->phydev;
+	int value;
+
+	/* PHY 0 link becomes up */
+	if (fep->phydevs[0]->link && fep->phydevs[0]->link != fep->phy_oldlinks[0]) {
+		phydev = fep->phydevs[0];
+		value = phy_read(phydev, MII_BMSR);
+		if (! (value & BMSR_ANEGCOMPLETE))  {
+			phydev->autoneg = AUTONEG_ENABLE;
+			if (phydev->drv->config_aneg)
+				phydev->drv->config_aneg(phydev);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		} 
+	}
+
+	/* PHY 1 link becomes up */
+	if (fep->phydevs[1]->link && fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
+		phydev = fep->phydevs[1];
+		value = phy_read(phydev, MII_BMSR);
+		if (! (value & BMSR_ANEGCOMPLETE))  {
+			phydev->autoneg = AUTONEG_ENABLE;
+			if (phydev->drv->config_aneg)
+				phydev->drv->config_aneg(phydev);
+			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+		}
+	}
+}
+
+
 // #define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
@@ -940,14 +968,13 @@ void fs_link_monitor(struct work_struct *work)
 	struct phy_device *phydev = fep->phydev;
 	struct phy_device *changed_phydevs[2] = {NULL, NULL};
 	int nb_changed_phydevs = 0;
-	int value;
-	static long PHY_B_timeout=0;
 
 	#ifdef DOUBLE_ATTACH_DEBUG
+	int value;	
 	printk("Current PHY : %s\n", fep->phydev==fep->phydevs[0] ? "PHY 0": "PHY 1");
 	printk("PHY 0 (addr=%d) : %s ", fep->phydevs[0]->addr, fep->phydevs[0]->link ? "Up": "Down");
 	value = phy_read(fep->phydevs[0], MII_BMSR);
-	if (value & 0x0004) 
+	if (value & 0x0004)
 		printk ("(Up in MII_BMSR) ");
 	else
 		printk ("(Down in MII_BMSR) ");
@@ -971,6 +998,12 @@ void fs_link_monitor(struct work_struct *work)
 			printk ("not isolated\n");
 	}
 	#endif
+	if (fep->phydevs[0]->state != PHY_RUNNING && fep->phydevs[1] && fep->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
+		fep->phydevs[1]->state = PHY_RUNNING;
+	#ifdef DOUBLE_ATTACH_DEBUG
+		dev_err(fep->dev, "PHY is now running \n");
+	#endif
+	}
 
 	/* If there's only one PHY -> Nothing to do */
 	if (! fep->phydevs[1]) {
@@ -993,57 +1026,10 @@ void fs_link_monitor(struct work_struct *work)
 
 	/* If we are not in AUTO mode, don't do anything */
 	if (fep->mode != MODE_AUTO) return;
+	
 
-	/* Autoneg stuf */
-	if ((aneg_status == 2) && (jiffies > PHY_B_timeout)) {
-		aneg_status = 4;
-	}
+	//autoneg_handler(work);
 
-	if (aneg_status == 0) {
-		if (! fep->phydevs[0]->link)  {
-			aneg_status = 4;
-		}
-		else
-			aneg_status = 1;
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		return;
-	}
-
-	if (aneg_status == 1) {
-		value = phy_read(fep->phydevs[0], MII_BMSR);
-		if (value & BMSR_ANEGCOMPLETE)  {
-			aneg_status = 2;
-			PHY_B_timeout = jiffies+4*HZ;
-		}
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		return;
-	}
-
-	if (aneg_status == 2) {
-		if (fep->phydevs[1]->link) {
-			phydev = fep->phydevs[1];
-			aneg_status = 3;
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		}
-	}
-
-
-	if (aneg_status == 3) {
-		value = phy_read(fep->phydevs[1], MII_BMSR);
-		if (value & BMSR_ANEGCOMPLETE) {
-			phydev = fep->phydevs[1];
-			aneg_status = 4;
-			if (fep->phydev != fep->phydevs[1]) {
-				value = phy_read(phydev, MII_BMCR);
-				phy_write(phydev, MII_BMCR, 
-				((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
-			}
-		}
-		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-	}
 
 	/* If elapsed time since last change is too small, wait for a while */
 	if (jiffies - fep->change_time < LINK_MONITOR_RETRY) {
@@ -1057,6 +1043,7 @@ void fs_link_monitor(struct work_struct *work)
 		fep->phy_oldlinks[0] = fep->phydevs[0]->link;
 		/* phyA link status has changed -> notify user space */
 		schedule_work(&fep->notify_work[PHY0_LINK].notify_queue);
+
 	} 
 	if (fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
 		changed_phydevs[nb_changed_phydevs++] = fep->phydevs[1];
@@ -1073,17 +1060,18 @@ void fs_link_monitor(struct work_struct *work)
 		return;
 	}
 
-	/* If both PHYs obtained a new link, PHY2 must become the active link */
-	if (nb_changed_phydevs==2 && fep->phydevs[0]->link && 
-	    fep->phydevs[1]->link) {
-		if (fep->phydev != fep->phydevs[0])
+
+	/* If both PHYs obtained a new link, PHY0 must become the active link */
+	if (fep->phydevs[1]) {
+		//if both PHY are up, PHY0 is always main PHY, (we had to choose one)
+		if (fep->phydev != fep->phydevs[0] && fep->phydevs[1]->link && fep->phydevs[0]->link) {
 			fs_link_switch(fep);
+		}
 		if (! netif_carrier_ok(fep->phydev->attached_dev))
 			netif_carrier_on(fep->phydev->attached_dev);
-		return;
 	}
 		
-
+	
 	/* If the active PHY has a link and carrier is off, 
 	   call netif_carrier_on */
 	if (phydev->link) {
@@ -1111,6 +1099,7 @@ static int fs_init_phy(struct net_device *dev)
 	struct phy_device *phydev;
 	phy_interface_t iface;
 
+
 	fep->oldlink = 0;
 	fep->oldspeed = 0;
 	fep->oldduplex = -1;
@@ -1132,6 +1121,7 @@ static int fs_init_phy(struct net_device *dev)
 	}
 
 	fep->phydev = phydev;
+	
 	fep->phydevs[0] = phydev;
 	fep->phy_oldlinks[0] = 0;
 	
@@ -1198,7 +1188,6 @@ static int fs_enet_open(struct net_device *dev)
 		}
 	}
 
-	aneg_status = 0;
 
 	INIT_DELAYED_WORK(&fep->link_queue, fs_link_monitor);
 	INIT_WORK(&fep->arp_queue, fs_send_gratuitous_arp);
