@@ -167,6 +167,10 @@ int main(void)
 	DEFINE(TI_PREEMPT, offsetof(struct thread_info, preempt_count));
 	DEFINE(TI_TASK, offsetof(struct thread_info, task));
 	DEFINE(TI_CPU, offsetof(struct thread_info, cpu));
+	DEFINE(TI_AC_STAMP, offsetof(struct thread_info, ac_stamp));
+	DEFINE(TI_AC_LEAVE, offsetof(struct thread_info, ac_leave));
+	DEFINE(TI_AC_STIME, offsetof(struct thread_info, ac_stime));
+	DEFINE(TI_AC_UTIME, offsetof(struct thread_info, ac_utime));
 
 #ifdef CONFIG_PPC64
 	DEFINE(DCACHEL1LINESIZE, offsetof(struct ppc64_caches, dline_size));

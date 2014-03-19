@@ -43,6 +43,12 @@ struct thread_info {
 	int		cpu;			/* cpu we're on */
 	int		preempt_count;		/* 0 => preemptable,
 						   <0 => BUG */
+#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
+	__u32 ac_stamp;
+	__u32 ac_leave;
+	__u32 ac_stime;
+	__u32 ac_utime;
+#endif
 	struct restart_block restart_block;
 	unsigned long	local_flags;		/* private flags for thread */
 
@@ -58,6 +64,8 @@ struct thread_info {
 	.task =		&tsk,			\
 	.exec_domain =	&default_exec_domain,	\
 	.cpu =		0,			\
+	.ac_stime =	0,			\
+	.ac_utime =	0,			\
 	.preempt_count = INIT_PREEMPT_COUNT,	\
 	.restart_block = {			\
 		.fn = do_no_restart_syscall,	\
