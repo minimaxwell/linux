@@ -31,7 +31,7 @@
 #else /* CONFIG_PPC64 */
 #define ACCOUNT_CPU_USER_ENTRY(ti, ra, rb)
 #define ACCOUNT_CPU_USER_EXIT(ti, ra, rb)
-#endif
+#endif /* CONFIG_PPC64 */
 #define ACCOUNT_STOLEN_TIME
 #else /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
 #ifdef CONFIG_PPC64
@@ -93,7 +93,7 @@ END_FW_FTR_SECTION_IFSET(FW_FEATURE_SPLPAR)
 	add ra, rb, ra;			/* AC_STIME += R */		\
 	stw ra, TI_AC_STIME(ti);					\
 
-#endif
+#endif /* CONFIG_PPC64 */
 
 #endif /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
 
