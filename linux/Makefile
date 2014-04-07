@@ -2,7 +2,7 @@ ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
 PATCHLEVEL = 12
-SUBLEVEL = 14
+SUBLEVEL = 15
 EXTRAVERSION =
 NAME = One Giant Leap for Frogkind
 
