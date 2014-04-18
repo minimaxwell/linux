@@ -1185,14 +1185,14 @@
 		};
 			
 /*		crypto@20000 {
-			compatible = "fsl,sec2.0";
+			compatible = "fsl,sec1.2", "fsl,sec1.0";
 			reg = <0x20000 0x8000>;
 			interrupts = <1 1>;
 			interrupt-parent = <&PIC>;
 			fsl,num-channels = <1>;
 			fsl,channel-fifo-len = <24>;
 			fsl,exec-units-mask = <0x4c>;
-			fsl,descriptor-types-mask = <0x301f>;
+			fsl,descriptor-types-mask = <0x05000155>;
 		};
 */	};
 
