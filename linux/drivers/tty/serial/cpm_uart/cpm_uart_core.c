@@ -402,7 +402,7 @@ static irqreturn_t cpm_uart_int(int irq, void *data)
 
 static int cpm_uart_startup(struct uart_port *port)
 {
-	int retval;
+	int retval, i;
 	struct uart_cpm_port *pinfo = (struct uart_cpm_port *)port;
 
 	pr_debug("CPM uart[%d]:startup\n", port->line);
@@ -424,6 +424,31 @@ static int cpm_uart_startup(struct uart_port *port)
 	retval = request_irq(port->irq, cpm_uart_int, 0, "cpm_uart", port);
 	if (retval)
 		return retval;
+
+	for (i = 0; i < NUM_GPIOS; i++) {
+		int gpio, ret;
+
+		gpio = of_get_gpio(pinfo->port.dev->of_node, i);
+
+		if (gpio_is_valid(gpio)) {
+			ret = gpio_request(gpio, "cpm_uart");
+			if (ret) {
+				pr_err("can't request gpio #%d: %d\n", i, ret);
+				continue;
+			}
+			if (i == GPIO_RTS || i == GPIO_DTR)
+				ret = gpio_direction_output(gpio, 0);
+			else
+				ret = gpio_direction_input(gpio);
+			if (ret) {
+				pr_err("can't set direction for gpio #%d: %d\n",
+					i, ret);
+				gpio_free(gpio);
+				continue;
+			}
+			pinfo->gpios[i] = gpio;
+		}
+	}
 
 	/* Startup rx-int */
 	if (IS_SMC(pinfo)) {
@@ -1213,32 +1238,8 @@ static int cpm_uart_init_port(struct device_node *np,
 		goto out_pram;
 	}
 
-	for (i = 0; i < NUM_GPIOS; i++) {
-		int gpio;
-
+	for (i = 0; i < NUM_GPIOS; i++)
 		pinfo->gpios[i] = -1;
-
-		gpio = of_get_gpio(np, i);
-
-		if (gpio_is_valid(gpio)) {
-			ret = gpio_request(gpio, "cpm_uart");
-			if (ret) {
-				pr_err("can't request gpio #%d: %d\n", i, ret);
-				continue;
-			}
-			if (i == GPIO_RTS || i == GPIO_DTR)
-				ret = gpio_direction_output(gpio, 0);
-			else
-				ret = gpio_direction_input(gpio);
-			if (ret) {
-				pr_err("can't set direction for gpio #%d: %d\n",
-					i, ret);
-				gpio_free(gpio);
-				continue;
-			}
-			pinfo->gpios[i] = gpio;
-		}
-	}
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_CPM
 	udbg_putc = NULL;

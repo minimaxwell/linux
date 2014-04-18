@@ -828,6 +828,20 @@
 				far-id = <4>;
 			};
 
+			scc3wb: wb@a40 {
+				device_type = "wb_scc";
+				wb_name = "scc3";
+				compatible = "cs,wb-scc", "cs,mia-far";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28 2>;	/* scc, cts */
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x80>;
+				gpios = <&CPM1_PIO_C 5 1	/* CTS3 */
+				         &CPM1_PIO_D 7 1>;	/* RTS3 */
+				far-id = <4>;
+			};
+
 			scc3t: tdm@a40 {
 				device_type = "tdm";
 				tdm_name = "scc3";

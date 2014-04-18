@@ -29,6 +29,17 @@ extern int fpga_read_channel(int channel, int *val);
 #define FAV_NVCS_LEMO		6
 #define FAV_NVCS_FISCHER	5
 
+#define PCM_CODEC_MINOR		240	/* tdm codecs et E1 MIAe */
+#define PCM_VOIE_MINOR		241	/* tdm voies MCR3K-2G */
+#define PCM_RETARD_MINOR	242	/* tdm retard MCR3K-2G */
+#define WB_MINOR_SCC2		243	/* crypto wide-band SCC2 */
+#define WB_MINOR_SCC3		244	/* crypto wide-band SCC3 */
+#define NAME_CODEC_DEVICE	"pcm"
+#define NAME_VOIE_DEVICE	"pcm_voie"
+#define NAME_RETARD_DEVICE	"pcm_retard"
+#define NAME_WB_SCC2_DEVICE	"wb_scc2"
+#define NAME_WB_SCC3_DEVICE	"wb_scc3"
+
 #endif /* __KERNEL__ */
 		
 #include <linux/ioctl.h>
@@ -77,12 +88,21 @@ struct pose_delay {
 						SAF3000_PCM_DELAY_REC_IDENT, \
 						struct pose_delay)
 
-/** @brief Structure pour le mmap() sur les devices /dev/tdm_xxx */
+/* @brief Structure pour le mmap() sur les devices /dev/tdm_xxx */
 struct tdm_map {
 	unsigned long current_time; /**< @brief Donne l'heure TDM correspondant a la derniere mise a jour du compteur (en ms) */
 	unsigned long last_read_time; /**< @brief Donne l'heure TDM correspondant a la derniere lecture */
 	unsigned long current_tbl; /**< @brief Donne la valeur de la partie basse de la TIMEBASE */
 	unsigned long tb_ticks_per_msec; /**< @brief Donne le nombre de ticks TIMEBASE par miliseconde */
 };
+
+
+#define SAF3000_WB_IOC_MAGIC		0x91
+
+#define SAF3000_WB_STOP_REC_IDENT	0
+
+/* pour stopper la reception et se mettre en recherche de synchro */
+#define SAF3000_WB_STOP_REC			_IO(SAF3000_WB_IOC_MAGIC, \
+						SAF3000_WB_STOP_REC_IDENT)
 
 #endif
