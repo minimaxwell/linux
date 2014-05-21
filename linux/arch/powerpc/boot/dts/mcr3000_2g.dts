@@ -599,11 +599,37 @@
 				         &CPM1_PIO_B 18 1>;	/* RTS2 */
 			};
 
+			scc2wb: wb@a20 {
+				device_type = "wb_scc";
+				wb_name = "scc2";
+				compatible = "cs,wb-scc";
+				reg = <0xa20 0x20 0x3d00 0x80>;
+				interrupts = <29 11>;		/* scc, cts */
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <1>;
+				fsl,cpm-command = <0x40>;
+				gpios = <&CPM1_PIO_C 9 1	/* CTS2 */
+				         &CPM1_PIO_B 18 1>;	/* RTS2 */
+			};
+
 			scc3: serial@a40 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x80>;
+				gpios = <&CPM1_PIO_C 5 1	/* CTS3 */
+				         &CPM1_PIO_D 7 1>;	/* RTS3 */
+			};
+
+			scc3wb: wb@a40 {
+				device_type = "wb_scc";
+				wb_name = "scc3";
+				compatible = "cs,wb-scc";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28 2>;		/* scc, cts */
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <2>;
 				fsl,cpm-command = <0x80>;
