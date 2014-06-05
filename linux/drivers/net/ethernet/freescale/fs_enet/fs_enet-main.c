@@ -1067,8 +1067,6 @@ void fs_link_monitor(struct work_struct *work)
 		if (fep->phydev != fep->phydevs[0] && fep->phydevs[1]->link && fep->phydevs[0]->link) {
 			fs_link_switch(fep);
 		}
-		if (! netif_carrier_ok(fep->phydev->attached_dev))
-			netif_carrier_on(fep->phydev->attached_dev);
 	}
 		
 	
