@@ -53,6 +53,8 @@
 #include <net/arp.h>
 
 #include "fs_enet.h"
+#include <linux/if_vlan.h>
+#include <linux/syscalls.h>
 
 #define PHY_ISOLATE 1
 #define PHY_POWER_DOWN 2
@@ -808,13 +810,83 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 	__be32 ip_addr;
 	struct sk_buff *skb;
 
+	int fd, i = 0, nb_line = 0, ret, j, k = 0;
+	char buf[300];
+	char lines[10][50];
+	char iface_and_vlan[10];
+	int id;
+	char iface[10];
+	char sanitized_iface[5] ;
+
 	ip_addr = inet_select_addr(fep->ndev, 0, 0);
 	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
 			fep->ndev->dev_addr, NULL);
 	if (skb == NULL)
 		printk("arp_create failure -> gratuitous arp not sent\n");
-	else
+	else {
+		//send skb on eth1
 		arp_xmit(skb);
+		//dev_err(fep->dev, "gratuitous arp sent\n");
+
+		//find all vlan on eth1
+		//FIXME : is there a clean way ? 
+	
+		mm_segment_t old_fs = get_fs();
+		set_fs(KERNEL_DS);
+
+		fd = sys_open("/proc/net/vlan/config", O_RDONLY, 0);
+		if (fd >= 0) {
+			while (sys_read(fd, &buf[i], 1) == 1 ) {
+				//remove header (2 lines)
+				//VLAN Dev name    | VLAN ID \n
+				//Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD \n
+				if (buf[i] == '\n')
+					nb_line++;
+				if (nb_line >= 2)
+					i++;
+			}
+			//split on each line
+			nb_line = 0;
+			for (j=1;j<i;j++) {
+				if (buf[j] == '\n') {
+					lines[nb_line][k] = '\n';
+					nb_line++;
+					k = 0;
+				}
+				lines[nb_line][k] = buf[j];
+				k++;
+			}
+			
+			//each line is something like :
+			//eth1.64        | 64  | eth1\n
+			for (i = 0; i < nb_line; i++) {
+				//dev_err(fep->dev, lines[i]);
+				ret = sscanf(lines[i], "\n%s %*s %d %*s %s", iface_and_vlan, &id, iface); 
+				if (ret == 3) {
+					//dev_err(fep->dev, "\n----\nret : %d\n----\niface_and_vlan : *%s*\nid: *%d*\n\niface *%s*\n----\n",
+					//		 ret, iface_and_vlan, id, iface);
+					//if iface = eth1, send arp on corresponding vlan
+					strcpy(sanitized_iface,iface);
+					sanitized_iface[4] = '\0';
+					if (strcmp("eth1", sanitized_iface) == 0) {
+						skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr,
+								fep->ndev, ip_addr,
+								NULL,
+								fep->ndev->dev_addr,
+								NULL);
+						skb = vlan_put_tag(skb, htons(ETH_P_8021Q), id);
+						if (!skb) { 
+							dev_err(fep->dev, "failed to insert VLAN tag -> gratuitous arp not sent\n");
+						}
+						arp_xmit(skb);
+						//dev_err(fep->dev, "gratuitous arp sent on %s.%d\n", iface, id);
+					}
+				}
+			}
+			sys_close(fd);
+		}
+		set_fs(old_fs);
+	}
 }
 
 
