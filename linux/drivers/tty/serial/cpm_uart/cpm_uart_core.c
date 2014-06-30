@@ -474,11 +474,19 @@ inline void cpm_uart_wait_until_send(struct uart_cpm_port *pinfo)
 static void cpm_uart_shutdown(struct uart_port *port)
 {
 	struct uart_cpm_port *pinfo = (struct uart_cpm_port *)port;
+	int i;
 
 	pr_debug("CPM uart[%d]:shutdown\n", port->line);
 
 	/* free interrupt handler */
 	free_irq(port->irq, port);
+
+	/* free gpios */
+	for (i = 0; i < NUM_GPIOS; i++) {
+		if (pinfo->gpios[i] != -1)
+			gpio_free(pinfo->gpios[i]);
+		pinfo->gpios[i] = -1;
+	}
 
 	/* If the port is not the console, disable Rx and Tx. */
 	if (!(pinfo->flags & FLAG_CONSOLE)) {
