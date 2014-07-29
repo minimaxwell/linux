@@ -786,11 +786,8 @@
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 (ou SMC2 si defini) */
 				scc_tdm = "SCC4";
-				/* 1er parametre = channel phase E1 (0 à 1 si data rate = 4MHz */
-				/* 2eme parametre = data rate (8MHz ou 4MHz) */
-				/* par défaut ts_info = <0 4> */
-				/* les TS codecs se deduiront a partir du channel phase du E1 */
-				ts_info = <0 4>;	/* phase = 0, debit = 4MHz */
+				/* vitesse bus numerique 4 ou 8 MHz */
+				data_rate = <4>;
 			};
 
 			smc1: serial@a80 {
