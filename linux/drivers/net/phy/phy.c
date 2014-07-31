@@ -42,6 +42,8 @@
 #include <asm/irq.h>
 #include <asm/uaccess.h>
 
+#include <linux/of_device.h>
+#include <linux/of_platform.h>
 
 #define PHY1ADDR 2
 #define PHY0ADDR 3
@@ -49,6 +51,7 @@
 static int phy_ghost_ready = 0; 
 static int ok = 0; 
 static int active_phy = 0; //or PHY1ADDR or PHY0ADDR
+static int isMCR2G = 0;
 
 //#define DOUBLE_ATTACH_DEBUG 1
 
@@ -453,6 +456,12 @@ void phy_start_machine(struct phy_device *phydev,
 		void (*handler)(struct net_device *))
 {
 	phy_ghost_ready = 0;
+	if (of_find_compatible_node(NULL, NULL, "fsl,cmpc885")) {
+		if (of_get_property(of_find_compatible_node(NULL, NULL, "fsl,cmpc885"), "model", NULL)) {
+			if (strcmp(of_get_property(of_find_compatible_node(NULL, NULL, "fsl,cmpc885"), "model", NULL), "MCR3000_2G") == 0)
+				isMCR2G = 1;
+		}
+	}
 	phydev->adjust_state = handler;
 
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
@@ -797,7 +806,7 @@ void phy_state_machine(struct work_struct *work)
 				#ifdef DOUBLE_ATTACH_DEBUG
 				pr_err("PHY(addr: %d) from PHY_AN to PHY_NOLINK\n", phydev->addr);
 				#endif
-				if (phydev->addr == PHY1ADDR) {
+				if (phydev->addr == PHY1ADDR && !isMCR2G) {
 					phy_write(phydev, MII_BMCR, phy_read(phydev, MII_BMCR) | BMCR_ISOLATE);
 					#ifdef DOUBLE_ATTACH_DEBUG
 					pr_err("PHY(addr: %d) is now isolated\n", phydev->addr);
@@ -816,7 +825,7 @@ void phy_state_machine(struct work_struct *work)
 
 			/* If AN is done, we're running */
 			if (err > 0) {
-				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
+				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
 					if (active_phy == 0 && phydev->addr != 1)
 						active_phy = phydev->addr;
 					phydev->state = PHY_RUNNING;
@@ -847,7 +856,7 @@ void phy_state_machine(struct work_struct *work)
 				break;
 
 			if (phydev->link) {
-				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
+				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
 					if (active_phy == 0 && phydev->addr != 1)
 						active_phy = phydev->addr;
 					phydev->state = PHY_RUNNING;
@@ -920,7 +929,7 @@ void phy_state_machine(struct work_struct *work)
 				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
 					if (active_phy == 0 && phydev->addr != 1)
 						active_phy = phydev->addr;
-					if (phydev->addr == PHY1ADDR && !ok) {
+					if (phydev->addr == PHY1ADDR && !ok && !isMCR2G) {
 						phydev->state = PHY_DOUBLE_ATTACHEMENT;
 						#ifdef DOUBLE_ATTACH_DEBUG
 						pr_err("PHY(addr: %d) from PHY_CHANGELINK to PHY_DOUBLE_ATTACHEMENT\n", phydev->addr);
