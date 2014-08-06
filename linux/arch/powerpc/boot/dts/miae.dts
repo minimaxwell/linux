@@ -812,6 +812,19 @@
 				         &CPM1_PIO_B 18 1>;	/* RTS2 */
 			};
 
+			smc2: serial@a90 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart", "cs,mia-far";
+				reg = <0xa90 0x10 0x3f80 0x40>;
+				interrupts = <3>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0xd0>;
+				gpios = <&liens 12 1	/* CTS */
+				         &liens 11 1>;	/* RTS */
+				far-id = <4>;
+			};
+
 			scc3: serial@a40 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart", "cs,mia-far";
@@ -857,19 +870,6 @@
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0xc0>;
-			};
-
-			smc2: serial@a90 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart", "cs,mia-far";
-				reg = <0xa90 0x10 0x3f80 0x40>;
-				interrupts = <3>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <3>;
-				fsl,cpm-command = <0xd0>;
-				gpios = <&liens 12 1	/* CTS */
-				         &liens 11 1>;	/* RTS */
-				far-id = <4>;
 			};
 
 			smc2_9b: smc@a90 {
