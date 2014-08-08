@@ -1,0 +1,46 @@
+From 89600486832d318b0a185d539d9c8b32cdae95fa Mon Sep 17 00:00:00 2001
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>, scottwood@freescale.com
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 20/20] powerpc/8xx: Don't restore regs to save them again.
+
+There is not need to restore r10, r11 and cr registers at this end of ITLBmiss
+handler as they are saved again to the same place in ITLBError handler we are
+jumping to.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ arch/powerpc/kernel/head_8xx.S |    8 +++++---
+ 1 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/arch/powerpc/kernel/head_8xx.S b/arch/powerpc/kernel/head_8xx.S
+index 99438d8..102fe9f 100644
+--- a/arch/powerpc/kernel/head_8xx.S
++++ b/arch/powerpc/kernel/head_8xx.S
+@@ -380,8 +380,7 @@ InstructionTLBMiss:
+ 	lwz	r3, 8(r0)
+ #endif
+ 	mfspr	r10, SPRN_SPRG_SCRATCH2
+-	EXCEPTION_EPILOG_0
+-	b	InstructionTLBError
++	b	InstructionTLBError1
+ 
+ 	. = 0x1200
+ DataStoreTLBMiss:
+@@ -470,7 +469,10 @@ DataStoreTLBMiss:
+  */
+ 	. = 0x1300
+ InstructionTLBError:
+-	EXCEPTION_PROLOG
++	EXCEPTION_PROLOG_0
++InstructionTLBError1:
++	EXCEPTION_PROLOG_1
++	EXCEPTION_PROLOG_2
+ 	mr	r4,r12
+ 	mr	r5,r9
+ 	EXC_XFER_LITE(0x1300, handle_page_fault)
+-- 
+1.7.1
+

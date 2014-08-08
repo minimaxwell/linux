@@ -1,0 +1,36 @@
+From 08b3df50f71e6ee1b329940823a836120d553208 Mon Sep 17 00:00:00 2001
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>, scottwood@freescale.com
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 09/20] powerpc/8xx: Optimize verification in FixupDAR
+
+By XORing the upper part of the instruction code, we get a value that can
+directly be verified with the second test and we can remove the first test.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ arch/powerpc/kernel/head_8xx.S |    6 ++----
+ 1 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/arch/powerpc/kernel/head_8xx.S b/arch/powerpc/kernel/head_8xx.S
+index e5a250c..5037420 100644
+--- a/arch/powerpc/kernel/head_8xx.S
++++ b/arch/powerpc/kernel/head_8xx.S
+@@ -542,10 +542,8 @@ FixupDAR:/* Entry point for dcbx workaround. */
+ /* Check if it really is a dcbx instruction. */
+ /* dcbt and dcbtst does not generate DTLB Misses/Errors,
+  * no need to include them here */
+-	srwi	r10, r11, 26	/* check if major OP code is 31 */
+-	cmpwi	cr0, r10, 31
+-	bne-	141f
+-	rlwinm	r10, r11, 0, 21, 30
++	xoris	r10, r11, 0x7c00	/* check if major OP code is 31 */
++	rlwinm	r10, r10, 0, 21, 5
+ 	cmpwi	cr0, r10, 2028	/* Is dcbz? */
+ 	beq+	142f
+ 	cmpwi	cr0, r10, 940	/* Is dcbi? */
+-- 
+1.7.1
+

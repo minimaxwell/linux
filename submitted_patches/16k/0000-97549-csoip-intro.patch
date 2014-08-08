@@ -1,0 +1,13 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>, scottwood@freescale.com
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 00/20] powerpc/8xx: Optimise MMU TLB handling and add support of 16k pages
+
+This patchset:
+* provides several MMU TLB handling optimisation on MPC8xx.
+* adds support of 16k pages on MPC8xx.
+All changes have been successfully tested on a custom board equipped with MPC885
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+Tested-by: Christophe Leroy <christophe.leroy@c-s.fr>
