@@ -852,16 +852,6 @@
 				far-id = <4>;
 			};
 
-			scc3t: tdm@a40 {
-				device_type = "tdm";
-				tdm_name = "scc3";
-				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
-				reg = <0xa40 0x20 0x3e00 0x80>;
-				interrupts = <28>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-command = <0x80>;
-			};
-
 			scc4t: tdm@a60 {
 				device_type = "tdm";
 				tdm_name = "scc4";
