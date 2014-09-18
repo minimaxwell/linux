@@ -126,6 +126,7 @@ static int __init declare_of_platform_devices(void)
 			pr_info("CMM declare_of_platform_devices()\n");
 		
 			u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
+			direct16_gpiochip_init("s3k,mcr3000-fpga-m-direct-gpio");
 			fpgam_init_platform_devices();
 		} 
 		/* CMPC885 configuration by default */

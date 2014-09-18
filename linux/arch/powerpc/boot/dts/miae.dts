@@ -195,7 +195,7 @@
 			};
 			liens: gpio-controller@34 {
 				#gpio-cells = <2>;
-				compatible = "s3k,mcr3000-fpga-m-gpio";
+				compatible = "s3k,mcr3000-fpga-m-direct-gpio";
 				reg = <0x34 2>;
 				gpio-controller;
 			};
