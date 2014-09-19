@@ -1,0 +1,50 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>, scottwood@freescale.com
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 2/2] powerpc32: add support for csum_add()
+
+The C version of csum_add() as defined in include/net/checksum.h gives the
+following assembly:
+       0:       7c 04 1a 14     add     r0,r4,r3
+       4:       7c 64 00 10     subfc   r3,r4,r0
+       8:       7c 63 19 10     subfe   r3,r3,r3
+       c:       7c 63 00 50     subf    r3,r3,r0
+
+include/net/checksum.h also offers the possibility to define an arch specific
+function.
+This patch provides a ppc32 specific csum_add() inline function.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ arch/powerpc/include/asm/checksum.h | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/arch/powerpc/include/asm/checksum.h b/arch/powerpc/include/asm/checksum.h
+index cfe806a..a13aa1f 100644
+--- a/arch/powerpc/include/asm/checksum.h
++++ b/arch/powerpc/include/asm/checksum.h
+@@ -141,6 +141,19 @@ static inline __sum16 csum_tcpudp_magic(__be32 saddr, __be32 daddr,
+ {
+ 	return csum_fold(csum_tcpudp_nofold(saddr, daddr, len, proto, sum));
+ }
++
++#define HAVE_ARCH_CSUM_ADD
++static inline __wsum csum_add(__wsum csum, __wsum addend)
++{
++    __asm__("\n\
++	addc %0,%0,%1 \n\
++	addze %0,%0 \n\
++	"
++	: "=r" (csum)
++	: "r" (addend), "0"(csum));
++	return csum;
++}
++
+ #endif
+ #endif
+ #endif /* __KERNEL__ */
+-- 
+2.1.0
+

@@ -1,0 +1,15 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>, scottwood@freescale.com
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 0/2] powerpc32: Optimise some IP checksum functions.
+
+This patchset provides a few optimisations related to IP checksum functions.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+Tested-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ arch/powerpc/include/asm/checksum.h | 28 ++++++++++++++++++++++++++++
+ arch/powerpc/lib/checksum_32.S      | 16 ----------------
+ 2 files changed, 28 insertions(+), 16 deletions(-)
