@@ -1,0 +1,47 @@
+From db3f51bc909b15e33ab01c272ca15cc8dfeb2dea Mon Sep 17 00:00:00 2001
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>, scottwood@freescale.com
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH v4 05/21] powerpc/8xx: Fix comment about DIRTY update
+
+Since commit 2321f33790a6c5b80322d907a92d5739e7521a13, dirty handling is not
+handled here anymore. So we fix the comment.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+Changes in v2:
+- None
+
+Changes in v3:
+- None
+
+Changes in v4:
+- None
+
+ arch/powerpc/kernel/head_8xx.S | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/arch/powerpc/kernel/head_8xx.S b/arch/powerpc/kernel/head_8xx.S
+index e4086d6..10054b8 100644
+--- a/arch/powerpc/kernel/head_8xx.S
++++ b/arch/powerpc/kernel/head_8xx.S
+@@ -479,12 +479,8 @@ InstructionTLBError:
+ 	EXC_XFER_LITE(0x400, handle_page_fault)
+ 
+ /* This is the data TLB error on the MPC8xx.  This could be due to
+- * many reasons, including a dirty update to a pte.  We can catch that
+- * one here, but anything else is an error.  First, we track down the
+- * Linux pte.  If it is valid, write access is allowed, but the
+- * page dirty bit is not set, we will set it and reload the TLB.  For
+- * any other case, we bail out to a higher level function that can
+- * handle it.
++ * many reasons, including a dirty update to a pte.  We bail out to
++ * a higher level function that can handle it.
+  */
+ 	. = 0x1400
+ DataTLBError:
+-- 
+2.1.0
+
