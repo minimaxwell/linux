@@ -1,0 +1,45 @@
+From 30795bca86f32217ea69269762b938d9fd0785bc Mon Sep 17 00:00:00 2001
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: "David S. Miller" <davem@davemloft.net>
+CC: linux-kernel@vger.kernel.org, Eric Dumazet <edumazet@google.com>, netdev@vger.kernel.org
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH] net: optimise csum_replace4()
+
+csum_partial() is a generic function which is not optimised for small fixed
+length calculations, and its use requires to store "from" and "to" values in
+memory while we already have them available in registers. This also has impact,
+especially on RISC processors. In the same spirit as the change done by
+Eric Dumazet on csum_replace2(), this patch rewrites inet_proto_csum_replace4()
+taking into account RFC1624.
+
+I spotted during a NATted tcp transfert that csum_partial() is one of top 5
+consuming functions (around 8%), and the second user of csum_partial() is 
+inet_proto_csum_replace4().
+
+I have proposed the same modification to inet_proto_csum_replace4() in another
+patch.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ include/net/checksum.h | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/include/net/checksum.h b/include/net/checksum.h
+index 87cb190..6465bae 100644
+--- a/include/net/checksum.h
++++ b/include/net/checksum.h
+@@ -122,9 +122,7 @@ static inline __wsum csum_partial_ext(const void *buff, int len, __wsum sum)
+ 
+ static inline void csum_replace4(__sum16 *sum, __be32 from, __be32 to)
+ {
+-	__be32 diff[] = { ~from, to };
+-
+-	*sum = csum_fold(csum_partial(diff, sizeof(diff), ~csum_unfold(*sum)));
++	*sum = csum_fold(csum_add(csum_sub(~csum_unfold(*sum), from), to));
+ }
+ 
+ /* Implements RFC 1624 (Incremental Internet Checksum)
+-- 
+2.1.0
+
