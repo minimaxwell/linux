@@ -120,7 +120,7 @@ static int __init declare_of_platform_devices(void)
 			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			fpgaf_init_platform_devices();
 			
-/*			fpga_clk_init();*/
+			fpga_clk_init();
 			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
 		} 
 		/* MIAE configuration */
