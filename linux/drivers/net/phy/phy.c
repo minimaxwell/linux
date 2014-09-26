@@ -48,6 +48,26 @@ static int ok = 0;
 static int active_phy = 0; //or PHY1ADDR or PHY0ADDR
 static int isMCR2G = 0;
 
+static const char *phy_speed_to_str(int speed)
+{
+	switch (speed) {
+	case SPEED_10:
+		return "10Mbps";
+	case SPEED_100:
+		return "100Mbps";
+	case SPEED_1000:
+		return "1Gbps";
+	case SPEED_2500:
+		return "2.5Gbps";
+	case SPEED_10000:
+		return "10Gbps";
+	case SPEED_UNKNOWN:
+		return "Unknown";
+	default:
+		return "Unsupported (update phy.c)";
+	}
+}
+
 /**
  * phy_print_status - Convenience function to print out the current phy status
  * @phydev: the phy_device struct
@@ -731,7 +751,7 @@ void phy_state_machine(struct work_struct *work)
 	case PHY_PENDING:
 		break;
 	case PHY_UP:
-		needs_aneg = 1;
+		needs_aneg = true;
 
 		phydev->link_timeout = PHY_AN_TIMEOUT;
 		break;
@@ -769,12 +789,8 @@ void phy_state_machine(struct work_struct *work)
 				phydev->state = PHY_DOUBLE_ATTACHEMENT;
 			}
 
-		} else if (0 == phydev->link_timeout--) {
-			needs_aneg = 1;
-			/* If we have the magic_aneg bit, we try again */
-			if (phydev->drv->flags & PHY_HAS_MAGICANEG)
-				break;
-		}
+		} else if (0 == phydev->link_timeout--)
+			needs_aneg = true;
 		break;
 	case PHY_NOLINK:
 		err = phy_read_status(phydev);
@@ -786,6 +802,17 @@ void phy_state_machine(struct work_struct *work)
 			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
 				if (active_phy == 0 && phydev->addr != 1)
 					active_phy = phydev->addr;
+				if (AUTONEG_ENABLE == phydev->autoneg) {
+					err = phy_aneg_done(phydev);
+					if (err < 0)
+						break;
+	
+					if (!err) {
+						phydev->state = PHY_AN;
+						phydev->link_timeout = PHY_AN_TIMEOUT;
+						break;
+					}
+				}
 				phydev->state = PHY_RUNNING;
 				netif_carrier_on(phydev->attached_dev);
 				phydev->adjust_link(phydev->attached_dev);
@@ -804,7 +831,7 @@ void phy_state_machine(struct work_struct *work)
 			phydev->state = PHY_CHANGELINK;
 		} else {
 			if (0 == phydev->link_timeout--)
-				needs_aneg = 1;
+				needs_aneg = true;
 		}
 
 		phydev->adjust_link(phydev->attached_dev);

@@ -356,27 +356,33 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 static void fsl_spi_do_one_msg(struct spi_message *m)
 {
 	struct spi_device *spi = m->spi;
-	struct spi_transfer *t;
+	struct spi_transfer *t, *first;
 	unsigned int cs_change;
 	const int nsecs = 50;
 	int status;
-	u32 prev_speed_hz = 0;
-	u8 prev_bits_per_word = 0;
 
-	cs_change = 1;
-	status = 0;
+	/* Don't allow changes if CS is active */
+	first = list_first_entry(&m->transfers, struct spi_transfer,
+			transfer_list);
 	list_for_each_entry(t, &m->transfers, transfer_list) {
-		if (prev_bits_per_word != t->bits_per_word
-				|| prev_speed_hz != t->speed_hz) {
+		if ((first->bits_per_word != t->bits_per_word) ||
+			(first->speed_hz != t->speed_hz)) {
 			/* Don't allow changes if CS is active */
 			status = -EINVAL;
+			dev_err(&spi->dev,
+				"bits_per_word/speed_hz should be same for the same SPI transfer\n");
+			return;
+		}
+	}
 
+	cs_change = 1;
+	status = -EINVAL;
+	list_for_each_entry(t, &m->transfers, transfer_list) {
+		if (t->bits_per_word || t->speed_hz) {
 			if (cs_change)
 				status = fsl_spi_setup_transfer(spi, t);
 			if (status < 0)
 				break;
-			prev_bits_per_word = t->bits_per_word;
-			prev_speed_hz = t->speed_hz;
 		}
 
 		if (cs_change) {
