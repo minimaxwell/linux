@@ -99,11 +99,6 @@ int mpc8xxx_spi_transfer(struct spi_device *spi,
 	return 0;
 }
 
-void mpc8xxx_spi_cleanup(struct spi_device *spi)
-{
-	kfree(spi->controller_state);
-}
-
 const char *mpc8xxx_spi_strmode(unsigned int flags)
 {
 	if (flags & SPI_QE_CPU_MODE) {

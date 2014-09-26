@@ -1004,7 +1004,7 @@ static void cpm_uart_config_port(struct uart_port *port, int flags)
  * Note that this is called with interrupts already disabled
  */
 static void cpm_uart_early_write(struct uart_cpm_port *pinfo,
-		const char *string, u_int count)
+		const char *string, u_int count, bool handle_linefeed)
 {
 	unsigned int i;
 	cbd_t __iomem *bdp, *bdbase;
@@ -1046,7 +1046,7 @@ static void cpm_uart_early_write(struct uart_cpm_port *pinfo,
 			bdp++;
 
 		/* if a LF, also do CR... */
-		if (*string == 10) {
+		if (handle_linefeed && *string == 10) {
 			while ((in_be16(&bdp->cbd_sc) & BD_SC_READY) != 0)
 				;
 
@@ -1144,7 +1144,7 @@ static void cpm_put_poll_char(struct uart_port *port,
 	static char ch[2];
 
 	ch[0] = (char)c;
-	cpm_uart_early_write(pinfo, ch, 1);
+	cpm_uart_early_write(pinfo, ch, 1, false);
 }
 #endif /* CONFIG_CONSOLE_POLL */
 
@@ -1284,7 +1284,7 @@ static void cpm_uart_console_write(struct console *co, const char *s,
 		spin_lock_irqsave(&pinfo->port.lock, flags);
 	}
 
-	cpm_uart_early_write(pinfo, s, count);
+	cpm_uart_early_write(pinfo, s, count, true);
 
 	if (unlikely(nolock)) {
 		local_irq_restore(flags);
