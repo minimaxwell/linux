@@ -1537,12 +1537,6 @@ u8 rtl92c_bt_rssi_state_change(struct ieee80211_hw *hw)
 	else
 		curr_bt_rssi_state &= (~BT_RSSI_STATE_SPECIAL_LOW);
 
-	/* Set Tx Power according to BT status. */
-	if (undec_sm_pwdb >= 30)
-		curr_bt_rssi_state |=  BT_RSSI_STATE_TXPOWER_LOW;
-	else if (undec_sm_pwdb < 25)
-		curr_bt_rssi_state &= (~BT_RSSI_STATE_TXPOWER_LOW);
-
 	/* Check BT state related to BT_Idle in B/G mode. */
 	if (undec_sm_pwdb < 15)
 		curr_bt_rssi_state |=  BT_RSSI_STATE_BG_EDCA_LOW;

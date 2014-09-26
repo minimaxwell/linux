@@ -1,10 +1,10 @@
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
-PATCHLEVEL = 13
+PATCHLEVEL = 14
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = One Giant Leap for Frogkind
+NAME = Shuffling Zombie Juror
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"

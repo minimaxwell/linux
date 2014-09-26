@@ -87,38 +87,33 @@ static void vAdHocBeaconStop(struct vnt_private *pDevice)
 	struct vnt_manager *pMgmt = &pDevice->vnt_mgmt;
 	int bStop;
 
-    /*
-     * temporarily stop Beacon packet for AdHoc Server
-     * if all of the following coditions are met:
-     *  (1) STA is in AdHoc mode
-     *  (2) VT3253 is programmed as automatic Beacon Transmitting
-     *  (3) One of the following conditions is met
-     *      (3.1) AdHoc channel is in B/G band and the
-     *      current scan channel is in A band
-     *      or
-     *      (3.2) AdHoc channel is in A mode
-     */
-    bStop = false;
-    if ((pMgmt->eCurrMode == WMAC_MODE_IBSS_STA) &&
-    (pMgmt->eCurrState >= WMAC_STATE_STARTED))
-    {
-        if ((pMgmt->uIBSSChannel <=  CB_MAX_CHANNEL_24G) &&
-             (pMgmt->uScanChannel > CB_MAX_CHANNEL_24G))
-        {
-            bStop = true;
-        }
-        if (pMgmt->uIBSSChannel >  CB_MAX_CHANNEL_24G)
-        {
-            bStop = true;
-        }
-    }
+	/*
+	 * temporarily stop Beacon packet for AdHoc Server
+	 * if all of the following coditions are met:
+	 *  (1) STA is in AdHoc mode
+	 *  (2) VT3253 is programmed as automatic Beacon Transmitting
+	 *  (3) One of the following conditions is met
+	 *      (3.1) AdHoc channel is in b/G band and the
+	 *      current scan channel is in A band
+	 *      or
+	 *      (3.2) AdHoc channel is in A mode
+	 */
+	bStop = false;
+	if ((pMgmt->eCurrMode == WMAC_MODE_IBSS_STA) &&
+	    (pMgmt->eCurrState >= WMAC_STATE_STARTED)) {
+		if ((pMgmt->uIBSSChannel <=  CB_MAX_CHANNEL_24G) &&
+		    (pMgmt->uScanChannel > CB_MAX_CHANNEL_24G)) {
+			bStop = true;
+		}
+		if (pMgmt->uIBSSChannel >  CB_MAX_CHANNEL_24G)
+			bStop = true;
+	}
 
-    if (bStop)
-    {
-        //PMESG(("STOP_BEACON: IBSSChannel = %u, ScanChannel = %u\n",
-        //        pMgmt->uIBSSChannel, pMgmt->uScanChannel));
-        MACvRegBitsOff(pDevice, MAC_REG_TCR, TCR_AUTOBCNTX);
-    }
+	if (bStop) {
+		//PMESG(("STOP_BEACON: IBSSChannel = %u, ScanChannel = %u\n",
+		//        pMgmt->uIBSSChannel, pMgmt->uScanChannel));
+		MACvRegBitsOff(pDevice, MAC_REG_TCR, TCR_AUTOBCNTX);
+	}
 
 } /* vAdHocBeaconStop */
 

@@ -714,204 +714,179 @@ void phy_state_machine(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct phy_device *phydev =
 			container_of(dwork, struct phy_device, state_queue);
-	int needs_aneg = 0;
+	int needs_aneg = 0, do_suspend = 0;
 	int err = 0;
 
 	mutex_lock(&phydev->lock);
 
-	if (phydev->adjust_state)
-		phydev->adjust_state(phydev->attached_dev);
-
 	switch(phydev->state) {
-		case PHY_DOWN:
-		case PHY_STARTING:
-		case PHY_READY:
-		case PHY_PENDING:
+	case PHY_DOWN:
+	case PHY_STARTING:
+	case PHY_READY:
+	case PHY_PENDING:
+		break;
+	case PHY_UP:
+		needs_aneg = 1;
+
+		phydev->link_timeout = PHY_AN_TIMEOUT;
+		break;
+	case PHY_AN:
+		err = phy_read_status(phydev);
+
+		if (err < 0)
 			break;
-		case PHY_UP:
-			needs_aneg = 1;
 
-			phydev->link_timeout = PHY_AN_TIMEOUT;
+		/* If the link is down, give up on negotiation for now */
+		if (!phydev->link) {
+			phydev->state = PHY_NOLINK;
+			if (phydev->addr == PHY1ADDR && !isMCR2G) {
+				phy_write(phydev, MII_BMCR, phy_read(phydev, MII_BMCR) | BMCR_ISOLATE);
+			}
+			netif_carrier_off(phydev->attached_dev);
+			phydev->adjust_link(phydev->attached_dev);
 			break;
-		case PHY_AN:
-			err = phy_read_status(phydev);
+		}
 
-			if (err < 0)
-				break;
+		/* Check if negotiation is done.  Break if there's an error */
+		err = phy_aneg_done(phydev);
+		if (err < 0)
+			break;
 
-			/* If the link is down, give up on
-			 * negotiation for now */
-			if (!phydev->link) {
-				phydev->state = PHY_NOLINK;
-				if (phydev->addr == PHY1ADDR && !isMCR2G) {
-					phy_write(phydev, MII_BMCR, phy_read(phydev, MII_BMCR) | BMCR_ISOLATE);
-				}
-				netif_carrier_off(phydev->attached_dev);
+		/* If AN is done, we're running */
+		if (err > 0) {
+			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
+				if (active_phy == 0 && phydev->addr != 1)
+					active_phy = phydev->addr;
+				phydev->state = PHY_RUNNING;
+				netif_carrier_on(phydev->attached_dev);
 				phydev->adjust_link(phydev->attached_dev);
-				break;
+			} else {
+				phydev->state = PHY_DOUBLE_ATTACHEMENT;
 			}
 
-			/* Check if negotiation is done.  Break
-			 * if there's an error */
+		} else if (0 == phydev->link_timeout--) {
+			needs_aneg = 1;
+			/* If we have the magic_aneg bit, we try again */
+			if (phydev->drv->flags & PHY_HAS_MAGICANEG)
+				break;
+		}
+		break;
+	case PHY_NOLINK:
+		err = phy_read_status(phydev);
+
+		if (err)
+			break;
+
+		if (phydev->link) {
+			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
+				if (active_phy == 0 && phydev->addr != 1)
+					active_phy = phydev->addr;
+				phydev->state = PHY_RUNNING;
+				netif_carrier_on(phydev->attached_dev);
+				phydev->adjust_link(phydev->attached_dev);
+			} else {
+				phydev->state = PHY_DOUBLE_ATTACHEMENT;
+			}
+		}
+		break;
+	case PHY_FORCING:
+		err = genphy_update_link(phydev);
+
+		if (err)
+			break;
+
+		if (phydev->link) {
+			phydev->state = PHY_CHANGELINK;
+		} else {
+			if (0 == phydev->link_timeout--)
+				needs_aneg = 1;
+		}
+
+		phydev->adjust_link(phydev->attached_dev);
+		break;
+	case PHY_RUNNING:
+		/* Only register a CHANGE if we are
+		 * polling or ignoring interrupts
+		 */
+		if (!phy_interrupt_is_valid(phydev)) {
+			phydev->state = PHY_CHANGELINK;
+		}
+		break;
+	case PHY_DOUBLE_ATTACHEMENT:
+		/* Only register a CHANGE if we are
+		 * polling or ignoring interrupts
+		 */
+		if (! (phy_read(phydev, MII_BMSR) & BMSR_ANEGCOMPLETE)) {
+			phydev->autoneg = AUTONEG_ENABLE;
+			phydev->state = PHY_AN;
+		} else if (phy_ghost_ready == 0) { 
+			phy_ghost_ready = 1;
+		}
+		break;
+	case PHY_CHANGELINK:
+		err = phy_read_status(phydev);
+
+		if (err)
+			break;
+
+		if (phydev->link) {
+			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
+				if (active_phy == 0 && phydev->addr != 1)
+					active_phy = phydev->addr;
+				if (phydev->addr == PHY1ADDR && !ok && !isMCR2G) {
+					phydev->state = PHY_DOUBLE_ATTACHEMENT;
+				} else {
+					phydev->state = PHY_RUNNING;
+					if (phydev->addr != 1) {
+						ok = 1;
+					}
+				}
+				netif_carrier_on(phydev->attached_dev);
+			} else {
+				phydev->state = PHY_DOUBLE_ATTACHEMENT;
+			}
+		} else {
+			if (active_phy == phydev->addr) {
+				active_phy = 0;
+				if (phy_ghost_ready)
+					active_phy = (phydev->addr == PHY1ADDR ? PHY0ADDR : PHY1ADDR);
+			}
+			phy_ghost_ready = 0;
+			phydev->state = PHY_NOLINK;
+			netif_carrier_off(phydev->attached_dev);
+		}
+
+		phydev->adjust_link(phydev->attached_dev);
+
+		if (phy_interrupt_is_valid(phydev))
+			err = phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED);
+		break;
+	case PHY_HALTED:
+		if (phydev->link) {
+			phydev->link = 0;
+			netif_carrier_off(phydev->attached_dev);
+			phydev->adjust_link(phydev->attached_dev);
+			do_suspend = 1;
+		}
+		break;
+	case PHY_RESUMING:
+		err = phy_clear_interrupt(phydev);
+		if (err)
+			break;
+
+		err = phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED);
+
+		if (err)
+			break;
+
+		if (AUTONEG_ENABLE == phydev->autoneg) {
 			err = phy_aneg_done(phydev);
 			if (err < 0)
 				break;
 
-			/* If AN is done, we're running */
+			/* err > 0 if AN is done.
+			 * Otherwise, it's 0, and we're still waiting for AN */
 			if (err > 0) {
-				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
-					if (active_phy == 0 && phydev->addr != 1)
-						active_phy = phydev->addr;
-					phydev->state = PHY_RUNNING;
-					netif_carrier_on(phydev->attached_dev);
-					phydev->adjust_link(phydev->attached_dev);
-				} else {
-					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-				}
-
-			} else if (0 == phydev->link_timeout--) {
-				needs_aneg = 1;
-				/* If we have the magic_aneg bit,
-				 * we try again */
-				if (phydev->drv->flags & PHY_HAS_MAGICANEG)
-					break;
-			}
-			break;
-		case PHY_NOLINK:
-			err = phy_read_status(phydev);
-
-			if (err)
-				break;
-
-			if (phydev->link) {
-				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
-					if (active_phy == 0 && phydev->addr != 1)
-						active_phy = phydev->addr;
-					phydev->state = PHY_RUNNING;
-					netif_carrier_on(phydev->attached_dev);
-					phydev->adjust_link(phydev->attached_dev);
-				} else {
-					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-				}
-			}
-			break;
-		case PHY_FORCING:
-			err = genphy_update_link(phydev);
-
-			if (err)
-				break;
-
-			if (phydev->link) {
-				phydev->state = PHY_CHANGELINK;
-			} else {
-				if (0 == phydev->link_timeout--)
-					needs_aneg = 1;
-			}
-
-			phydev->adjust_link(phydev->attached_dev);
-			break;
-		case PHY_RUNNING:
-			/* Only register a CHANGE if we are
-			 * polling or ignoring interrupts
-			 */
-			if (!phy_interrupt_is_valid(phydev)) {
-				phydev->state = PHY_CHANGELINK;
-			}
-			break;
-		case PHY_DOUBLE_ATTACHEMENT:
-			/* Only register a CHANGE if we are
-			 * polling or ignoring interrupts
-			 */
-			if (! (phy_read(phydev, MII_BMSR) & BMSR_ANEGCOMPLETE)) {
-				phydev->autoneg = AUTONEG_ENABLE;
-				phydev->state = PHY_AN;
-			} else if (phy_ghost_ready == 0) { 
-				phy_ghost_ready = 1;
-			}
-			break;
-		case PHY_CHANGELINK:
-			err = phy_read_status(phydev);
-
-			if (err)
-				break;
-
-			if (phydev->link) {
-				if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
-					if (active_phy == 0 && phydev->addr != 1)
-						active_phy = phydev->addr;
-					if (phydev->addr == PHY1ADDR && !ok && !isMCR2G) {
-						phydev->state = PHY_DOUBLE_ATTACHEMENT;
-					} else {
-						phydev->state = PHY_RUNNING;
-						if (phydev->addr != 1) {
-							ok = 1;
-						}
-					}
-					netif_carrier_on(phydev->attached_dev);
-				} else {
-					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-				}
-			} else {
-				if (active_phy == phydev->addr) {
-					active_phy = 0;
-					if (phy_ghost_ready)
-						active_phy = (phydev->addr == PHY1ADDR ? PHY0ADDR : PHY1ADDR);
-				}
-				phy_ghost_ready = 0;
-				phydev->state = PHY_NOLINK;
-				netif_carrier_off(phydev->attached_dev);
-			}
-
-			phydev->adjust_link(phydev->attached_dev);
-
-			if (phy_interrupt_is_valid(phydev))
-				err = phy_config_interrupt(phydev,
-						PHY_INTERRUPT_ENABLED);
-			break;
-		case PHY_HALTED:
-			if (phydev->link) {
-				phydev->link = 0;
-				netif_carrier_off(phydev->attached_dev);
-				phydev->adjust_link(phydev->attached_dev);
-			}
-			break;
-		case PHY_RESUMING:
-
-			err = phy_clear_interrupt(phydev);
-
-			if (err)
-				break;
-
-			err = phy_config_interrupt(phydev,
-					PHY_INTERRUPT_ENABLED);
-
-			if (err)
-				break;
-
-			if (AUTONEG_ENABLE == phydev->autoneg) {
-				err = phy_aneg_done(phydev);
-				if (err < 0)
-					break;
-
-				/* err > 0 if AN is done.
-				 * Otherwise, it's 0, and we're
-				 * still waiting for AN */
-				if (err > 0) {
-					err = phy_read_status(phydev);
-					if (err)
-						break;
-
-					if (phydev->link) {
-						phydev->state = PHY_RUNNING;
-						netif_carrier_on(phydev->attached_dev);
-					} else
-						phydev->state = PHY_NOLINK;
-					phydev->adjust_link(phydev->attached_dev);
-				} else {
-					phydev->state = PHY_AN;
-					phydev->link_timeout = PHY_AN_TIMEOUT;
-				}
-			} else {
 				err = phy_read_status(phydev);
 				if (err)
 					break;
@@ -919,11 +894,28 @@ void phy_state_machine(struct work_struct *work)
 				if (phydev->link) {
 					phydev->state = PHY_RUNNING;
 					netif_carrier_on(phydev->attached_dev);
-				} else
+				} else {
 					phydev->state = PHY_NOLINK;
+				}
 				phydev->adjust_link(phydev->attached_dev);
+			} else {
+				phydev->state = PHY_AN;
+				phydev->link_timeout = PHY_AN_TIMEOUT;
 			}
-			break;
+		} else {
+			err = phy_read_status(phydev);
+			if (err)
+				break;
+
+			if (phydev->link) {
+				phydev->state = PHY_RUNNING;
+				netif_carrier_on(phydev->attached_dev);
+			} else	{
+				phydev->state = PHY_NOLINK;
+			}
+			phydev->adjust_link(phydev->attached_dev);
+		}
+		break;
 	}
 
 	mutex_unlock(&phydev->lock);

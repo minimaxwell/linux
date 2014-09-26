@@ -24,10 +24,8 @@
 #include <linux/ioport.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
-#include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/netdevice.h>
-#include <linux/inetdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
@@ -53,6 +51,7 @@
 #include <net/arp.h>
 
 #include "fs_enet.h"
+#include <linux/inetdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/syscalls.h>
 

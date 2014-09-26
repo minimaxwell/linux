@@ -94,7 +94,6 @@ struct spi_device {
 #define	SPI_RX_DUAL	0x400			/* receive with 2 wires */
 #define	SPI_RX_QUAD	0x800			/* receive with 4 wires */
 #define	SPI_TROLL	0x1000			/* a few clock ticks needed after CS goes inactive  */
-	u8			bits_per_word;
 	int			irq;
 	void			*controller_state;
 	void			*controller_data;
