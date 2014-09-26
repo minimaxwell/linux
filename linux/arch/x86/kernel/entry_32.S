@@ -434,9 +434,8 @@ sysenter_past_esp:
 	jnz sysenter_audit
 sysenter_do_call:
 	cmpl $(NR_syscalls), %eax
-	jae sysenter_badsys
+	jae syscall_badsys
 	call *sys_call_table(,%eax,4)
-sysenter_after_call:
 	movl %eax,PT_EAX(%esp)
 	LOCKDEP_SYS_EXIT
 	DISABLE_INTERRUPTS(CLBR_ANY)
@@ -517,7 +516,6 @@ ENTRY(system_call)
 	jae syscall_badsys
 syscall_call:
 	call *sys_call_table(,%eax,4)
-syscall_after_call:
 	movl %eax,PT_EAX(%esp)		# store the return value
 syscall_exit:
 	LOCKDEP_SYS_EXIT
@@ -556,6 +554,11 @@ ENTRY(iret_exc)
 
 	CFI_RESTORE_STATE
 ldt_ss:
+	larl PT_OLDSS(%esp), %eax
+	jnz restore_nocheck
+	testl $0x00400000, %eax		# returning to 32bit stack?
+	jnz restore_nocheck		# allright, normal return
+
 #ifdef CONFIG_PARAVIRT
 	/*
 	 * The kernel can't run on a non-flat stack if paravirt mode
@@ -687,13 +690,8 @@ syscall_fault:
 END(syscall_fault)
 
 syscall_badsys:
-	movl $-ENOSYS,%eax
-	jmp syscall_after_call
-END(syscall_badsys)
-
-sysenter_badsys:
-	movl $-ENOSYS,%eax
-	jmp sysenter_after_call
+	movl $-ENOSYS,PT_EAX(%esp)
+	jmp resume_userspace
 END(syscall_badsys)
 	CFI_ENDPROC
 /*
@@ -1087,7 +1085,7 @@ ENTRY(ftrace_caller)
 	pushl $0	/* Pass NULL as regs pointer */
 	movl 4*4(%esp), %eax
 	movl 0x4(%ebp), %edx
-	movl function_trace_op, %ecx
+	leal function_trace_op, %ecx
 	subl $MCOUNT_INSN_SIZE, %eax
 
 .globl ftrace_call
@@ -1145,7 +1143,7 @@ ENTRY(ftrace_regs_caller)
 	movl 12*4(%esp), %eax	/* Load ip (1st parameter) */
 	subl $MCOUNT_INSN_SIZE, %eax	/* Adjust ip */
 	movl 0x4(%ebp), %edx	/* Load parent ip (2nd parameter) */
-	movl function_trace_op, %ecx /* Save ftrace_pos in 3rd parameter */
+	leal function_trace_op, %ecx /* Save ftrace_pos in 3rd parameter */
 	pushl %esp		/* Save pt_regs as 4th parameter */
 
 GLOBAL(ftrace_regs_call)

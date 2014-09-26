@@ -1031,14 +1031,15 @@ xfs_iext_add(
 		 * the next index needed in the indirection array.
 		 */
 		else {
-			uint	count = ext_diff;
+			int	count = ext_diff;
 
 			while (count) {
 				erp = xfs_iext_irec_new(ifp, erp_idx);
-				erp->er_extcount = min(count, XFS_LINEAR_EXTS);
-				count -= erp->er_extcount;
-				if (count)
+				erp->er_extcount = count;
+				count -= MIN(count, (int)XFS_LINEAR_EXTS);
+				if (count) {
 					erp_idx++;
+				}
 			}
 		}
 	}
@@ -1358,7 +1359,7 @@ xfs_iext_remove_indirect(
 void
 xfs_iext_realloc_direct(
 	xfs_ifork_t	*ifp,		/* inode fork pointer */
-	int		new_size)	/* new size of extents after adding */
+	int		new_size)	/* new size of extents */
 {
 	int		rnew_size;	/* real new size of extents */
 
@@ -1396,8 +1397,13 @@ xfs_iext_realloc_direct(
 				rnew_size - ifp->if_real_bytes);
 		}
 	}
-	/* Switch from the inline extent buffer to a direct extent list */
+	/*
+	 * Switch from the inline extent buffer to a direct
+	 * extent list. Be sure to include the inline extent
+	 * bytes in new_size.
+	 */
 	else {
+		new_size += ifp->if_bytes;
 		if (!is_power_of_2(new_size)) {
 			rnew_size = roundup_pow_of_two(new_size);
 		}

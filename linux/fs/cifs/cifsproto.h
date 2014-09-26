@@ -127,9 +127,6 @@ extern u64 cifs_UnixTimeToNT(struct timespec);
 extern struct timespec cnvrtDosUnixTm(__le16 le_date, __le16 le_time,
 				      int offset);
 extern void cifs_set_oplock_level(struct cifsInodeInfo *cinode, __u32 oplock);
-extern int cifs_get_writer(struct cifsInodeInfo *cinode);
-extern void cifs_put_writer(struct cifsInodeInfo *cinode);
-extern void cifs_done_oplock_break(struct cifsInodeInfo *cinode);
 extern int cifs_unlock_range(struct cifsFileInfo *cfile,
 			     struct file_lock *flock, const unsigned int xid);
 extern int cifs_push_mandatory_locks(struct cifsFileInfo *cfile);
@@ -478,10 +475,9 @@ extern int CIFSGetExtAttr(const unsigned int xid, struct cifs_tcon *tcon,
 			const int netfid, __u64 *pExtAttrBits, __u64 *pMask);
 extern void cifs_autodisable_serverino(struct cifs_sb_info *cifs_sb);
 extern bool CIFSCouldBeMFSymlink(const struct cifs_fattr *fattr);
-extern int CIFSCheckMFSymlink(unsigned int xid, struct cifs_tcon *tcon,
-			      struct cifs_sb_info *cifs_sb,
-			      struct cifs_fattr *fattr,
-			      const unsigned char *path);
+extern int CIFSCheckMFSymlink(struct cifs_fattr *fattr,
+		const unsigned char *path,
+		struct cifs_sb_info *cifs_sb, unsigned int xid);
 extern int mdfour(unsigned char *, unsigned char *, int);
 extern int E_md4hash(const unsigned char *passwd, unsigned char *p16,
 			const struct nls_table *codepage);

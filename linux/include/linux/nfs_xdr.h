@@ -379,14 +379,12 @@ struct nfs_openres {
  * Arguments to the open_confirm call.
  */
 struct nfs_open_confirmargs {
-	struct nfs4_sequence_args	seq_args;
 	const struct nfs_fh *	fh;
 	nfs4_stateid *		stateid;
 	struct nfs_seqid *	seqid;
 };
 
 struct nfs_open_confirmres {
-	struct nfs4_sequence_res	seq_res;
 	nfs4_stateid            stateid;
 	struct nfs_seqid *	seqid;
 };
@@ -467,12 +465,7 @@ struct nfs_lockt_res {
 };
 
 struct nfs_release_lockowner_args {
-	struct nfs4_sequence_args	seq_args;
 	struct nfs_lowner	lock_owner;
-};
-
-struct nfs_release_lockowner_res {
-	struct nfs4_sequence_res	seq_res;
 };
 
 struct nfs4_delegreturnargs {

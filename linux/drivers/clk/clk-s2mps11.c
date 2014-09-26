@@ -130,7 +130,7 @@ static struct device_node *s2mps11_clk_parse_dt(struct platform_device *pdev)
 	int i;
 
 	if (!iodev->dev->of_node)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	clk_np = of_find_node_by_name(iodev->dev->of_node, "clocks");
 	if (!clk_np) {
@@ -190,12 +190,15 @@ static int s2mps11_clk_probe(struct platform_device *pdev)
 			goto err_reg;
 		}
 
-		s2mps11_clk->lookup = clkdev_alloc(s2mps11_clk->clk,
-					s2mps11_name(s2mps11_clk), NULL);
+		s2mps11_clk->lookup = devm_kzalloc(&pdev->dev,
+					sizeof(struct clk_lookup), GFP_KERNEL);
 		if (!s2mps11_clk->lookup) {
 			ret = -ENOMEM;
 			goto err_lup;
 		}
+
+		s2mps11_clk->lookup->con_id = s2mps11_name(s2mps11_clk);
+		s2mps11_clk->lookup->clk = s2mps11_clk->clk;
 
 		clkdev_add(s2mps11_clk->lookup);
 	}

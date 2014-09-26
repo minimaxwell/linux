@@ -1551,13 +1551,7 @@ static void btrfs_clear_bit_hook(struct inode *inode,
 			spin_unlock(&BTRFS_I(inode)->lock);
 		}
 
-		/*
-		 * We don't reserve metadata space for space cache inodes so we
-		 * don't need to call dellalloc_release_metadata if there is an
-		 * error.
-		 */
-		if (*bits & EXTENT_DO_ACCOUNTING &&
-		    root != root->fs_info->tree_root)
+		if (*bits & EXTENT_DO_ACCOUNTING)
 			btrfs_delalloc_release_metadata(inode, len);
 
 		if (root->root_key.objectid != BTRFS_DATA_RELOC_TREE_OBJECTID
@@ -2373,23 +2367,10 @@ out_unlock:
 	return ret;
 }
 
-static void free_sa_defrag_extent(struct new_sa_defrag_extent *new)
-{
-	struct old_sa_defrag_extent *old, *tmp;
-
-	if (!new)
-		return;
-
-	list_for_each_entry_safe(old, tmp, &new->head, list) {
-		list_del(&old->list);
-		kfree(old);
-	}
-	kfree(new);
-}
-
 static void relink_file_extents(struct new_sa_defrag_extent *new)
 {
 	struct btrfs_path *path;
+	struct old_sa_defrag_extent *old, *tmp;
 	struct sa_defrag_extent_backref *backref;
 	struct sa_defrag_extent_backref *prev = NULL;
 	struct inode *inode;
@@ -2432,11 +2413,16 @@ static void relink_file_extents(struct new_sa_defrag_extent *new)
 	kfree(prev);
 
 	btrfs_free_path(path);
-out:
-	free_sa_defrag_extent(new);
 
+	list_for_each_entry_safe(old, tmp, &new->head, list) {
+		list_del(&old->list);
+		kfree(old);
+	}
+out:
 	atomic_dec(&root->fs_info->defrag_running);
 	wake_up(&root->fs_info->transaction_wait);
+
+	kfree(new);
 }
 
 static struct new_sa_defrag_extent *
@@ -2446,7 +2432,7 @@ record_old_file_extents(struct inode *inode,
 	struct btrfs_root *root = BTRFS_I(inode)->root;
 	struct btrfs_path *path;
 	struct btrfs_key key;
-	struct old_sa_defrag_extent *old;
+	struct old_sa_defrag_extent *old, *tmp;
 	struct new_sa_defrag_extent *new;
 	int ret;
 
@@ -2494,7 +2480,7 @@ record_old_file_extents(struct inode *inode,
 		if (slot >= btrfs_header_nritems(l)) {
 			ret = btrfs_next_leaf(root, path);
 			if (ret < 0)
-				goto out_free_path;
+				goto out_free_list;
 			else if (ret > 0)
 				break;
 			continue;
@@ -2523,7 +2509,7 @@ record_old_file_extents(struct inode *inode,
 
 		old = kmalloc(sizeof(*old), GFP_NOFS);
 		if (!old)
-			goto out_free_path;
+			goto out_free_list;
 
 		offset = max(new->file_pos, key.offset);
 		end = min(new->file_pos + new->len, key.offset + num_bytes);
@@ -2545,10 +2531,15 @@ next:
 
 	return new;
 
+out_free_list:
+	list_for_each_entry_safe(old, tmp, &new->head, list) {
+		list_del(&old->list);
+		kfree(old);
+	}
 out_free_path:
 	btrfs_free_path(path);
 out_kfree:
-	free_sa_defrag_extent(new);
+	kfree(new);
 	return NULL;
 }
 
@@ -2619,7 +2610,7 @@ static int btrfs_finish_ordered_io(struct btrfs_ordered_extent *ordered_extent)
 			EXTENT_DEFRAG, 1, cached_state);
 	if (ret) {
 		u64 last_snapshot = btrfs_root_last_snapshot(&root->root_item);
-		if (0 && last_snapshot >= BTRFS_I(inode)->generation)
+		if (last_snapshot >= BTRFS_I(inode)->generation)
 			/* the inode is shared */
 			new = record_old_file_extents(inode, ordered_extent);
 
@@ -2719,14 +2710,8 @@ out:
 	btrfs_remove_ordered_extent(inode, ordered_extent);
 
 	/* for snapshot-aware defrag */
-	if (new) {
-		if (ret) {
-			free_sa_defrag_extent(new);
-			atomic_dec(&root->fs_info->defrag_running);
-		} else {
-			relink_file_extents(new);
-		}
-	}
+	if (new)
+		relink_file_extents(new);
 
 	/* once for us */
 	btrfs_put_ordered_extent(ordered_extent);
@@ -2984,7 +2969,6 @@ int btrfs_orphan_add(struct btrfs_trans_handle *trans, struct inode *inode)
 	if (insert >= 1) {
 		ret = btrfs_insert_orphan_item(trans, root, btrfs_ino(inode));
 		if (ret) {
-			atomic_dec(&root->orphan_inodes);
 			if (reserve) {
 				clear_bit(BTRFS_INODE_ORPHAN_META_RESERVED,
 					  &BTRFS_I(inode)->runtime_flags);
@@ -3034,15 +3018,13 @@ static int btrfs_orphan_del(struct btrfs_trans_handle *trans,
 		release_rsv = 1;
 	spin_unlock(&root->orphan_lock);
 
-	if (delete_item) {
-		atomic_dec(&root->orphan_inodes);
-		if (trans)
-			ret = btrfs_del_orphan_item(trans, root,
-						    btrfs_ino(inode));
-	}
+	if (trans && delete_item)
+		ret = btrfs_del_orphan_item(trans, root, btrfs_ino(inode));
 
-	if (release_rsv)
+	if (release_rsv) {
 		btrfs_orphan_release_metadata(inode);
+		atomic_dec(&root->orphan_inodes);
+	}
 
 	return ret;
 }
@@ -4363,12 +4345,8 @@ static int btrfs_setsize(struct inode *inode, struct iattr *attr)
 	 * these flags set.  For all other operations the VFS set these flags
 	 * explicitly if it wants a timestamp update.
 	 */
-	if (newsize != oldsize) {
-		inode_inc_iversion(inode);
-		if (!(mask & (ATTR_CTIME | ATTR_MTIME)))
-			inode->i_ctime = inode->i_mtime =
-				current_fs_time(inode->i_sb);
-	}
+	if (newsize != oldsize && (!(mask & (ATTR_CTIME | ATTR_MTIME))))
+		inode->i_ctime = inode->i_mtime = current_fs_time(inode->i_sb);
 
 	if (newsize > oldsize) {
 		truncate_pagecache(inode, newsize);

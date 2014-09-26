@@ -1569,7 +1569,8 @@ xfs_vm_write_begin(
 
 	ASSERT(len <= PAGE_CACHE_SIZE);
 
-	page = grab_cache_page_write_begin(mapping, index, flags);
+	page = grab_cache_page_write_begin(mapping, index,
+					   flags | AOP_FLAG_NOFS);
 	if (!page)
 		return -ENOMEM;
 

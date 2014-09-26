@@ -354,30 +354,34 @@ open_query_close_cifs_symlink(const unsigned char *path, char *pbuf,
 
 
 int
-CIFSCheckMFSymlink(unsigned int xid, struct cifs_tcon *tcon,
-		   struct cifs_sb_info *cifs_sb, struct cifs_fattr *fattr,
-		   const unsigned char *path)
+CIFSCheckMFSymlink(struct cifs_fattr *fattr,
+		   const unsigned char *path,
+		   struct cifs_sb_info *cifs_sb, unsigned int xid)
 {
-	int rc;
+	int rc = 0;
 	u8 *buf = NULL;
 	unsigned int link_len = 0;
 	unsigned int bytes_read = 0;
+	struct cifs_tcon *ptcon;
 
 	if (!CIFSCouldBeMFSymlink(fattr))
 		/* it's not a symlink */
 		return 0;
 
 	buf = kmalloc(CIFS_MF_SYMLINK_FILE_SIZE, GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
+	if (!buf) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
-	if (tcon->ses->server->ops->query_mf_symlink)
-		rc = tcon->ses->server->ops->query_mf_symlink(path, buf,
-						&bytes_read, cifs_sb, xid);
+	ptcon = tlink_tcon(cifs_sb_tlink(cifs_sb));
+	if ((ptcon->ses) && (ptcon->ses->server->ops->query_mf_symlink))
+		rc = ptcon->ses->server->ops->query_mf_symlink(path, buf,
+						 &bytes_read, cifs_sb, xid);
 	else
-		rc = -ENOSYS;
+		goto out;
 
-	if (rc)
+	if (rc != 0)
 		goto out;
 
 	if (bytes_read == 0) /* not a symlink */

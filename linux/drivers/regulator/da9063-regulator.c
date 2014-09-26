@@ -1,4 +1,3 @@
-
 /*
  * Regulator driver for DA9063 PMIC series
  *
@@ -61,8 +60,7 @@ struct da9063_regulator_info {
 	.desc.ops = &da9063_ldo_ops, \
 	.desc.min_uV = (min_mV) * 1000, \
 	.desc.uV_step = (step_mV) * 1000, \
-	.desc.n_voltages = (((max_mV) - (min_mV))/(step_mV) + 1 \
-		+ (DA9063_V##regl_name##_BIAS)), \
+	.desc.n_voltages = (((max_mV) - (min_mV))/(step_mV) + 1), \
 	.desc.enable_reg = DA9063_REG_##regl_name##_CONT, \
 	.desc.enable_mask = DA9063_LDO_EN, \
 	.desc.vsel_reg = DA9063_REG_V##regl_name##_A, \

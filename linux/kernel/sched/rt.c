@@ -246,10 +246,8 @@ static inline void rt_set_overload(struct rq *rq)
 	 * if we should look at the mask. It would be a shame
 	 * if we looked at the mask, but the mask was not
 	 * updated yet.
-	 *
-	 * Matched by the barrier in pull_rt_task().
 	 */
-	smp_wmb();
+	wmb();
 	atomic_inc(&rq->rd->rto_count);
 }
 
@@ -901,13 +899,6 @@ inc_rt_prio_smp(struct rt_rq *rt_rq, int prio, int prev_prio)
 {
 	struct rq *rq = rq_of_rt_rq(rt_rq);
 
-#ifdef CONFIG_RT_GROUP_SCHED
-	/*
-	 * Change rq's cpupri only if rt_rq is the top queue.
-	 */
-	if (&rq->rt != rt_rq)
-		return;
-#endif
 	if (rq->online && prio < prev_prio)
 		cpupri_set(&rq->rd->cpupri, rq->cpu, prio);
 }
@@ -917,13 +908,6 @@ dec_rt_prio_smp(struct rt_rq *rt_rq, int prio, int prev_prio)
 {
 	struct rq *rq = rq_of_rt_rq(rt_rq);
 
-#ifdef CONFIG_RT_GROUP_SCHED
-	/*
-	 * Change rq's cpupri only if rt_rq is the top queue.
-	 */
-	if (&rq->rt != rt_rq)
-		return;
-#endif
 	if (rq->online && rt_rq->highest_prio.curr != prev_prio)
 		cpupri_set(&rq->rd->cpupri, rq->cpu, rt_rq->highest_prio.curr);
 }
@@ -1229,7 +1213,8 @@ select_task_rq_rt(struct task_struct *p, int sd_flag, int flags)
 	 */
 	if (curr && unlikely(rt_task(curr)) &&
 	    (curr->nr_cpus_allowed < 2 ||
-	     curr->prio <= p->prio)) {
+	     curr->prio <= p->prio) &&
+	    (p->nr_cpus_allowed > 1)) {
 		int target = find_lowest_rq(p);
 
 		if (target != -1)
@@ -1644,12 +1629,6 @@ static int pull_rt_task(struct rq *this_rq)
 
 	if (likely(!rt_overloaded(this_rq)))
 		return 0;
-
-	/*
-	 * Match the barrier from rt_set_overloaded; this guarantees that if we
-	 * see overloaded we must also see the rto_mask bit.
-	 */
-	smp_rmb();
 
 	for_each_cpu(cpu, this_rq->rd->rto_mask) {
 		if (this_cpu == cpu)

@@ -3318,9 +3318,10 @@ again:
 		last = cache->key.objectid + cache->key.offset;
 
 		err = write_one_cache_group(trans, root, path, cache);
-		btrfs_put_block_group(cache);
 		if (err) /* File system offline */
 			goto out;
+
+		btrfs_put_block_group(cache);
 	}
 
 	while (1) {
@@ -7717,7 +7718,7 @@ out:
 	 */
 	if (!for_reloc && root_dropped == false)
 		btrfs_add_dead_root(root);
-	if (err && err != -EAGAIN)
+	if (err)
 		btrfs_std_error(root->fs_info, err);
 	return err;
 }

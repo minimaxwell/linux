@@ -97,6 +97,7 @@ enum {
 enum {
 	MV64XXX_I2C_ACTION_INVALID,
 	MV64XXX_I2C_ACTION_CONTINUE,
+	MV64XXX_I2C_ACTION_OFFLOAD_SEND_START,
 	MV64XXX_I2C_ACTION_SEND_START,
 	MV64XXX_I2C_ACTION_SEND_RESTART,
 	MV64XXX_I2C_ACTION_OFFLOAD_RESTART,
@@ -202,9 +203,6 @@ static int mv64xxx_i2c_offload_msg(struct mv64xxx_i2c_data *drv_data)
 	unsigned long data_reg_lo = 0;
 	unsigned long ctrl_reg;
 	struct i2c_msg *msg = drv_data->msgs;
-
-	if (!drv_data->offload_enabled)
-		return -EOPNOTSUPP;
 
 	drv_data->msg = msg;
 	drv_data->byte_posn = 0;
@@ -435,7 +433,8 @@ mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
 
 		drv_data->msgs++;
 		drv_data->num_msgs--;
-		if (mv64xxx_i2c_offload_msg(drv_data) < 0) {
+		if (!(drv_data->offload_enabled &&
+				mv64xxx_i2c_offload_msg(drv_data))) {
 			drv_data->cntl_bits |= MV64XXX_I2C_REG_CONTROL_START;
 			writel(drv_data->cntl_bits,
 			drv_data->reg_base + drv_data->reg_offsets.control);
@@ -459,14 +458,15 @@ mv64xxx_i2c_do_action(struct mv64xxx_i2c_data *drv_data)
 			drv_data->reg_base + drv_data->reg_offsets.control);
 		break;
 
+	case MV64XXX_I2C_ACTION_OFFLOAD_SEND_START:
+		if (!mv64xxx_i2c_offload_msg(drv_data))
+			break;
+		else
+			drv_data->action = MV64XXX_I2C_ACTION_SEND_START;
+		/* FALLTHRU */
 	case MV64XXX_I2C_ACTION_SEND_START:
-		/* Can we offload this msg ? */
-		if (mv64xxx_i2c_offload_msg(drv_data) < 0) {
-			/* No, switch to standard path */
-			mv64xxx_i2c_prepare_for_io(drv_data, drv_data->msgs);
-			writel(drv_data->cntl_bits | MV64XXX_I2C_REG_CONTROL_START,
-				drv_data->reg_base + drv_data->reg_offsets.control);
-		}
+		writel(drv_data->cntl_bits | MV64XXX_I2C_REG_CONTROL_START,
+			drv_data->reg_base + drv_data->reg_offsets.control);
 		break;
 
 	case MV64XXX_I2C_ACTION_SEND_ADDR_1:
@@ -625,10 +625,15 @@ mv64xxx_i2c_execute_msg(struct mv64xxx_i2c_data *drv_data, struct i2c_msg *msg,
 	unsigned long	flags;
 
 	spin_lock_irqsave(&drv_data->lock, flags);
+	if (drv_data->offload_enabled) {
+		drv_data->action = MV64XXX_I2C_ACTION_OFFLOAD_SEND_START;
+		drv_data->state = MV64XXX_I2C_STATE_WAITING_FOR_START_COND;
+	} else {
+		mv64xxx_i2c_prepare_for_io(drv_data, msg);
 
-	drv_data->action = MV64XXX_I2C_ACTION_SEND_START;
-	drv_data->state = MV64XXX_I2C_STATE_WAITING_FOR_START_COND;
-
+		drv_data->action = MV64XXX_I2C_ACTION_SEND_START;
+		drv_data->state = MV64XXX_I2C_STATE_WAITING_FOR_START_COND;
+	}
 	drv_data->send_stop = is_last;
 	drv_data->block = 1;
 	mv64xxx_i2c_do_action(drv_data);
@@ -687,7 +692,6 @@ static const struct of_device_id mv64xxx_i2c_of_match_table[] = {
 	{ .compatible = "allwinner,sun4i-i2c", .data = &mv64xxx_i2c_regs_sun4i},
 	{ .compatible = "marvell,mv64xxx-i2c", .data = &mv64xxx_i2c_regs_mv64xxx},
 	{ .compatible = "marvell,mv78230-i2c", .data = &mv64xxx_i2c_regs_mv64xxx},
-	{ .compatible = "marvell,mv78230-a0-i2c", .data = &mv64xxx_i2c_regs_mv64xxx},
 	{}
 };
 MODULE_DEVICE_TABLE(of, mv64xxx_i2c_of_match_table);
@@ -779,10 +783,6 @@ mv64xxx_of_config(struct mv64xxx_i2c_data *drv_data,
 		drv_data->errata_delay = true;
 	}
 
-	if (of_device_is_compatible(np, "marvell,mv78230-a0-i2c")) {
-		drv_data->offload_enabled = false;
-		drv_data->errata_delay = true;
-	}
 out:
 	return rc;
 #endif

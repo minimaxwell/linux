@@ -1090,7 +1090,7 @@ static void pmz_convert_to_zs(struct uart_pmac_port *uap, unsigned int cflag,
 	uap->port.read_status_mask = Rx_OVR;
 	if (iflag & INPCK)
 		uap->port.read_status_mask |= CRC_ERR | PAR_ERR;
-	if (iflag & (IGNBRK | BRKINT | PARMRK))
+	if (iflag & (BRKINT | PARMRK))
 		uap->port.read_status_mask |= BRK_ABRT;
 
 	uap->port.ignore_status_mask = 0;
@@ -2049,9 +2049,6 @@ static int __init pmz_console_init(void)
 {
 	/* Probe ports */
 	pmz_probe();
-
-	if (pmz_ports_count == 0)
-		return -ENODEV;
 
 	/* TODO: Autoprobe console based on OF */
 	/* pmz_console.index = i; */

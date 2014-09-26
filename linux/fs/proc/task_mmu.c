@@ -1353,7 +1353,7 @@ static int gather_hugetbl_stats(pte_t *pte, unsigned long hmask,
 	struct numa_maps *md;
 	struct page *page;
 
-	if (!pte_present(*pte))
+	if (pte_none(*pte))
 		return 0;
 
 	page = pte_page(*pte);

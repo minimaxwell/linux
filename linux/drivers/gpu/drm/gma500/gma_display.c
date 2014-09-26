@@ -349,7 +349,6 @@ int gma_crtc_cursor_set(struct drm_crtc *crtc,
 	/* If we didn't get a handle then turn the cursor off */
 	if (!handle) {
 		temp = CURSOR_MODE_DISABLE;
-		mutex_lock(&dev->struct_mutex);
 
 		if (gma_power_begin(dev, false)) {
 			REG_WRITE(control, temp);
@@ -366,7 +365,6 @@ int gma_crtc_cursor_set(struct drm_crtc *crtc,
 			gma_crtc->cursor_obj = NULL;
 		}
 
-		mutex_unlock(&dev->struct_mutex);
 		return 0;
 	}
 
@@ -376,12 +374,9 @@ int gma_crtc_cursor_set(struct drm_crtc *crtc,
 		return -EINVAL;
 	}
 
-	mutex_lock(&dev->struct_mutex);
 	obj = drm_gem_object_lookup(dev, file_priv, handle);
-	if (!obj) {
-		ret = -ENOENT;
-		goto unlock;
-	}
+	if (!obj)
+		return -ENOENT;
 
 	if (obj->size < width * height * 4) {
 		dev_dbg(dev->dev, "Buffer is too small\n");
@@ -445,13 +440,10 @@ int gma_crtc_cursor_set(struct drm_crtc *crtc,
 	}
 
 	gma_crtc->cursor_obj = obj;
-unlock:
-	mutex_unlock(&dev->struct_mutex);
 	return ret;
 
 unref_cursor:
 	drm_gem_object_unreference(obj);
-	mutex_unlock(&dev->struct_mutex);
 	return ret;
 }
 

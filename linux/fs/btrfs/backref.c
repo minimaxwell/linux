@@ -185,9 +185,6 @@ static int __add_prelim_ref(struct list_head *head, u64 root_id,
 {
 	struct __prelim_ref *ref;
 
-	if (root_id == BTRFS_DATA_RELOC_TREE_OBJECTID)
-		return 0;
-
 	ref = kmem_cache_alloc(btrfs_prelim_ref_cache, gfp_mask);
 	if (!ref)
 		return -ENOMEM;
@@ -1390,10 +1387,9 @@ int extent_from_logical(struct btrfs_fs_info *fs_info, u64 logical,
  * returns <0 on error
  */
 static int __get_extent_inline_ref(unsigned long *ptr, struct extent_buffer *eb,
-				   struct btrfs_key *key,
-				   struct btrfs_extent_item *ei, u32 item_size,
-				   struct btrfs_extent_inline_ref **out_eiref,
-				   int *out_type)
+				struct btrfs_extent_item *ei, u32 item_size,
+				struct btrfs_extent_inline_ref **out_eiref,
+				int *out_type)
 {
 	unsigned long end;
 	u64 flags;
@@ -1403,26 +1399,19 @@ static int __get_extent_inline_ref(unsigned long *ptr, struct extent_buffer *eb,
 		/* first call */
 		flags = btrfs_extent_flags(eb, ei);
 		if (flags & BTRFS_EXTENT_FLAG_TREE_BLOCK) {
-			if (key->type == BTRFS_METADATA_ITEM_KEY) {
-				/* a skinny metadata extent */
-				*out_eiref =
-				     (struct btrfs_extent_inline_ref *)(ei + 1);
-			} else {
-				WARN_ON(key->type != BTRFS_EXTENT_ITEM_KEY);
-				info = (struct btrfs_tree_block_info *)(ei + 1);
-				*out_eiref =
-				   (struct btrfs_extent_inline_ref *)(info + 1);
-			}
+			info = (struct btrfs_tree_block_info *)(ei + 1);
+			*out_eiref =
+				(struct btrfs_extent_inline_ref *)(info + 1);
 		} else {
 			*out_eiref = (struct btrfs_extent_inline_ref *)(ei + 1);
 		}
 		*ptr = (unsigned long)*out_eiref;
-		if ((unsigned long)(*ptr) >= (unsigned long)ei + item_size)
+		if ((void *)*ptr >= (void *)ei + item_size)
 			return -ENOENT;
 	}
 
 	end = (unsigned long)ei + item_size;
-	*out_eiref = (struct btrfs_extent_inline_ref *)(*ptr);
+	*out_eiref = (struct btrfs_extent_inline_ref *)*ptr;
 	*out_type = btrfs_extent_inline_ref_type(eb, *out_eiref);
 
 	*ptr += btrfs_extent_inline_ref_size(*out_type);
@@ -1441,8 +1430,8 @@ static int __get_extent_inline_ref(unsigned long *ptr, struct extent_buffer *eb,
  * <0 on error.
  */
 int tree_backref_for_extent(unsigned long *ptr, struct extent_buffer *eb,
-			    struct btrfs_key *key, struct btrfs_extent_item *ei,
-			    u32 item_size, u64 *out_root, u8 *out_level)
+				struct btrfs_extent_item *ei, u32 item_size,
+				u64 *out_root, u8 *out_level)
 {
 	int ret;
 	int type;
@@ -1453,8 +1442,8 @@ int tree_backref_for_extent(unsigned long *ptr, struct extent_buffer *eb,
 		return 1;
 
 	while (1) {
-		ret = __get_extent_inline_ref(ptr, eb, key, ei, item_size,
-					      &eiref, &type);
+		ret = __get_extent_inline_ref(ptr, eb, ei, item_size,
+						&eiref, &type);
 		if (ret < 0)
 			return ret;
 

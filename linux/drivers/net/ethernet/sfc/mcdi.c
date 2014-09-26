@@ -50,7 +50,6 @@ struct efx_mcdi_async_param {
 static void efx_mcdi_timeout_async(unsigned long context);
 static int efx_mcdi_drv_attach(struct efx_nic *efx, bool driver_operating,
 			       bool *was_attached_out);
-static bool efx_mcdi_poll_once(struct efx_nic *efx);
 
 static inline struct efx_mcdi_iface *efx_mcdi(struct efx_nic *efx)
 {
@@ -238,21 +237,6 @@ static void efx_mcdi_read_response_header(struct efx_nic *efx)
 	}
 }
 
-static bool efx_mcdi_poll_once(struct efx_nic *efx)
-{
-	struct efx_mcdi_iface *mcdi = efx_mcdi(efx);
-
-	rmb();
-	if (!efx->type->mcdi_poll_response(efx))
-		return false;
-
-	spin_lock_bh(&mcdi->iface_lock);
-	efx_mcdi_read_response_header(efx);
-	spin_unlock_bh(&mcdi->iface_lock);
-
-	return true;
-}
-
 static int efx_mcdi_poll(struct efx_nic *efx)
 {
 	struct efx_mcdi_iface *mcdi = efx_mcdi(efx);
@@ -288,12 +272,17 @@ static int efx_mcdi_poll(struct efx_nic *efx)
 
 		time = jiffies;
 
-		if (efx_mcdi_poll_once(efx))
+		rmb();
+		if (efx->type->mcdi_poll_response(efx))
 			break;
 
 		if (time_after(time, finish))
 			return -ETIMEDOUT;
 	}
+
+	spin_lock_bh(&mcdi->iface_lock);
+	efx_mcdi_read_response_header(efx);
+	spin_unlock_bh(&mcdi->iface_lock);
 
 	/* Return rc=0 like wait_event_timeout() */
 	return 0;
@@ -630,16 +619,6 @@ int efx_mcdi_rpc_finish(struct efx_nic *efx, unsigned cmd, size_t inlen,
 		rc = efx_mcdi_await_completion(efx);
 
 	if (rc != 0) {
-		netif_err(efx, hw, efx->net_dev,
-			  "MC command 0x%x inlen %d mode %d timed out\n",
-			  cmd, (int)inlen, mcdi->mode);
-
-		if (mcdi->mode == MCDI_MODE_EVENTS && efx_mcdi_poll_once(efx)) {
-			netif_err(efx, hw, efx->net_dev,
-				  "MCDI request was completed without an event\n");
-			rc = 0;
-		}
-
 		/* Close the race with efx_mcdi_ev_cpl() executing just too late
 		 * and completing a request we've just cancelled, by ensuring
 		 * that the seqno check therein fails.
@@ -648,9 +627,11 @@ int efx_mcdi_rpc_finish(struct efx_nic *efx, unsigned cmd, size_t inlen,
 		++mcdi->seqno;
 		++mcdi->credits;
 		spin_unlock_bh(&mcdi->iface_lock);
-	}
 
-	if (rc == 0) {
+		netif_err(efx, hw, efx->net_dev,
+			  "MC command 0x%x inlen %d mode %d timed out\n",
+			  cmd, (int)inlen, mcdi->mode);
+	} else {
 		size_t hdr_len, data_len;
 
 		/* At the very least we need a memory barrier here to ensure

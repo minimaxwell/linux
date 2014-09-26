@@ -212,10 +212,8 @@ static int perf_event__synthesize_mmap_events(struct perf_tool *tool,
 		       &event->mmap.start, &event->mmap.len, prot,
 		       &event->mmap.pgoff,
 		       execname);
-		/*
- 		 * Anon maps don't have the execname.
- 		 */
-		if (n < 4)
+
+		if (n != 5)
 			continue;
 
 		if (prot[2] != 'x')

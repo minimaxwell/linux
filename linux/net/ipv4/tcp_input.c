@@ -1064,7 +1064,7 @@ static bool tcp_check_dsack(struct sock *sk, const struct sk_buff *ack_skb,
 	}
 
 	/* D-SACK for already forgotten data... Do dumb counting. */
-	if (dup_sack && tp->undo_marker && tp->undo_retrans > 0 &&
+	if (dup_sack && tp->undo_marker && tp->undo_retrans &&
 	    !after(end_seq_0, prior_snd_una) &&
 	    after(end_seq_0, tp->undo_marker))
 		tp->undo_retrans--;
@@ -1120,7 +1120,7 @@ static int tcp_match_skb_to_sack(struct sock *sk, struct sk_buff *skb,
 			unsigned int new_len = (pkt_len / mss) * mss;
 			if (!in_sack && new_len < pkt_len) {
 				new_len += mss;
-				if (new_len >= skb->len)
+				if (new_len > skb->len)
 					return 0;
 			}
 			pkt_len = new_len;
@@ -1144,7 +1144,7 @@ static u8 tcp_sacktag_one(struct sock *sk,
 
 	/* Account D-SACK for retransmitted packet. */
 	if (dup_sack && (sacked & TCPCB_RETRANS)) {
-		if (tp->undo_marker && tp->undo_retrans > 0 &&
+		if (tp->undo_marker && tp->undo_retrans &&
 		    after(end_seq, tp->undo_marker))
 			tp->undo_retrans--;
 		if (sacked & TCPCB_SACKED_ACKED)
@@ -1845,7 +1845,7 @@ static void tcp_clear_retrans_partial(struct tcp_sock *tp)
 	tp->lost_out = 0;
 
 	tp->undo_marker = 0;
-	tp->undo_retrans = -1;
+	tp->undo_retrans = 0;
 }
 
 void tcp_clear_retrans(struct tcp_sock *tp)
@@ -2613,7 +2613,7 @@ static void tcp_enter_recovery(struct sock *sk, bool ece_ack)
 
 	tp->prior_ssthresh = 0;
 	tp->undo_marker = tp->snd_una;
-	tp->undo_retrans = tp->retrans_out ? : -1;
+	tp->undo_retrans = tp->retrans_out;
 
 	if (inet_csk(sk)->icsk_ca_state < TCP_CA_CWR) {
 		if (!ece_ack)
@@ -2633,12 +2633,13 @@ static void tcp_process_loss(struct sock *sk, int flag, bool is_dupack)
 	bool recovered = !before(tp->snd_una, tp->high_seq);
 
 	if (tp->frto) { /* F-RTO RFC5682 sec 3.1 (sack enhanced version). */
-		/* Step 3.b. A timeout is spurious if not all data are
-		 * lost, i.e., never-retransmitted data are (s)acked.
-		 */
-		if (tcp_try_undo_loss(sk, flag & FLAG_ORIG_SACK_ACKED))
+		if (flag & FLAG_ORIG_SACK_ACKED) {
+			/* Step 3.b. A timeout is spurious if not all data are
+			 * lost, i.e., never-retransmitted data are (s)acked.
+			 */
+			tcp_try_undo_loss(sk, true);
 			return;
-
+		}
 		if (after(tp->snd_nxt, tp->high_seq) &&
 		    (flag & FLAG_DATA_SACKED || is_dupack)) {
 			tp->frto = 0; /* Loss was real: 2nd part of step 3.a */
@@ -2855,8 +2856,7 @@ static inline bool tcp_ack_update_rtt(struct sock *sk, const int flag,
 	 * left edge of the send window.
 	 * See draft-ietf-tcplw-high-performance-00, section 3.3.
 	 */
-	if (seq_rtt < 0 && tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr &&
-	    flag & FLAG_ACKED)
+	if (seq_rtt < 0 && tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr)
 		seq_rtt = tcp_time_stamp - tp->rx_opt.rcv_tsecr;
 
 	if (seq_rtt < 0)
@@ -2871,19 +2871,14 @@ static inline bool tcp_ack_update_rtt(struct sock *sk, const int flag,
 }
 
 /* Compute time elapsed between (last) SYNACK and the ACK completing 3WHS. */
-static void tcp_synack_rtt_meas(struct sock *sk, const u32 synack_stamp)
+static void tcp_synack_rtt_meas(struct sock *sk, struct request_sock *req)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	s32 seq_rtt = -1;
 
-	if (synack_stamp && !tp->total_retrans)
-		seq_rtt = tcp_time_stamp - synack_stamp;
-
-	/* If the ACK acks both the SYNACK and the (Fast Open'd) data packets
-	 * sent in SYN_RECV, SYNACK RTT is the smooth RTT computed in tcp_ack()
-	 */
-	if (!tp->srtt)
-		tcp_ack_update_rtt(sk, FLAG_SYN_ACKED, seq_rtt, -1);
+	if (tp->lsndtime && !tp->total_retrans)
+		seq_rtt = tcp_time_stamp - tp->lsndtime;
+	tcp_ack_update_rtt(sk, FLAG_SYN_ACKED, seq_rtt, -1);
 }
 
 static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
@@ -2986,7 +2981,6 @@ static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 	s32 seq_rtt = -1;
 	s32 ca_seq_rtt = -1;
 	ktime_t last_ackt = net_invalid_timestamp();
-	bool rtt_update;
 
 	while ((skb = tcp_write_queue_head(sk)) && skb != tcp_send_head(sk)) {
 		struct tcp_skb_cb *scb = TCP_SKB_CB(skb);
@@ -3063,13 +3057,14 @@ static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 	if (skb && (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED))
 		flag |= FLAG_SACK_RENEGING;
 
-	rtt_update = tcp_ack_update_rtt(sk, flag, seq_rtt, sack_rtt);
+	if (tcp_ack_update_rtt(sk, flag, seq_rtt, sack_rtt) ||
+	    (flag & FLAG_ACKED))
+		tcp_rearm_rto(sk);
 
 	if (flag & FLAG_ACKED) {
 		const struct tcp_congestion_ops *ca_ops
 			= inet_csk(sk)->icsk_ca_ops;
 
-		tcp_rearm_rto(sk);
 		if (unlikely(icsk->icsk_mtup.probe_size &&
 			     !after(tp->mtu_probe.probe_seq_end, tp->snd_una))) {
 			tcp_mtup_probe_success(sk);
@@ -3108,13 +3103,6 @@ static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 
 			ca_ops->pkts_acked(sk, pkts_acked, rtt_us);
 		}
-	} else if (skb && rtt_update && sack_rtt >= 0 &&
-		   sack_rtt > (s32)(now - TCP_SKB_CB(skb)->when)) {
-		/* Do not re-arm RTO if the sack RTT is measured from data sent
-		 * after when the head was last (re)transmitted. Otherwise the
-		 * timeout may continue to extend in loss recovery.
-		 */
-		tcp_rearm_rto(sk);
 	}
 
 #if FASTRETRANS_DEBUG > 0
@@ -5599,7 +5587,6 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	struct request_sock *req;
 	int queued = 0;
 	bool acceptable;
-	u32 synack_stamp;
 
 	tp->rx_opt.saw_tstamp = 0;
 
@@ -5682,11 +5669,9 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		 * so release it.
 		 */
 		if (req) {
-			synack_stamp = tcp_rsk(req)->snt_synack;
 			tp->total_retrans = req->num_retrans;
 			reqsk_fastopen_remove(sk, req, false);
 		} else {
-			synack_stamp = tp->lsndtime;
 			/* Make sure socket is routed, for correct metrics. */
 			icsk->icsk_af_ops->rebuild_header(sk);
 			tcp_init_congestion_control(sk);
@@ -5709,7 +5694,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		tp->snd_una = TCP_SKB_CB(skb)->ack_seq;
 		tp->snd_wnd = ntohs(th->window) << tp->rx_opt.snd_wscale;
 		tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
-		tcp_synack_rtt_meas(sk, synack_stamp);
+		tcp_synack_rtt_meas(sk, req);
 
 		if (tp->rx_opt.tstamp_ok)
 			tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;

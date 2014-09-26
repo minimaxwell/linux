@@ -421,6 +421,7 @@ static int dspi_suspend(struct device *dev)
 
 static int dspi_resume(struct device *dev)
 {
+
 	struct spi_master *master = dev_get_drvdata(dev);
 	struct fsl_dspi *dspi = spi_master_get_devdata(master);
 
@@ -504,7 +505,7 @@ static int dspi_probe(struct platform_device *pdev)
 	clk_prepare_enable(dspi->clk);
 
 	init_waitqueue_head(&dspi->waitq);
-	platform_set_drvdata(pdev, master);
+	platform_set_drvdata(pdev, dspi);
 
 	ret = spi_bitbang_start(&dspi->bitbang);
 	if (ret != 0) {
@@ -526,8 +527,7 @@ out_master_put:
 
 static int dspi_remove(struct platform_device *pdev)
 {
-	struct spi_master *master = platform_get_drvdata(pdev);
-	struct fsl_dspi *dspi = spi_master_get_devdata(master);
+	struct fsl_dspi *dspi = platform_get_drvdata(pdev);
 
 	/* Disconnect from the SPI framework */
 	spi_bitbang_stop(&dspi->bitbang);

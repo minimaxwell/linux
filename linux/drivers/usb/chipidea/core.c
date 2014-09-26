@@ -497,8 +497,6 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 		ci->transceiver = ci->platdata->phy;
 	else
 		ci->global_phy = true;
-	ci->imx28_write_fix = !!(ci->platdata->flags &
-		CI_HDRC_IMX28_WRITE_FIX);
 
 	ret = hw_device_init(ci, base);
 	if (ret < 0) {
@@ -576,10 +574,6 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 			? CI_ROLE_HOST
 			: CI_ROLE_GADGET;
 	}
-
-	/* only update vbus status for peripheral */
-	if (ci->role == CI_ROLE_GADGET)
-		ci_handle_vbus_change(ci);
 
 	ret = ci_role_start(ci, ci->role);
 	if (ret) {

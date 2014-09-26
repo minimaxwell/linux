@@ -59,11 +59,8 @@ extern int sysctl_sctp_wmem[3];
 static int proc_sctp_do_hmac_alg(struct ctl_table *ctl,
 				int write,
 				void __user *buffer, size_t *lenp,
-				loff_t *ppos);
-static int proc_sctp_do_auth(struct ctl_table *ctl, int write,
-			     void __user *buffer, size_t *lenp,
-			     loff_t *ppos);
 
+				loff_t *ppos);
 static struct ctl_table sctp_table[] = {
 	{
 		.procname	= "sctp_mem",
@@ -264,7 +261,7 @@ static struct ctl_table sctp_net_table[] = {
 		.data		= &init_net.sctp.auth_enable,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_sctp_do_auth,
+		.proc_handler	= proc_dointvec,
 	},
 	{
 		.procname	= "addr_scope_policy",
@@ -303,72 +300,43 @@ static int proc_sctp_do_hmac_alg(struct ctl_table *ctl,
 				loff_t *ppos)
 {
 	struct net *net = current->nsproxy->net_ns;
-	struct ctl_table tbl;
-	bool changed = false;
-	char *none = "none";
 	char tmp[8];
+	struct ctl_table tbl;
 	int ret;
+	int changed = 0;
+	char *none = "none";
 
 	memset(&tbl, 0, sizeof(struct ctl_table));
 
 	if (write) {
 		tbl.data = tmp;
-		tbl.maxlen = sizeof(tmp);
+		tbl.maxlen = 8;
 	} else {
 		tbl.data = net->sctp.sctp_hmac_alg ? : none;
 		tbl.maxlen = strlen(tbl.data);
 	}
+		ret = proc_dostring(&tbl, write, buffer, lenp, ppos);
 
-	ret = proc_dostring(&tbl, write, buffer, lenp, ppos);
-	if (write && ret == 0) {
+	if (write) {
 #ifdef CONFIG_CRYPTO_MD5
 		if (!strncmp(tmp, "md5", 3)) {
 			net->sctp.sctp_hmac_alg = "md5";
-			changed = true;
+			changed = 1;
 		}
 #endif
 #ifdef CONFIG_CRYPTO_SHA1
 		if (!strncmp(tmp, "sha1", 4)) {
 			net->sctp.sctp_hmac_alg = "sha1";
-			changed = true;
+			changed = 1;
 		}
 #endif
 		if (!strncmp(tmp, "none", 4)) {
 			net->sctp.sctp_hmac_alg = NULL;
-			changed = true;
+			changed = 1;
 		}
+
 		if (!changed)
 			ret = -EINVAL;
-	}
-
-	return ret;
-}
-
-static int proc_sctp_do_auth(struct ctl_table *ctl, int write,
-			     void __user *buffer, size_t *lenp,
-			     loff_t *ppos)
-{
-	struct net *net = current->nsproxy->net_ns;
-	struct ctl_table tbl;
-	int new_value, ret;
-
-	memset(&tbl, 0, sizeof(struct ctl_table));
-	tbl.maxlen = sizeof(unsigned int);
-
-	if (write)
-		tbl.data = &new_value;
-	else
-		tbl.data = &net->sctp.auth_enable;
-
-	ret = proc_dointvec(&tbl, write, buffer, lenp, ppos);
-	if (write && ret == 0) {
-		struct sock *sk = net->sctp.ctl_sock;
-
-		net->sctp.auth_enable = new_value;
-		/* Update the value in the control socket */
-		lock_sock(sk);
-		sctp_sk(sk)->ep->auth_enable = new_value;
-		release_sock(sk);
 	}
 
 	return ret;

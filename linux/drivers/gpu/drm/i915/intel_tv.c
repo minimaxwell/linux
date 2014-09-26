@@ -1530,14 +1530,9 @@ static int tv_is_present_in_vbt(struct drm_device *dev)
 		/*
 		 * If the device type is not TV, continue.
 		 */
-		switch (p_child->device_type) {
-		case DEVICE_TYPE_INT_TV:
-		case DEVICE_TYPE_TV:
-		case DEVICE_TYPE_TV_SVIDEO_COMPOSITE:
-			break;
-		default:
+		if (p_child->device_type != DEVICE_TYPE_INT_TV &&
+			p_child->device_type != DEVICE_TYPE_TV)
 			continue;
-		}
 		/* Only when the addin_offset is non-zero, it is regarded
 		 * as present.
 		 */

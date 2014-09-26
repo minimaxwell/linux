@@ -42,7 +42,7 @@ typedef unsigned char	__u8;
 
 /* This array collects all instances that use the generic do_table */
 struct devtable {
-	const char *device_id; /* name of table, __mod_<name>__*_device_table. */
+	const char *device_id; /* name of table, __mod_<name>_device_table. */
 	unsigned long id_size;
 	void *function;
 };
@@ -146,8 +146,7 @@ static void device_id_check(const char *modname, const char *device_id,
 
 	if (size % id_size || size < id_size) {
 		fatal("%s: sizeof(struct %s_device_id)=%lu is not a modulo "
-		      "of the size of "
-		      "section __mod_%s__<identifier>_device_table=%lu.\n"
+		      "of the size of section __mod_%s_device_table=%lu.\n"
 		      "Fix definition of struct %s_device_id "
 		      "in mod_devicetable.h\n",
 		      modname, device_id, id_size, device_id, size, device_id);
@@ -211,8 +210,8 @@ static void do_usb_entry(void *symval,
 				range_lo < 0x9 ? "[%X-9" : "[%X",
 				range_lo);
 			sprintf(alias + strlen(alias),
-				range_hi > 0xA ? "A-%X]" : "%X]",
-				range_hi);
+				range_hi > 0xA ? "a-%X]" : "%X]",
+				range_lo);
 		}
 	}
 	if (bcdDevice_initial_digits < (sizeof(bcdDevice_lo) * 2 - 1))
@@ -1207,7 +1206,7 @@ void handle_moddevtable(struct module *mod, struct elf_info *info,
 {
 	void *symval;
 	char *zeros = NULL;
-	const char *name, *identifier;
+	const char *name;
 	unsigned int namelen;
 
 	/* We're looking for a section relative symbol */
@@ -1218,7 +1217,7 @@ void handle_moddevtable(struct module *mod, struct elf_info *info,
 	if (ELF_ST_TYPE(sym->st_info) != STT_OBJECT)
 		return;
 
-	/* All our symbols are of form <prefix>__mod_<name>__<identifier>_device_table. */
+	/* All our symbols are of form <prefix>__mod_XXX_device_table. */
 	name = strstr(symname, "__mod_");
 	if (!name)
 		return;
@@ -1228,10 +1227,7 @@ void handle_moddevtable(struct module *mod, struct elf_info *info,
 		return;
 	if (strcmp(name + namelen - strlen("_device_table"), "_device_table"))
 		return;
-	identifier = strstr(name, "__");
-	if (!identifier)
-		return;
-	namelen = identifier - name;
+	namelen -= strlen("_device_table");
 
 	/* Handle all-NULL symbols allocated into .bss */
 	if (info->sechdrs[get_secindex(info, sym)].sh_type & SHT_NOBITS) {

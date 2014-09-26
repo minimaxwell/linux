@@ -142,22 +142,22 @@ static inline unsigned alloc_local_tag(struct percpu_ida *pool,
 /**
  * percpu_ida_alloc - allocate a tag
  * @pool: pool to allocate from
- * @state: task state for prepare_to_wait
+ * @gfp: gfp flags
  *
  * Returns a tag - an integer in the range [0..nr_tags) (passed to
  * tag_pool_init()), or otherwise -ENOSPC on allocation failure.
  *
  * Safe to be called from interrupt context (assuming it isn't passed
- * TASK_UNINTERRUPTIBLE | TASK_INTERRUPTIBLE, of course).
+ * __GFP_WAIT, of course).
  *
  * @gfp indicates whether or not to wait until a free id is available (it's not
  * used for internal memory allocations); thus if passed __GFP_WAIT we may sleep
  * however long it takes until another thread frees an id (same semantics as a
  * mempool).
  *
- * Will not fail if passed TASK_UNINTERRUPTIBLE | TASK_INTERRUPTIBLE.
+ * Will not fail if passed __GFP_WAIT.
  */
-int percpu_ida_alloc(struct percpu_ida *pool, int state)
+int percpu_ida_alloc(struct percpu_ida *pool, gfp_t gfp)
 {
 	DEFINE_WAIT(wait);
 	struct percpu_ida_cpu *tags;
@@ -184,8 +184,7 @@ int percpu_ida_alloc(struct percpu_ida *pool, int state)
 		 *
 		 * global lock held and irqs disabled, don't need percpu lock
 		 */
-		if (state != TASK_RUNNING)
-			prepare_to_wait(&pool->wait, &wait, state);
+		prepare_to_wait(&pool->wait, &wait, TASK_UNINTERRUPTIBLE);
 
 		if (!tags->nr_free)
 			alloc_global_tags(pool, tags);
@@ -202,22 +201,16 @@ int percpu_ida_alloc(struct percpu_ida *pool, int state)
 		spin_unlock(&pool->lock);
 		local_irq_restore(flags);
 
-		if (tag >= 0 || state == TASK_RUNNING)
+		if (tag >= 0 || !(gfp & __GFP_WAIT))
 			break;
-
-		if (signal_pending_state(state, current)) {
-			tag = -ERESTARTSYS;
-			break;
-		}
 
 		schedule();
 
 		local_irq_save(flags);
 		tags = this_cpu_ptr(pool->tag_cpu);
 	}
-	if (state != TASK_RUNNING)
-		finish_wait(&pool->wait, &wait);
 
+	finish_wait(&pool->wait, &wait);
 	return tag;
 }
 EXPORT_SYMBOL_GPL(percpu_ida_alloc);

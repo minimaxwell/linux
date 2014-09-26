@@ -478,9 +478,10 @@ static void hdmi_print_sad_info(int i, struct cea_sad *a,
 		snd_iprintf(buffer, "sad%d_profile\t\t%d\n", i, a->profile);
 }
 
-void snd_hdmi_print_eld_info(struct hdmi_eld *eld,
-			     struct snd_info_buffer *buffer)
+static void hdmi_print_eld_info(struct snd_info_entry *entry,
+				struct snd_info_buffer *buffer)
 {
+	struct hdmi_eld *eld = entry->private_data;
 	struct parsed_hdmi_eld *e = &eld->info;
 	char buf[SND_PRINT_CHANNEL_ALLOCATION_ADVISED_BUFSIZE];
 	int i;
@@ -499,10 +500,13 @@ void snd_hdmi_print_eld_info(struct hdmi_eld *eld,
 		[4 ... 7] = "reserved"
 	};
 
+	mutex_lock(&eld->lock);
 	snd_iprintf(buffer, "monitor_present\t\t%d\n", eld->monitor_present);
 	snd_iprintf(buffer, "eld_valid\t\t%d\n", eld->eld_valid);
-	if (!eld->eld_valid)
+	if (!eld->eld_valid) {
+		mutex_unlock(&eld->lock);
 		return;
+	}
 	snd_iprintf(buffer, "monitor_name\t\t%s\n", e->monitor_name);
 	snd_iprintf(buffer, "connection_type\t\t%s\n",
 				eld_connection_type_names[e->conn_type]);
@@ -524,11 +528,13 @@ void snd_hdmi_print_eld_info(struct hdmi_eld *eld,
 
 	for (i = 0; i < e->sad_count; i++)
 		hdmi_print_sad_info(i, e->sad + i, buffer);
+	mutex_unlock(&eld->lock);
 }
 
-void snd_hdmi_write_eld_info(struct hdmi_eld *eld,
-			     struct snd_info_buffer *buffer)
+static void hdmi_write_eld_info(struct snd_info_entry *entry,
+				struct snd_info_buffer *buffer)
 {
+	struct hdmi_eld *eld = entry->private_data;
 	struct parsed_hdmi_eld *e = &eld->info;
 	char line[64];
 	char name[64];
@@ -536,6 +542,7 @@ void snd_hdmi_write_eld_info(struct hdmi_eld *eld,
 	long long val;
 	unsigned int n;
 
+	mutex_lock(&eld->lock);
 	while (!snd_info_get_line(buffer, line, sizeof(line))) {
 		if (sscanf(line, "%s %llx", name, &val) != 2)
 			continue;
@@ -587,7 +594,38 @@ void snd_hdmi_write_eld_info(struct hdmi_eld *eld,
 				e->sad_count = n + 1;
 		}
 	}
+	mutex_unlock(&eld->lock);
 }
+
+
+int snd_hda_eld_proc_new(struct hda_codec *codec, struct hdmi_eld *eld,
+			 int index)
+{
+	char name[32];
+	struct snd_info_entry *entry;
+	int err;
+
+	snprintf(name, sizeof(name), "eld#%d.%d", codec->addr, index);
+	err = snd_card_proc_new(codec->bus->card, name, &entry);
+	if (err < 0)
+		return err;
+
+	snd_info_set_text_ops(entry, eld, hdmi_print_eld_info);
+	entry->c.text.write = hdmi_write_eld_info;
+	entry->mode |= S_IWUSR;
+	eld->proc_entry = entry;
+
+	return 0;
+}
+
+void snd_hda_eld_proc_free(struct hda_codec *codec, struct hdmi_eld *eld)
+{
+	if (!codec->bus->shutdown && eld->proc_entry) {
+		snd_device_free(codec->bus->card, eld->proc_entry);
+		eld->proc_entry = NULL;
+	}
+}
+
 #endif /* CONFIG_PROC_FS */
 
 /* update PCM info based on ELD */

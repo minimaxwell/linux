@@ -148,9 +148,6 @@ struct cache {
 	wait_queue_head_t migration_wait;
 	atomic_t nr_migrations;
 
-	wait_queue_head_t quiescing_wait;
-	atomic_t quiescing_ack;
-
 	/*
 	 * cache_size entries, dirty if set
 	 */
@@ -162,7 +159,7 @@ struct cache {
 	 */
 	dm_dblock_t discard_nr_blocks;
 	unsigned long *discard_bitset;
-	uint32_t discard_block_size;
+	uint32_t discard_block_size; /* a power of 2 times sectors per block */
 
 	/*
 	 * Rather than reconstructing the table line for the status we just
@@ -751,9 +748,8 @@ static void cell_defer(struct cache *cache, struct dm_bio_prison_cell *cell,
 
 static void cleanup_migration(struct dm_cache_migration *mg)
 {
-	struct cache *cache = mg->cache;
+	dec_nr_migrations(mg->cache);
 	free_migration(mg);
-	dec_nr_migrations(cache);
 }
 
 static void migration_failure(struct dm_cache_migration *mg)
@@ -867,13 +863,12 @@ static void issue_copy_real(struct dm_cache_migration *mg)
 	int r;
 	struct dm_io_region o_region, c_region;
 	struct cache *cache = mg->cache;
-	sector_t cblock = from_cblock(mg->cblock);
 
 	o_region.bdev = cache->origin_dev->bdev;
 	o_region.count = cache->sectors_per_block;
 
 	c_region.bdev = cache->cache_dev->bdev;
-	c_region.sector = cblock * cache->sectors_per_block;
+	c_region.sector = from_cblock(mg->cblock) * cache->sectors_per_block;
 	c_region.count = cache->sectors_per_block;
 
 	if (mg->writeback || mg->demote) {
@@ -1351,6 +1346,24 @@ static void writeback_some_dirty_blocks(struct cache *cache)
 /*----------------------------------------------------------------
  * Main worker loop
  *--------------------------------------------------------------*/
+static void start_quiescing(struct cache *cache)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
+	cache->quiescing = 1;
+	spin_unlock_irqrestore(&cache->lock, flags);
+}
+
+static void stop_quiescing(struct cache *cache)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
+	cache->quiescing = 0;
+	spin_unlock_irqrestore(&cache->lock, flags);
+}
+
 static bool is_quiescing(struct cache *cache)
 {
 	int r;
@@ -1361,41 +1374,6 @@ static bool is_quiescing(struct cache *cache)
 	spin_unlock_irqrestore(&cache->lock, flags);
 
 	return r;
-}
-
-static void ack_quiescing(struct cache *cache)
-{
-	if (is_quiescing(cache)) {
-		atomic_inc(&cache->quiescing_ack);
-		wake_up(&cache->quiescing_wait);
-	}
-}
-
-static void wait_for_quiescing_ack(struct cache *cache)
-{
-	wait_event(cache->quiescing_wait, atomic_read(&cache->quiescing_ack));
-}
-
-static void start_quiescing(struct cache *cache)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&cache->lock, flags);
-	cache->quiescing = true;
-	spin_unlock_irqrestore(&cache->lock, flags);
-
-	wait_for_quiescing_ack(cache);
-}
-
-static void stop_quiescing(struct cache *cache)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&cache->lock, flags);
-	cache->quiescing = false;
-	spin_unlock_irqrestore(&cache->lock, flags);
-
-	atomic_set(&cache->quiescing_ack, 0);
 }
 
 static void wait_for_migrations(struct cache *cache)
@@ -1442,14 +1420,15 @@ static void do_worker(struct work_struct *ws)
 	struct cache *cache = container_of(ws, struct cache, worker);
 
 	do {
-		if (!is_quiescing(cache)) {
-			writeback_some_dirty_blocks(cache);
-			process_deferred_writethrough_bios(cache);
+		if (!is_quiescing(cache))
 			process_deferred_bios(cache);
-		}
 
 		process_migrations(cache, &cache->quiesced_migrations, issue_copy);
 		process_migrations(cache, &cache->completed_migrations, complete_migration);
+
+		writeback_some_dirty_blocks(cache);
+
+		process_deferred_writethrough_bios(cache);
 
 		if (commit_if_needed(cache)) {
 			process_deferred_flush_bios(cache, false);
@@ -1463,9 +1442,6 @@ static void do_worker(struct work_struct *ws)
 			process_migrations(cache, &cache->need_commit_migrations,
 					   migration_success_post_commit);
 		}
-
-		ack_quiescing(cache);
-
 	} while (more_work(cache));
 }
 
@@ -1908,6 +1884,35 @@ static int create_cache_policy(struct cache *cache, struct cache_args *ca,
 	return 0;
 }
 
+/*
+ * We want the discard block size to be a power of two, at least the size
+ * of the cache block size, and have no more than 2^14 discard blocks
+ * across the origin.
+ */
+#define MAX_DISCARD_BLOCKS (1 << 14)
+
+static bool too_many_discard_blocks(sector_t discard_block_size,
+				    sector_t origin_size)
+{
+	(void) sector_div(origin_size, discard_block_size);
+
+	return origin_size > MAX_DISCARD_BLOCKS;
+}
+
+static sector_t calculate_discard_block_size(sector_t cache_block_size,
+					     sector_t origin_size)
+{
+	sector_t discard_block_size;
+
+	discard_block_size = roundup_pow_of_two(cache_block_size);
+
+	if (origin_size)
+		while (too_many_discard_blocks(discard_block_size, origin_size))
+			discard_block_size *= 2;
+
+	return discard_block_size;
+}
+
 #define DEFAULT_MIGRATION_THRESHOLD 2048
 
 static int cache_create(struct cache_args *ca, struct cache **result)
@@ -1932,8 +1937,6 @@ static int cache_create(struct cache_args *ca, struct cache **result)
 	ti->num_discard_bios = 1;
 	ti->discards_supported = true;
 	ti->discard_zeroes_data_unsupported = true;
-	/* Discard bios must be split on a block boundary */
-	ti->split_discard_bios = true;
 
 	cache->features = ca->features;
 	ti->per_bio_data_size = get_per_bio_data_size(cache);
@@ -2002,9 +2005,6 @@ static int cache_create(struct cache_args *ca, struct cache **result)
 	atomic_set(&cache->nr_migrations, 0);
 	init_waitqueue_head(&cache->migration_wait);
 
-	init_waitqueue_head(&cache->quiescing_wait);
-	atomic_set(&cache->quiescing_ack, 0);
-
 	r = -ENOMEM;
 	cache->nr_dirty = 0;
 	cache->dirty_bitset = alloc_bitset(from_cblock(cache->cache_size));
@@ -2014,7 +2014,9 @@ static int cache_create(struct cache_args *ca, struct cache **result)
 	}
 	clear_bitset(cache->dirty_bitset, from_cblock(cache->cache_size));
 
-	cache->discard_block_size = cache->sectors_per_block;
+	cache->discard_block_size =
+		calculate_discard_block_size(cache->sectors_per_block,
+					     cache->origin_sectors);
 	cache->discard_nr_blocks = oblock_to_dblock(cache, cache->origin_blocks);
 	cache->discard_bitset = alloc_bitset(from_dblock(cache->discard_nr_blocks));
 	if (!cache->discard_bitset) {
@@ -2153,17 +2155,19 @@ static int cache_map(struct dm_target *ti, struct bio *bio)
 	bool discarded_block;
 	struct dm_bio_prison_cell *cell;
 	struct policy_result lookup_result;
-	struct per_bio_data *pb = init_per_bio_data(bio, pb_data_size);
+	struct per_bio_data *pb;
 
-	if (unlikely(from_oblock(block) >= from_oblock(cache->origin_blocks))) {
+	if (from_oblock(block) > from_oblock(cache->origin_blocks)) {
 		/*
 		 * This can only occur if the io goes to a partial block at
 		 * the end of the origin device.  We don't cache these.
 		 * Just remap to the origin and carry on.
 		 */
-		remap_to_origin(cache, bio);
+		remap_to_origin_clear_discard(cache, bio, block);
 		return DM_MAPIO_REMAPPED;
 	}
+
+	pb = init_per_bio_data(bio, pb_data_size);
 
 	if (bio->bi_rw & (REQ_FLUSH | REQ_FUA | REQ_DISCARD)) {
 		defer_bio(cache, bio);
@@ -2601,7 +2605,7 @@ static void set_discard_limits(struct cache *cache, struct queue_limits *limits)
 	/*
 	 * FIXME: these limits may be incompatible with the cache device
 	 */
-	limits->max_discard_sectors = cache->discard_block_size;
+	limits->max_discard_sectors = cache->discard_block_size * 1024;
 	limits->discard_granularity = cache->discard_block_size << SECTOR_SHIFT;
 }
 

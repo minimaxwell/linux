@@ -1108,16 +1108,14 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOPUT_VSCREENINFO:
 		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		info->flags |= FBINFO_MISC_USEREVENT;
 		ret = fb_set_var(info, &var);
 		info->flags &= ~FBINFO_MISC_USEREVENT;
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		if (!ret && copy_to_user(argp, &var, sizeof(var)))
 			ret = -EFAULT;
 		break;
@@ -1146,14 +1144,12 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		ret = fb_pan_display(info, &var);
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		if (ret == 0 && copy_to_user(argp, &var, sizeof(var)))
 			return -EFAULT;
 		break;
@@ -1188,27 +1184,23 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			break;
 		}
 		event.data = &con2fb;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		event.info = info;
 		ret = fb_notifier_call_chain(FB_EVENT_SET_CONSOLE_MAP, &event);
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		break;
 	case FBIOBLANK:
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		info->flags |= FBINFO_MISC_USEREVENT;
 		ret = fb_blank(info, arg);
 		info->flags &= ~FBINFO_MISC_USEREVENT;
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		break;
 	default:
 		if (!lock_fb_info(info))
@@ -1577,10 +1569,10 @@ static bool fb_do_apertures_overlap(struct apertures_struct *gena,
 static int do_unregister_framebuffer(struct fb_info *fb_info);
 
 #define VGA_FB_PHYS 0xA0000
-static int do_remove_conflicting_framebuffers(struct apertures_struct *a,
-					      const char *name, bool primary)
+static void do_remove_conflicting_framebuffers(struct apertures_struct *a,
+				     const char *name, bool primary)
 {
-	int i, ret;
+	int i;
 
 	/* check all firmware fbs and kick off if the base addr overlaps */
 	for (i = 0 ; i < FB_MAX; i++) {
@@ -1596,31 +1588,25 @@ static int do_remove_conflicting_framebuffers(struct apertures_struct *a,
 			(primary && gen_aper && gen_aper->count &&
 			 gen_aper->ranges[0].base == VGA_FB_PHYS)) {
 
-			printk(KERN_INFO "fb: switching to %s from %s\n",
+			printk(KERN_INFO "fb: conflicting fb hw usage "
+			       "%s vs %s - removing generic driver\n",
 			       name, registered_fb[i]->fix.id);
-			ret = do_unregister_framebuffer(registered_fb[i]);
-			if (ret)
-				return ret;
+			do_unregister_framebuffer(registered_fb[i]);
 		}
 	}
-
-	return 0;
 }
 
 static int do_register_framebuffer(struct fb_info *fb_info)
 {
-	int i, ret;
+	int i;
 	struct fb_event event;
 	struct fb_videomode mode;
 
 	if (fb_check_foreignness(fb_info))
 		return -ENOSYS;
 
-	ret = do_remove_conflicting_framebuffers(fb_info->apertures,
-						 fb_info->fix.id,
-						 fb_is_primary_device(fb_info));
-	if (ret)
-		return ret;
+	do_remove_conflicting_framebuffers(fb_info->apertures, fb_info->fix.id,
+					 fb_is_primary_device(fb_info));
 
 	if (num_registered_fb == FB_MAX)
 		return -ENXIO;
@@ -1674,15 +1660,12 @@ static int do_register_framebuffer(struct fb_info *fb_info)
 	registered_fb[i] = fb_info;
 
 	event.info = fb_info;
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	fb_notifier_call_chain(FB_EVENT_FB_REGISTERED, &event);
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 	return 0;
 }
 
@@ -1695,16 +1678,13 @@ static int do_unregister_framebuffer(struct fb_info *fb_info)
 	if (i < 0 || i >= FB_MAX || registered_fb[i] != fb_info)
 		return -EINVAL;
 
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	event.info = fb_info;
 	ret = fb_notifier_call_chain(FB_EVENT_FB_UNBIND, &event);
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 
 	if (ret)
 		return -EINVAL;
@@ -1745,16 +1725,12 @@ int unlink_framebuffer(struct fb_info *fb_info)
 }
 EXPORT_SYMBOL(unlink_framebuffer);
 
-int remove_conflicting_framebuffers(struct apertures_struct *a,
-				    const char *name, bool primary)
+void remove_conflicting_framebuffers(struct apertures_struct *a,
+				     const char *name, bool primary)
 {
-	int ret;
-
 	mutex_lock(&registration_lock);
-	ret = do_remove_conflicting_framebuffers(a, name, primary);
+	do_remove_conflicting_framebuffers(a, name, primary);
 	mutex_unlock(&registration_lock);
-
-	return ret;
 }
 EXPORT_SYMBOL(remove_conflicting_framebuffers);
 
@@ -1940,9 +1916,6 @@ int fb_get_options(const char *name, char **option)
 				options = opt + name_len + 1;
 		}
 	}
-	/* No match, pass global option */
-	if (!options && option && fb_mode_option)
-		options = kstrdup(fb_mode_option, GFP_KERNEL);
 	if (options && !strncmp(options, "off", 3))
 		retval = 1;
 

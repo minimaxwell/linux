@@ -153,7 +153,7 @@ xfs_growfs_data_private(
 	xfs_buf_t		*bp;
 	int			bucket;
 	int			dpct;
-	int			error, saved_error = 0;
+	int			error;
 	xfs_agnumber_t		nagcount;
 	xfs_agnumber_t		nagimax = 0;
 	xfs_rfsblock_t		nb, nb_mod;
@@ -217,8 +217,6 @@ xfs_growfs_data_private(
 	 */
 	nfree = 0;
 	for (agno = nagcount - 1; agno >= oagcount; agno--, new -= agsize) {
-		__be32	*agfl_bno;
-
 		/*
 		 * AG freespace header block
 		 */
@@ -278,10 +276,8 @@ xfs_growfs_data_private(
 			agfl->agfl_seqno = cpu_to_be32(agno);
 			uuid_copy(&agfl->agfl_uuid, &mp->m_sb.sb_uuid);
 		}
-
-		agfl_bno = XFS_BUF_TO_AGFL_BNO(mp, bp);
 		for (bucket = 0; bucket < XFS_AGFL_SIZE(mp); bucket++)
-			agfl_bno[bucket] = cpu_to_be32(NULLAGBLOCK);
+			agfl->agfl_bno[bucket] = cpu_to_be32(NULLAGBLOCK);
 
 		error = xfs_bwrite(bp);
 		xfs_buf_relse(bp);
@@ -500,33 +496,29 @@ xfs_growfs_data_private(
 				error = ENOMEM;
 		}
 
-		/*
-		 * If we get an error reading or writing alternate superblocks,
-		 * continue.  xfs_repair chooses the "best" superblock based
-		 * on most matches; if we break early, we'll leave more
-		 * superblocks un-updated than updated, and xfs_repair may
-		 * pick them over the properly-updated primary.
-		 */
 		if (error) {
 			xfs_warn(mp,
 		"error %d reading secondary superblock for ag %d",
 				error, agno);
-			saved_error = error;
-			continue;
+			break;
 		}
 		xfs_sb_to_disk(XFS_BUF_TO_SBP(bp), &mp->m_sb, XFS_SB_ALL_BITS);
 
+		/*
+		 * If we get an error writing out the alternate superblocks,
+		 * just issue a warning and continue.  The real work is
+		 * already done and committed.
+		 */
 		error = xfs_bwrite(bp);
 		xfs_buf_relse(bp);
 		if (error) {
 			xfs_warn(mp,
 		"write error %d updating secondary superblock for ag %d",
 				error, agno);
-			saved_error = error;
-			continue;
+			break; /* no point in continuing */
 		}
 	}
-	return saved_error ? saved_error : error;
+	return error;
 
  error0:
 	xfs_trans_cancel(tp, XFS_TRANS_ABORT);

@@ -150,17 +150,28 @@ static int ohci_quirk_nec(struct usb_hcd *hcd)
 static int ohci_quirk_amd700(struct usb_hcd *hcd)
 {
 	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
+	struct pci_dev *amd_smbus_dev;
+	u8 rev;
 
 	if (usb_amd_find_chipset_info())
 		ohci->flags |= OHCI_QUIRK_AMD_PLL;
 
+	amd_smbus_dev = pci_get_device(PCI_VENDOR_ID_ATI,
+			PCI_DEVICE_ID_ATI_SBX00_SMBUS, NULL);
+	if (!amd_smbus_dev)
+		return 0;
+
+	rev = amd_smbus_dev->revision;
+
 	/* SB800 needs pre-fetch fix */
-	if (usb_amd_prefetch_quirk()) {
+	if ((rev >= 0x40) && (rev <= 0x4f)) {
 		ohci->flags |= OHCI_QUIRK_AMD_PREFETCH;
 		ohci_dbg(ohci, "enabled AMD prefetch quirk\n");
 	}
 
-	ohci->flags |= OHCI_QUIRK_GLOBAL_SUSPEND;
+	pci_dev_put(amd_smbus_dev);
+	amd_smbus_dev = NULL;
+
 	return 0;
 }
 

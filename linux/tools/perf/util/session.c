@@ -870,7 +870,6 @@ static struct machine *
 					       struct perf_sample *sample)
 {
 	const u8 cpumode = event->header.misc & PERF_RECORD_MISC_CPUMODE_MASK;
-	struct machine *machine;
 
 	if (perf_guest &&
 	    ((cpumode == PERF_RECORD_MISC_GUEST_KERNEL) ||
@@ -883,11 +882,7 @@ static struct machine *
 		else
 			pid = sample->pid;
 
-		machine = perf_session__find_machine(session, pid);
-		if (!machine)
-			machine = perf_session__findnew_machine(session,
-						DEFAULT_GUEST_KERNEL_ID);
-		return machine;
+		return perf_session__findnew_machine(session, pid);
 	}
 
 	return &session->machines.host;

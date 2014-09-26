@@ -174,8 +174,6 @@ static void cik_sdma_gfx_stop(struct radeon_device *rdev)
 		WREG32(SDMA0_GFX_RB_CNTL + reg_offset, rb_cntl);
 		WREG32(SDMA0_GFX_IB_CNTL + reg_offset, 0);
 	}
-	rdev->ring[R600_RING_TYPE_DMA_INDEX].ready = false;
-	rdev->ring[CAYMAN_RING_TYPE_DMA1_INDEX].ready = false;
 }
 
 /**
@@ -202,11 +200,6 @@ void cik_sdma_enable(struct radeon_device *rdev, bool enable)
 {
 	u32 me_cntl, reg_offset;
 	int i;
-
-	if (enable == false) {
-		cik_sdma_gfx_stop(rdev);
-		cik_sdma_rlc_stop(rdev);
-	}
 
 	for (i = 0; i < 2; i++) {
 		if (i == 0)
@@ -335,6 +328,10 @@ static int cik_sdma_load_microcode(struct radeon_device *rdev)
 	if (!rdev->sdma_fw)
 		return -EINVAL;
 
+	/* stop the gfx rings and rlc compute queues */
+	cik_sdma_gfx_stop(rdev);
+	cik_sdma_rlc_stop(rdev);
+
 	/* halt the MEs */
 	cik_sdma_enable(rdev, false);
 
@@ -403,6 +400,9 @@ int cik_sdma_resume(struct radeon_device *rdev)
  */
 void cik_sdma_fini(struct radeon_device *rdev)
 {
+	/* stop the gfx rings and rlc compute queues */
+	cik_sdma_gfx_stop(rdev);
+	cik_sdma_rlc_stop(rdev);
 	/* halt the MEs */
 	cik_sdma_enable(rdev, false);
 	radeon_ring_fini(rdev, &rdev->ring[R600_RING_TYPE_DMA_INDEX]);
@@ -468,7 +468,7 @@ int cik_copy_dma(struct radeon_device *rdev,
 		radeon_ring_write(ring, 0); /* src/dst endian swap */
 		radeon_ring_write(ring, src_offset & 0xffffffff);
 		radeon_ring_write(ring, upper_32_bits(src_offset) & 0xffffffff);
-		radeon_ring_write(ring, dst_offset & 0xffffffff);
+		radeon_ring_write(ring, dst_offset & 0xfffffffc);
 		radeon_ring_write(ring, upper_32_bits(dst_offset) & 0xffffffff);
 		src_offset += cur_size_in_bytes;
 		dst_offset += cur_size_in_bytes;
@@ -512,7 +512,7 @@ int cik_sdma_ring_test(struct radeon_device *rdev,
 	tmp = 0xCAFEDEAD;
 	writel(tmp, ptr);
 
-	r = radeon_ring_lock(rdev, ring, 5);
+	r = radeon_ring_lock(rdev, ring, 4);
 	if (r) {
 		DRM_ERROR("radeon: dma failed to lock ring %d (%d).\n", ring->idx, r);
 		return r;

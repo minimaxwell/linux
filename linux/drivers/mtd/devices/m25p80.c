@@ -78,7 +78,7 @@
 
 /* Define max times to check status register before we give up. */
 #define	MAX_READY_WAIT_JIFFIES	(40 * HZ)	/* M25P16 specs 40s max chip erase */
-#define	MAX_CMD_SIZE		6
+#define	MAX_CMD_SIZE		5
 
 #define JEDEC_MFR(_jedec_id)	((_jedec_id) >> 16)
 
@@ -992,13 +992,15 @@ static int m25p_probe(struct spi_device *spi)
 		}
 	}
 
-	flash = devm_kzalloc(&spi->dev, sizeof(*flash), GFP_KERNEL);
+	flash = kzalloc(sizeof *flash, GFP_KERNEL);
 	if (!flash)
 		return -ENOMEM;
-
-	flash->command = devm_kzalloc(&spi->dev, MAX_CMD_SIZE, GFP_KERNEL);
-	if (!flash->command)
+	flash->command = kmalloc(MAX_CMD_SIZE + (flash->fast_read ? 1 : 0),
+					GFP_KERNEL);
+	if (!flash->command) {
+		kfree(flash);
 		return -ENOMEM;
+	}
 
 	flash->spi = spi;
 	mutex_init(&flash->lock);
@@ -1131,10 +1133,14 @@ static int m25p_probe(struct spi_device *spi)
 static int m25p_remove(struct spi_device *spi)
 {
 	struct m25p	*flash = spi_get_drvdata(spi);
+	int		status;
 
 	/* Clean up MTD stuff. */
-	mtd_device_unregister(&flash->mtd);
-
+	status = mtd_device_unregister(&flash->mtd);
+	if (status == 0) {
+		kfree(flash->command);
+		kfree(flash);
+	}
 	return 0;
 }
 

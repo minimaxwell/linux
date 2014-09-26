@@ -193,7 +193,7 @@ check_name(struct dentry *direntry)
 static int
 cifs_do_create(struct inode *inode, struct dentry *direntry, unsigned int xid,
 	       struct tcon_link *tlink, unsigned oflags, umode_t mode,
-	       __u32 *oplock, struct cifs_fid *fid)
+	       __u32 *oplock, struct cifs_fid *fid, int *created)
 {
 	int rc = -ENOENT;
 	int create_options = CREATE_NOT_DIR;
@@ -349,6 +349,7 @@ cifs_do_create(struct inode *inode, struct dentry *direntry, unsigned int xid,
 				.device	= 0,
 		};
 
+		*created |= FILE_CREATED;
 		if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_SET_UID) {
 			args.uid = current_fsuid();
 			if (inode->i_mode & S_ISGID)
@@ -479,15 +480,12 @@ cifs_atomic_open(struct inode *inode, struct dentry *direntry,
 	cifs_add_pending_open(&fid, tlink, &open);
 
 	rc = cifs_do_create(inode, direntry, xid, tlink, oflags, mode,
-			    &oplock, &fid);
+			    &oplock, &fid, opened);
 
 	if (rc) {
 		cifs_del_pending_open(&open);
 		goto out;
 	}
-
-	if ((oflags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
-		*opened |= FILE_CREATED;
 
 	rc = finish_open(file, direntry, generic_file_open, opened);
 	if (rc) {
@@ -531,6 +529,7 @@ int cifs_create(struct inode *inode, struct dentry *direntry, umode_t mode,
 	struct TCP_Server_Info *server;
 	struct cifs_fid fid;
 	__u32 oplock;
+	int created = FILE_CREATED;
 
 	cifs_dbg(FYI, "cifs_create parent inode = 0x%p name is: %s and dentry = 0x%p\n",
 		 inode, direntry->d_name.name, direntry);
@@ -547,7 +546,7 @@ int cifs_create(struct inode *inode, struct dentry *direntry, umode_t mode,
 		server->ops->new_lease_key(&fid);
 
 	rc = cifs_do_create(inode, direntry, xid, tlink, oflags, mode,
-			    &oplock, &fid);
+			    &oplock, &fid, &created);
 	if (!rc && server->ops->close)
 		server->ops->close(xid, tcon, &fid);
 

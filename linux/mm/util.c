@@ -387,10 +387,7 @@ struct address_space *page_mapping(struct page *page)
 {
 	struct address_space *mapping = page->mapping;
 
-	/* This happens if someone calls flush_dcache_page on slab page */
-	if (unlikely(PageSlab(page)))
-		return NULL;
-
+	VM_BUG_ON(PageSlab(page));
 	if (unlikely(PageSwapCache(page))) {
 		swp_entry_t entry;
 

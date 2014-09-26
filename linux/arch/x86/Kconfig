@@ -123,7 +123,6 @@ config X86
 	select COMPAT_OLD_SIGACTION if IA32_EMULATION
 	select RTC_LIB
 	select HAVE_DEBUG_STACKOVERFLOW
-	select ARCH_SUPPORTS_ATOMIC_RMW
 
 config INSTRUCTION_DECODER
 	def_bool y
@@ -1881,10 +1880,6 @@ config ARCH_ENABLE_MEMORY_HOTREMOVE
 config USE_PERCPU_NUMA_NODE_ID
 	def_bool y
 	depends on NUMA
-
-config ARCH_ENABLE_HUGEPAGE_MIGRATION
-	def_bool y
-	depends on X86_64 && HUGETLB_PAGE && MIGRATION
 
 menu "Power management and ACPI options"
 

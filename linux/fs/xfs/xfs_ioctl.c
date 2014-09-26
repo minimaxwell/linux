@@ -443,8 +443,7 @@ xfs_attrlist_by_handle(
 		return -XFS_ERROR(EPERM);
 	if (copy_from_user(&al_hreq, arg, sizeof(xfs_fsop_attrlist_handlereq_t)))
 		return -XFS_ERROR(EFAULT);
-	if (al_hreq.buflen < sizeof(struct attrlist) ||
-	    al_hreq.buflen > XATTR_LIST_MAX)
+	if (al_hreq.buflen > XATTR_LIST_MAX)
 		return -XFS_ERROR(EINVAL);
 
 	/*
@@ -1133,7 +1132,7 @@ xfs_ioctl_setattr(
 		 * cleared upon successful return from chown()
 		 */
 		if ((ip->i_d.di_mode & (S_ISUID|S_ISGID)) &&
-		    !capable_wrt_inode_uidgid(VFS_I(ip), CAP_FSETID))
+		    !inode_capable(VFS_I(ip), CAP_FSETID))
 			ip->i_d.di_mode &= ~(S_ISUID|S_ISGID);
 
 		/*
@@ -1711,12 +1710,6 @@ xfs_file_ioctl(
 	case XFS_IOC_FREE_EOFBLOCKS: {
 		struct xfs_fs_eofblocks eofb;
 		struct xfs_eofblocks keofb;
-
-		if (!capable(CAP_SYS_ADMIN))
-			return -EPERM;
-
-		if (mp->m_flags & XFS_MOUNT_RDONLY)
-			return -XFS_ERROR(EROFS);
 
 		if (!capable(CAP_SYS_ADMIN))
 			return -EPERM;

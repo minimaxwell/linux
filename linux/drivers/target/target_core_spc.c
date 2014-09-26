@@ -639,7 +639,6 @@ spc_emulate_inquiry(struct se_cmd *cmd)
 	unsigned char buf[SE_INQUIRY_BUF];
 	sense_reason_t ret;
 	int p;
-	int len = 0;
 
 	memset(buf, 0, SE_INQUIRY_BUF);
 
@@ -657,7 +656,6 @@ spc_emulate_inquiry(struct se_cmd *cmd)
 		}
 
 		ret = spc_emulate_inquiry_std(cmd, buf);
-		len = buf[4] + 5;
 		goto out;
 	}
 
@@ -665,7 +663,6 @@ spc_emulate_inquiry(struct se_cmd *cmd)
 		if (cdb[2] == evpd_handlers[p].page) {
 			buf[1] = cdb[2];
 			ret = evpd_handlers[p].emulate(cmd, buf);
-			len = get_unaligned_be16(&buf[2]) + 4;
 			goto out;
 		}
 	}
@@ -681,7 +678,7 @@ out:
 	}
 
 	if (!ret)
-		target_complete_cmd_with_length(cmd, GOOD, len);
+		target_complete_cmd(cmd, GOOD);
 	return ret;
 }
 
@@ -999,7 +996,7 @@ set_length:
 		transport_kunmap_data_sg(cmd);
 	}
 
-	target_complete_cmd_with_length(cmd, GOOD, length);
+	target_complete_cmd(cmd, GOOD);
 	return 0;
 }
 
@@ -1176,7 +1173,7 @@ done:
 	buf[3] = (lun_count & 0xff);
 	transport_kunmap_data_sg(cmd);
 
-	target_complete_cmd_with_length(cmd, GOOD, 8 + lun_count * 8);
+	target_complete_cmd(cmd, GOOD);
 	return 0;
 }
 EXPORT_SYMBOL(spc_emulate_report_luns);

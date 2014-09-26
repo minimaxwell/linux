@@ -4,16 +4,6 @@
 / {
 	model = "ZyXEL NSA310";
 
-	mbus {
-		pcie-controller {
-			status = "okay";
-
-			pcie@1,0 {
-				status = "okay";
-			};
-		};
-	};
-
 	ocp@f1000000 {
 		pinctrl: pinctrl@10000 {
 
@@ -77,6 +67,14 @@
 			partition@5040000 {
 				label = "rootfs2";
 				reg = <0x5040000 0x2fc0000>;
+			};
+		};
+
+		pcie-controller {
+			status = "okay";
+
+			pcie@1,0 {
+				status = "okay";
 			};
 		};
 	};
