@@ -32,11 +32,10 @@
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 #include <linux/mdio.h>
-
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include <linux/atomic.h>
-#include <asm/io.h>
 #include <asm/irq.h>
-#include <asm/uaccess.h>
 
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
@@ -413,22 +412,17 @@ out_unlock:
 }
 EXPORT_SYMBOL(phy_start_aneg);
 
-
 /**
  * phy_start_machine - start PHY state machine tracking
  * @phydev: the phy_device struct
- * @handler: callback function for state change notifications
  *
  * Description: The PHY infrastructure can run a state machine
  *   which tracks whether the PHY is starting up, negotiating,
  *   etc.  This function starts the timer which tracks the state
- *   of the PHY.  If you want to be notified when the state changes,
- *   pass in the callback @handler, otherwise, pass NULL.  If you
- *   want to maintain your own state machine, do not call this
- *   function.
+ *   of the PHY.  If you want to maintain your own state machine,
+ *   do not call this function.
  */
-void phy_start_machine(struct phy_device *phydev,
-		void (*handler)(struct net_device *))
+void phy_start_machine(struct phy_device *phydev)
 {
 	phy_ghost_ready = 0;
 	if (of_find_compatible_node(NULL, NULL, "fsl,cmpc885")) {
@@ -437,8 +431,6 @@ void phy_start_machine(struct phy_device *phydev,
 				isMCR2G = 1;
 		}
 	}
-	phydev->adjust_state = handler;
-
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
 }
 
@@ -556,8 +548,6 @@ phy_err:
  */
 int phy_start_interrupts(struct phy_device *phydev)
 {
-	int err = 0;
-
 	atomic_set(&phydev->irq_disable, 0);
 	if (request_irq(phydev->irq, phy_interrupt,
 				IRQF_SHARED,
@@ -941,11 +931,14 @@ void phy_state_machine(struct work_struct *work)
 	if (needs_aneg)
 		err = phy_start_aneg(phydev);
 
+	if (do_suspend)
+		phy_suspend(phydev);
+
 	if (err < 0)
 		phy_error(phydev);
 
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
-			HZ * PHY_STATE_TIME);
+			   HZ * PHY_STATE_TIME);
 }
 
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)
