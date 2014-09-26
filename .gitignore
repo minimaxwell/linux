@@ -1,0 +1,9 @@
+tr.sh
+*.dtb
+initramfs.txt
+initramfs
+toto
+*.rej
+linux/drivers/platform/saf3000
+linux/include/ldb
+linux/include/saf3000/drv_version.h
