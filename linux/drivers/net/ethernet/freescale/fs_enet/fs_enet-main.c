@@ -826,6 +826,7 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 	if (skb == NULL)
 		printk("arp_create failure -> gratuitous arp not sent\n");
 	else {
+		mm_segment_t old_fs = get_fs();
 		//send skb on eth1
 		arp_xmit(skb);
 		//dev_err(fep->dev, "gratuitous arp sent\n");
@@ -833,7 +834,6 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 		//find all vlan on eth1
 		//FIXME : is there a clean way ? 
 	
-		mm_segment_t old_fs = get_fs();
 		set_fs(KERNEL_DS);
 
 		fd = sys_open("/proc/net/vlan/config", O_RDONLY, 0);
