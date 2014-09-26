@@ -124,7 +124,7 @@ struct phy_info {
 
 struct fs_notify_work {
 	struct work_struct notify_queue;
-	struct sysfs_dirent *sd;
+	struct kernfs_node *kn;
 };
 
 struct fs_enet_private {

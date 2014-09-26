@@ -801,7 +801,7 @@ void fs_sysfs_notify(struct work_struct *work)
 	struct fs_notify_work *notify =
 			container_of(work, struct fs_notify_work, notify_queue);
 
-	sysfs_notify_dirent(notify->sd);
+	sysfs_notify_dirent(notify->kn);
 }
 
 
@@ -1792,11 +1792,11 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	if (ret)
 		goto out_remove_file;
 
-	fep->notify_work[PHY0_LINK].sd = 
+	fep->notify_work[PHY0_LINK].kn = 
 		sysfs_get_dirent(fep->dev->kobj.sd, "phy0_link");
-	fep->notify_work[PHY1_LINK].sd = 
+	fep->notify_work[PHY1_LINK].kn = 
 		sysfs_get_dirent(fep->dev->kobj.sd, "phy1_link");
-	fep->notify_work[ACTIVE_LINK].sd = 
+	fep->notify_work[ACTIVE_LINK].kn = 
 		sysfs_get_dirent(fep->dev->kobj.sd, "active_link");
 
 	return 0;
