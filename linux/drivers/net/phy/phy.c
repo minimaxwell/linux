@@ -49,8 +49,6 @@ static int ok = 0;
 static int active_phy = 0; //or PHY1ADDR or PHY0ADDR
 static int isMCR2G = 0;
 
-//#define DOUBLE_ATTACH_DEBUG 1
-
 /**
  * phy_print_status - Convenience function to print out the current phy status
  * @phydev: the phy_device struct
@@ -402,15 +400,9 @@ int phy_start_aneg(struct phy_device *phydev)
 	if (phydev->state != PHY_HALTED) {
 		if (AUTONEG_ENABLE == phydev->autoneg) {
 			phydev->state = PHY_AN;
-			#ifdef DOUBLE_ATTACH_DEBUG
-			pr_err("PHY(addr: %d) set to PHY_AN from phy_start_aneg\n", phydev->addr);
-			#endif
 			phydev->link_timeout = PHY_AN_TIMEOUT;
 		} else {
 			phydev->state = PHY_FORCING;
-			#ifdef DOUBLE_ATTACH_DEBUG
-			pr_err("PHY(addr: %d) set to PHY_FORCING from phy_start_aneg\n", phydev->addr);
-			#endif
 			phydev->link_timeout = PHY_FORCE_TIMEOUT;
 		}
 	}
@@ -629,9 +621,6 @@ void phy_change(struct work_struct *work)
 
 	mutex_lock(&phydev->lock);
 	if ((PHY_RUNNING == phydev->state) || (PHY_NOLINK == phydev->state)) {
-		#ifdef DOUBLE_ATTACH_DEBUG
-		pr_err("PHY(addr: %d) from %d to PHY_CHANGELINK \n", phydev->addr, phydev->state);
-		#endif
 		phydev->state = PHY_CHANGELINK;
 		if (active_phy == phydev->addr) { 
 			active_phy = 0;
@@ -764,14 +753,8 @@ void phy_state_machine(struct work_struct *work)
 			 * negotiation for now */
 			if (!phydev->link) {
 				phydev->state = PHY_NOLINK;
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) from PHY_AN to PHY_NOLINK\n", phydev->addr);
-				#endif
 				if (phydev->addr == PHY1ADDR && !isMCR2G) {
 					phy_write(phydev, MII_BMCR, phy_read(phydev, MII_BMCR) | BMCR_ISOLATE);
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) is now isolated\n", phydev->addr);
-					#endif
 				}
 				netif_carrier_off(phydev->attached_dev);
 				phydev->adjust_link(phydev->attached_dev);
@@ -790,16 +773,10 @@ void phy_state_machine(struct work_struct *work)
 					if (active_phy == 0 && phydev->addr != 1)
 						active_phy = phydev->addr;
 					phydev->state = PHY_RUNNING;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_AN to PHY_RUNNING\n", phydev->addr);
-					#endif
 					netif_carrier_on(phydev->attached_dev);
 					phydev->adjust_link(phydev->attached_dev);
 				} else {
 					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_AN to PHY_DOUBLE_ATTACHEMENT\n", phydev->addr);
-					#endif
 				}
 
 			} else if (0 == phydev->link_timeout--) {
@@ -821,16 +798,10 @@ void phy_state_machine(struct work_struct *work)
 					if (active_phy == 0 && phydev->addr != 1)
 						active_phy = phydev->addr;
 					phydev->state = PHY_RUNNING;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_NOLINK to PHY_RUNNING\n", phydev->addr);
-					#endif
 					netif_carrier_on(phydev->attached_dev);
 					phydev->adjust_link(phydev->attached_dev);
 				} else {
 					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_NOLINK to PHY_DOUBLE_ATTACHEMENT\n", phydev->addr);
-					#endif
 				}
 			}
 			break;
@@ -842,9 +813,6 @@ void phy_state_machine(struct work_struct *work)
 
 			if (phydev->link) {
 				phydev->state = PHY_CHANGELINK;
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) from PHY_FORCING to PHY_CHANGELINK\n", phydev->addr);
-				#endif
 			} else {
 				if (0 == phydev->link_timeout--)
 					needs_aneg = 1;
@@ -858,9 +826,6 @@ void phy_state_machine(struct work_struct *work)
 			 */
 			if (!phy_interrupt_is_valid(phydev)) {
 				phydev->state = PHY_CHANGELINK;
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) from PHY_RUNNING to PHY_CHANGELINK\n", phydev->addr);
-				#endif
 			}
 			break;
 		case PHY_DOUBLE_ATTACHEMENT:
@@ -868,16 +833,10 @@ void phy_state_machine(struct work_struct *work)
 			 * polling or ignoring interrupts
 			 */
 			if (! (phy_read(phydev, MII_BMSR) & BMSR_ANEGCOMPLETE)) {
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) has to do his AN before running\n", phydev->addr);
-				#endif
 				phydev->autoneg = AUTONEG_ENABLE;
 				phydev->state = PHY_AN;
 			} else if (phy_ghost_ready == 0) { 
 				phy_ghost_ready = 1;
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) phy_ghost_ready\n", phydev->addr);
-				#endif
 			}
 			break;
 		case PHY_CHANGELINK:
@@ -892,27 +851,15 @@ void phy_state_machine(struct work_struct *work)
 						active_phy = phydev->addr;
 					if (phydev->addr == PHY1ADDR && !ok && !isMCR2G) {
 						phydev->state = PHY_DOUBLE_ATTACHEMENT;
-						#ifdef DOUBLE_ATTACH_DEBUG
-						pr_err("PHY(addr: %d) from PHY_CHANGELINK to PHY_DOUBLE_ATTACHEMENT\n", phydev->addr);
-						#endif
 					} else {
 						phydev->state = PHY_RUNNING;
-						#ifdef DOUBLE_ATTACH_DEBUG
-						pr_err("PHY(addr: %d) from PHY_CHANGELINK to PHY_RUNNING\n", phydev->addr);
-						#endif
 						if (phydev->addr != 1) {
 							ok = 1;
-							#ifdef DOUBLE_ATTACH_DEBUG
-							pr_err("ok = 1\n", phydev->addr);
-							#endif
 						}
 					}
 					netif_carrier_on(phydev->attached_dev);
 				} else {
 					phydev->state = PHY_DOUBLE_ATTACHEMENT;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_CHANGELINK to PHY_DOUBLE_ATTACHEMENT\n", phydev->addr);
-					#endif
 				}
 			} else {
 				if (active_phy == phydev->addr) {
@@ -922,9 +869,6 @@ void phy_state_machine(struct work_struct *work)
 				}
 				phy_ghost_ready = 0;
 				phydev->state = PHY_NOLINK;
-				#ifdef DOUBLE_ATTACH_DEBUG
-				pr_err("PHY(addr: %d) from PHY_CHANGELINK to PHY_NOLINK\n", phydev->addr);
-				#endif
 				netif_carrier_off(phydev->attached_dev);
 			}
 
@@ -969,21 +913,12 @@ void phy_state_machine(struct work_struct *work)
 
 					if (phydev->link) {
 						phydev->state = PHY_RUNNING;
-						#ifdef DOUBLE_ATTACH_DEBUG
-						pr_err("PHY(addr: %d) from PHY_RESUMING to PHY_RUNNING\n", phydev->addr);
-						#endif
 						netif_carrier_on(phydev->attached_dev);
 					} else
 						phydev->state = PHY_NOLINK;
-						#ifdef DOUBLE_ATTACH_DEBUG
-						pr_err("PHY(addr: %d) from PHY_RESUMING to PHY_NOLINK\n", phydev->addr);
-						#endif
 					phydev->adjust_link(phydev->attached_dev);
 				} else {
 					phydev->state = PHY_AN;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_RESUMING to PHY_AN\n", phydev->addr);
-					#endif
 					phydev->link_timeout = PHY_AN_TIMEOUT;
 				}
 			} else {
@@ -993,15 +928,9 @@ void phy_state_machine(struct work_struct *work)
 
 				if (phydev->link) {
 					phydev->state = PHY_RUNNING;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_RESUMING to PHY_RUNNING\n", phydev->addr);
-					#endif
 					netif_carrier_on(phydev->attached_dev);
 				} else
 					phydev->state = PHY_NOLINK;
-					#ifdef DOUBLE_ATTACH_DEBUG
-					pr_err("PHY(addr: %d) from PHY_RESUMING to PHY_NOLINK\n", phydev->addr);
-					#endif
 				phydev->adjust_link(phydev->attached_dev);
 			}
 			break;
