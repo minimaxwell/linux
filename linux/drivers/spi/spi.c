@@ -1035,41 +1035,39 @@ static void of_register_spi_devices(struct spi_master *master)
 			spi->mode |= SPI_TROLL;
 
 		/* Device DUAL/QUAD mode */
-		prop = of_get_property(nc, "spi-tx-bus-width", &len);
-		if (prop && len == sizeof(*prop)) {
-			switch (be32_to_cpup(prop)) {
-			case SPI_NBITS_SINGLE:
+		if (!of_property_read_u32(nc, "spi-tx-bus-width", &value)) {
+			switch (value) {
+			case 1:
 				break;
-			case SPI_NBITS_DUAL:
+			case 2:
 				spi->mode |= SPI_TX_DUAL;
 				break;
-			case SPI_NBITS_QUAD:
+			case 4:
 				spi->mode |= SPI_TX_QUAD;
 				break;
 			default:
 				dev_err(&master->dev,
 					"spi-tx-bus-width %d not supported\n",
-					be32_to_cpup(prop));
+					value);
 				spi_dev_put(spi);
 				continue;
 			}
 		}
 
-		prop = of_get_property(nc, "spi-rx-bus-width", &len);
-		if (prop && len == sizeof(*prop)) {
-			switch (be32_to_cpup(prop)) {
-			case SPI_NBITS_SINGLE:
+		if (!of_property_read_u32(nc, "spi-rx-bus-width", &value)) {
+			switch (value) {
+			case 1:
 				break;
-			case SPI_NBITS_DUAL:
+			case 2:
 				spi->mode |= SPI_RX_DUAL;
 				break;
-			case SPI_NBITS_QUAD:
+			case 4:
 				spi->mode |= SPI_RX_QUAD;
 				break;
 			default:
 				dev_err(&master->dev,
 					"spi-rx-bus-width %d not supported\n",
-					be32_to_cpup(prop));
+					value);
 				spi_dev_put(spi);
 				continue;
 			}
@@ -1080,14 +1078,14 @@ static void of_register_spi_devices(struct spi_master *master)
 		if (prop && len >= sizeof(*prop))
 			spi->bits_per_word = prop[0];
 		/* Device speed */
-		prop = of_get_property(nc, "spi-max-frequency", &len);
-		if (!prop || len < sizeof(*prop)) {
-			dev_err(&master->dev, "%s has no 'spi-max-frequency' property\n",
-				nc->full_name);
+		rc = of_property_read_u32(nc, "spi-max-frequency", &value);
+		if (rc) {
+			dev_err(&master->dev, "%s has no valid 'spi-max-frequency' property (%d)\n",
+				nc->full_name, rc);
 			spi_dev_put(spi);
 			continue;
 		}
-		spi->max_speed_hz = be32_to_cpup(prop);
+		spi->max_speed_hz = value;
 
 		/* IRQ */
 		spi->irq = irq_of_parse_and_map(nc, 0);
@@ -1591,8 +1589,7 @@ int spi_setup(struct spi_device *spi)
 	if (spi->master->setup)
 		status = spi->master->setup(spi);
 
-	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%s"
-				"%u bits/w, %u Hz max --> %d\n",
+	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%s%u bits/w, %u Hz max --> %d\n",
 			(int) (spi->mode & (SPI_CPOL | SPI_CPHA)),
 			(spi->mode & SPI_CS_HIGH) ? "cs_high, " : "",
 			(spi->mode & SPI_LSB_FIRST) ? "lsb, " : "",

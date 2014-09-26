@@ -697,11 +697,11 @@ static int genphy_config_advert(struct phy_device *phydev)
  *   to the values in phydev. Assumes that the values are valid.
  *   Please see phy_sanitize_settings().
  */
-static int genphy_setup_forced(struct phy_device *phydev)
+int genphy_setup_forced(struct phy_device *phydev)
 {
 	int err;
 	int ctl;
-	
+
 	ctl = phy_read(phydev, MII_BMCR);
 
 	if (ctl < 0)

@@ -1788,11 +1788,11 @@ static int fs_enet_probe(struct platform_device *ofdev)
 		goto out_remove_file;
 
 	fep->notify_work[PHY0_LINK].sd = 
-		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "phy0_link");
+		sysfs_get_dirent(fep->dev->kobj.sd, "phy0_link");
 	fep->notify_work[PHY1_LINK].sd = 
-		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "phy1_link");
+		sysfs_get_dirent(fep->dev->kobj.sd, "phy1_link");
 	fep->notify_work[ACTIVE_LINK].sd = 
-		sysfs_get_dirent(fep->dev->kobj.sd, NULL, "active_link");
+		sysfs_get_dirent(fep->dev->kobj.sd, "active_link");
 
 	return 0;
 

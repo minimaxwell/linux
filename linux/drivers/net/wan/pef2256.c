@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
+#include <linux/of_address.h>
 
 #include <linux/cache.h>
 #include <asm/byteorder.h>
