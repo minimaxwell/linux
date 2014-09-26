@@ -723,7 +723,7 @@ static int genphy_setup_forced(struct phy_device *phydev)
 
 	return err;
 }
-
+EXPORT_SYMBOL(genphy_setup_forced);
 
 /**
  * genphy_restart_aneg - Enable and Restart Autonegotiation
