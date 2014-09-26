@@ -624,8 +624,6 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	err = phy_init_hw(phydev);
 	if (err)
 		phy_detach(phydev);
-	else
-		phy_resume(phydev);
 
 	return err;
 }
@@ -679,7 +677,6 @@ void phy_detach(struct phy_device *phydev)
 
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
-	phy_suspend(phydev);
 
 	/* If the device had no specific driver before (i.e. - it
 	 * was using the generic driver), we unbind the device
