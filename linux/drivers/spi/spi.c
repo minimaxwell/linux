@@ -1074,9 +1074,10 @@ static void of_register_spi_devices(struct spi_master *master)
 		}
 
 		/* Bits per word */
-		prop = of_get_property(nc, "spi-bits", &len);
-		if (prop && len >= sizeof(*prop))
-			spi->bits_per_word = prop[0];
+		rc = of_property_read_u32(nc, "spi-bits", &value);
+		if (!rc)
+			spi->bits_per_word = value;
+
 		/* Device speed */
 		rc = of_property_read_u32(nc, "spi-max-frequency", &value);
 		if (rc) {

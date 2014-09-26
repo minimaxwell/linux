@@ -25,6 +25,7 @@
 #include <asm/io.h>
 #include <asm/cpm1.h>
 #include <asm/fs_pd.h>
+#include <linux/of_address.h>
 
 /*
  * Driver identification

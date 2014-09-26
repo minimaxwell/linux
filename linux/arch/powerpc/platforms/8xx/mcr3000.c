@@ -12,6 +12,9 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 #include <linux/proc_fs.h>
+#include <linux/of_fdt.h>
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
 
 #include <asm/io.h>
 #include <asm/machdep.h>
