@@ -229,6 +229,7 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 	const struct mpc8xxx_wdt_type *wdt_type;
 	u32 freq = fsl_get_sys_freq();
 	bool enabled;
+	unsigned int timeout_sec;
 
 	match = of_match_device(mpc8xxx_wdt_match, &ofdev->dev);
 	if (!match)
@@ -275,7 +276,7 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 	 * userspace handles it.
 	 */
 	if (enabled)
-		mpc8xxx_wdt_timer_ping(0);
+		mod_timer(&wdt_timer, jiffies);
 	return 0;
 err_unmap:
 	iounmap(wd_base);
@@ -285,9 +286,10 @@ err_unmap:
 
 static int mpc8xxx_wdt_remove(struct platform_device *ofdev)
 {
-	mpc8xxx_wdt_pr_warn("watchdog removed");
+	pr_crit("Watchdog removed, expect the %s soon!\n",
+		reset ? "reset" : "machine check exception");
 	del_timer_sync(&wdt_timer);
-	misc_deregister(&mpc8xxx_wdt_miscdev);
+	watchdog_unregister_device(&mpc8xxx_wdt_dev);
 	iounmap(wd_base);
 
 	return 0;
@@ -340,10 +342,11 @@ static int mpc8xxx_wdt_init_late(void)
 	if (!wd_base)
 		return -ENODEV;
 
-	ret = misc_register(&mpc8xxx_wdt_miscdev);
+	watchdog_set_nowayout(&mpc8xxx_wdt_dev, nowayout);
+
+	ret = watchdog_register_device(&mpc8xxx_wdt_dev);
 	if (ret) {
-		pr_err("cannot register miscdev on minor=%d (err=%d)\n",
-		       WATCHDOG_MINOR, ret);
+		pr_err("cannot register watchdog device (err=%d)\n", ret);
 		return ret;
 	}
 	return 0;
