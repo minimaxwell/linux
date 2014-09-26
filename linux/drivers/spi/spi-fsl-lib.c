@@ -129,7 +129,6 @@ int mpc8xxx_spi_probe(struct device *dev, struct resource *mem,
 			| SPI_LSB_FIRST | SPI_LOOP | SPI_TROLL;
 
 	master->transfer = mpc8xxx_spi_transfer;
-	master->cleanup = mpc8xxx_spi_cleanup;
 	master->dev.of_node = dev->of_node;
 
 	mpc8xxx_spi = spi_master_get_devdata(master);

@@ -1670,9 +1670,16 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	fpi->use_napi = 1;
 	fpi->napi_weight = 17;
 	fpi->phy_node = of_parse_phandle(ofdev->dev.of_node, "phy-handle", 0);
-	if ((!fpi->phy_node) && (!of_get_property(ofdev->dev.of_node, "fixed-link",
-						  NULL)))
-		goto out_free_fpi;
+	if (!fpi->phy_node && of_phy_is_fixed_link(ofdev->dev.of_node)) {
+		err = of_phy_register_fixed_link(ofdev->dev.of_node);
+		if (err)
+			goto out_free_fpi;
+
+		/* In the case of a fixed PHY, the DT node associated
+		 * to the PHY is the Ethernet MAC DT node.
+		 */
+		fpi->phy_node = ofdev->dev.of_node;
+	}
 	fpi->phy_node2 = of_parse_phandle(ofdev->dev.of_node, "phy-handle", 1);
 
 	if (of_device_is_compatible(ofdev->dev.of_node, "fsl,mpc5125-fec")) {
