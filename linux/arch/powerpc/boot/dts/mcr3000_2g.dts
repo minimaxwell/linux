@@ -488,9 +488,10 @@
 				#size-cells = <1>;
 				ranges = <0x0 0x2000 0x2000>;
 
+				/* conserver les 4 premiers Kbytes pour QMC */
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x0 0x1c00>;
+					reg = <0x1000 0x0c00>;
 				};
 			};
 
@@ -573,6 +574,8 @@
 				/* parametres possible : none, SCC3, SCC4 */
 				scc_voie = "SCC4";
 				scc_retard = "SCC3";
+//				scc_voie = "SCC3";
+//				scc_retard = "SCC4";
 				/* parametre enregistrement : TS sup sur scc_voie 0 a 48 */
 				ts_enreg = <16>;
 			};
@@ -668,6 +671,16 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0xc0>;
 			};
+
+//			scc4q: qmc@a60 {
+//				device_type = "qmc";
+//				qmc_name = "scc4";
+//				compatible = "fsl,mpc885-scc-qmc", "fsl,cpm1-scc-qmc";
+//				reg = <0xa60 0x20 0x3f00 0xb0 0x2000 0x1000>;
+//				interrupts = <27>;
+//				interrupt-parent = <&CPM_PIC>;
+//				fsl,cpm-command = <0xc0>;
+//			};
 
 			smc2: serial@a90 {
 				device_type = "serial";

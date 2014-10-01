@@ -36,12 +36,14 @@ extern int fpga_read_channel(int channel, int *val);
 #define WB_MINOR_SCC2		243	/* crypto wide-band SCC2 */
 #define WB_MINOR_SCC3		244	/* crypto wide-band SCC3 */
 #define SMC_9BITS_MINOR		245	/* SMC avec 9 bits de donnees */
+#define QMC_DELAY_MINOR		239	/* QMC pour gestion retard */
 #define NAME_CODEC_DEVICE	"pcm"
 #define NAME_VOIE_DEVICE	"pcm_voie"
 #define NAME_RETARD_DEVICE	"pcm_retard"
 #define NAME_WB_SCC2_DEVICE	"wb_scc2"
 #define NAME_WB_SCC3_DEVICE	"wb_scc3"
 #define NAME_SMC_9BITS_DEVICE	"smc_9bits"
+#define NAME_QMC_DELAY_DEVICE	"qmc_delay"
 
 #endif /* __KERNEL__ */
 		
