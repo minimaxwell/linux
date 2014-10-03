@@ -1,0 +1,18 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Benjamin Herrenschmidt <benh@kernel.crashing.org>, Paul Mackerras <paulus@samba.org>, Mark Brown <broonie@kernel.org>, Marcelo Tosatti <marcelo@kvack.org>, Vitaly Bordug <vitb@kernel.crashing.org>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, linux-spi@vger.kernel.org, Joakim Tjernlund <joakim.tjernlund@transmode.se>, scottwood@freescale.com
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 0/2] fsl: fsl-spi: Fix CMP1 pram allocation and allow dynamic allocation
+
+This patchset:
+1) Fix parameter ram offset setup for CPM1
+2) Allow dynamic allocation of CPM1 parameter RAM
+
+Tested on MPC885.
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ linux/arch/powerpc/platforms/8xx/Kconfig | 11 +++++++++++
+ linux/drivers/spi/spi-fsl-cpm.c          | 14 +++++++++-----
+ 2 files changed, 20 insertions(+), 5 deletions(-)
