@@ -1,0 +1,31 @@
+From: Christophe Leroy <christophe.leroy@c-s.fr>
+To: Pantelis Antoniou <pantelis.antoniou@gmail.com>, Vitaly Bordug <vbordug@ru.mvista.com>
+CC: linux-kernel@vger.kernel.org, linuxppc-dev@lists.ozlabs.org, netdev@vger.kernel.org
+BCC: Christophe Leroy <christophe.leroy@c-s.fr>
+Subject: [PATCH 0/2] net: fs_enet: Remove non NAPI RX and add NAPI for TX
+
+When using a MPC8xx as a router, 'perf' shows a significant time spent in 
+fs_enet_interrupt() and fs_enet_start_xmit().
+'perf annotate' shows that the time spent in fs_enet_start_xmit is indeed spent
+between spin_unlock_irqrestore() and the following instruction, hence in
+interrupt handling. This is due to the TX complete interrupt that fires after
+each transmitted packet.
+This patchset first remove all non NAPI handling as NAPI has become the only
+mode for RX, then adds NAPI for handling TX complete.
+This improves NAT TCP throughput by 21% on MPC885 with FEC.
+
+Tested on MPC885 with FEC.
+
+[PATCH 1/2] net: fs_enet: Remove non NAPI RX
+[PATCH 2/2] net: fs_enet: Add NAPI TX
+
+Signed-off-by: Christophe Leroy <christophe.leroy@c-s.fr>
+
+---
+ .../net/ethernet/freescale/fs_enet/fs_enet-main.c  | 211 ++++++---------------
+ .../net/ethernet/freescale/fs_enet/fs_enet.h       |   9 +-
+ .../net/ethernet/freescale/fs_enet/mac-fcc.c       |  29 +++
+ .../net/ethernet/freescale/fs_enet/mac-fec.c       |  29 +++
+ .../net/ethernet/freescale/fs_enet/mac-scc.c       |  29 +++
+ linux/include/linux/fs_enet_pd.h                   |   1 -
+ 6 files changed, 147 insertions(+), 161 deletions(-)
