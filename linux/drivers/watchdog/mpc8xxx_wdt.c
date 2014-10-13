@@ -173,7 +173,7 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 	/* Calculate the timeout in seconds */
 	timeout_sec = (timeout * wdt_type->prescaler) / freq;
 
-	mpc8xxx_wdt_dev.timeout = timeout_sec;
+	watchdog_init_timeout(&mpc8xxx_wdt_dev, timeout_sec, &ofdev->dev);
 #ifdef MODULE
 	ret = mpc8xxx_wdt_init_late();
 	if (ret)
