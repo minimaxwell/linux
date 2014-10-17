@@ -1,7 +1,7 @@
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
-PATCHLEVEL = 16
+PATCHLEVEL = 17
 SUBLEVEL = 0
 EXTRAVERSION =
 NAME = Shuffling Zombie Juror

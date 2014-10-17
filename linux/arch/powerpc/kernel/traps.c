@@ -771,6 +771,20 @@ void watchdog_exception(struct pt_regs *regs)
 }
 #endif
 
+void handle_hmi_exception(struct pt_regs *regs)
+{
+	struct pt_regs *old_regs;
+
+	old_regs = set_irq_regs(regs);
+	irq_enter();
+
+	if (ppc_md.handle_hmi_exception)
+		ppc_md.handle_hmi_exception(regs);
+
+	irq_exit();
+	set_irq_regs(old_regs);
+}
+
 void unknown_exception(struct pt_regs *regs)
 {
 	enum ctx_state prev_state = exception_enter();

@@ -1574,7 +1574,7 @@ static int fs_enet_probe(struct platform_device *ofdev)
 		/* In the case of a fixed PHY, the DT node associated
 		 * to the PHY is the Ethernet MAC DT node.
 		 */
-		fpi->phy_node = ofdev->dev.of_node;
+		fpi->phy_node = of_node_get(ofdev->dev.of_node);
 	}
 	fpi->phy_node2 = of_parse_phandle(ofdev->dev.of_node, "phy-handle", 1);
 
