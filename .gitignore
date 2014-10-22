@@ -96,3 +96,14 @@ x509.genkey
 
 # Kconfig presets
 all.config
+
+# CS home made
+toto
+/arch/ppc
+/drivers/platform/saf3000
+/include/ldb
+/include/saf3000/drv_version.h
+/initramfs
+/initramfs.txt
+/tr.sh
+/working/
