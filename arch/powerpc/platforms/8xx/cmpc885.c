@@ -49,6 +49,9 @@ void __init cmpc885_pics_init(void)
 			irq = fpgaf_pic_init();
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpgaf_cascade);
+			irq = fpga_pic_init();
+			if (irq != NO_IRQ)
+				irq_set_chained_handler(irq, fpga_cascade);
 		}
 		/* MIAE configuration */
 		if (!strcmp(model, "MIAE")) {
@@ -119,6 +122,7 @@ static int __init declare_of_platform_devices(void)
 		
 			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
 			fpgaf_init_platform_devices();
+			fpga_init_platform_devices();
 			
 			fpga_clk_init();
 			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
