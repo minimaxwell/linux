@@ -118,6 +118,8 @@ static int __init declare_of_platform_devices(void)
 
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
+			immap_t __iomem *mpc8xx_immr;
+
 			pr_info("%s declare_of_platform_devices()\n", model);
 		
 			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
@@ -126,6 +128,19 @@ static int __init declare_of_platform_devices(void)
 			
 			fpga_clk_init();
 			cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
+
+			mpc8xx_immr = ioremap(get_immrbase(), 0x4000);
+			if (!mpc8xx_immr) {
+				printk(KERN_CRIT "Could not map IMMR\n");
+			} else {
+				cpm8xx_t __iomem *cpmp;  /* Pointer to comm processor space */
+				struct spi_pram *spp;
+
+				cpmp = &mpc8xx_immr->im_cpm;
+				spp = (struct spi_pram *)&cpmp->cp_dparam[PROFF_SPI];
+				out_be16(&spp->rpbase, 0x1bc0);
+			}
+			iounmap(mpc8xx_immr);
 		} 
 		/* MIAE configuration */
 		else if (!strcmp(model, "MIAE")) {

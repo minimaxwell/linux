@@ -500,7 +500,7 @@
 				/* conserver les 4 premiers Kbytes pour QMC */
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x1000 0x0c00>;
+					reg = <0x1000 0x0bc0>;
 				};
 			};
 
