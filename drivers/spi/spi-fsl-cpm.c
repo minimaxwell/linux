@@ -57,10 +57,10 @@ void fsl_spi_cpm_reinit_txrx(struct mpc8xxx_spi *mspi)
 			     QE_CR_PROTOCOL_UNSPECIFIED, 0);
 	} else {
 		if (mspi->flags & SPI_CPM1) {
-			out_be16(&mspi->pram->rstate, 0);
+			out_be32(&mspi->pram->rstate, 0);
 			out_be16(&mspi->pram->rbptr,
 				 in_be16(&mspi->pram->rbase));
-			out_be16(&mspi->pram->tstate, 0);
+			out_be32(&mspi->pram->tstate, 0);
 			out_be16(&mspi->pram->tbptr,
 				 in_be16(&mspi->pram->tbase));
 		} else {
