@@ -269,15 +269,15 @@
 			};
 		};
 		
-		uart-fpga@4,1000000 {
-			device_type = "serial";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-uart-fpga";
-			reg = <4 0x1000000 0x0200>;
-			interrupts = <1>;
-			interrupt-parent = <&FPGA_PIC>;
-		};
+//		uart-fpga@4,1000000 {
+//			device_type = "serial";
+//			#address-cells = <1>;
+//			#size-cells = <1>;
+//			compatible = "s3k,mcr3000-uart-fpga";
+//			reg = <4 0x1000000 0x0200>;
+//			interrupts = <1>;
+//			interrupt-parent = <&FPGA_PIC>;
+//		};
 
 		e1@4,2000000 {
 			#address-cells = <1>;
@@ -301,7 +301,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-mtsl";
-			reg = <4 0x3000000 0xFFFF>;
+			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
 		};
 
 		codec {
@@ -582,9 +582,7 @@
 				reg = <0x9c0 0x440 0x930 0x20>;
 				/* parametres possible : none, SCC3, SCC4 */
 				scc_voie = "SCC4";
-				scc_retard = "SCC3";
-//				scc_voie = "SCC3";
-//				scc_retard = "SCC4";
+				scc_retard = "SCC2";
 				/* parametre enregistrement : TS sup sur scc_voie 0 a 48 */
 				ts_enreg = <16>;
 			};
@@ -609,6 +607,16 @@
 				fsl,cpm-command = <0x40>;
 				gpios = <&CPM1_PIO_C 9 1	/* CTS2 */
 				         &CPM1_PIO_B 18 1>;	/* RTS2 */
+			};
+
+			scc2q: qmc@a20 {
+				device_type = "qmc";
+				qmc_name = "scc2";
+				compatible = "fsl,mpc885-scc-qmc", "fsl,cpm1-scc-qmc";
+				reg = <0xa20 0x20 0x3d00 0xb0 0x2000 0x1000>;
+				interrupts = <29>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-command = <0x40>;
 			};
 
 			scc2wb: wb@a20 {
@@ -680,16 +688,6 @@
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0xc0>;
 			};
-
-//			scc4q: qmc@a60 {
-//				device_type = "qmc";
-//				qmc_name = "scc4";
-//				compatible = "fsl,mpc885-scc-qmc", "fsl,cpm1-scc-qmc";
-//				reg = <0xa60 0x20 0x3f00 0xb0 0x2000 0x1000>;
-//				interrupts = <27>;
-//				interrupt-parent = <&CPM_PIC>;
-//				fsl,cpm-command = <0xc0>;
-//			};
 
 			smc2: serial@a90 {
 				device_type = "serial";
