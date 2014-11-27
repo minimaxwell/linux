@@ -66,7 +66,7 @@ static struct irq_chip fpga_pic = {
 
 int fpga_get_irq(void)
 {
-	int vec = 0;
+	int vec = -1;
 	int ret = -1, rssint, rint;
 	
 	rssint = in_be16(&fpga_regs->mRSSINT_1) << 16;
@@ -74,9 +74,9 @@ int fpga_get_irq(void)
 	/* si IT RINT9 */
 	if (rssint & IDENT_BIT_RINT9) {
 		rint = in_be16(&fpga_regs->mRINT9);
-		if (rint & RINT9_UART_MSK) vec = 1;
+		if (rint & RINT9_UART_MSK) vec = 0;
 	}
-	if (rssint)
+	if (vec != -1)
 		ret = irq_linear_revmap(fpga_pic_host, vec);
 
 	return ret;
