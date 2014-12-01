@@ -51,9 +51,9 @@ pr_err("fpga_unmask_irq() vec = %d\n", vec);
 
 static void fpga_end_irq(struct irq_data *d)
 {
-	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
+//	unsigned int vec = (unsigned int)irqd_to_hwirq(d);
 
-pr_err("fpga_end_irq() vec = %d\n", vec);
+//pr_err("fpga_end_irq() vec = %d\n", vec);
 //	out_be16(&fpgaf_regs->it_ack, ~(1 << (15-vec)));
 }
 
@@ -66,7 +66,7 @@ static struct irq_chip fpga_pic = {
 
 int fpga_get_irq(void)
 {
-	int vec = -1;
+	int vec = 0;
 	int ret = -1, rssint, rint;
 	
 	rssint = in_be16(&fpga_regs->mRSSINT_1) << 16;
@@ -74,9 +74,9 @@ int fpga_get_irq(void)
 	/* si IT RINT9 */
 	if (rssint & IDENT_BIT_RINT9) {
 		rint = in_be16(&fpga_regs->mRINT9);
-		if (rint & RINT9_UART_MSK) vec = 0;
+		if (rint & RINT9_UART_MSK) vec = 1;
 	}
-	if (vec != -1)
+	if (rssint)
 		ret = irq_linear_revmap(fpga_pic_host, vec);
 
 	return ret;
