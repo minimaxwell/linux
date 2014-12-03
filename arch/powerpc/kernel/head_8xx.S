@@ -33,19 +33,12 @@
 
 /* Macro to make the code more readable. */
 #ifdef CONFIG_8xx_CPU6
-#define SPRN_MI_TWC_ADDR	0x2b80
-#define SPRN_MI_RPN_ADDR	0x2d80
-#define SPRN_MD_TWC_ADDR	0x3b80
-#define SPRN_MD_RPN_ADDR	0x3d80
-
-#define MTSPR_CPU6(spr, reg, treg)	\
-	li	treg, spr##_ADDR;	\
-	stw	treg, 12(r0);		\
-	lwz	treg, 12(r0);		\
-	mtspr	spr, reg
+#define DO_8xx_CPU6(val, reg)	\
+	li	reg, val;	\
+	stw	reg, 12(r0);	\
+	lwz	reg, 12(r0);
 #else
-#define MTSPR_CPU6(spr, reg, treg)	\
-	mtspr	spr, reg
+#define DO_8xx_CPU6(val, reg)
 #endif
 
 /*
@@ -343,7 +336,8 @@ InstructionTLBMiss:
 	 * for this "segment."
 	 */
 	ori	r11,r11,1		/* Set valid bit */
-	MTSPR_CPU6(SPRN_MI_TWC, r11, r3)	/* Set segment attributes */
+	DO_8xx_CPU6(0x2b80, r3)
+	mtspr	SPRN_MI_TWC, r11	/* Set segment attributes */
 	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
 	/* Extract level 2 index */
 	rlwinm	r11, r11, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
@@ -362,7 +356,8 @@ InstructionTLBMiss:
 	 */
 	li	r11, RPN_PATTERN
 	rlwimi	r10, r11, 0, 0x07f8	/* Set 24-27, clear 21-23,28 */
-	MTSPR_CPU6(SPRN_MI_RPN, r10, r3)	/* Update TLB entry */
+	DO_8xx_CPU6(0x2d80, r3)
+	mtspr	SPRN_MI_RPN, r10	/* Update TLB entry */
 
 	/* Restore registers */
 #ifdef CONFIG_8xx_CPU6
@@ -431,7 +426,8 @@ DataStoreTLBMiss:
 	 * It is bit 25 in the Linux PTE and bit 30 in the TWC
 	 */
 	rlwimi	r11, r10, 32-5, 30, 30
-	MTSPR_CPU6(SPRN_MD_TWC, r11, r3)
+	DO_8xx_CPU6(0x3b80, r3)
+	mtspr	SPRN_MD_TWC, r11
 
 	/* Both _PAGE_ACCESSED and _PAGE_PRESENT has to be set.
 	 * We also need to know if the insn is a load/store, so:
@@ -464,7 +460,8 @@ DataStoreTLBMiss:
 	 */
 2:	li	r11, RPN_PATTERN
 	rlwimi	r10, r11, 0, 24, 28	/* Set 24-27, clear 28 */
-	MTSPR_CPU6(SPRN_MD_RPN, r10, r3)	/* Update TLB entry */
+	DO_8xx_CPU6(0x3d80, r3)
+	mtspr	SPRN_MD_RPN, r10	/* Update TLB entry */
 
 	/* Restore registers */
 #ifdef CONFIG_8xx_CPU6
