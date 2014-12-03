@@ -107,3 +107,4 @@ toto
 /initramfs.txt
 /tr.sh
 /working/
+*.rej
