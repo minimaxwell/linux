@@ -234,10 +234,15 @@ DataAccess:
 	EXC_XFER_LITE(0x300, handle_page_fault)
 
 /* Instruction access exception.
- * This is "never generated" by the MPC8xx.
+ * This is "never generated" by the MPC8xx.  We jump to it for other
+ * translation errors.
  */
 	. = 0x400
 InstructionAccess:
+	EXCEPTION_PROLOG
+	mr	r4,r12
+	mr	r5,r9
+	EXC_XFER_LITE(0x400, handle_page_fault)
 
 /* External interrupt */
 	EXCEPTION(0x500, HardwareInterrupt, do_IRQ, EXC_XFER_LITE)
@@ -377,7 +382,7 @@ InstructionTLBMiss:
 #endif
 	mfspr	r10, SPRN_SPRG_SCRATCH2
 	EXCEPTION_EPILOG_0
-	b	InstructionTLBError
+	b	InstructionAccess
 
 	. = 0x1200
 DataStoreTLBMiss:
@@ -472,11 +477,7 @@ DataStoreTLBMiss:
  */
 	. = 0x1300
 InstructionTLBError:
-	EXCEPTION_PROLOG
-	mr	r4,r12
-	mr	r5,r9
-	/* 0x400 is InstructionAccess exception, needed by bad_page_fault() */
-	EXC_XFER_LITE(0x400, handle_page_fault)
+	b	InstructionAccess
 
 /* This is the data TLB error on the MPC8xx.  This could be due to
  * many reasons, including a dirty update to a pte.  We can catch that
