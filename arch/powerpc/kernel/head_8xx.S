@@ -299,6 +299,8 @@ InstructionTLBMiss:
 	addi	r11, r10, -0x1000
 	tlbie	r11
 #endif
+	DO_8xx_CPU6(0x3780, r3)
+	mtspr	SPRN_MD_EPN, r10	/* Have to use MD_EPN for walk, MI_EPN can't */
 
 	/* If we are faulting a kernel address, we have to use the
 	 * kernel page tables.
@@ -326,9 +328,10 @@ InstructionTLBMiss:
 	ori	r11,r11,1		/* Set valid bit */
 	DO_8xx_CPU6(0x2b80, r3)
 	mtspr	SPRN_MI_TWC, r11	/* Set segment attributes */
-	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
-	rlwinm	r11, r11, 22, 20, 29	/* Extract level 2 index */
-	lwzx	r10, r10, r11	/* Get the pte */
+	DO_8xx_CPU6(0x3b80, r3)
+	mtspr	SPRN_MD_TWC, r11	/* Load pte table base address */
+	mfspr	r11, SPRN_MD_TWC	/* ....and get the pte address */
+	lwz	r10, 0(r11)	/* Get the pte */
 
 #ifdef CONFIG_SWAP
 	andi.	r11, r10, _PAGE_ACCESSED | _PAGE_PRESENT
@@ -394,13 +397,12 @@ DataStoreTLBMiss:
 
 	/* We have a pte table, so load fetch the pte from the table.
 	 */
-	mfspr	r10, SPRN_MD_EPN	/* Get address of fault */
-	/* Extract level 2 index */
-	rlwinm	r10, r10, 22, 20, 29
-	rlwimi	r10, r11, 0, 0, 19	/* Add level 2 base */
+	ori	r11, r11, 1	/* Set valid bit in physical L2 page */
+	DO_8xx_CPU6(0x3b80, r3)
+	mtspr	SPRN_MD_TWC, r11	/* Load pte table base address */
+	mfspr	r10, SPRN_MD_TWC	/* ....and get the pte address */
 	lwz	r10, 0(r10)	/* Get the pte */
 
-	ori	r11, r11, 1	/* Set valid bit in physical L2 page */
 	/* Insert the Guarded flag into the TWC from the Linux PTE.
 	 * It is bit 27 of both the Linux PTE and the TWC (at least
 	 * I got that right :-).  It will be better when we can put
@@ -526,16 +528,18 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	/* fetch instruction from memory. */
 	mfspr	r10, SPRN_SRR0
 	andis.	r11, r10, 0x8000	/* Address >= 0x80000000 */
+	DO_8xx_CPU6(0x3780, r3)
+	mtspr	SPRN_MD_EPN, r10
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
 	beq-	3f		/* Branch if user space */
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
 	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
 3:	rlwinm	r10, r10, 12, 20, 29	/* Extract level 1 index */
 	lwzx	r11, r10, r11	/* Get the level 1 entry */
-	rlwinm	r10, r11,0,0,19	/* Extract page descriptor page address */
-	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
-	rlwinm	r11, r11, 22, 20, 29	/* Extract level 2 index */
-	lwzx	r11, r10, r11	/* Get the pte */
+	DO_8xx_CPU6(0x3b80, r3)
+	mtspr	SPRN_MD_TWC, r11	/* Load pte table base address */
+	mfspr	r11, SPRN_MD_TWC	/* ....and get the pte address */
+	lwz	r11, 0(r11)	/* Get the pte */
 #ifdef CONFIG_8xx_CPU6
 	lwz	r3, 8(r0)	/* restore r3 from memory */
 #endif
