@@ -277,7 +277,7 @@ u32 __kprobes aarch64_insn_gen_branch_imm(unsigned long pc, unsigned long addr,
 	BUG_ON((pc & 0x3) || (addr & 0x3));
 
 	/*
-	 * b/linux/BL support [-128M, 128M) offset
+	 * B/BL support [-128M, 128M) offset
 	 * ARM64 virtual address arrangement guarantees all kernel and module
 	 * texts are within +/-128M.
 	 */
