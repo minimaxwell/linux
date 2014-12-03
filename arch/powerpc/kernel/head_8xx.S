@@ -294,9 +294,9 @@ InstructionTLBMiss:
 	mtspr	SPRN_SPRG_SCRATCH2, r10
 	mfspr	r10, SPRN_SRR0	/* Get effective address of fault */
 #ifdef CONFIG_8xx_CPU15
-	addi	r11, r10, PAGE_SIZE
+	addi	r11, r10, 0x1000
 	tlbie	r11
-	addi	r11, r10, -PAGE_SIZE
+	addi	r11, r10, -0x1000
 	tlbie	r11
 #endif
 
@@ -315,8 +315,7 @@ InstructionTLBMiss:
 	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
 3:
 #endif
-	/* Extract level 1 index */
-	rlwinm	r10, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
+	rlwinm	r10, r10, 12, 20, 29	/* Extract level 1 index */
 	lwzx	r11, r10, r11	/* Get the level 1 entry */
 	rlwinm.	r10, r11,0,0,19	/* Extract page descriptor page address */
 	beq	2f		/* If zero, don't try to find a pte */
@@ -328,8 +327,7 @@ InstructionTLBMiss:
 	DO_8xx_CPU6(0x2b80, r3)
 	mtspr	SPRN_MI_TWC, r11	/* Set segment attributes */
 	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
-	/* Extract level 2 index */
-	rlwinm	r11, r11, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
+	rlwinm	r11, r11, 22, 20, 29	/* Extract level 2 index */
 	lwzx	r10, r10, r11	/* Get the pte */
 
 #ifdef CONFIG_SWAP
@@ -389,8 +387,7 @@ DataStoreTLBMiss:
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
 	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
 3:
-	/* Extract level 1 index */
-	rlwinm	r10, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
+	rlwinm	r10, r10, 12, 20, 29	/* Extract level 1 index */
 	lwzx	r11, r10, r11	/* Get the level 1 entry */
 	rlwinm.	r10, r11,0,0,19	/* Extract page descriptor page address */
 	beq	2f		/* If zero, don't try to find a pte */
@@ -399,8 +396,8 @@ DataStoreTLBMiss:
 	 */
 	mfspr	r10, SPRN_MD_EPN	/* Get address of fault */
 	/* Extract level 2 index */
-	rlwinm	r10, r10, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
-	rlwimi	r10, r11, 0, 0, 32 - PAGE_SHIFT - 1	/* Add level 2 base */
+	rlwinm	r10, r10, 22, 20, 29
+	rlwimi	r10, r11, 0, 0, 19	/* Add level 2 base */
 	lwz	r10, 0(r10)	/* Get the pte */
 
 	ori	r11, r11, 1	/* Set valid bit in physical L2 page */
@@ -533,20 +530,18 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	beq-	3f		/* Branch if user space */
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
 	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
-	/* Extract level 1 index */
-3:	rlwinm	r10, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
+3:	rlwinm	r10, r10, 12, 20, 29	/* Extract level 1 index */
 	lwzx	r11, r10, r11	/* Get the level 1 entry */
 	rlwinm	r10, r11,0,0,19	/* Extract page descriptor page address */
 	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
-	/* Extract level 2 index */
-	rlwinm	r11, r11, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
+	rlwinm	r11, r11, 22, 20, 29	/* Extract level 2 index */
 	lwzx	r11, r10, r11	/* Get the pte */
 #ifdef CONFIG_8xx_CPU6
 	lwz	r3, 8(r0)	/* restore r3 from memory */
 #endif
 	/* concat physical page address(r11) and page offset(r10) */
 	mfspr	r10, SPRN_SRR0
-	rlwimi	r11, r10, 0, 32 - PAGE_SHIFT, 31
+	rlwimi	r11, r10, 0, 20, 31
 	lwz	r11,0(r11)
 /* Check if it really is a dcbx instruction. */
 /* dcbt and dcbtst does not generate DTLB Misses/Errors,
@@ -922,13 +917,12 @@ set_dec_cpu6:
 	.globl	sdata
 sdata:
 	.globl	empty_zero_page
-	.align	PAGE_SHIFT
 empty_zero_page:
-	.space	PAGE_SIZE
+	.space	4096
 
 	.globl	swapper_pg_dir
 swapper_pg_dir:
-	.space	PGD_TABLE_SIZE
+	.space	4096
 
 /* Room for two PTE table poiners, usually the kernel and current user
  * pointer to their respective root page table (pgdir).
