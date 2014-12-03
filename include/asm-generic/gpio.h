@@ -27,7 +27,7 @@
  */
 
 #ifndef CONFIG_ARCH_NR_GPIOS
-#define ARCH_NR_GPIOS		256
+#define ARCH_NR_GPIOS		512
 #else
 #define ARCH_NR_GPIOS CONFIG_ARCH_NR_GPIOS
 #endif

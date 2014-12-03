@@ -1,10 +1,10 @@
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
 VERSION = 3
-PATCHLEVEL = 17
+PATCHLEVEL = 18
 SUBLEVEL = 0
-EXTRAVERSION =
-NAME = Shuffling Zombie Juror
+EXTRAVERSION = -rc7
+NAME = Diseased Newt
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
