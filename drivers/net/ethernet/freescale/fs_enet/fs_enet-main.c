@@ -46,7 +46,7 @@
 #include <asm/irq.h>
 #include <asm/uaccess.h>
 
-#include <ldb/ldb_gpio.h>
+#include <saf3000/ldb_gpio.h>
 
 #include <net/arp.h>
 

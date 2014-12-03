@@ -24,7 +24,7 @@
 #include <asm/fs_pd.h>
 #include <asm/udbg.h>
 
-#include <ldb/ldb_gpio.h>
+#include <saf3000/ldb_gpio.h>
 
 #include <sysdev/simple_gpio.h>
 
