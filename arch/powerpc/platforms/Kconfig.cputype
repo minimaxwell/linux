@@ -115,6 +115,12 @@ config POWER6_CPU
 config POWER7_CPU
 	bool "POWER7"
 	depends on PPC_BOOK3S_64
+	select ARCH_HAS_FAST_MULTIPLIER
+
+config POWER8_CPU
+	bool "POWER8"
+	depends on PPC_BOOK3S_64
+	select ARCH_HAS_FAST_MULTIPLIER
 
 config E5500_CPU
 	bool "Freescale e5500"
@@ -302,9 +308,13 @@ config PPC_ICSWX_USE_SIGILL
 
 	  If in doubt, say N here.
 
+config SPE_POSSIBLE
+	def_bool y
+	depends on E200 || (E500 && !PPC_E500MC)
+
 config SPE
 	bool "SPE Support"
-	depends on E200 || (E500 && !PPC_E500MC)
+	depends on SPE_POSSIBLE
 	default y
 	---help---
 	  This option enables kernel support for the Signal Processing
