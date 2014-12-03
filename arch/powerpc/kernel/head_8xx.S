@@ -383,7 +383,8 @@ InstructionTLBMiss:
 	lwz	r3, 8(r0)
 #endif
 	mfspr	r10, SPRN_SPRG_SCRATCH2
-	b	InstructionTLBError1
+	EXCEPTION_EPILOG_0
+	b	InstructionTLBError
 
 	. = 0x1200
 DataStoreTLBMiss:
@@ -472,10 +473,7 @@ DataStoreTLBMiss:
  */
 	. = 0x1300
 InstructionTLBError:
-	EXCEPTION_PROLOG_0
-InstructionTLBError1:
-	EXCEPTION_PROLOG_1
-	EXCEPTION_PROLOG_2
+	EXCEPTION_PROLOG
 	mr	r4,r12
 	mr	r5,r9
 	/* 0x400 is InstructionAccess exception, needed by bad_page_fault() */
