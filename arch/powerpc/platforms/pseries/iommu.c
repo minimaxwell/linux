@@ -329,16 +329,16 @@ struct direct_window {
 
 /* Dynamic DMA Window support */
 struct ddw_query_response {
-	u32 windows_available;
-	u32 largest_available_block;
-	u32 page_size;
-	u32 migration_capable;
+	__be32 windows_available;
+	__be32 largest_available_block;
+	__be32 page_size;
+	__be32 migration_capable;
 };
 
 struct ddw_create_response {
-	u32 liobn;
-	u32 addr_hi;
-	u32 addr_lo;
+	__be32 liobn;
+	__be32 addr_hi;
+	__be32 addr_lo;
 };
 
 static LIST_HEAD(direct_window_list);
@@ -725,18 +725,16 @@ static void remove_ddw(struct device_node *np, bool remove_prop)
 {
 	struct dynamic_dma_window_prop *dwp;
 	struct property *win64;
-	u32 ddw_avail[3];
+	const u32 *ddw_avail;
 	u64 liobn;
-	int ret = 0;
+	int len, ret = 0;
 
-	ret = of_property_read_u32_array(np, "ibm,ddw-applicable",
-					 &ddw_avail[0], 3);
-
+	ddw_avail = of_get_property(np, "ibm,ddw-applicable", &len);
 	win64 = of_find_property(np, DIRECT64_PROPNAME, NULL);
 	if (!win64)
 		return;
 
-	if (ret || win64->length < sizeof(*dwp))
+	if (!ddw_avail || len < 3 * sizeof(u32) || win64->length < sizeof(*dwp))
 		goto delprop;
 
 	dwp = win64->value;
@@ -874,9 +872,8 @@ static int create_ddw(struct pci_dev *dev, const u32 *ddw_avail,
 
 	do {
 		/* extra outputs are LIOBN and dma-addr (hi, lo) */
-		ret = rtas_call(ddw_avail[1], 5, 4, (u32 *)create,
-				cfg_addr, BUID_HI(buid), BUID_LO(buid),
-				page_shift, window_shift);
+		ret = rtas_call(ddw_avail[1], 5, 4, (u32 *)create, cfg_addr,
+				BUID_HI(buid), BUID_LO(buid), page_shift, window_shift);
 	} while (rtas_busy_delay(ret));
 	dev_info(&dev->dev,
 		"ibm,create-pe-dma-window(%x) %x %x %x %x %x returned %d "
@@ -913,7 +910,7 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 	int page_shift;
 	u64 dma_addr, max_addr;
 	struct device_node *dn;
-	u32 ddw_avail[3];
+	const u32 *uninitialized_var(ddw_avail);
 	struct direct_window *window;
 	struct property *win64;
 	struct dynamic_dma_window_prop *ddwprop;
@@ -945,9 +942,8 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 	 * for the given node in that order.
 	 * the property is actually in the parent, not the PE
 	 */
-	ret = of_property_read_u32_array(pdn, "ibm,ddw-applicable",
-					 &ddw_avail[0], 3);
-	if (ret)
+	ddw_avail = of_get_property(pdn, "ibm,ddw-applicable", &len);
+	if (!ddw_avail || len < 3 * sizeof(u32))
 		goto out_failed;
 
        /*
@@ -970,11 +966,11 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 		dev_dbg(&dev->dev, "no free dynamic windows");
 		goto out_failed;
 	}
-	if (query.page_size & 4) {
+	if (be32_to_cpu(query.page_size) & 4) {
 		page_shift = 24; /* 16MB */
-	} else if (query.page_size & 2) {
+	} else if (be32_to_cpu(query.page_size) & 2) {
 		page_shift = 16; /* 64kB */
-	} else if (query.page_size & 1) {
+	} else if (be32_to_cpu(query.page_size) & 1) {
 		page_shift = 12; /* 4kB */
 	} else {
 		dev_dbg(&dev->dev, "no supported direct page size in mask %x",
@@ -984,7 +980,7 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 	/* verify the window * number of ptes will map the partition */
 	/* check largest block * page size > max memory hotplug addr */
 	max_addr = memory_hotplug_max();
-	if (query.largest_available_block < (max_addr >> page_shift)) {
+	if (be32_to_cpu(query.largest_available_block) < (max_addr >> page_shift)) {
 		dev_dbg(&dev->dev, "can't map partiton max 0x%llx with %u "
 			  "%llu-sized pages\n", max_addr,  query.largest_available_block,
 			  1ULL << page_shift);
@@ -1010,9 +1006,8 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 	if (ret != 0)
 		goto out_free_prop;
 
-	ddwprop->liobn = cpu_to_be32(create.liobn);
-	ddwprop->dma_base = cpu_to_be64(((u64)create.addr_hi << 32) |
-			create.addr_lo);
+	ddwprop->liobn = create.liobn;
+	ddwprop->dma_base = cpu_to_be64(of_read_number(&create.addr_hi, 2));
 	ddwprop->tce_shift = cpu_to_be32(page_shift);
 	ddwprop->window_shift = cpu_to_be32(len);
 
@@ -1044,7 +1039,7 @@ static u64 enable_ddw(struct pci_dev *dev, struct device_node *pdn)
 	list_add(&window->list, &direct_window_list);
 	spin_unlock(&direct_window_list_lock);
 
-	dma_addr = be64_to_cpu(ddwprop->dma_base);
+	dma_addr = of_read_number(&create.addr_hi, 2);
 	goto out_unlock;
 
 out_free_window:

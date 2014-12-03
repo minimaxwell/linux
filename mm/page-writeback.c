@@ -2116,6 +2116,23 @@ void account_page_dirtied(struct page *page, struct address_space *mapping)
 EXPORT_SYMBOL(account_page_dirtied);
 
 /*
+ * Helper function for set_page_writeback family.
+ *
+ * The caller must hold mem_cgroup_begin/end_update_page_stat() lock
+ * while calling this function.
+ * See test_set_page_writeback for example.
+ *
+ * NOTE: Unlike account_page_dirtied this does not rely on being atomic
+ * wrt interrupts.
+ */
+void account_page_writeback(struct page *page)
+{
+	mem_cgroup_inc_page_stat(page, MEM_CGROUP_STAT_WRITEBACK);
+	inc_zone_page_state(page, NR_WRITEBACK);
+}
+EXPORT_SYMBOL(account_page_writeback);
+
+/*
  * For address_spaces which do not use buffers.  Just tag the page as dirty in
  * its radix tree.
  *
@@ -2327,12 +2344,11 @@ EXPORT_SYMBOL(clear_page_dirty_for_io);
 int test_clear_page_writeback(struct page *page)
 {
 	struct address_space *mapping = page_mapping(page);
-	unsigned long memcg_flags;
-	struct mem_cgroup *memcg;
-	bool locked;
 	int ret;
+	bool locked;
+	unsigned long memcg_flags;
 
-	memcg = mem_cgroup_begin_page_stat(page, &locked, &memcg_flags);
+	mem_cgroup_begin_update_page_stat(page, &locked, &memcg_flags);
 	if (mapping) {
 		struct backing_dev_info *bdi = mapping->backing_dev_info;
 		unsigned long flags;
@@ -2353,23 +2369,22 @@ int test_clear_page_writeback(struct page *page)
 		ret = TestClearPageWriteback(page);
 	}
 	if (ret) {
-		mem_cgroup_dec_page_stat(memcg, MEM_CGROUP_STAT_WRITEBACK);
+		mem_cgroup_dec_page_stat(page, MEM_CGROUP_STAT_WRITEBACK);
 		dec_zone_page_state(page, NR_WRITEBACK);
 		inc_zone_page_state(page, NR_WRITTEN);
 	}
-	mem_cgroup_end_page_stat(memcg, locked, memcg_flags);
+	mem_cgroup_end_update_page_stat(page, &locked, &memcg_flags);
 	return ret;
 }
 
 int __test_set_page_writeback(struct page *page, bool keep_write)
 {
 	struct address_space *mapping = page_mapping(page);
-	unsigned long memcg_flags;
-	struct mem_cgroup *memcg;
-	bool locked;
 	int ret;
+	bool locked;
+	unsigned long memcg_flags;
 
-	memcg = mem_cgroup_begin_page_stat(page, &locked, &memcg_flags);
+	mem_cgroup_begin_update_page_stat(page, &locked, &memcg_flags);
 	if (mapping) {
 		struct backing_dev_info *bdi = mapping->backing_dev_info;
 		unsigned long flags;
@@ -2395,11 +2410,9 @@ int __test_set_page_writeback(struct page *page, bool keep_write)
 	} else {
 		ret = TestSetPageWriteback(page);
 	}
-	if (!ret) {
-		mem_cgroup_inc_page_stat(memcg, MEM_CGROUP_STAT_WRITEBACK);
-		inc_zone_page_state(page, NR_WRITEBACK);
-	}
-	mem_cgroup_end_page_stat(memcg, locked, memcg_flags);
+	if (!ret)
+		account_page_writeback(page);
+	mem_cgroup_end_update_page_stat(page, &locked, &memcg_flags);
 	return ret;
 
 }

@@ -415,7 +415,7 @@ static void rockchip_spi_dma_txcb(void *data)
 	spin_unlock_irqrestore(&rs->lock, flags);
 }
 
-static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
+static int rockchip_spi_dma_transfer(struct rockchip_spi *rs)
 {
 	unsigned long flags;
 	struct dma_slave_config rxconf, txconf;
@@ -474,6 +474,8 @@ static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
 		dmaengine_submit(txdesc);
 		dma_async_issue_pending(rs->dma_tx.ch);
 	}
+
+	return 1;
 }
 
 static void rockchip_spi_config(struct rockchip_spi *rs)
@@ -555,17 +557,16 @@ static int rockchip_spi_transfer_one(
 	else if (rs->rx)
 		rs->tmode = CR0_XFM_RO;
 
-	/* we need prepare dma before spi was enabled */
-	if (master->can_dma && master->can_dma(master, spi, xfer)) {
+	if (master->can_dma && master->can_dma(master, spi, xfer))
 		rs->use_dma = 1;
-		rockchip_spi_prepare_dma(rs);
-	} else {
+	else
 		rs->use_dma = 0;
-	}
 
 	rockchip_spi_config(rs);
 
-	if (!rs->use_dma)
+	if (rs->use_dma)
+		ret = rockchip_spi_dma_transfer(rs);
+	else
 		ret = rockchip_spi_pio_transfer(rs);
 
 	return ret;

@@ -1102,10 +1102,10 @@ static int nf_tables_newchain(struct sock *nlsk, struct sk_buff *skb,
 			basechain->stats = stats;
 		} else {
 			stats = netdev_alloc_pcpu_stats(struct nft_stats);
-			if (stats == NULL) {
+			if (IS_ERR(stats)) {
 				module_put(type->owner);
 				kfree(basechain);
-				return -ENOMEM;
+				return PTR_ERR(stats);
 			}
 			rcu_assign_pointer(basechain->stats, stats);
 		}

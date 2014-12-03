@@ -253,11 +253,9 @@ int videobuf_dma_init_kernel(struct videobuf_dmabuf *dma, int direction,
 	return 0;
 out_free_pages:
 	while (i > 0) {
-		void *addr;
-
-		i--;
-		addr = page_address(dma->vaddr_pages[i]);
+		void *addr = page_address(dma->vaddr_pages[i]);
 		dma_free_coherent(dma->dev, PAGE_SIZE, addr, dma->dma_addr[i]);
+		i--;
 	}
 	kfree(dma->dma_addr);
 	dma->dma_addr = NULL;

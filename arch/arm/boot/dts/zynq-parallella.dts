@@ -34,10 +34,6 @@
 	};
 };
 
-&clkc {
-	fclk-enable = <0xf>;
-};
-
 &gem0 {
 	status = "okay";
 	phy-mode = "rgmii-id";

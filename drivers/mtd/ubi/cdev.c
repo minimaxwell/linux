@@ -425,10 +425,8 @@ static long vol_cdev_ioctl(struct file *file, unsigned int cmd,
 			break;
 
 		err = ubi_start_update(ubi, vol, bytes);
-		if (bytes == 0) {
-			ubi_volume_notify(ubi, vol, UBI_VOLUME_UPDATED);
+		if (bytes == 0)
 			revoke_exclusive(desc, UBI_READWRITE);
-		}
 		break;
 	}
 

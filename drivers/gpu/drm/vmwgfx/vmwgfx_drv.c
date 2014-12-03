@@ -688,11 +688,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 		goto out_err0;
 	}
 
-	/*
-	 * Limit back buffer size to VRAM size.  Remove this once
-	 * screen targets are implemented.
-	 */
-	if (dev_priv->prim_bb_mem > dev_priv->vram_size)
+	if (unlikely(dev_priv->prim_bb_mem < dev_priv->vram_size))
 		dev_priv->prim_bb_mem = dev_priv->vram_size;
 
 	mutex_unlock(&dev_priv->hw_mutex);

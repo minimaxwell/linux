@@ -372,7 +372,6 @@ static bool ltc3589_volatile_reg(struct device *dev, unsigned int reg)
 	switch (reg) {
 	case LTC3589_IRQSTAT:
 	case LTC3589_PGSTAT:
-	case LTC3589_VCCR:
 		return true;
 	}
 	return false;

@@ -2755,10 +2755,8 @@ probe_err3:
 		list_del(&pch->chan.device_node);
 
 		/* Flush the channel */
-		if (pch->thread) {
-			pl330_control(&pch->chan, DMA_TERMINATE_ALL, 0);
-			pl330_free_chan_resources(&pch->chan);
-		}
+		pl330_control(&pch->chan, DMA_TERMINATE_ALL, 0);
+		pl330_free_chan_resources(&pch->chan);
 	}
 probe_err2:
 	pl330_del(pl330);
@@ -2784,10 +2782,8 @@ static int pl330_remove(struct amba_device *adev)
 		list_del(&pch->chan.device_node);
 
 		/* Flush the channel */
-		if (pch->thread) {
-			pl330_control(&pch->chan, DMA_TERMINATE_ALL, 0);
-			pl330_free_chan_resources(&pch->chan);
-		}
+		pl330_control(&pch->chan, DMA_TERMINATE_ALL, 0);
+		pl330_free_chan_resources(&pch->chan);
 	}
 
 	pl330_del(pl330);

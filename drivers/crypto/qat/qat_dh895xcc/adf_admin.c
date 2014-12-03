@@ -108,7 +108,7 @@ int adf_init_admin_comms(struct adf_accel_dev *accel_dev)
 	uint64_t reg_val;
 
 	admin = kzalloc_node(sizeof(*accel_dev->admin), GFP_KERNEL,
-			     dev_to_node(&GET_DEV(accel_dev)));
+			     accel_dev->numa_node);
 	if (!admin)
 		return -ENOMEM;
 	admin->virt_addr = dma_zalloc_coherent(&GET_DEV(accel_dev), PAGE_SIZE,

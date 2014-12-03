@@ -602,9 +602,12 @@ struct pwm_device *pwm_get(struct device *dev, const char *con_id)
 	struct pwm_device *pwm = ERR_PTR(-EPROBE_DEFER);
 	const char *dev_id = dev ? dev_name(dev) : NULL;
 	struct pwm_chip *chip = NULL;
+	unsigned int index = 0;
 	unsigned int best = 0;
-	struct pwm_lookup *p, *chosen = NULL;
+	struct pwm_lookup *p;
 	unsigned int match;
+	unsigned int period;
+	enum pwm_polarity polarity;
 
 	/* look up via DT first */
 	if (IS_ENABLED(CONFIG_OF) && dev && dev->of_node)
@@ -650,7 +653,10 @@ struct pwm_device *pwm_get(struct device *dev, const char *con_id)
 		}
 
 		if (match > best) {
-			chosen = p;
+			chip = pwmchip_find_by_name(p->provider);
+			index = p->index;
+			period = p->period;
+			polarity = p->polarity;
 
 			if (match != 3)
 				best = match;
@@ -659,22 +665,17 @@ struct pwm_device *pwm_get(struct device *dev, const char *con_id)
 		}
 	}
 
-	if (!chosen)
-		goto out;
-
-	chip = pwmchip_find_by_name(chosen->provider);
-	if (!chip)
-		goto out;
-
-	pwm = pwm_request_from_chip(chip, chosen->index, con_id ?: dev_id);
-	if (IS_ERR(pwm))
-		goto out;
-
-	pwm_set_period(pwm, chosen->period);
-	pwm_set_polarity(pwm, chosen->polarity);
-
-out:
 	mutex_unlock(&pwm_lookup_lock);
+
+	if (chip)
+		pwm = pwm_request_from_chip(chip, index, con_id ?: dev_id);
+	if (IS_ERR(pwm))
+		return pwm;
+
+	pwm_set_period(pwm, period);
+	pwm_set_polarity(pwm, polarity);
+
+
 	return pwm;
 }
 EXPORT_SYMBOL_GPL(pwm_get);

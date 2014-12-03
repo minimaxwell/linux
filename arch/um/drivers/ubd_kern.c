@@ -1277,7 +1277,7 @@ static void do_ubd_request(struct request_queue *q)
 
 	while(1){
 		struct ubd *dev = q->queuedata;
-		if(dev->request == NULL){
+		if(dev->end_sg == 0){
 			struct request *req = blk_fetch_request(q);
 			if(req == NULL)
 				return;
@@ -1299,8 +1299,7 @@ static void do_ubd_request(struct request_queue *q)
 				return;
 			}
 			prepare_flush_request(req, io_req);
-			if (submit_request(io_req, dev) == false)
-				return;
+			submit_request(io_req, dev);
 		}
 
 		while(dev->start_sg < dev->end_sg){

@@ -2100,13 +2100,8 @@ int gfs2_diradd_alloc_required(struct inode *inode, const struct qstr *name,
 	}
 	if (IS_ERR(dent))
 		return PTR_ERR(dent);
-
-	if (da->save_loc) {
-		da->bh = bh;
-		da->dent = dent;
-	} else {
-		brelse(bh);
-	}
+	da->bh = bh;
+	da->dent = dent;
 	return 0;
 }
 

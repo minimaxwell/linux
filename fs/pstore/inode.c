@@ -320,10 +320,10 @@ int pstore_mkfile(enum pstore_type_id type, char *psname, u64 id, int count,
 						compressed ? ".enc.z" : "");
 		break;
 	case PSTORE_TYPE_CONSOLE:
-		sprintf(name, "console-%s-%lld", psname, id);
+		sprintf(name, "console-%s", psname);
 		break;
 	case PSTORE_TYPE_FTRACE:
-		sprintf(name, "ftrace-%s-%lld", psname, id);
+		sprintf(name, "ftrace-%s", psname);
 		break;
 	case PSTORE_TYPE_MCE:
 		sprintf(name, "mce-%s-%lld", psname, id);

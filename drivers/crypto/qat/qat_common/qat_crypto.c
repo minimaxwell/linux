@@ -109,14 +109,12 @@ struct qat_crypto_instance *qat_crypto_get_instance_node(int node)
 
 	list_for_each(itr, adf_devmgr_get_head()) {
 		accel_dev = list_entry(itr, struct adf_accel_dev, list);
-		if ((node == dev_to_node(&GET_DEV(accel_dev)) ||
-			dev_to_node(&GET_DEV(accel_dev)) < 0)
-				&& adf_dev_started(accel_dev))
+		if (accel_dev->numa_node == node && adf_dev_started(accel_dev))
 			break;
 		accel_dev = NULL;
 	}
 	if (!accel_dev) {
-		pr_err("QAT: Could not find device on node %d\n", node);
+		pr_err("QAT: Could not find device on give node\n");
 		accel_dev = adf_devmgr_get_first();
 	}
 	if (!accel_dev || !adf_dev_started(accel_dev))
@@ -166,7 +164,7 @@ static int qat_crypto_create_instances(struct adf_accel_dev *accel_dev)
 
 	for (i = 0; i < num_inst; i++) {
 		inst = kzalloc_node(sizeof(*inst), GFP_KERNEL,
-				    dev_to_node(&GET_DEV(accel_dev)));
+				    accel_dev->numa_node);
 		if (!inst)
 			goto err;
 

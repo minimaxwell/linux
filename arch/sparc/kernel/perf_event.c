@@ -1662,8 +1662,7 @@ static bool __init supported_pmu(void)
 		sparc_pmu = &niagara2_pmu;
 		return true;
 	}
-	if (!strcmp(sparc_pmu_type, "niagara4") ||
-	    !strcmp(sparc_pmu_type, "niagara5")) {
+	if (!strcmp(sparc_pmu_type, "niagara4")) {
 		sparc_pmu = &niagara4_pmu;
 		return true;
 	}
