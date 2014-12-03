@@ -219,10 +219,19 @@ MachineCheck:
 	EXC_XFER_STD(0x200, machine_check_exception)
 
 /* Data access exception.
- * This is "never generated" by the MPC8xx.
+ * This is "never generated" by the MPC8xx.  We jump to it for other
+ * translation errors.
  */
 	. = 0x300
 DataAccess:
+	EXCEPTION_PROLOG
+	mfspr	r10,SPRN_DSISR
+	stw	r10,_DSISR(r11)
+	mr	r5,r10
+	mfspr	r4,SPRN_DAR
+	li	r10,0x00f0
+	mtspr	SPRN_DAR,r10	/* Tag DAR, to be used in DTLB Error */
+	EXC_XFER_LITE(0x300, handle_page_fault)
 
 /* Instruction access exception.
  * This is "never generated" by the MPC8xx.
@@ -482,15 +491,7 @@ DataTLBError:
 	beq-	FixupDAR	/* must be a buggy dcbX, icbi insn. */
 DARFixed:/* Return from dcbx instruction bug workaround */
 	EXCEPTION_EPILOG_0
-	EXCEPTION_PROLOG
-	mfspr	r10,SPRN_DSISR
-	stw	r10,_DSISR(r11)
-	mr	r5,r10
-	mfspr	r4,SPRN_DAR
-	li	r10,0x00f0
-	mtspr	SPRN_DAR,r10	/* Tag DAR, to be used in DTLB Error */
-	/* 0x300 is DataAccess exception, needed by bad_page_fault() */
-	EXC_XFER_LITE(0x300, handle_page_fault)
+	b	DataAccess
 
 	EXCEPTION(0x1500, Trap_15, unknown_exception, EXC_XFER_EE)
 	EXCEPTION(0x1600, Trap_16, unknown_exception, EXC_XFER_EE)
