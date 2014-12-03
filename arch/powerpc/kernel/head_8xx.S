@@ -83,6 +83,13 @@ _ENTRY(_start);
  * 8M 1:1.  I also mapped an additional I/O space 1:1 so we can get to
  * the "internal" processor registers before MMU_init is called.
  *
+ * The TLB code currently contains a major hack.  Since I use the condition
+ * code register, I have to save and restore it.  I am out of registers, so
+ * I just store it in memory location 0 (the TLB handlers are not reentrant).
+ * To avoid making any decisions, I need to use the "segment" valid bit
+ * in the first level table, but that would require many changes to the
+ * Linux page directory/table functions that I don't want to do right now.
+ *
  *	-- Dan
  */
 	.globl	__start
@@ -299,7 +306,7 @@ SystemCall:
  */
 InstructionTLBMiss:
 #ifdef CONFIG_8xx_CPU6
-	mtspr	SPRN_DAR, r3
+	stw	r3, 8(r0)
 #endif
 	EXCEPTION_PROLOG_0
 	mtspr	SPRN_SPRG_SCRATCH2, r10
@@ -344,10 +351,7 @@ InstructionTLBMiss:
 #ifdef CONFIG_SWAP
 	andi.	r11, r10, _PAGE_ACCESSED | _PAGE_PRESENT
 	cmpwi	cr0, r11, _PAGE_ACCESSED | _PAGE_PRESENT
-	li	r11, RPN_PATTERN
 	bne-	cr0, 2f
-#else
-	li	r11, RPN_PATTERN
 #endif
 	/* The Linux PTE won't go exactly into the MMU TLB.
 	 * Software indicator bits 21 and 28 must be clear.
@@ -355,29 +359,28 @@ InstructionTLBMiss:
 	 * set.  All other Linux PTE bits control the behavior
 	 * of the MMU.
 	 */
+	li	r11, RPN_PATTERN
 	rlwimi	r10, r11, 0, 0x07f8	/* Set 24-27, clear 21-23,28 */
 	MTSPR_CPU6(SPRN_MI_RPN, r10, r3)	/* Update TLB entry */
 
 	/* Restore registers */
 #ifdef CONFIG_8xx_CPU6
-	mfspr	r3, SPRN_DAR
-	mtspr	SPRN_DAR, r11	/* Tag DAR */
+	lwz	r3, 8(r0)
 #endif
 	mfspr	r10, SPRN_SPRG_SCRATCH2
 	EXCEPTION_EPILOG_0
 	rfi
 2:
-	mfspr	r10, SPRN_SRR1
+	mfspr	r11, SPRN_SRR1
 	/* clear all error bits as TLB Miss
 	 * sets a few unconditionally
 	*/
-	rlwinm	r10, r10, 0, 0xffff
-	mtspr	SPRN_SRR1, r10
+	rlwinm	r11, r11, 0, 0xffff
+	mtspr	SPRN_SRR1, r11
 
 	/* Restore registers */
 #ifdef CONFIG_8xx_CPU6
-	mfspr	r3, SPRN_DAR
-	mtspr	SPRN_DAR, r11	/* Tag DAR */
+	lwz	r3, 8(r0)
 #endif
 	mfspr	r10, SPRN_SPRG_SCRATCH2
 	b	InstructionTLBError1
@@ -385,7 +388,7 @@ InstructionTLBMiss:
 	. = 0x1200
 DataStoreTLBMiss:
 #ifdef CONFIG_8xx_CPU6
-	mtspr	SPRN_DAR, r3
+	stw	r3, 8(r0)
 #endif
 	EXCEPTION_PROLOG_0
 	mtspr	SPRN_SPRG_SCRATCH2, r10
@@ -456,7 +459,7 @@ DataStoreTLBMiss:
 
 	/* Restore registers */
 #ifdef CONFIG_8xx_CPU6
-	mfspr	r3, SPRN_DAR
+	lwz	r3, 8(r0)
 #endif
 	mtspr	SPRN_DAR, r11	/* Tag DAR */
 	mfspr	r10, SPRN_SPRG_SCRATCH2
@@ -528,7 +531,7 @@ DARFixed:/* Return from dcbx instruction bug workaround */
 #define NO_SELF_MODIFYING_CODE
 FixupDAR:/* Entry point for dcbx workaround. */
 #ifdef CONFIG_8xx_CPU6
-	mtspr	SPRN_DAR, r3
+	stw	r3, 8(r0)
 #endif
 	mtspr	SPRN_SPRG_SCRATCH2, r10
 	/* fetch instruction from memory. */
@@ -547,7 +550,7 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	rlwinm	r11, r11, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
 	lwzx	r11, r10, r11	/* Get the pte */
 #ifdef CONFIG_8xx_CPU6
-	mfspr	r3, SPRN_DAR
+	lwz	r3, 8(r0)	/* restore r3 from memory */
 #endif
 	/* concat physical page address(r11) and page offset(r10) */
 	mfspr	r10, SPRN_SRR0
