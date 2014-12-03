@@ -92,7 +92,7 @@ extern int icache_44x_need_flush;
  * system.  This really does become a problem for machines with good amounts
  * of RAM.  -- Cort
  */
-#define VMALLOC_OFFSET (0x1000000) /* 16M */
+#define VMALLOC_OFFSET (0x1000000U) /* 16M */
 #ifdef PPC_PIN_SIZE
 #define VMALLOC_START (((_ALIGN((long)high_memory, PPC_PIN_SIZE) + VMALLOC_OFFSET) & ~(VMALLOC_OFFSET-1)))
 #else
