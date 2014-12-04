@@ -40,6 +40,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 #include <linux/of_net.h>
+#include <linux/micrel_phy.h>
 
 #include <linux/vmalloc.h>
 #include <asm/pgtable.h>
@@ -1062,6 +1063,12 @@ void fs_link_monitor(struct work_struct *work)
 	
 }
 		
+/* For CMPC885 board: set the LEDs properly */
+static int fs_enet_phy_micrel_fixup(struct phy_device *phydev)
+{
+	return phy_write(phydev, 0x1E, phy_read(phydev, 0x1E) | 0x4000);
+}
+
 static int fs_init_phy(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
@@ -1694,6 +1701,12 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	fep->notify_work[ACTIVE_LINK].kn = 
 		sysfs_get_dirent(fep->dev->kobj.sd, "active_link");
 
+	/* register the PHY board fixup (for CMPC885 board) */
+	err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
+					 fs_enet_phy_micrel_fixup);
+	/* we can live without it, so just issue a warning */
+	if (err)
+		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");
 	return 0;
 
 out_remove_file:
