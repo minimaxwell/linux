@@ -54,7 +54,7 @@
 
 #define __access_ok(addr, size, segment)	\
 	(((addr) <= (segment).seg) &&		\
-	 (((size) == 0) || ((size) == 1) || (((size) - 1) <= ((segment).seg - (addr)))))
+	 (((size) <= 1) || (((size) - 1) <= ((segment).seg - (addr)))))
 
 #endif
 
