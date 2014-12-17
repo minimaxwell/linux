@@ -270,11 +270,14 @@
 		};
 		
 //		uart-fpga@4,1000000 {
-//			device_type = "serial";
 //			#address-cells = <1>;
 //			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-uart-fpga";
-//			reg = <4 0x1000000 0x0200>;
+//			compatible = "ns16550a";
+//			/* adresse uart 16550a et taille utile */
+//			reg = <4 0x1000100 0x100>;
+//			reg-shift = <1>;
+//			fifo-size = <32>;
+//			clock = "fpga";
 //			interrupts = <1>;
 //			interrupt-parent = <&FPGA_PIC>;
 //		};
@@ -632,6 +635,16 @@
 				         &CPM1_PIO_B 18 1>;	/* RTS2 */
 			};
 
+			scc2t: tdm@a20 {
+				device_type = "tdm";
+				tdm_name = "scc2";
+				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
+				reg = <0xa20 0x20 0x3d00 0x80>;
+				interrupts = <29>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-command = <0x40>;
+			};
+
 			scc3: serial@a40 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
@@ -655,16 +668,6 @@
 				fsl,cpm-command = <0x80>;
 				gpios = <&CPM1_PIO_C 5 1	/* CTS3 */
 				         &CPM1_PIO_D 7 1>;	/* RTS3 */
-			};
-
-			scc3t: tdm@a40 {
-				device_type = "tdm";
-				tdm_name = "scc3";
-				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
-				reg = <0xa40 0x20 0x3e00 0x80>;
-				interrupts = <28>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-command = <0x80>;
 			};
 
 			scc4: serial@a60 {
