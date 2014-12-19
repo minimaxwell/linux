@@ -353,7 +353,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 2>;			// Version FPGA
+			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst 13 1 >;			// RST_FPGA
@@ -600,6 +600,18 @@
 				fsl,cpm-command = <0x90>;
 			};
 
+			scc3: serial@a40 {
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa40 0x20 0x3e00 0x80>;
+				interrupts = <28>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <2>;
+				fsl,cpm-command = <0x80>;
+				gpios = <&CPM1_PIO_C 5 1	/* CTS3 */
+				         &CPM1_PIO_D 7 1>;	/* RTS3 */
+			};
+
 			scc2: serial@a20 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
@@ -643,18 +655,6 @@
 				interrupts = <29>;
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0x40>;
-			};
-
-			scc3: serial@a40 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
-				reg = <0xa40 0x20 0x3e00 0x80>;
-				interrupts = <28>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <2>;
-				fsl,cpm-command = <0x80>;
-				gpios = <&CPM1_PIO_C 5 1	/* CTS3 */
-				         &CPM1_PIO_D 7 1>;	/* RTS3 */
 			};
 
 			scc3wb: wb@a40 {
