@@ -322,13 +322,12 @@ InstructionTLBMiss:
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
 #ifdef CONFIG_MODULES
 	beq	3f
-	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
-	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
+	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
 #endif
 	/* Insert level 1 index */
 	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
-	lwz	r11, 0(r11)	/* Get the level 1 entry */
+	lwz	r11, (swapper_pg_dir-PAGE_OFFSET)@l(r11)	/* Get the level 1 entry */
 
 	/* Load the MI_TWC with the attributes for this "segment." */
 	MTSPR_CPU6(SPRN_MI_TWC, r11, r3)	/* Set segment attributes */
@@ -376,12 +375,11 @@ DataStoreTLBMiss:
 	andis.	r11, r10, 0x8000
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
 	beq	3f
-	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
-	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
+	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
 	/* Insert level 1 index */
 	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
-	lwz	r11, 0(r11)	/* Get the level 1 entry */
+	lwz	r11, (swapper_pg_dir-PAGE_OFFSET)@l(r11)	/* Get the level 1 entry */
 
 	/* We have a pte table, so load fetch the pte from the table.
 	 */
@@ -510,12 +508,11 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	mfspr	r10, SPRN_SRR0
 	andis.	r11, r10, 0x8000	/* Address >= 0x80000000 */
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
-	beq-	3f		/* Branch if user space */
-	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@h
-	ori	r11, r11, (swapper_pg_dir-PAGE_OFFSET)@l
+	beq	3f
+	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 	/* Insert level 1 index */
 3:	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
-	lwz	r11, 0(r11)	/* Get the level 1 entry */
+	lwz	r11, (swapper_pg_dir-PAGE_OFFSET)@l(r11)	/* Get the level 1 entry */
 	rlwinm	r11, r11,0,0,19	/* Extract page descriptor page address */
 	/* Insert level 2 index */
 	rlwimi	r11, r10, 32 - (PAGE_SHIFT - 2), 32 - PAGE_SHIFT, 29
@@ -670,8 +667,7 @@ start_here:
 	 * init's THREAD like the context switch code does, but this is
 	 * easier......until someone changes init's static structures.
 	 */
-	lis	r6, swapper_pg_dir@h
-	ori	r6, r6, swapper_pg_dir@l
+	lis	r6, swapper_pg_dir@ha
 	tophys(r6,r6)
 #ifdef CONFIG_8xx_CPU6
 	lis	r4, cpu6_errata_word@h
@@ -850,6 +846,8 @@ _GLOBAL(set_context)
 	stw	r4, 0x4(r5)
 #endif
 
+	li	r5, (swapper_pg_dir-PAGE_OFFSET)@l
+	sub	r4, r4, r5
 #ifdef CONFIG_8xx_CPU6
 	lis	r6, cpu6_errata_word@h
 	ori	r6, r6, cpu6_errata_word@l
