@@ -30,6 +30,8 @@ static noinline int gup_pte_range(pmd_t pmd, unsigned long addr,
 	result = _PAGE_PRESENT|_PAGE_USER;
 	if (write)
 		result |= _PAGE_RW;
+	else
+		result |= _PAGE_RO;
 	mask = result | _PAGE_SPECIAL;
 
 	ptep = pte_offset_kernel(&pmd, addr);
