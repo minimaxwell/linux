@@ -92,7 +92,7 @@ unsigned long __init mmu_mapin_ram(unsigned long top)
 			break;
 	}
 
-	setbat(2, PAGE_OFFSET, 0, bl, PAGE_KERNEL_X);
+	setbat(2, PAGE_OFFSET, 0, bl, pgprot_val(PAGE_KERNEL_X));
 	done = (unsigned long)bat_addrs[2].limit - PAGE_OFFSET + 1;
 	if ((done < tot) && !bat_addrs[3].limit) {
 		/* use BAT3 to cover a bit more */
@@ -100,7 +100,8 @@ unsigned long __init mmu_mapin_ram(unsigned long top)
 		for (bl = 128<<10; bl < max_size; bl <<= 1)
 			if (bl * 2 > tot)
 				break;
-		setbat(3, PAGE_OFFSET+done, done, bl, PAGE_KERNEL_X);
+		setbat(3, PAGE_OFFSET+done, done, bl,
+		       pgprot_val(PAGE_KERNEL_X));
 		done = (unsigned long)bat_addrs[3].limit - PAGE_OFFSET + 1;
 	}
 
