@@ -48,6 +48,19 @@
 	mtspr	spr, reg
 #endif
 
+/* Macro to test if an address is a kernel address */
+#if CONFIG_TASK_SIZE <= 0x80000000
+#define IS_KERNEL(tmp, addr)		\
+	andis.	tmp, addr, 0x8000	/* Address >= 0x80000000 */
+#define BRANCH_UNLESS_KERNEL(label)	beq	label
+#else
+#define IS_KERNEL(tmp, addr)		\
+	rlwinm	tmp, addr, 16, 16, 31;	\
+	cmpli	cr0, tmp, PAGE_OFFSET >> 16
+#define BRANCH_UNLESS_KERNEL(label)	blt	label
+#endif
+
+
 /*
  * Value for the bits that have fixed value in RPN entries.
  * Also used for tagging DAR for DTLBerror.
@@ -323,15 +336,15 @@ InstructionTLBMiss:
 	mfspr	r10, SPRN_SRR0	/* Get effective address of fault */
 	DO_8xx_CPU15(r11, r10)
 	mfcr	r3
-	andis.	r11, r10, 0x8000	/* Address >= 0x80000000 */
+	IS_KERNEL(r11, r10)
 #else
 	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
 	DO_8xx_CPU15(r10, r11)
 	mfcr	r10
-	andis.	r11, r11, 0x8000	/* Address >= 0x80000000 */
+	IS_KERNEL(r11, r11)
 #endif
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
-	beq	3f
+	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
 #ifdef CONFIG_8xx_CPU6
@@ -390,14 +403,14 @@ DataStoreTLBMiss:
 	mtspr	SPRN_SPRG_SCRATCH2, r3
 	mfcr	r3
 	mfspr	r10, SPRN_MD_EPN
-	andis.	r11, r10, 0x8000
+	IS_KERNEL(r11, r10)
 #else
 	mfcr	r10
 	mfspr	r11, SPRN_MD_EPN
-	andis.	r11, r11, 0x8000
+	IS_KERNEL(r11, r11)
 #endif
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
-	beq	3f
+	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
 #ifdef CONFIG_8xx_CPU6
@@ -536,9 +549,9 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	mtspr	SPRN_SPRG_SCRATCH2, r10
 	/* fetch instruction from memory. */
 	mfspr	r10, SPRN_SRR0
-	andis.	r11, r10, 0x8000	/* Address >= 0x80000000 */
+	IS_KERNEL(r11, r10)
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
-	beq	3f
+	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 	/* Insert level 1 index */
 3:	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
