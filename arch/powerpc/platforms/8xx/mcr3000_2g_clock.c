@@ -61,11 +61,7 @@ static struct clk *fpga_clk_get(struct device *dev, const char *id)
 	if (dev == NULL && id == NULL)
 		return NULL;
 
-	if (id == NULL) {
-		id = of_get_property(dev->of_node, "clock", NULL);
-	}
-	
-	if (id && strcmp(id,"fpga") == 0 && try_module_get(fpga_clk.owner)) {
+	if (strcmp(id,"fpga") == 0 && try_module_get(fpga_clk.owner)) {
 		clk = &fpga_clk; 
 	}
 
@@ -91,9 +87,6 @@ static unsigned long fpga_clk_get_rate(struct clk *clk)
 {
 	unsigned int _Info = 0, rate;
 	
-	if (fpga_clk.init_brg == 0)
-		return ppc_proc_freq;	/* clock frequency */
-
 	if (fpga_clk.fpga_brg) {
 		_Info = in_be16(fpga_clk.fpga_brg);
 	}

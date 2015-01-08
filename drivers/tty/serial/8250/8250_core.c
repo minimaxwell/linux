@@ -413,7 +413,6 @@ static unsigned int mem_serial_in(struct uart_port *p, int offset)
 static void mem_serial_out(struct uart_port *p, int offset, int value)
 {
 	offset = offset << p->regshift;
-pr_err("mem_serial_out(), offset %d, p->membase %08lX\n", offset, (long)p->membase);
 	writeb(value, p->membase + offset);
 }
 
