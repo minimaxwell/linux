@@ -2148,9 +2148,11 @@ uart_configure_port(struct uart_driver *drv, struct uart_state *state,
 		 * keep the DTR setting that is set in uart_set_options()
 		 * We probably don't need a spinlock around this, but
 		 */
+if (strcmp(uart_type(port), "16550A")) {
 		spin_lock_irqsave(&port->lock, flags);
 		port->ops->set_mctrl(port, port->mctrl & TIOCM_DTR);
 		spin_unlock_irqrestore(&port->lock, flags);
+}
 
 		/*
 		 * If this driver supports console, and it hasn't been

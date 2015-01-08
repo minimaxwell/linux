@@ -250,23 +250,25 @@
 			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
 			/* registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA */
 			ranges = <0 4 0x1000000 0x0200>;
-			interrupts = <0>;
-			interrupt-parent = <&FPGA_PIC>;
+//			interrupts = <0>;
+//			interrupt-parent = <&FPGA_PIC>;
+			interrupts = <6 1>;
+			interrupt-parent = <&PIC>;
 			serie: gpio-controller@0E4 {
 				#gpio-cells = <2>;
 				compatible = "s3k,mcr3000-fpga-gpio";
 				reg = <0x0E4 2>;
 				gpio-controller;
 			};
-			FPGA_PIC: pic@1000000 {
-				interrupt-controller;
-				#address-cells = <0>;
-				#interrupt-cells = <1>;
-				interrupts = <6 1>;
-				interrupt-parent = <&PIC>;
-				reg = <0x0 0x0200>;	/* Mappage registres FPGA */
-				compatible = "s3k,mcr3000-fpga-pic";
-			};
+//			FPGA_PIC: pic@1000000 {
+//				interrupt-controller;
+//				#address-cells = <0>;
+//				#interrupt-cells = <1>;
+//				interrupts = <6 1>;
+//				interrupt-parent = <&PIC>;
+//				reg = <0x0 0x0200>;	/* Mappage registres FPGA */
+//				compatible = "s3k,mcr3000-fpga-pic";
+//			};
 		};
 		
 //		uart-fpga@4,1000000 {
