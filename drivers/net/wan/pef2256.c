@@ -140,50 +140,6 @@ static void config_hdlc(struct pef2256_dev_priv *priv)
 
 	udelay(FALC_HW_CMD_DELAY_US);
 
-	/* MODE.HRAC = 0 (Receiver inactive)
-	 * MODE.DIV = 0 (Data normal operation)
-	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
-	 * MODE.MDS2:0 = 100 (No address comparison)
-	 * MODE.HRAC = 1 (Receiver active)
-	 */
-	pef2256_w8(priv, MODE, 1 << 3);
-	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
-	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
-	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
-	 * setting up Interframe Time Fill
-	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
-	 */
-	pef2256_w8(priv, CCR1, 0x10 | (1 << 3));
-	/* CCR2.XCRC = 0 (Transmit CRC ON)
-	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
-	 * CCR2.RADD = 0 (No write address in RFIFO)
-	 */
-	pef2256_w8(priv, CCR2, 0x00);
-
-	udelay(FALC_HW_CMD_DELAY_US);
-
-	/* MODE.HRAC = 0 (Receiver inactive)
-	 * MODE.DIV = 0 (Data normal operation)
-	 * for FALC V2.2 : MODE.HDLCI = 0 (normal operation)
-	 * MODE.MDS2:0 = 100 (No address comparison)
-	 * MODE.HRAC = 1 (Receiver active)
-	 */
-	pef2256_w8(priv, MODE, 1 << 3);
-	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
-	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
-	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
-	 * setting up Interframe Time Fill
-	 * CCR1.ITF = 1 (Interframe Time Fill Continuous flag)
-	 */
-	pef2256_w8(priv, CCR1, 0x10 | (1 << 3));
-	/* CCR2.XCRC = 0 (Transmit CRC ON)
-	 * CCR2.RCRC = 0 (Receive CRC ON, no write in RFIFO)
-	 * CCR2.RADD = 0 (No write address in RFIFO)
-	 */
-	pef2256_w8(priv, CCR2, 0x00);
-
-	udelay(FALC_HW_CMD_DELAY_US);
-
 	/* Init  Time Slot select */
 	pef2256_w8(priv, TTR1, 0x00);
 	pef2256_w8(priv, TTR2, 0x00);
