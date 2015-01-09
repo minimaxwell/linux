@@ -480,9 +480,9 @@ static ssize_t fs_attr_mode_store(struct device *dev,
 	if (value != MASTER_MODE && value != SLAVE_MODE)
 		ret = -EINVAL;
 
-	if (ret < 0)
+	if (ret < 0) {
 		netdev_info(ndev, "Invalid mode (0 or 1 expected\n");
-	else {
+	} else {
 		priv->mode = value;
 		if (reconfigure && netif_carrier_ok(ndev))
 			init_falc(priv);
@@ -520,9 +520,9 @@ static ssize_t fs_attr_Tx_TS_store(struct device *dev,
 	if (ret < 0 || value > TS_0)
 		ret = -EINVAL;
 
-	if (ret < 0)
+	if (ret < 0) {
 		netdev_info(ndev, "Invalid Tx_TS (hex number > 0 and < 0x80000000 expected\n");
-	else {
+	} else {
 		priv->Tx_TS = value;
 		if (reconfigure && netif_carrier_ok(ndev))
 			config_hdlc(priv);
@@ -559,9 +559,9 @@ static ssize_t fs_attr_Rx_TS_store(struct device *dev,
 	if (ret < 0 || value > TS_0)
 		ret = -EINVAL;
 
-	if (ret < 0)
+	if (ret < 0) {
 		netdev_info(ndev, "Invalid Rx_TS (hex number > 0 and < 0x80000000 expected\n");
-	else {
+	} else {
 		priv->Rx_TS = value;
 		if (reconfigure && netif_carrier_ok(ndev))
 			config_hdlc(priv);
@@ -729,8 +729,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 		pef2256_r8(priv, ISR5);
 
 	/* An error status has changed */
-	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS ||
-	    isr2 & ISR2_AIS)
+	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS || isr2 & ISR2_AIS)
 		pef2256_errors(priv);
 
 	/* RDO : Receive data overflow -> RX error */
@@ -743,10 +742,11 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 			priv->stats.rx_bytes = 0;
 		else
 			priv->stats.rx_bytes = -1;
-	} else
+	} else {
 		/* RPF or RME : FIFO received */
 		if (isr0 & (ISR0_RPF | ISR0_RME))
 			pef2256_rx(priv, isr0);
+	}
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (isr1 & ISR1_XDU) {
@@ -777,7 +777,7 @@ static int pef2256_open(struct net_device *netdev)
 	if (priv->component_id == VERSION_UNDEF) {
 		dev_err(priv->dev, "Composant ident (%X/%X) = %d\n",
 			pef2256_r8(priv, VSTR), pef2256_r8(priv, WID),
-				priv->component_id);
+			priv->component_id);
 		return -ENODEV;
 	}
 
@@ -860,7 +860,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 
 	for (idx = 0; idx < size; idx++)
 		pef2256_w8(priv, XFIFO + (idx & 1),
-			tx_buff[priv->stats.tx_bytes + idx]);
+			   tx_buff[priv->stats.tx_bytes + idx]);
 
 	priv->stats.tx_bytes += size;
 
@@ -950,8 +950,9 @@ static int pef2256_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 "invalid rising edge sync pulse \"%s\" -> using \"transmit\"\n", str_data);
 		strcpy(priv->rising_edge_sync_pulse, "transmit");
-	} else
+	} else {
 		strncpy(priv->rising_edge_sync_pulse, str_data, 10);
+	}
 
 	priv->irq = platform_get_irq(pdev, 0);
 	if (!priv->irq) {
@@ -968,15 +969,12 @@ static int pef2256_probe(struct platform_device *pdev)
 	/* Get the component Id */
 	priv->component_id = VERSION_UNDEF;
 	if (pef2256_r8(priv, VSTR) == 0x00) {
-		if ((pef2256_r8(priv, WID) & WID_IDENT_1) ==
-			WID_IDENT_1_2)
+		if ((pef2256_r8(priv, WID) & WID_IDENT_1) == WID_IDENT_1_2)
 			priv->component_id = VERSION_1_2;
 	} else if (pef2256_r8(priv, VSTR) == 0x05) {
-		if ((pef2256_r8(priv, WID) & WID_IDENT_2) ==
-			WID_IDENT_2_1)
+		if ((pef2256_r8(priv, WID) & WID_IDENT_2) == WID_IDENT_2_1)
 			priv->component_id = VERSION_2_1;
-		else if ((pef2256_r8(priv, WID) & WID_IDENT_2) ==
-			WID_IDENT_2_2)
+		else if ((pef2256_r8(priv, WID) & WID_IDENT_2) == WID_IDENT_2_2)
 			priv->component_id = VERSION_2_2;
 	}
 
@@ -1043,7 +1041,6 @@ static int pef2256_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = dev_get_drvdata(&pdev->dev);
 	struct pef2256_dev_priv *priv = dev_to_hdlc(ndev)->priv;
-
 
 	device_remove_file(priv->dev, &dev_attr_Tx_TS);
 	device_remove_file(priv->dev, &dev_attr_Rx_TS);
