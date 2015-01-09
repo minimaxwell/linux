@@ -796,11 +796,15 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 		priv->netdev->stats.tx_errors++;
 		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
-		netif_wake_queue(priv->netdev);
-	} else
+	} else {
 		/* XPR or ALLS : FIFO sent */
-		if (priv->r_isr1 & (ISR1_XPR | ISR1_ALLS))
-			pef2256_tx(priv);
+		if (priv->r_isr1 & (ISR1_XPR | ISR1_ALLS)) {
+			if (priv->tx_skb)
+				pef2256_tx(priv);
+			else
+				netif_wake_queue(priv->netdev);
+		}
+	}
 
 	return IRQ_HANDLED;
 }
