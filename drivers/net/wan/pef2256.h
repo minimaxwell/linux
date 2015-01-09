@@ -143,10 +143,6 @@ struct pef2256_dev_priv {
 	struct net_device *netdev;
 
 	int irq;
-
-	u8 r_isr0;			/* ISR0 register */
-	u8 r_isr1;			/* ISR1 register */
-	u8 r_isr2;			/* ISR2 register */
 };
 
 

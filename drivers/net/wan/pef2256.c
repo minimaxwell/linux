@@ -580,7 +580,7 @@ static void pef2256_fifo_ack(struct pef2256_dev_priv *priv)
 }
 
 
-static void pef2256_rx(struct pef2256_dev_priv *priv)
+static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 {
 	int idx;
 
@@ -588,14 +588,14 @@ static void pef2256_rx(struct pef2256_dev_priv *priv)
 	if (priv->stats.rx_bytes == -1) {
 		pef2256_fifo_ack(priv);
 
-		if (priv->r_isr0 & ISR0_RME)
+		if (isr0 & ISR0_RME)
 			priv->stats.rx_bytes = 0;
 
 		return;
 	}
 
 	/* RPF : a block is available in the receive FIFO */
-	if (priv->r_isr0 & ISR0_RPF) {
+	if (isr0 & ISR0_RPF) {
 		for (idx = 0; idx < 32; idx++)
 			priv->rx_buff[priv->stats.rx_bytes + idx] =
 				pef2256_r8(priv, RFIFO + (idx & 1));
@@ -606,7 +606,7 @@ static void pef2256_rx(struct pef2256_dev_priv *priv)
 	}
 
 	/* RME : Message end : Read the receive FIFO */
-	if (priv->r_isr0 & ISR0_RME) {
+	if (isr0 & ISR0_RME) {
 		/* Get size of last block */
 		int size = pef2256_r8(priv, RBCL) & 0x1F;
 
@@ -641,13 +641,13 @@ static void pef2256_rx(struct pef2256_dev_priv *priv)
 }
 
 
-static void pef2256_tx(struct pef2256_dev_priv *priv)
+static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 {
 	int idx, size;
 	u8 *tx_buff = priv->tx_skb->data;
 
 	/* ALLS : transmit all done */
-	if (priv->r_isr1 & ISR1_ALLS) {
+	if (isr1 & ISR1_ALLS) {
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
 		dev_kfree_skb_irq(priv->tx_skb);
@@ -698,26 +698,28 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 {
 	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
 	u8 r_gis;
+	u8 isr0, isr1, isr2;
 
 	r_gis = pef2256_r8(priv, GIS);
-
-	priv->r_isr0 = priv->r_isr1 = priv->r_isr2 = 0;
 
 	/* We only care about ISR0, ISR1 and ISR2 */
 	/* ISR0 */
 	if (r_gis & GIS_ISR0)
-		priv->r_isr0 =
-			pef2256_r8(priv, ISR0) & ~(pef2256_r8(priv, IMR0));
+		isr0 = pef2256_r8(priv, ISR0) & ~(pef2256_r8(priv, IMR0));
+	else
+		isr0 = 0;
 
 	/* ISR1 */
 	if (r_gis & GIS_ISR1)
-		priv->r_isr1 =
-			pef2256_r8(priv, ISR1) & ~(pef2256_r8(priv, IMR1));
+		isr1 = pef2256_r8(priv, ISR1) & ~(pef2256_r8(priv, IMR1));
+	else
+		isr1 = 0;
 
 	/* ISR2 */
 	if (r_gis & GIS_ISR2)
-		priv->r_isr2 =
-			pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
+		isr2 = pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
+	else
+		isr2 = 0;
 
 	if (r_gis & GIS_ISR3)
 		pef2256_r8(priv, ISR3);
@@ -727,36 +729,36 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 		pef2256_r8(priv, ISR5);
 
 	/* An error status has changed */
-	if (priv->r_isr0 & ISR0_PDEN || priv->r_isr2 & ISR2_LOS ||
-	    priv->r_isr2 & ISR2_AIS)
+	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS ||
+	    isr2 & ISR2_AIS)
 		pef2256_errors(priv);
 
 	/* RDO : Receive data overflow -> RX error */
-	if (priv->r_isr1 & ISR1_RDO) {
+	if (isr1 & ISR1_RDO) {
 		pef2256_fifo_ack(priv);
 		netdev_err(priv->netdev, "Receive data overflow\n");
 		priv->netdev->stats.rx_errors++;
 		/* RME received ? */
-		if (priv->r_isr0 & ISR0_RME)
+		if (isr0 & ISR0_RME)
 			priv->stats.rx_bytes = 0;
 		else
 			priv->stats.rx_bytes = -1;
 	} else
 		/* RPF or RME : FIFO received */
-		if (priv->r_isr0 & (ISR0_RPF | ISR0_RME))
-			pef2256_rx(priv);
+		if (isr0 & (ISR0_RPF | ISR0_RME))
+			pef2256_rx(priv, isr0);
 
 	/* XDU : Transmit data underrun -> TX error */
-	if (priv->r_isr1 & ISR1_XDU) {
+	if (isr1 & ISR1_XDU) {
 		netdev_err(priv->netdev, "Transmit data underrun\n");
 		priv->netdev->stats.tx_errors++;
 		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
 	} else {
 		/* XPR or ALLS : FIFO sent */
-		if (priv->r_isr1 & (ISR1_XPR | ISR1_ALLS)) {
+		if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
 			if (priv->tx_skb)
-				pef2256_tx(priv);
+				pef2256_tx(priv, isr1);
 			else
 				netif_wake_queue(priv->netdev);
 		}
