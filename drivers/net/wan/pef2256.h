@@ -253,6 +253,9 @@ struct pef2256_dev_priv {
 #define	ISR0	0x68	/* 0x68	Interrupt Status Register 0 */
 #define	ISR1	0x69	/* 0x69	Interrupt Status Register 1 */
 #define	ISR2	0x6A	/* 0x6A	Interrupt Status Register 2 */
+#define	ISR3	0x6B	/* 0x6B	Interrupt Status Register 3 */
+#define	ISR4	0x6C	/* 0x6C	Interrupt Status Register 4 */
+#define	ISR5	0x6D	/* 0x6D	Interrupt Status Register 5 */
 #define	GIS	0x6E	/* 0x6E	Global Interrupt Status */
 #define	Res8	0x6F	/* 0x6F	Free Register 8 */
 #define	CAS1	0x70	/* 0x70	CAS Register 1 */

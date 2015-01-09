@@ -763,6 +763,13 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 		priv->r_isr2 =
 			pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
 
+	if (r_gis & GIS_ISR3)
+		pef2256_r8(priv, ISR3);
+	if (r_gis & GIS_ISR4)
+		pef2256_r8(priv, ISR4);
+	if (r_gis & GIS_ISR5)
+		pef2256_r8(priv, ISR5);
+
 	/* An error status has changed */
 	if (priv->r_isr0 & ISR0_PDEN || priv->r_isr2 & ISR2_LOS ||
 	    priv->r_isr2 & ISR2_AIS)
