@@ -778,6 +778,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	/* RDO : Receive data overflow -> RX error */
 	if (priv->r_isr1 & ISR1_RDO) {
 		pef2256_fifo_ack(priv);
+		netdev_err(priv->netdev, "Receive data overflow\n");
 		priv->netdev->stats.rx_errors++;
 		/* RME received ? */
 		if (priv->r_isr0 & ISR0_RME)
@@ -791,6 +792,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (priv->r_isr1 & ISR1_XDU) {
+		netdev_err(priv->netdev, "Transmit data underrun\n");
 		priv->netdev->stats.tx_errors++;
 		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
