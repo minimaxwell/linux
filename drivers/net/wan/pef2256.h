@@ -53,28 +53,31 @@ enum versions {
 #define WID_IDENT_2_2		0x40
 
 /* Registers' bits */
-#define GIS_ISR0			1
+#define GIS_ISR0			(1 << 0)
 #define GIS_ISR1			(1 << 1)
 #define GIS_ISR2			(1 << 2)
-#define ISR0_RPF			1
+#define GIS_ISR3			(1 << 3)
+#define GIS_ISR4			(1 << 4)
+#define GIS_ISR5			(1 << 5)
+#define ISR0_RPF			(1 << 0)
 #define ISR0_PDEN			(1 << 1)
 #define ISR0_RME			(1 << 7)
-#define ISR1_XPR			1
+#define ISR1_XPR			(1 << 0)
 #define ISR1_XDU			(1 << 4)
 #define ISR1_ALLS			(1 << 5)
 #define ISR1_RDO			(1 << 6)
 #define ISR2_LOS			(1 << 2)
 #define ISR2_AIS			(1 << 3)
-#define IMR0_RPF			1
-#define IMR0_PDEN			1
+#define IMR0_RPF			(1 << 0)
+#define IMR0_PDEN			(1 << 0)
 #define IMR0_RME			(1 << 7)
-#define IMR1_XPR			1
+#define IMR1_XPR			(1 << 0)
 #define IMR1_XDU			(1 << 4)
 #define IMR1_ALLS			(1 << 5)
 #define IMR1_RDO			(1 << 6)
 #define IMR2_LOS			(1 << 2)
 #define IMR2_AIS			(1 << 3)
-#define LIM0_MAS			1
+#define LIM0_MAS			(1 << 0)
 #define LIM1_RIL0			(1 << 4)
 #define LIM1_RIL1			(1 << 5)
 #define LIM1_RIL2			(1 << 6)
@@ -112,7 +115,7 @@ enum versions {
 #define RC0_SWD				(1 << 7)
 #define RC0_ASY4			(1 << 6)
 #define XSW_XSIS			(1 << 7)
-#define PC5_CRP				1
+#define PC5_CRP				(1 << 0)
 #define XPM2_XLT			(1 << 6)
 
 struct pef2256_dev_priv {
@@ -250,9 +253,6 @@ struct pef2256_dev_priv {
 #define	ISR0	0x68	/* 0x68	Interrupt Status Register 0 */
 #define	ISR1	0x69	/* 0x69	Interrupt Status Register 1 */
 #define	ISR2	0x6A	/* 0x6A	Interrupt Status Register 2 */
-#define	ISR3	0x6B	/* 0x6B	Interrupt Status Register 3 */
-#define	ISR4	0x6C	/* 0x6C	Interrupt Status Register 4 */
-#define	ISR5	0x6D	/* 0x6D	Interrupt Status Register 5 */
 #define	GIS	0x6E	/* 0x6E	Global Interrupt Status */
 #define	Res8	0x6F	/* 0x6F	Free Register 8 */
 #define	CAS1	0x70	/* 0x70	CAS Register 1 */
