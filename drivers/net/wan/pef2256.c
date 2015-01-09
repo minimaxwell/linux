@@ -490,6 +490,8 @@ static void init_falc(struct pef2256_dev_priv *priv)
 
 	/* port RCLK is output */
 	pef2256_s8(priv, PC5, PC5_CRP);
+	/* status changed interrupt at both up and down */
+	pef2256_s8(priv, GCR, GCR_SCI);
 	/* visibility of the masked interrupts */
 	pef2256_s8(priv, GCR, GCR_VIS);
 	/* reset lines
@@ -741,7 +743,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 
 	r_gis = pef2256_r8(priv, GIS);
 
-	priv->r_isr0 = priv->r_isr1 = 0;
+	priv->r_isr0 = priv->r_isr1 = priv->r_isr2 = 0;
 
 	/* We only care about ISR0, ISR1 and ISR2 */
 	/* ISR0 */
