@@ -694,6 +694,7 @@ static void pef2256_tx(struct pef2256_dev_priv *priv)
 	if (priv->r_isr1 & ISR1_ALLS) {
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
+		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
 		priv->stats.tx_bytes = 0;
 		netif_wake_queue(priv->netdev);
@@ -723,6 +724,7 @@ static void pef2256_errors(struct pef2256_dev_priv *priv)
 	    pef2256_r8(priv, FRS0) & (FRS0_LOS | FRS0_AIS)) {
 		if (priv->tx_skb) {
 			priv->netdev->stats.tx_errors++;
+			dev_kfree_skb_irq(priv->tx_skb);
 			priv->tx_skb = NULL;
 			priv->stats.tx_bytes = 0;
 			netif_wake_queue(priv->netdev);
@@ -783,6 +785,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	/* XDU : Transmit data underrun -> TX error */
 	if (priv->r_isr1 & ISR1_XDU) {
 		priv->netdev->stats.tx_errors++;
+		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
 		netif_wake_queue(priv->netdev);
 	} else
