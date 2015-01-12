@@ -755,13 +755,6 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	else
 		isr2 = 0;
 
-	if (r_gis & GIS_ISR3)
-		pef2256_r8(priv, ISR3);
-	if (r_gis & GIS_ISR4)
-		pef2256_r8(priv, ISR4);
-	if (r_gis & GIS_ISR5)
-		pef2256_r8(priv, ISR5);
-
 	/* An error status has changed */
 	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS || isr2 & ISR2_AIS)
 		pef2256_errors(priv);
@@ -815,6 +808,9 @@ static int pef2256_open(struct net_device *netdev)
 	dummy = pef2256_r8(priv, ISR0);
 	dummy = pef2256_r8(priv, ISR1);
 	dummy = pef2256_r8(priv, ISR2);
+	dummy = pef2256_r8(priv, ISR3);
+	dummy = pef2256_r8(priv, ISR4);
+	dummy = pef2256_r8(priv, ISR5);
 
 	/* Mask HDLC 1 Transmit IT */
 	pef2256_s8(priv, IMR1, IMR1_XPR);
