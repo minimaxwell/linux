@@ -107,12 +107,6 @@ static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 static void config_hdlc(struct pef2256_dev_priv *priv)
 {
 	int TS_idx;
-	u8 dummy;
-
-	/* Read to remove pending IT */
-	dummy = pef2256_r8(priv, ISR0);
-	dummy = pef2256_r8(priv, ISR1);
-	dummy = pef2256_r8(priv, ISR2);
 
 	/* Mask HDLC 1 Transmit IT */
 	pef2256_s8(priv, IMR1, IMR1_XPR);
