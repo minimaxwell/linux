@@ -35,6 +35,8 @@
 #include <linux/etherdevice.h>
 #include "pef2256.h"
 
+#define MTU_MAX	1600
+
 static int pef2256_open(struct net_device *netdev);
 static int pef2256_close(struct net_device *netdev);
 
@@ -594,7 +596,16 @@ static void pef2256_fifo_ack(struct pef2256_dev_priv *priv)
 static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 {
 	int idx;
+	struct sk_buff *skb = priv->rx_skb;
 
+	if (unlikely(skb == NULL)) {
+		skb = dev_alloc_skb(MTU_MAX);
+		priv->rx_skb = skb;
+		if (skb == NULL) {
+			priv->netdev->stats.rx_dropped++;
+			return;
+		}
+	}
 	/* RDO has been received -> wait for RME */
 	if (priv->stats.rx_bytes == -1) {
 		pef2256_fifo_ack(priv);
@@ -607,8 +618,10 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 
 	/* RPF : a block is available in the receive FIFO */
 	if (isr0 & ISR0_RPF) {
+		u16 *rx_buff = (u16*)skb->data;
+
 		for (idx = 0; idx < 16; idx++)
-			priv->rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+			rx_buff[(priv->stats.rx_bytes)/2 + idx] =
 				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
@@ -618,12 +631,13 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 
 	/* RME : Message end : Read the receive FIFO */
 	if (isr0 & ISR0_RME) {
+		u16 *rx_buff = (u16*)skb->data;
 		/* Get size of last block */
 		int size = pef2256_r8(priv, RBCL) & 0x1F;
 
 		/* Read last block */
 		for (idx = 0; idx < (size+1)/2; idx++)
-			priv->rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+			rx_buff[(priv->stats.rx_bytes)/2 + idx] =
 				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
@@ -632,21 +646,13 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 
 		/* Packet received */
 		if (priv->stats.rx_bytes > 0) {
-			struct sk_buff *skb =
-				dev_alloc_skb(priv->stats.rx_bytes);
-
-			if (!skb) {
-				priv->stats.rx_bytes = 0;
-				priv->netdev->stats.rx_dropped++;
-				return;
-			}
-			memcpy(skb->data, priv->rx_buff, priv->stats.rx_bytes);
 			skb_put(skb, priv->stats.rx_bytes);
 			priv->stats.rx_bytes = 0;
 			skb->protocol = hdlc_type_trans(skb, priv->netdev);
 			priv->netdev->stats.rx_packets++;
 			priv->netdev->stats.rx_bytes += skb->len;
 			netif_rx(skb);
+			priv->rx_skb = dev_alloc_skb(MTU_MAX);
 		}
 	}
 }
@@ -831,6 +837,7 @@ static int pef2256_open(struct net_device *netdev)
 
 	priv->tx_skb = NULL;
 	priv->stats.rx_bytes = 0;
+	priv->rx_skb = dev_alloc_skb(MTU_MAX);
 
 	config_hdlc(priv);
 

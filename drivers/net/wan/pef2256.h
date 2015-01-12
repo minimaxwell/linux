@@ -120,6 +120,7 @@ enum versions {
 
 struct pef2256_dev_priv {
 	struct sk_buff *tx_skb;
+	struct sk_buff *rx_skb;
 	struct device *dev;
 
 	void __iomem *ioaddr;
@@ -130,8 +131,6 @@ struct pef2256_dev_priv {
 	int clock_rate;
 	int data_rate;
 	char rising_edge_sync_pulse[10];
-
-	u16 rx_buff[1024];
 
 	struct net_device_stats stats;
 
