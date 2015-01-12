@@ -987,12 +987,9 @@ static int pef2256_probe(struct platform_device *pdev)
 			priv->component_id = VERSION_2_2;
 	}
 
-	priv->tx_skb = NULL;
-
 	/* Default settings ; Rx and Tx use TS 1, mode = MASTER */
 	priv->Rx_TS = 0x40000000;
 	priv->Tx_TS = 0x40000000;
-	priv->mode = 0;
 
 	netdev = alloc_hdlcdev(priv);
 	if (!netdev) {
