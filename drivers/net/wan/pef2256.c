@@ -122,7 +122,6 @@ static void config_hdlc(struct pef2256_dev_priv *priv)
 	/* Mask HDLC 1 Receive IT */
 	pef2256_s8(priv, IMR0, IMR0_RPF);
 	pef2256_s8(priv, IMR0, IMR0_RME);
-	pef2256_s8(priv, IMR1, IMR1_RDO);
 
 	/* Mask errors IT */
 	pef2256_s8(priv, IMR0, IMR0_PDEN);
@@ -804,6 +803,14 @@ static int pef2256_open(struct net_device *netdev)
 	 * such interrupts before it is initialized and configured.
 	*/
 
+	/* Mask HDLC 1 Transmit IT */
+	pef2256_w8(priv, IMR0, 0xff);
+	pef2256_w8(priv, IMR1, 0xff);
+	pef2256_w8(priv, IMR2, 0xff);
+	pef2256_w8(priv, IMR3, 0xff);
+	pef2256_w8(priv, IMR4, 0xff);
+	pef2256_w8(priv, IMR5, 0xff);
+
 	/* Read to remove pending IT */
 	dummy = pef2256_r8(priv, ISR0);
 	dummy = pef2256_r8(priv, ISR1);
@@ -811,21 +818,6 @@ static int pef2256_open(struct net_device *netdev)
 	dummy = pef2256_r8(priv, ISR3);
 	dummy = pef2256_r8(priv, ISR4);
 	dummy = pef2256_r8(priv, ISR5);
-
-	/* Mask HDLC 1 Transmit IT */
-	pef2256_s8(priv, IMR1, IMR1_XPR);
-	pef2256_s8(priv, IMR1, IMR1_XDU);
-	pef2256_s8(priv, IMR1, IMR1_ALLS);
-
-	/* Mask HDLC 1 Receive IT */
-	pef2256_s8(priv, IMR0, IMR0_RPF);
-	pef2256_s8(priv, IMR0, IMR0_RME);
-	pef2256_s8(priv, IMR1, IMR1_RDO);
-
-	/* Mask errors IT */
-	pef2256_s8(priv, IMR0, IMR0_PDEN);
-	pef2256_s8(priv, IMR2, IMR2_LOS);
-	pef2256_s8(priv, IMR2, IMR2_AIS);
 
 	ret = request_irq(priv->irq, pef2256_irq, 0, "e1-wan", priv);
 	if (ret) {
