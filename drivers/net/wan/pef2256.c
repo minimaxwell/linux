@@ -177,7 +177,6 @@ static void config_hdlc(struct pef2256_dev_priv *priv)
 	/* Unmask HDLC 1 Receive IT */
 	pef2256_c8(priv, IMR0, IMR0_RPF);
 	pef2256_c8(priv, IMR0, IMR0_RME);
-	pef2256_c8(priv, IMR1, IMR1_RDO);
 
 	/* Unmask errors IT */
 	pef2256_c8(priv, IMR0, IMR0_PDEN);
@@ -606,17 +605,8 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 			return;
 		}
 	}
-	/* RDO has been received -> wait for RME */
-	if (priv->stats.rx_bytes == -1) {
-		pef2256_fifo_ack(priv);
 
-		if (isr0 & ISR0_RME)
-			priv->stats.rx_bytes = 0;
-
-		return;
-	}
-
-	/* RPF : a block is available in the receive FIFO */
+	/* RPF : a full block is available in the receive FIFO */
 	if (isr0 & ISR0_RPF) {
 		u16 *rx_buff = (u16*)skb->data;
 
@@ -645,14 +635,37 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 		priv->stats.rx_bytes += size;
 
 		/* Packet received */
-		if (priv->stats.rx_bytes > 0) {
-			skb_put(skb, priv->stats.rx_bytes);
+		if (priv->stats.rx_bytes > 3) {
+			u8 status;
+
+			size = priv->stats.rx_bytes - 3;
+			/* invert status bits 7 and 5 so that set bits are errors) */
+			status = (skb->data[size + 2] & ~0x2) ^ 0xa0;
+
+			if (status == 0) {
+				skb_put(skb, size);
+				skb->protocol = hdlc_type_trans(skb, priv->netdev);
+				priv->netdev->stats.rx_packets++;
+				priv->netdev->stats.rx_bytes += size;
+				netif_rx(skb);
+				priv->rx_skb = dev_alloc_skb(MTU_MAX);
+			}
+			else {
+				if (status & 0x80) {
+					netdev_err(priv->netdev, "Invalid Frame\n");
+				}
+				if (status & 0x40) {
+					netdev_err(priv->netdev, "Receive data overflow\n");
+				}
+				if (status & 0x20) {
+					netdev_err(priv->netdev, "CRC16 error\n");
+				}
+				if (status & 0x10) {
+					netdev_err(priv->netdev, "Receive message aborted\n");
+				}
+				priv->netdev->stats.rx_errors++;
+			}
 			priv->stats.rx_bytes = 0;
-			skb->protocol = hdlc_type_trans(skb, priv->netdev);
-			priv->netdev->stats.rx_packets++;
-			priv->netdev->stats.rx_bytes += skb->len;
-			netif_rx(skb);
-			priv->rx_skb = dev_alloc_skb(MTU_MAX);
 		}
 	}
 }
@@ -753,21 +766,9 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS || isr2 & ISR2_AIS)
 		pef2256_errors(priv);
 
-	/* RDO : Receive data overflow -> RX error */
-	if (isr1 & ISR1_RDO) {
-		pef2256_fifo_ack(priv);
-		netdev_err(priv->netdev, "Receive data overflow\n");
-		priv->netdev->stats.rx_errors++;
-		/* RME received ? */
-		if (isr0 & ISR0_RME)
-			priv->stats.rx_bytes = 0;
-		else
-			priv->stats.rx_bytes = -1;
-	} else {
-		/* RPF or RME : FIFO received */
-		if (isr0 & (ISR0_RPF | ISR0_RME))
-			pef2256_rx(priv, isr0);
-	}
+	/* RPF or RME : FIFO received */
+	if (isr0 & (ISR0_RPF | ISR0_RME))
+		pef2256_rx(priv, isr0);
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (isr1 & ISR1_XDU) {
