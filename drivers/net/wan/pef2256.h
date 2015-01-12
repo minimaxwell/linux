@@ -131,7 +131,7 @@ struct pef2256_dev_priv {
 	int data_rate;
 	char rising_edge_sync_pulse[10];
 
-	u8 rx_buff[2048];
+	u16 rx_buff[1024];
 
 	struct net_device_stats stats;
 

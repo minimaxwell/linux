@@ -44,10 +44,21 @@ static u8 pef2256_r8(struct pef2256_dev_priv *priv, u32 offset)
 	return ioread8(priv->ioaddr + offset);
 }
 
+/* helper function - Read a register */
+static u16 pef2256_r16(struct pef2256_dev_priv *priv, u32 offset)
+{
+	return ioread16be(priv->ioaddr + offset);
+}
+
 /* helper function - Write a value to a register */
 static void pef2256_w8(struct pef2256_dev_priv *priv, u32 offset, u8 val)
 {
 	iowrite8(val, priv->ioaddr + offset);
+}
+
+static void pef2256_w16(struct pef2256_dev_priv *priv, u32 offset, u16 val)
+{
+	iowrite16be(val, priv->ioaddr + offset);
 }
 
 /* helper function - Clear bits in a register */
@@ -596,9 +607,9 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 
 	/* RPF : a block is available in the receive FIFO */
 	if (isr0 & ISR0_RPF) {
-		for (idx = 0; idx < 32; idx++)
-			priv->rx_buff[priv->stats.rx_bytes + idx] =
-				pef2256_r8(priv, RFIFO + (idx & 1));
+		for (idx = 0; idx < 16; idx++)
+			priv->rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
 
@@ -611,9 +622,9 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 		int size = pef2256_r8(priv, RBCL) & 0x1F;
 
 		/* Read last block */
-		for (idx = 0; idx < size; idx++)
-			priv->rx_buff[priv->stats.rx_bytes + idx] =
-				pef2256_r8(priv, RFIFO + (idx & 1));
+		for (idx = 0; idx < (size+1)/2; idx++)
+			priv->rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
 
@@ -644,7 +655,7 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 {
 	int idx, size;
-	u8 *tx_buff = priv->tx_skb->data;
+	u16 *tx_buff = (u16*)priv->tx_skb->data;
 
 	/* ALLS : transmit all done */
 	if (isr1 & ISR1_ALLS) {
@@ -661,9 +672,9 @@ static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 			if (size > 32)
 				size = 32;
 
-			for (idx = 0; idx < size; idx++)
-				pef2256_w8(priv, XFIFO + (idx & 1),
-					tx_buff[priv->stats.tx_bytes + idx]);
+			for (idx = 0; (idx < size + 1 / 2); idx++)
+				pef2256_w16(priv, XFIFO,
+					tx_buff[priv->stats.tx_bytes /2 + idx]);
 
 			priv->stats.tx_bytes += size;
 
@@ -849,7 +860,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 	int idx, size;
-	u8 *tx_buff = skb->data;
+	u16 *tx_buff = (u16*)skb->data;
 
 	priv->tx_skb = skb;
 	priv->stats.tx_bytes = 0;
@@ -858,9 +869,9 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 	if (size > 32)
 		size = 32;
 
-	for (idx = 0; idx < size; idx++)
-		pef2256_w8(priv, XFIFO + (idx & 1),
-			   tx_buff[priv->stats.tx_bytes + idx]);
+	for (idx = 0; idx < (size + 1) / 2; idx++)
+		pef2256_w16(priv, XFIFO,
+			   tx_buff[priv->stats.tx_bytes/2 + idx]);
 
 	priv->stats.tx_bytes += size;
 
