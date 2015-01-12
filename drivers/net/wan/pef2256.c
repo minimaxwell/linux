@@ -657,12 +657,29 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 	}
 }
 
-
-static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
+static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 {
 	int idx, size;
 	u16 *tx_buff = (u16*)priv->tx_skb->data;
 
+	size = priv->tx_skb->len - priv->stats.tx_bytes;
+	if (size > 32)
+		size = 32;
+
+	for (idx = 0; (idx < size + 1 / 2); idx++)
+		pef2256_w16(priv, XFIFO,
+			tx_buff[priv->stats.tx_bytes /2 + idx]);
+
+	priv->stats.tx_bytes += size;
+
+	if (priv->stats.tx_bytes == priv->tx_skb->len)
+		pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
+	else
+		pef2256_s8(priv, CMDR, 1 << 3);
+}
+
+static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
+{
 	/* ALLS : transmit all done */
 	if (isr1 & ISR1_ALLS) {
 		priv->netdev->stats.tx_packets++;
@@ -671,24 +688,11 @@ static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 		priv->tx_skb = NULL;
 		priv->stats.tx_bytes = 0;
 		netif_wake_queue(priv->netdev);
-	} else
+	} else {
 		/* XPR : write a new block in transmit FIFO */
-		if (priv->stats.tx_bytes < priv->tx_skb->len) {
-			size = priv->tx_skb->len - priv->stats.tx_bytes;
-			if (size > 32)
-				size = 32;
-
-			for (idx = 0; (idx < size + 1 / 2); idx++)
-				pef2256_w16(priv, XFIFO,
-					tx_buff[priv->stats.tx_bytes /2 + idx]);
-
-			priv->stats.tx_bytes += size;
-
-			if (priv->stats.tx_bytes == priv->tx_skb->len)
-				pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
-			else
-				pef2256_s8(priv, CMDR, 1 << 3);
-		}
+		if (priv->stats.tx_bytes < priv->tx_skb->len)
+			pef2256_do_tx(priv);
+	}
 }
 
 static void pef2256_errors(struct pef2256_dev_priv *priv)
@@ -866,25 +870,11 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 					  struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
-	int idx, size;
-	u16 *tx_buff = (u16*)skb->data;
 
 	priv->tx_skb = skb;
 	priv->stats.tx_bytes = 0;
 
-	size = priv->tx_skb->len - priv->stats.tx_bytes;
-	if (size > 32)
-		size = 32;
-
-	for (idx = 0; idx < (size + 1) / 2; idx++)
-		pef2256_w16(priv, XFIFO,
-			   tx_buff[priv->stats.tx_bytes/2 + idx]);
-
-	priv->stats.tx_bytes += size;
-
-	pef2256_s8(priv, CMDR, 1 << 3);
-	if (priv->stats.tx_bytes == priv->tx_skb->len)
-		pef2256_s8(priv, CMDR, 1 << 1);
+	pef2256_do_tx(priv);
 
 	netif_stop_queue(netdev);
 	return NETDEV_TX_OK;
