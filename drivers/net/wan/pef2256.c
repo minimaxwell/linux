@@ -583,7 +583,7 @@ static void pef2256_fifo_ack(struct pef2256_dev_priv *priv)
 }
 
 
-static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
+static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 {
 	int idx;
 	struct sk_buff *skb = priv->rx_skb;
@@ -597,21 +597,8 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 		}
 	}
 
-	/* RPF : a full block is available in the receive FIFO */
-	if (isr0 & ISR0_RPF) {
-		u16 *rx_buff = (u16*)skb->data;
-
-		for (idx = 0; idx < 16; idx++)
-			rx_buff[(priv->rx_bytes)/2 + idx] =
-				pef2256_r16(priv, RFIFO);
-
-		pef2256_fifo_ack(priv);
-
-		priv->rx_bytes += 32;
-	}
-
-	/* RME : Message end : Read the receive FIFO */
-	if (isr0 & ISR0_RME) {
+	if (end) {
+		/* RME : Message end : Read the receive FIFO */
 		u16 *rx_buff = (u16*)skb->data;
 		/* Get size of last block */
 		int size = pef2256_r8(priv, RBCL) & 0x1F;
@@ -658,6 +645,17 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 			}
 			priv->rx_bytes = 0;
 		}
+	} else {
+		/* RPF : a full block is available in the receive FIFO */
+		u16 *rx_buff = (u16*)skb->data;
+
+		for (idx = 0; idx < 16; idx++)
+			rx_buff[(priv->rx_bytes)/2 + idx] =
+				pef2256_r16(priv, RFIFO);
+
+		pef2256_fifo_ack(priv);
+
+		priv->rx_bytes += 32;
 	}
 }
 
@@ -682,10 +680,9 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 		pef2256_s8(priv, CMDR, 1 << 3);
 }
 
-static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
+static void pef2256_tx(struct pef2256_dev_priv *priv, int all_sent)
 {
-	/* ALLS : transmit all done */
-	if (isr1 & ISR1_ALLS) {
+	if (all_sent) {
 		priv->netdev->stats.tx_packets++;
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
 		dev_kfree_skb_irq(priv->tx_skb);
@@ -693,7 +690,6 @@ static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 		priv->tx_bytes = 0;
 		netif_wake_queue(priv->netdev);
 	} else {
-		/* XPR : write a new block in transmit FIFO */
 		if (priv->tx_bytes < priv->tx_skb->len)
 			pef2256_do_tx(priv);
 	}
@@ -752,7 +748,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 
 	/* RPF or RME : FIFO received */
 	if (isr0 & (ISR0_RPF | ISR0_RME))
-		pef2256_rx(priv, isr0);
+		pef2256_rx(priv, isr0 & ISR0_RME);
 
 	/* XDU : Transmit data underrun -> TX error */
 	if (isr1 & ISR1_XDU) {
@@ -764,7 +760,7 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 		/* XPR or ALLS : FIFO sent */
 		if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
 			if (priv->tx_skb)
-				pef2256_tx(priv, isr1);
+				pef2256_tx(priv, isr1 & ISR1_ALLS);
 			else
 				netif_wake_queue(priv->netdev);
 		}
