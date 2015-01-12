@@ -453,8 +453,6 @@ static void init_falc(struct pef2256_dev_priv *priv)
 	pef2256_s8(priv, PC5, PC5_CRP);
 	/* status changed interrupt at both up and down */
 	pef2256_s8(priv, GCR, GCR_SCI);
-	/* visibility of the masked interrupts */
-	pef2256_s8(priv, GCR, GCR_VIS);
 	/* reset lines
 	 *  => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
 	 *     CMDR.SRES = 1 (bit 0)
@@ -732,19 +730,19 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	/* We only care about ISR0, ISR1 and ISR2 */
 	/* ISR0 */
 	if (r_gis & GIS_ISR0)
-		isr0 = pef2256_r8(priv, ISR0) & ~(pef2256_r8(priv, IMR0));
+		isr0 = pef2256_r8(priv, ISR0);
 	else
 		isr0 = 0;
 
 	/* ISR1 */
 	if (r_gis & GIS_ISR1)
-		isr1 = pef2256_r8(priv, ISR1) & ~(pef2256_r8(priv, IMR1));
+		isr1 = pef2256_r8(priv, ISR1);
 	else
 		isr1 = 0;
 
 	/* ISR2 */
 	if (r_gis & GIS_ISR2)
-		isr2 = pef2256_r8(priv, ISR2) & ~(pef2256_r8(priv, IMR2));
+		isr2 = pef2256_r8(priv, ISR2);
 	else
 		isr2 = 0;
 
