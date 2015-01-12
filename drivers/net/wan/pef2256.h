@@ -132,7 +132,8 @@ struct pef2256_dev_priv {
 	int data_rate;
 	char rising_edge_sync_pulse[10];
 
-	struct net_device_stats stats;
+	int rx_bytes;
+	int tx_bytes;
 
 	u32 Tx_TS;	/* Transmit Time Slots */
 	u32 Rx_TS;	/* Receive Time Slots */

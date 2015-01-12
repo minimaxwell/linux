@@ -611,12 +611,12 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 		u16 *rx_buff = (u16*)skb->data;
 
 		for (idx = 0; idx < 16; idx++)
-			rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+			rx_buff[(priv->rx_bytes)/2 + idx] =
 				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
 
-		priv->stats.rx_bytes += 32;
+		priv->rx_bytes += 32;
 	}
 
 	/* RME : Message end : Read the receive FIFO */
@@ -627,18 +627,18 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 
 		/* Read last block */
 		for (idx = 0; idx < (size+1)/2; idx++)
-			rx_buff[(priv->stats.rx_bytes)/2 + idx] =
+			rx_buff[(priv->rx_bytes)/2 + idx] =
 				pef2256_r16(priv, RFIFO);
 
 		pef2256_fifo_ack(priv);
 
-		priv->stats.rx_bytes += size;
+		priv->rx_bytes += size;
 
 		/* Packet received */
-		if (priv->stats.rx_bytes > 3) {
+		if (priv->rx_bytes > 3) {
 			u8 status;
 
-			size = priv->stats.rx_bytes - 3;
+			size = priv->rx_bytes - 3;
 			/* invert status bits 7 and 5 so that set bits are errors) */
 			status = (skb->data[size + 2] & ~0x2) ^ 0xa0;
 
@@ -665,7 +665,7 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, u8 isr0)
 				}
 				priv->netdev->stats.rx_errors++;
 			}
-			priv->stats.rx_bytes = 0;
+			priv->rx_bytes = 0;
 		}
 	}
 }
@@ -675,17 +675,17 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 	int idx, size;
 	u16 *tx_buff = (u16*)priv->tx_skb->data;
 
-	size = priv->tx_skb->len - priv->stats.tx_bytes;
+	size = priv->tx_skb->len - priv->tx_bytes;
 	if (size > 32)
 		size = 32;
 
 	for (idx = 0; (idx < size + 1 / 2); idx++)
 		pef2256_w16(priv, XFIFO,
-			tx_buff[priv->stats.tx_bytes /2 + idx]);
+			tx_buff[priv->tx_bytes /2 + idx]);
 
-	priv->stats.tx_bytes += size;
+	priv->tx_bytes += size;
 
-	if (priv->stats.tx_bytes == priv->tx_skb->len)
+	if (priv->tx_bytes == priv->tx_skb->len)
 		pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
 	else
 		pef2256_s8(priv, CMDR, 1 << 3);
@@ -699,11 +699,11 @@ static void pef2256_tx(struct pef2256_dev_priv *priv, u8 isr1)
 		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
 		dev_kfree_skb_irq(priv->tx_skb);
 		priv->tx_skb = NULL;
-		priv->stats.tx_bytes = 0;
+		priv->tx_bytes = 0;
 		netif_wake_queue(priv->netdev);
 	} else {
 		/* XPR : write a new block in transmit FIFO */
-		if (priv->stats.tx_bytes < priv->tx_skb->len)
+		if (priv->tx_bytes < priv->tx_skb->len)
 			pef2256_do_tx(priv);
 	}
 }
@@ -716,12 +716,12 @@ static void pef2256_errors(struct pef2256_dev_priv *priv)
 			priv->netdev->stats.tx_errors++;
 			dev_kfree_skb_irq(priv->tx_skb);
 			priv->tx_skb = NULL;
-			priv->stats.tx_bytes = 0;
+			priv->tx_bytes = 0;
 			netif_wake_queue(priv->netdev);
 		}
-		if (priv->stats.rx_bytes > 0) {
+		if (priv->rx_bytes > 0) {
 			priv->netdev->stats.rx_errors++;
-			priv->stats.rx_bytes = 0;
+			priv->rx_bytes = 0;
 		}
 		netif_carrier_off(priv->netdev);
 	} else
@@ -841,7 +841,7 @@ static int pef2256_open(struct net_device *netdev)
 	init_falc(priv);
 
 	priv->tx_skb = NULL;
-	priv->stats.rx_bytes = 0;
+	priv->rx_bytes = 0;
 	priv->rx_skb = dev_alloc_skb(MTU_MAX);
 
 	config_hdlc(priv);
@@ -873,7 +873,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
 
 	priv->tx_skb = skb;
-	priv->stats.tx_bytes = 0;
+	priv->tx_bytes = 0;
 
 	pef2256_do_tx(priv);
 
