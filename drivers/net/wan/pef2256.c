@@ -77,6 +77,12 @@ static void pef2256_s8(struct pef2256_dev_priv *priv, u32 offset, u8 mask)
 	iowrite8(val | mask, priv->ioaddr + offset);
 }
 
+static void pef2256_command(struct pef2256_dev_priv *priv, u8 command)
+{
+	while (pef2256_r8(priv, SIS) & SIS_CEC);
+	pef2256_w8(priv, CMDR, command);
+}
+
 static void config_hdlc_timeslot(struct pef2256_dev_priv *priv, int ts)
 {
 	static struct {
@@ -453,11 +459,8 @@ static void init_falc(struct pef2256_dev_priv *priv)
 	pef2256_s8(priv, PC5, PC5_CRP);
 	/* status changed interrupt at both up and down */
 	pef2256_s8(priv, GCR, GCR_SCI);
-	/* reset lines
-	 *  => CMDR.RRES = 1 (bit 6); CMDR.XRES = 1 (bit 4);
-	 *     CMDR.SRES = 1 (bit 0)
-	 */
-	pef2256_w8(priv, CMDR, 0x51);
+	/* reset lines */
+	pef2256_command(priv, CMDR_RRES | CMDR_XRES | CMDR_SRES);
 }
 
 static ssize_t fs_attr_mode_show(struct device *dev,
@@ -579,7 +582,7 @@ static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show,
 
 static void pef2256_fifo_ack(struct pef2256_dev_priv *priv)
 {
-	pef2256_s8(priv, CMDR, 1 << 7);
+	pef2256_command(priv, CMDR_RMC);
 }
 
 
@@ -669,9 +672,9 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 	priv->tx_bytes += size;
 
 	if (priv->tx_bytes == skb->len)
-		pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
+		pef2256_command(priv, CMDR_XHF | CMDR_XME);
 	else
-		pef2256_s8(priv, CMDR, 1 << 3);
+		pef2256_command(priv, CMDR_XHF);
 }
 
 static void pef2256_tx(struct pef2256_dev_priv *priv, int all_sent)

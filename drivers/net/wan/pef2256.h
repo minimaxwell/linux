@@ -119,6 +119,15 @@ enum versions {
 #define XSW_XSIS			(1 << 7)
 #define PC5_CRP				(1 << 0)
 #define XPM2_XLT			(1 << 6)
+#define SIS_CEC				(1 << 2)
+#define CMDR_SRES			(1 << 0)
+#define CMDR_XME			(1 << 1)
+#define CMDR_XTF			(1 << 2)
+#define CMDR_XHF			(1 << 3)
+#define CMDR_XRES			(1 << 4)
+#define CMDR_XREP			(1 << 5)
+#define CMDR_RRES			(1 << 6)
+#define CMDR_RMC			(1 << 7)
 
 #define NB_TX	16
 
