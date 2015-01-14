@@ -118,10 +118,16 @@ enum versions {
 #define PC5_CRP				(1 << 0)
 #define XPM2_XLT			(1 << 6)
 
+#define NB_TX	16
+
 struct pef2256_dev_priv {
-	struct sk_buff *tx_skb;
+	struct sk_buff *tx_skb_pool[NB_TX];
 	struct sk_buff *rx_skb;
 	struct device *dev;
+
+	struct sk_buff **tx_cur, **tx_avail;
+	int nb_free;
+	spinlock_t tx_lock;
 
 	void __iomem *ioaddr;
 	int component_id;

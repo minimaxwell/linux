@@ -662,9 +662,10 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 {
 	int idx, size;
-	u16 *tx_buff = (u16*)priv->tx_skb->data;
+	struct sk_buff *skb = *priv->tx_cur;
+	u16 *tx_buff = (u16*)skb->data;
 
-	size = priv->tx_skb->len - priv->tx_bytes;
+	size = skb->len - priv->tx_bytes;
 	if (size > 32)
 		size = 32;
 
@@ -674,7 +675,7 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 
 	priv->tx_bytes += size;
 
-	if (priv->tx_bytes == priv->tx_skb->len)
+	if (priv->tx_bytes == skb->len)
 		pef2256_s8(priv, CMDR, (1 << 3) | (1 << 1));
 	else
 		pef2256_s8(priv, CMDR, 1 << 3);
@@ -682,15 +683,27 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 
 static void pef2256_tx(struct pef2256_dev_priv *priv, int all_sent)
 {
+	struct sk_buff *skb = *priv->tx_cur;
+
 	if (all_sent) {
+		int nbf;
+
+		spin_lock(&priv->tx_lock);
 		priv->netdev->stats.tx_packets++;
-		priv->netdev->stats.tx_bytes += priv->tx_skb->len;
-		dev_kfree_skb_irq(priv->tx_skb);
-		priv->tx_skb = NULL;
-		priv->tx_bytes = 0;
-		netif_wake_queue(priv->netdev);
+		priv->netdev->stats.tx_bytes += skb->len;
+		dev_kfree_skb_irq(skb);
+		if (++priv->tx_cur == priv->tx_skb_pool + NB_TX)
+			priv->tx_cur = priv->tx_skb_pool;
+		nbf = ++priv->nb_free;
+		if (nbf == 1)
+			netif_wake_queue(priv->netdev);
+		if (nbf != NB_TX) {
+			priv->tx_bytes = 0;
+			pef2256_do_tx(priv);
+		}
+		spin_unlock(&priv->tx_lock);
 	} else {
-		if (priv->tx_bytes < priv->tx_skb->len)
+		if (priv->nb_free != NB_TX && priv->tx_bytes < skb->len)
 			pef2256_do_tx(priv);
 	}
 }
@@ -698,20 +711,9 @@ static void pef2256_tx(struct pef2256_dev_priv *priv, int all_sent)
 static void pef2256_errors(struct pef2256_dev_priv *priv)
 {
 	if (pef2256_r8(priv, FRS1) & FRS1_PDEN ||
-	    pef2256_r8(priv, FRS0) & (FRS0_LOS | FRS0_AIS)) {
-		if (priv->tx_skb) {
-			priv->netdev->stats.tx_errors++;
-			dev_kfree_skb_irq(priv->tx_skb);
-			priv->tx_skb = NULL;
-			priv->tx_bytes = 0;
-			netif_wake_queue(priv->netdev);
-		}
-		if (priv->rx_bytes > 0) {
-			priv->netdev->stats.rx_errors++;
-			priv->rx_bytes = 0;
-		}
+	    pef2256_r8(priv, FRS0) & (FRS0_LOS | FRS0_AIS))
 		netif_carrier_off(priv->netdev);
-	} else
+	else
 		netif_carrier_on(priv->netdev);
 }
 
@@ -750,20 +752,15 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 	if (isr0 & (ISR0_RPF | ISR0_RME))
 		pef2256_rx(priv, isr0 & ISR0_RME);
 
-	/* XDU : Transmit data underrun -> TX error */
+
 	if (isr1 & ISR1_XDU) {
+		/* XDU : Transmit data underrun -> TX error */
 		netdev_err(priv->netdev, "Transmit data underrun\n");
 		priv->netdev->stats.tx_errors++;
-		dev_kfree_skb_irq(priv->tx_skb);
-		priv->tx_skb = NULL;
-	} else {
+		priv->tx_bytes = 0;
+	} else if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
 		/* XPR or ALLS : FIFO sent */
-		if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
-			if (priv->tx_skb)
-				pef2256_tx(priv, isr1 & ISR1_ALLS);
-			else
-				netif_wake_queue(priv->netdev);
-		}
+		pef2256_tx(priv, isr1 & ISR1_ALLS);
 	}
 
 	return IRQ_HANDLED;
@@ -816,7 +813,10 @@ static int pef2256_open(struct net_device *netdev)
 
 	init_falc(priv);
 
-	priv->tx_skb = NULL;
+	priv->nb_free = NB_TX;
+	priv->tx_cur = priv->tx_skb_pool;
+	priv->tx_avail = priv->tx_skb_pool;
+
 	priv->rx_bytes = 0;
 	priv->rx_skb = dev_alloc_skb(MTU_MAX);
 
@@ -847,13 +847,27 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 					  struct net_device *netdev)
 {
 	struct pef2256_dev_priv *priv = dev_to_hdlc(netdev)->priv;
+	unsigned long flags;
+	int nbf;
 
-	priv->tx_skb = skb;
-	priv->tx_bytes = 0;
+	spin_lock_irqsave(&priv->tx_lock, flags);
 
-	pef2256_do_tx(priv);
+	*priv->tx_avail = skb;
 
-	netif_stop_queue(netdev);
+	if (++priv->tx_avail == priv->tx_skb_pool + NB_TX)
+		priv->tx_avail = priv->tx_skb_pool;
+
+	nbf = priv->nb_free;
+	if (--priv->nb_free == 0)
+		netif_stop_queue(netdev);
+
+	if (nbf == NB_TX) {
+		priv->tx_bytes = 0;
+		pef2256_do_tx(priv);
+	}
+
+	spin_unlock_irqrestore(&priv->tx_lock, flags);
+
 	return NETDEV_TX_OK;
 }
 
@@ -999,6 +1013,8 @@ static int pef2256_probe(struct platform_device *pdev)
 
 	if (ret)
 		goto remove_files;
+
+	spin_lock_init(&priv->tx_lock);
 
 	return 0;
 
