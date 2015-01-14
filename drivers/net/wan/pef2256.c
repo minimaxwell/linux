@@ -629,18 +629,11 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 				priv->rx_skb = dev_alloc_skb(MTU_MAX);
 			}
 			else {
-				if (status & 0x80) {
-					netdev_err(priv->netdev, "Invalid Frame\n");
-				}
-				if (status & 0x40) {
-					netdev_err(priv->netdev, "Receive data overflow\n");
-				}
-				if (status & 0x20) {
-					netdev_err(priv->netdev, "CRC16 error\n");
-				}
-				if (status & 0x10) {
-					netdev_err(priv->netdev, "Receive message aborted\n");
-				}
+				netdev_err(priv->netdev, "%s%s%s%s\n",
+					   status & 0x80 ? "Invalid Frame, " : "",
+					   status & 0x40 ? "Receive data overflow, " : "",
+					   status & 0x20 ? "CRC16 error, " : "",
+					   status & 0x10 ? "Receive message aborted, " : "");
 				priv->netdev->stats.rx_errors++;
 			}
 			priv->rx_bytes = 0;
