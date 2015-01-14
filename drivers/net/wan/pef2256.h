@@ -59,6 +59,8 @@ enum versions {
 #define GIS_ISR3			(1 << 3)
 #define GIS_ISR4			(1 << 4)
 #define GIS_ISR5			(1 << 5)
+#define GIS_ISR_ALL			(GIS_ISR0 | GIS_ISR1 | GIS_ISR2 | \
+					 GIS_ISR3 | GIS_ISR4 | GIS_ISR5)
 #define ISR0_RPF			(1 << 0)
 #define ISR0_PDEN			(1 << 1)
 #define ISR0_RME			(1 << 7)

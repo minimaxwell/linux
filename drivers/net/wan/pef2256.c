@@ -721,46 +721,53 @@ static irqreturn_t pef2256_irq(int irq, void *dev_priv)
 {
 	struct pef2256_dev_priv *priv = (struct pef2256_dev_priv *)dev_priv;
 	u8 r_gis;
-	u8 isr0, isr1, isr2;
 
 	r_gis = pef2256_r8(priv, GIS);
 
-	/* We only care about ISR0, ISR1 and ISR2 */
-	/* ISR0 */
-	if (r_gis & GIS_ISR0)
-		isr0 = pef2256_r8(priv, ISR0);
-	else
-		isr0 = 0;
+	while (r_gis & GIS_ISR_ALL) {
+		int errors = 0;
+		/* We only care about ISR0, ISR1 and ISR2 */
+		/* ISR0 */
+		if (r_gis & GIS_ISR0) {
+			u8 isr0 = pef2256_r8(priv, ISR0);
 
-	/* ISR1 */
-	if (r_gis & GIS_ISR1)
-		isr1 = pef2256_r8(priv, ISR1);
-	else
-		isr1 = 0;
+			/* An error status has changed */
+			if (isr0 & ISR0_PDEN)
+				errors = 1;
 
-	/* ISR2 */
-	if (r_gis & GIS_ISR2)
-		isr2 = pef2256_r8(priv, ISR2);
-	else
-		isr2 = 0;
+			/* RPF or RME : FIFO received */
+			if (isr0 & (ISR0_RPF | ISR0_RME))
+				pef2256_rx(priv, isr0 & ISR0_RME);
+		}
 
-	/* An error status has changed */
-	if (isr0 & ISR0_PDEN || isr2 & ISR2_LOS || isr2 & ISR2_AIS)
-		pef2256_errors(priv);
+		/* ISR1 */
+		if (r_gis & GIS_ISR1) {
+			u8 isr1 = pef2256_r8(priv, ISR1);
 
-	/* RPF or RME : FIFO received */
-	if (isr0 & (ISR0_RPF | ISR0_RME))
-		pef2256_rx(priv, isr0 & ISR0_RME);
+			if (isr1 & ISR1_XDU) {
+				/* XDU : Transmit data underrun -> TX error */
+				netdev_err(priv->netdev,
+					   "Transmit data underrun\n");
+				priv->netdev->stats.tx_errors++;
+				priv->tx_bytes = 0;
+			} else if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
+				/* XPR or ALLS : FIFO sent */
+				pef2256_tx(priv, isr1 & ISR1_ALLS);
+			}
+		}
 
+		/* ISR2 */
+		if (r_gis & GIS_ISR2) {
+			u8 isr2 = pef2256_r8(priv, ISR2);
 
-	if (isr1 & ISR1_XDU) {
-		/* XDU : Transmit data underrun -> TX error */
-		netdev_err(priv->netdev, "Transmit data underrun\n");
-		priv->netdev->stats.tx_errors++;
-		priv->tx_bytes = 0;
-	} else if (isr1 & (ISR1_XPR | ISR1_ALLS)) {
-		/* XPR or ALLS : FIFO sent */
-		pef2256_tx(priv, isr1 & ISR1_ALLS);
+			/* An error status has changed */
+			if (isr2 & ISR2_LOS || isr2 & ISR2_AIS)
+				errors = 1;
+		}
+		if (errors)
+			pef2256_errors(priv);
+
+		r_gis = pef2256_r8(priv, GIS);
 	}
 
 	return IRQ_HANDLED;
