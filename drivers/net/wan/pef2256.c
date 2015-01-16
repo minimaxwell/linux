@@ -665,9 +665,12 @@ static void pef2256_do_tx(struct pef2256_dev_priv *priv)
 	if (size > 32)
 		size = 32;
 
-	for (idx = 0; (idx < size + 1 / 2); idx++)
+	for (idx = 0; idx < size / 2; idx++)
 		pef2256_w16(priv, XFIFO,
-			tx_buff[priv->tx_bytes /2 + idx]);
+			tx_buff[priv->tx_bytes / 2 + idx]);
+	if (size & 1)
+		pef2256_w8(priv, XFIFO,
+			*(u8*)&tx_buff[priv->tx_bytes / 2 + idx]);
 
 	priv->tx_bytes += size;
 
