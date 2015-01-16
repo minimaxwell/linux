@@ -151,6 +151,7 @@ struct pef2256_dev_priv {
 
 	int rx_bytes;
 	int tx_bytes;
+	int rx_toobig;
 
 	u32 Tx_TS;	/* Transmit Time Slots */
 	u32 Rx_TS;	/* Receive Time Slots */

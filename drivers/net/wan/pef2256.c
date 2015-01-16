@@ -35,7 +35,7 @@
 #include <linux/etherdevice.h>
 #include "pef2256.h"
 
-#define MTU_MAX	1600
+#define MTU_MAX	(HDLC_MTU_MAX + 4) /* space for CRC and status */
 
 static int pef2256_open(struct net_device *netdev);
 static int pef2256_close(struct net_device *netdev);
@@ -607,16 +607,20 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 		int size = pef2256_r8(priv, RBCL) & 0x1F;
 
 		/* Read last block */
-		for (idx = 0; idx < (size+1)/2; idx++)
-			rx_buff[(priv->rx_bytes)/2 + idx] =
-				pef2256_r16(priv, RFIFO);
+		if (priv->rx_bytes + size <= MTU_MAX) {
+			for (idx = 0; idx < (size + 1 ) / 2; idx++)
+				rx_buff[priv->rx_bytes / 2 + idx] =
+					pef2256_r16(priv, RFIFO);
+
+			priv->rx_bytes += size;
+		}
+		else {
+			priv->rx_toobig = 1;
+		}
 
 		pef2256_fifo_ack(priv);
-
-		priv->rx_bytes += size;
-
 		/* Packet received */
-		if (priv->rx_bytes > 3) {
+		if (priv->rx_bytes > 3 && !priv->rx_toobig) {
 			u8 status;
 
 			size = priv->rx_bytes - 3;
@@ -630,6 +634,7 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 				priv->netdev->stats.rx_bytes += size;
 				netif_rx(skb);
 				priv->rx_skb = dev_alloc_skb(MTU_MAX);
+				priv->rx_toobig = 0;
 			}
 			else {
 				netdev_err(priv->netdev, "%s%s%s%s\n",
@@ -639,19 +644,24 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 					   status & 0x10 ? "Receive message aborted, " : "");
 				priv->netdev->stats.rx_errors++;
 			}
-			priv->rx_bytes = 0;
 		}
+		priv->rx_bytes = 0;
+		priv->rx_toobig = 0;
 	} else {
 		/* RPF : a full block is available in the receive FIFO */
 		u16 *rx_buff = (u16*)skb->data;
 
-		for (idx = 0; idx < 16; idx++)
-			rx_buff[(priv->rx_bytes)/2 + idx] =
-				pef2256_r16(priv, RFIFO);
+		if (priv->rx_bytes + 32 <= MTU_MAX) {
+			for (idx = 0; idx < 16; idx++)
+				rx_buff[priv->rx_bytes / 2 + idx] =
+					pef2256_r16(priv, RFIFO);
 
+			priv->rx_bytes += 32;
+		}
+		else {
+			priv->rx_toobig = 1;
+		}
 		pef2256_fifo_ack(priv);
-
-		priv->rx_bytes += 32;
 	}
 }
 
@@ -825,6 +835,7 @@ static int pef2256_open(struct net_device *netdev)
 
 	priv->rx_bytes = 0;
 	priv->rx_skb = dev_alloc_skb(MTU_MAX);
+	priv->rx_toobig = 0;
 
 	config_hdlc(priv);
 
