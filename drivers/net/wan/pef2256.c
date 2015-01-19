@@ -35,7 +35,7 @@
 #include <linux/etherdevice.h>
 #include "pef2256.h"
 
-#define MTU_MAX	(HDLC_MTU_MAX + 4) /* space for CRC and status */
+#define MTU_MAX	(HDLC_MAX_MTU + 4) /* space for CRC and status */
 
 static int pef2256_open(struct net_device *netdev);
 static int pef2256_close(struct net_device *netdev);
