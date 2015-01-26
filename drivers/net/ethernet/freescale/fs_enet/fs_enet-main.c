@@ -897,39 +897,6 @@ void fs_link_switch(struct fs_enet_private *fep)
 	}
 }
 
-void autoneg_handler(struct work_struct *work) {
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct fs_enet_private *fep =
-			container_of(dwork, struct fs_enet_private, link_queue);
-	struct phy_device *phydev = fep->phydev;
-	int value;
-
-	/* PHY 0 link becomes up */
-	if (fep->phydevs[0]->link && fep->phydevs[0]->link != fep->phy_oldlinks[0]) {
-		phydev = fep->phydevs[0];
-		value = phy_read(phydev, MII_BMSR);
-		if (! (value & BMSR_ANEGCOMPLETE))  {
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		} 
-	}
-
-	/* PHY 1 link becomes up */
-	if (fep->phydevs[1]->link && fep->phydevs[1]->link != fep->phy_oldlinks[1]) {
-		phydev = fep->phydevs[1];
-		value = phy_read(phydev, MII_BMSR);
-		if (! (value & BMSR_ANEGCOMPLETE))  {
-			phydev->autoneg = AUTONEG_ENABLE;
-			if (phydev->drv->config_aneg)
-				phydev->drv->config_aneg(phydev);
-			schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-		}
-	}
-}
-
-
 // #define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
@@ -999,10 +966,6 @@ void fs_link_monitor(struct work_struct *work)
 	/* If we are not in AUTO mode, don't do anything */
 	if (fep->mode != MODE_AUTO) return;
 	
-
-	//autoneg_handler(work);
-
-
 	/* If elapsed time since last change is too small, wait for a while */
 	if (jiffies - fep->change_time < LINK_MONITOR_RETRY) {
 		schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
@@ -1033,9 +996,12 @@ void fs_link_monitor(struct work_struct *work)
 	}
 
 
-	/* If both PHYs obtained a new link, PHY0 must become the active link */
-	if (fep->phydevs[1]) {
-		//if both PHY are up, PHY0 is always main PHY, (we had to choose one)
+	/*
+	 * If no one was in charge (no active link) PHY0 become the 
+	 * active link but if either PHY0 or PHY1 was already active,
+	 * don't change anything, we leave him in charge
+	 */		
+	if (fep->phydevs[1] && !fep->phy_oldlinks[1]) {
 		if (fep->phydev != fep->phydevs[0] && fep->phydevs[1]->link && fep->phydevs[0]->link) {
 			fs_link_switch(fep);
 		}

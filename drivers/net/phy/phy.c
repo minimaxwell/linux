@@ -44,7 +44,6 @@
 #define PHY0ADDR 3
 
 static int phy_ghost_ready = 0; 
-static int ok = 0; 
 static int active_phy = 0; //or PHY1ADDR or PHY0ADDR
 static int isMCR2G = 0;
 
@@ -671,7 +670,6 @@ void phy_change(struct work_struct *work)
 		phydev->state = PHY_CHANGELINK;
 		if (active_phy == phydev->addr) { 
 			active_phy = 0;
-			phy_ghost_ready = 0;
 		}
 	}
 	mutex_unlock(&phydev->lock);
@@ -887,6 +885,8 @@ void phy_state_machine(struct work_struct *work)
 			phydev->autoneg = AUTONEG_ENABLE;
 			phydev->state = PHY_AN;
 		} else if (phy_ghost_ready == 0) { 
+			/* set phy_ghost_ready to tell	  */
+			/* back up PHY is ready (AN done) */	
 			phy_ghost_ready = 1;
 		}
 		break;
@@ -899,14 +899,15 @@ void phy_state_machine(struct work_struct *work)
 		if (phydev->link) {
 			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
 				if (active_phy == 0 && phydev->addr != 1)
+					/* there was no active PHY,   */ 
+					/* we become the active PHY   */	
 					active_phy = phydev->addr;
-				if (phydev->addr == PHY1ADDR && !ok && !isMCR2G) {
+				if (phydev->addr != active_phy  && !isMCR2G) {
+					 /* we are not the active_phy,  */ 
+					 /* go to DOUBLE_ATTACHEMENT    */
 					phydev->state = PHY_DOUBLE_ATTACHEMENT;
 				} else {
 					phydev->state = PHY_RUNNING;
-					if (phydev->addr != 1) {
-						ok = 1;
-					}
 				}
 				netif_carrier_on(phydev->attached_dev);
 			} else {
@@ -918,6 +919,9 @@ void phy_state_machine(struct work_struct *work)
 				if (phy_ghost_ready)
 					active_phy = (phydev->addr == PHY1ADDR ? PHY0ADDR : PHY1ADDR);
 			}
+			/* if we lost link on PHY1 or/and PHY2,		*/
+			/* change phy_ghost_ready to 0, since we'll use */
+			/* back up PHY (if he has a link ...)		*/
 			phy_ghost_ready = 0;
 			phydev->state = PHY_NOLINK;
 			netif_carrier_off(phydev->attached_dev);
