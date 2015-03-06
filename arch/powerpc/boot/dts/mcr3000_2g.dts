@@ -585,10 +585,9 @@
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440 0x930 0x20>;
-				/* parametres possible : none, SCC3, SCC4 */
-				scc_voie = "SCC4";
-				scc_retard = "SCC2";
-				/* parametre enregistrement : TS sup sur scc_voie 0 a 48 */
+				/* parametres possible : none, SCC2 */
+				scc_qmc_mcr = "SCC2";
+				/* parametre enregistrement : TS sup 0 a 16 */
 				ts_enreg = <16>;
 			};
 
