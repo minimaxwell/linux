@@ -648,16 +648,6 @@
 				         &CPM1_PIO_B 18 1>;	/* RTS2 */
 			};
 
-			scc2t: tdm@a20 {
-				device_type = "tdm";
-				tdm_name = "scc2";
-				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
-				reg = <0xa20 0x20 0x3d00 0x80>;
-				interrupts = <29>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-command = <0x40>;
-			};
-
 			scc3wb: wb@a40 {
 				device_type = "wb_scc";
 				wb_name = "scc3";
@@ -681,16 +671,6 @@
 				fsl,cpm-command = <0xc0>;
 				gpios = <&serie 9 1		/* CTS4 */
 				         &serie 11 1>;		/* RTS4 */
-			};
-
-			scc4t: tdm@a60 {
-				device_type = "tdm";
-				tdm_name = "scc4";
-				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
-				reg = <0xa60 0x20 0x3f00 0x80>;
-				interrupts = <27>;
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-command = <0xc0>;
 			};
 
 			smc2: serial@a90 {
