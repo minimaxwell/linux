@@ -545,7 +545,7 @@
 				"2557",	"2738",	"-27",	"-10",	"no",	"yes",	/* equipement 19 */
 				"2739",	"2966",	"-27",	"-10",	"no",	"yes",	/* equipement 20 */
 				"2967",	"3156",	"-11",	"-10",	"no",	"no",	/* equipement 21 */
-				"3157",	"4095",	"-27",	"-10",	"no",	"yes";	/* sans equipement */
+				"3157",	"4095",	"-27",	"-10",	"yes",	"no";	/* equipement 22 */
 		};
 
 		FAV_CS_SPI: gpio-controller@dummy0 {
