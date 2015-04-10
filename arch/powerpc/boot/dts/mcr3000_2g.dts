@@ -250,6 +250,7 @@
 			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
 			/* registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA */
 			ranges = <0 4 0x1000000 0x0200>;
+			liens = "SCC3", "SCC4", "SCC2", "SMC2";
 //			interrupts = <0>;
 //			interrupt-parent = <&FPGA_PIC>;
 			interrupts = <6 1>;
@@ -355,7 +356,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
+			reg = <4 0x100009c 2>;			// Version FPGA
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &CPM1_PIO_E 23 1		// DONEFPGA
 				 &rst 13 1 >;			// RST_FPGA
@@ -601,7 +602,7 @@
 				fsl,cpm-command = <0x90>;
 			};
 
-			scc3: serial@a40 {
+			scc3: serial@a40 {	/* SCC3 = LS1 */
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
 				reg = <0xa40 0x20 0x3e00 0x80>;
@@ -613,7 +614,19 @@
 				         &CPM1_PIO_D 7 1>;	/* RTS3 */
 			};
 
-			scc2: serial@a20 {
+			scc4: serial@a60 {	/* SCC4 = LS2 */
+				device_type = "serial";
+				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+				reg = <0xa60 0x20 0x3f00 0x80>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
+				fsl,cpm-brg = <3>;
+				fsl,cpm-command = <0xc0>;
+				gpios = <&serie 9 1		/* CTS4 */
+				         &serie 11 1>;		/* RTS4 */
+			};
+
+			scc2: serial@a20 {	/* SCC2 = QMC ou LS3 */
 				device_type = "serial";
 				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
 				reg = <0xa20 0x20 0x3d00 0x80>;
@@ -635,22 +648,10 @@
 				fsl,cpm-command = <0x40>;
 			};
 
-			scc2wb: wb@a20 {
-				device_type = "wb_scc";
-				wb_name = "scc2";
-				compatible = "cs,wb-scc";
-				reg = <0xa20 0x20 0x3d00 0x80>;
-				interrupts = <29 11>;		/* scc, cts */
-				interrupt-parent = <&CPM_PIC>;
-				fsl,cpm-brg = <1>;
-				fsl,cpm-command = <0x40>;
-				gpios = <&CPM1_PIO_C 9 1	/* CTS2 */
-				         &CPM1_PIO_B 18 1>;	/* RTS2 */
-			};
-
 			scc3wb: wb@a40 {
 				device_type = "wb_scc";
-				wb_name = "scc3";
+				wb_name = "ls1";
+				scc_name = "scc3";
 				compatible = "cs,wb-scc";
 				reg = <0xa40 0x20 0x3e00 0x80>;
 				interrupts = <28 2>;		/* scc, cts */
@@ -661,11 +662,14 @@
 				         &CPM1_PIO_D 7 1>;	/* RTS3 */
 			};
 
-			scc4: serial@a60 {
-				device_type = "serial";
-				compatible = "fsl,mpc885-scc-uart", "fsl,cpm1-scc-uart";
+			scc4wb: wb@a60 {
+				device_type = "wb_scc";
+				wb_name = "ls2";
+				scc_name = "scc4";
+				compatible = "cs,wb-scc";
 				reg = <0xa60 0x20 0x3f00 0x80>;
 				interrupts = <27>;
+//				interrupts = <27 xx>;		/* scc, cts */
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <3>;
 				fsl,cpm-command = <0xc0>;
