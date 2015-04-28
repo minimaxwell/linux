@@ -136,7 +136,7 @@ static void config_hdlc(struct pef2256_dev_priv *priv)
 	 * MODE.MDS2:0 = 100 (No address comparison)
 	 * MODE.HRAC = 1 (Receiver active)
 	 */
-	pef2256_w8(priv, MODE, 1 << 3);
+	pef2256_w8(priv, MODE, (1 << 7) | (1 << 3));
 	/* CCR1.EITS = 1 (Enable internal Time Slot 31:0 Signaling)
 	 * CCR1.XMFA = 0 (No transmit multiframe alignment)
 	 * CCR1.RFT1:0 = 00 (RFIFO is 32 bytes)
@@ -623,9 +623,9 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 		if (priv->rx_bytes > 3 && !priv->rx_toobig) {
 			u8 status;
 
-			size = priv->rx_bytes - 3;
+			size = priv->rx_bytes - 1;
 			/* invert status bits 7 and 5 so that set bits are errors) */
-			status = (skb->data[size + 2] & ~0x2) ^ 0xa0;
+			status = (skb->data[size] & ~0x2) ^ 0xa0;
 
 			if (status == 0) {
 				skb_put(skb, size);
