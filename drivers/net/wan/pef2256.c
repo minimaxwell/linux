@@ -532,9 +532,10 @@ static ssize_t fs_attr_Tx_TS_store(struct device *dev,
 		priv->Tx_TS = value;
 		if (reconfigure && netif_carrier_ok(ndev))
 			config_hdlc(priv);
+		ret = strnlen(buf, count);
 	}
 
-	return strnlen(buf, count);
+	return ret;
 }
 
 static DEVICE_ATTR(Tx_TS, S_IRUGO | S_IWUSR, fs_attr_Tx_TS_show,
@@ -571,9 +572,10 @@ static ssize_t fs_attr_Rx_TS_store(struct device *dev,
 		priv->Rx_TS = value;
 		if (reconfigure && netif_carrier_ok(ndev))
 			config_hdlc(priv);
+		ret = strnlen(buf, count);
 	}
 
-	return strnlen(buf, count);
+	return ret;
 }
 
 static DEVICE_ATTR(Rx_TS, S_IRUGO | S_IWUSR, fs_attr_Rx_TS_show,
