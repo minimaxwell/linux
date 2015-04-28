@@ -883,7 +883,7 @@ static netdev_tx_t pef2256_start_xmit(struct sk_buff *skb,
 
 	if (nbf == NB_TX) {
 		priv->tx_bytes = 0;
-		pef2256_do_tx(priv);
+		pef2256_command(priv, CMDR_SRES);
 	}
 
 	spin_unlock_irqrestore(&priv->tx_lock, flags);
