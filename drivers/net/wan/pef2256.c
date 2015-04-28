@@ -639,11 +639,12 @@ static void pef2256_rx(struct pef2256_dev_priv *priv, int end)
 				priv->rx_toobig = 0;
 			}
 			else {
-				netdev_err(priv->netdev, "%s%s%s%s\n",
-					   status & 0x80 ? "Invalid Frame, " : "",
-					   status & 0x40 ? "Receive data overflow, " : "",
-					   status & 0x20 ? "CRC16 error, " : "",
-					   status & 0x10 ? "Receive message aborted, " : "");
+				if (net_ratelimit())
+					netdev_err(priv->netdev, "%s%s%s%s\n",
+						   status & 0x80 ? "Invalid Frame, " : "",
+						   status & 0x40 ? "Receive data overflow, " : "",
+						   status & 0x20 ? "CRC16 error, " : "",
+						   status & 0x10 ? "Receive message aborted, " : "");
 				priv->netdev->stats.rx_errors++;
 			}
 		}
