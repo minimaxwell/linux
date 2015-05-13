@@ -804,7 +804,7 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 								NULL,
 								fep->ndev->dev_addr,
 								NULL);
-						skb = vlan_put_tag(skb, htons(ETH_P_8021Q), id);
+						skb = vlan_insert_tag_set_proto(skb, htons(ETH_P_8021Q), id);
 						if (!skb) { 
 							dev_err(fep->dev, "failed to insert VLAN tag -> gratuitous arp not sent\n");
 						}
