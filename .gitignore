@@ -108,3 +108,5 @@ toto
 /tr.sh
 /working/
 *.rej
+/tmp/
+/tools/perf/PERF-FEATURES
