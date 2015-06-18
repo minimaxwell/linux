@@ -8,7 +8,7 @@
 
 / {
 	model = "MIAE";
-	compatible = "fsl,cmpc885", "fsl,mod885";
+	compatible = "fsl,cmpc885", "fsl,mod885", "fsl,base";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
