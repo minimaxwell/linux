@@ -1,10 +1,11 @@
-ARCH = powerpc
-CROSS_COMPILE = ppc-linux-
 VERSION = 3
 PATCHLEVEL = 18
 SUBLEVEL = 14
 EXTRAVERSION =
 NAME = Diseased Newt
+
+ARCH = powerpc
+CROSS_COMPILE = ppc-linux-
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
