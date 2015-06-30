@@ -98,7 +98,7 @@ x509.genkey
 all.config
 
 # CS home made
-toto
+toto*
 /arch/ppc
 /drivers/platform/saf3000
 /include/ldb
@@ -110,3 +110,4 @@ toto
 *.rej
 /tmp/
 /tools/perf/PERF-FEATURES
+/patch_knl
