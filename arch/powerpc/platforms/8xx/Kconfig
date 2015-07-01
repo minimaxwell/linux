@@ -196,6 +196,11 @@ config I2C_SPI_SMC1_UCODE_PATCH
 	help
 	  Help not implemented yet, coming soon.
 
+config SMC_UCODE_PATCH
+	bool "SMC relocation patch"
+	help
+	  Help not implemented yet, coming soon.
+
 endchoice
 
 config UCODE_PATCH
