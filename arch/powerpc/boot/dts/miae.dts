@@ -725,6 +725,7 @@
 			brg-frequency = <0>;
 			interrupts = <0>;	// cpm error interrupt
 			interrupt-parent = <&CPM_PIC>;
+			micropatch;
 
 			muram@2000 {
 				#address-cells = <1>;
@@ -733,7 +734,7 @@
 
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x0 0x1c00>;
+					reg = <0x1000 0x0bc0>;
 				};
 			};
 
@@ -844,7 +845,7 @@
 			smc2: serial@a90 {
 				device_type = "serial";
 				compatible = "fsl,mpc885-smc-uart", "fsl,cpm1-smc-uart", "cs,mia-far";
-				reg = <0xa90 0x10 0x3f80 0x40>;
+				reg = <0xa90 0x10 0x3bc0 0x40>;
 				interrupts = <3>;
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <3>;
