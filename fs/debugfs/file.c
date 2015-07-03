@@ -727,6 +727,41 @@ static const struct file_operations fops_regset32 = {
 	.release =	single_release,
 };
 
+int debugfs_print_regs32be(struct seq_file *s, const struct debugfs_reg32 *regs,
+			   int nregs, void __iomem *base, char *prefix)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < nregs; i++, regs++) {
+		if (prefix)
+			ret += seq_printf(s, "%s", prefix);
+		ret += seq_printf(s, "%s = 0x%08x\n", regs->name,
+				  readl_be(base + regs->offset));
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(debugfs_print_regs32be);
+
+static int debugfs_show_regset32be(struct seq_file *s, void *data)
+{
+	struct debugfs_regset32 *regset = s->private;
+
+	debugfs_print_regs32be(s, regset->regs, regset->nregs, regset->base, "");
+	return 0;
+}
+
+static int debugfs_open_regset32be(struct inode *inode, struct file *file)
+{
+	return single_open(file, debugfs_show_regset32be, inode->i_private);
+}
+
+static const struct file_operations fops_regset32be = {
+	.open =		debugfs_open_regset32be,
+	.read =		seq_read,
+	.llseek =	seq_lseek,
+	.release =	single_release,
+};
+
 /**
  * debugfs_create_regset32 - create a debugfs file that returns register values
  * @name: a pointer to a string containing the name of the file to create.
@@ -759,6 +794,14 @@ struct dentry *debugfs_create_regset32(const char *name, umode_t mode,
 	return debugfs_create_file(name, mode, parent, regset, &fops_regset32);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_regset32);
+
+struct dentry *debugfs_create_regset32be(const char *name, umode_t mode,
+				       struct dentry *parent,
+				       struct debugfs_regset32 *regset)
+{
+	return debugfs_create_file(name, mode, parent, regset, &fops_regset32be);
+}
+EXPORT_SYMBOL_GPL(debugfs_create_regset32be);
 
 /*
  * The regset16 stuff is used to print 16-bit registers using the
@@ -816,6 +859,41 @@ static const struct file_operations fops_regset16 = {
 	.release =	single_release,
 };
 
+int debugfs_print_regs16be(struct seq_file *s, const struct debugfs_reg16 *regs,
+			   int nregs, void __iomem *base, char *prefix)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < nregs; i++, regs++) {
+		if (prefix)
+			ret += seq_printf(s, "%s", prefix);
+		ret += seq_printf(s, "%s = 0x%04x\n", regs->name,
+				  readw_be(base + regs->offset));
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(debugfs_print_regs16be);
+
+static int debugfs_show_regset16be(struct seq_file *s, void *data)
+{
+	struct debugfs_regset16 *regset = s->private;
+
+	debugfs_print_regs16be(s, regset->regs, regset->nregs, regset->base, "");
+	return 0;
+}
+
+static int debugfs_open_regset16be(struct inode *inode, struct file *file)
+{
+	return single_open(file, debugfs_show_regset16be, inode->i_private);
+}
+
+static const struct file_operations fops_regset16be = {
+	.open =		debugfs_open_regset16be,
+	.read =		seq_read,
+	.llseek =	seq_lseek,
+	.release =	single_release,
+};
+
 /**
  * debugfs_create_regset16 - create a debugfs file that returns register values
  * @name: a pointer to a string containing the name of the file to create.
@@ -848,6 +926,14 @@ struct dentry *debugfs_create_regset16(const char *name, umode_t mode,
 	return debugfs_create_file(name, mode, parent, regset, &fops_regset16);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_regset16);
+
+struct dentry *debugfs_create_regset16be(const char *name, umode_t mode,
+				       struct dentry *parent,
+				       struct debugfs_regset16 *regset)
+{
+	return debugfs_create_file(name, mode, parent, regset, &fops_regset16be);
+}
+EXPORT_SYMBOL_GPL(debugfs_create_regset16be);
 
 /*
  * The regset8 stuff is used to print 8-bit registers using the
