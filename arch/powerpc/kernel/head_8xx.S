@@ -49,7 +49,7 @@
 #endif
 
 /* Macro to test if an address is a kernel address */
-#if CONFIG_TASK_SIZE <= 0x80000000
+#if CONFIG_TASK_SIZE <= 0x80000000 && CONFIG_PAGE_OFFSET >= 0x80000000
 #define IS_KERNEL(tmp, addr)		\
 	andis.	tmp, addr, 0x8000	/* Address >= 0x80000000 */
 #define BRANCH_UNLESS_KERNEL(label)	beq	label
