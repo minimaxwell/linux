@@ -311,20 +311,20 @@ SystemCall:
  */
 
 #ifdef CONFIG_8xx_CPU15
-#define DO_8xx_CPU15(tmp, addr)	\
+#define INVALIDATE_ADJACENT_PAGES_CPU15(tmp, addr)	\
 	addi	tmp, addr, PAGE_SIZE;	\
 	tlbie	tmp;			\
-	addi	tmp, addr, PAGE_SIZE;	\
+	addi	tmp, addr, -PAGE_SIZE;	\
 	tlbie	tmp
 #else
-#define DO_8xx_CPU15(tmp, addr)
+#define INVALIDATE_ADJACENT_PAGES_CPU15(tmp, addr)
 #endif
 
 InstructionTLBMiss:
-	EXCEPTION_PROLOG_0
 #ifdef CONFIG_8xx_CPU6
 	mtspr	SPRN_SPRG_SCRATCH2, r3
 #endif
+	EXCEPTION_PROLOG_0
 
 	/* If we are faulting a kernel address, we have to use the
 	 * kernel page tables.
@@ -332,33 +332,21 @@ InstructionTLBMiss:
 #ifdef CONFIG_MODULES
 	/* Only modules will cause ITLB Misses as we always
 	 * pin the first 8MB of kernel memory */
-#ifdef CONFIG_8xx_CPU6
-	mfspr	r10, SPRN_SRR0	/* Get effective address of fault */
-	DO_8xx_CPU15(r11, r10)
-	mfcr	r3
-	IS_KERNEL(r11, r10)
-#else
 	mfspr	r11, SPRN_SRR0	/* Get effective address of fault */
-	DO_8xx_CPU15(r10, r11)
+	INVALIDATE_ADJACENT_PAGES_CPU15(r10, r11)
 	mfcr	r10
 	IS_KERNEL(r11, r11)
-#endif
-	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
+	mfspr	r11, SPRN_M_TW	/* Get level 1 table */
 	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
-#ifdef CONFIG_8xx_CPU6
-	mtcr	r3
-#else
 	mtcr	r10
 	mfspr	r10, SPRN_SRR0	/* Get effective address of fault */
-#endif
-#else /* CONFIG_MODULES */
+#else
 	mfspr	r10, SPRN_SRR0	/* Get effective address of fault */
-	DO_8xx_CPU15(r11, r10)
+	INVALIDATE_ADJACENT_PAGES_CPU15(r11, r10)
 	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
-#endif /* CONFIG_MODULES */
-
+#endif
 	/* Insert level 1 index */
 	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
 	lwz	r11, (swapper_pg_dir-PAGE_OFFSET)@l(r11)	/* Get the level 1 entry */
@@ -397,31 +385,23 @@ InstructionTLBMiss:
 
 	. = 0x1200
 DataStoreTLBMiss:
+#ifdef CONFIG_8xx_CPU6
+	mtspr	SPRN_SPRG_SCRATCH2, r3
+#endif
 	EXCEPTION_PROLOG_0
+	mfcr	r10
 
 	/* If we are faulting a kernel address, we have to use the
 	 * kernel page tables.
 	 */
-#ifdef CONFIG_8xx_CPU6
-	mtspr	SPRN_SPRG_SCRATCH2, r3
-	mfcr	r3
-	mfspr	r10, SPRN_MD_EPN
-	IS_KERNEL(r11, r10)
-#else
-	mfcr	r10
 	mfspr	r11, SPRN_MD_EPN
 	IS_KERNEL(r11, r11)
-#endif
-	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
+	mfspr	r11, SPRN_M_TW	/* Get level 1 table */
 	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 3:
-#ifdef CONFIG_8xx_CPU6
-	mtcr	r3
-#else
 	mtcr	r10
 	mfspr	r10, SPRN_MD_EPN
-#endif
 
 	/* Insert level 1 index */
 	rlwimi	r11, r10, 32 - ((PAGE_SHIFT - 2) << 1), (PAGE_SHIFT - 2) << 1, 29
@@ -551,7 +531,7 @@ FixupDAR:/* Entry point for dcbx workaround. */
 	/* fetch instruction from memory. */
 	mfspr	r10, SPRN_SRR0
 	IS_KERNEL(r11, r10)
-	mfspr	r11, SPRN_M_TW	/* Get level 1 table base address */
+	mfspr	r11, SPRN_M_TW	/* Get level 1 table */
 	BRANCH_UNLESS_KERNEL(3f)
 	lis	r11, (swapper_pg_dir-PAGE_OFFSET)@ha
 	/* Insert level 1 index */
@@ -895,6 +875,11 @@ _GLOBAL(set_context)
 	stw	r4, 0x4(r5)
 #endif
 
+	/* Register M_TW will contain base address of level 1 table minus the
+	 * lower part of the kernel PGDIR base address, so that all accesses to
+	 * level 1 table are done relative to lower part of kernel PGDIR base
+	 * address.
+	 */
 	li	r5, (swapper_pg_dir-PAGE_OFFSET)@l
 	sub	r4, r4, r5
 	tophys	(r4, r4)
@@ -905,13 +890,13 @@ _GLOBAL(set_context)
 	stw	r7, 12(r6)
 	lwz	r7, 12(r6)
 #endif
-        mtspr   SPRN_M_TW, r4               /* Update MMU base address */
+	mtspr	SPRN_M_TW, r4		/* Update pointeur to level 1 table */
 #ifdef CONFIG_8xx_CPU6
 	li	r7, 0x3380
 	stw	r7, 12(r6)
 	lwz	r7, 12(r6)
 #endif
-        mtspr   SPRN_M_CASID, r3             /* Update context */
+	mtspr	SPRN_M_CASID, r3	/* Update context */
 	SYNC
 	blr
 
