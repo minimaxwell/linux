@@ -18,7 +18,6 @@
 #include <linux/module.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
-#include <linux/mtd/partitions.h>
 #include <linux/of_platform.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
@@ -61,19 +60,6 @@ struct mcr3000_host
  */
 #define MCR3000_FIO_BASE	0x0c000000	/* Address where flash is mapped 			*/
 #define MCR3000_CPLD_STATUS	0x10000800	/* Address where CPLD is mapped. Used for NAND R/B pin	*/
-
-/*
- * Define partitions for flash device
- */
-static struct mtd_partition partition_info[] = {
-	{.name		= "System",
-	 .size		= (MTDPART_SIZ_FULL),
-	 .offset	= (MTDPART_OFS_APPEND)}
-};
-
-#define NUM_PARTITIONS 1
-
-
 
 /* 
  *	hardware specific access to control-lines
