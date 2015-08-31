@@ -75,7 +75,7 @@ static void fpgam_end_irq(struct irq_data *d)
 }
 
 static struct irq_chip fpgam_pic = {
-	.name = "FPGAMPIC",
+	.name = "FPGAM",
 	.irq_mask = fpgam_mask_irq,
 	.irq_unmask = fpgam_unmask_irq,
 	.irq_eoi = fpgam_end_irq,

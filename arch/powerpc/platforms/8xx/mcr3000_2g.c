@@ -60,7 +60,7 @@ static void fpgaf_end_irq(struct irq_data *d)
 }
 
 static struct irq_chip fpgaf_pic = {
-	.name = "FPGAFPIC",
+	.name = "FPGAF",
 	.irq_mask = fpgaf_mask_irq,
 	.irq_unmask = fpgaf_unmask_irq,
 	.irq_eoi = fpgaf_end_irq,
