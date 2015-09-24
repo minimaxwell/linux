@@ -733,7 +733,6 @@ void fs_sysfs_notify(struct work_struct *work)
 	sysfs_notify_dirent(notify->kn);
 }
 
-
 void fs_send_gratuitous_arp(struct work_struct *work)
 {
 	struct fs_enet_private *fep =
@@ -749,7 +748,10 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 	char iface[10];
 	char sanitized_iface[5] ;
 
+	struct net_device *vlan_dev;
+	
 	ip_addr = inet_select_addr(fep->ndev, 0, 0);
+
 	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, fep->ndev, ip_addr, NULL,
 			fep->ndev->dev_addr, NULL);
 	if (skb == NULL)
@@ -800,6 +802,13 @@ void fs_send_gratuitous_arp(struct work_struct *work)
 					strcpy(sanitized_iface,iface);
 					sanitized_iface[4] = '\0';
 					if (strcmp("eth1", sanitized_iface) == 0) {
+						vlan_dev = first_net_device(&init_net);
+						while (vlan_dev) {
+							if (strcmp(vlan_dev->name, iface_and_vlan) == 0) 
+								break;
+							vlan_dev = next_net_device(vlan_dev);
+						}
+						ip_addr = inet_select_addr(vlan_dev, 0, 0);
 						skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr,
 								fep->ndev, ip_addr,
 								NULL,
