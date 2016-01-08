@@ -559,12 +559,12 @@
 				"503",	"578",	"-27",	"-10",	"no",	"yes",	/* equipement 4 */
 				"579",	"682",	"-27",	"-10",	"no",	"yes",	/* equipement 5 */
 				"683",	"804",	"-27",	"-10",	"no",	"yes",	/* equipement 6 */
-				"805",	"908",	"-27",	"-10",	"no",	"yes",	/* equipement 7 */
+				"805",	"908",	"-7",	"-17",	"yes",	"yes",	/* equipement 7 defini */
 				"909",	"1016",	"-27",	"-10",	"no",	"yes",	/* equipement 8 */
 				"1017",	"1120",	"-27",	"-10",	"no",	"yes",	/* equipement 9 */
 				"1121",	"1232",	"-27",	"-10",	"no",	"yes",	/* equipement 10 */
 				"1233",	"1392",	"-27",	"-10",	"no",	"yes",	/* equipement 11 */
-				"1393",	"1523",	"-27",	"-10",	"no",	"yes",	/* equipement 12 */
+				"1393",	"1523",	"-23",	"-1",	"no",	"yes",	/* equipement 12 defini */
 				"1524",	"1664",	"-27",	"-10",	"no",	"yes",	/* equipement 13 */
 				"1665",	"1786",	"-27",	"-10",	"no",	"yes",	/* equipement 14 */
 				"1787",	"1954",	"-27",	"-10",	"no",	"yes",	/* equipement 15 */
@@ -573,8 +573,8 @@
 				"2397",	"2556",	"-27",	"-10",	"no",	"yes",	/* equipement 18 */
 				"2557",	"2738",	"-27",	"-10",	"no",	"yes",	/* equipement 19 */
 				"2739",	"2966",	"-27",	"-10",	"no",	"yes",	/* equipement 20 */
-				"2967",	"3156",	"-27",	"-10",	"no",	"yes",	/* equipement 21 */
-				"3157",	"4095",	"-27",	"-10",	"no",	"yes";	/* equipement 22 */
+				"2967",	"3156",	"-11",	"-10",	"no",	"no",	/* equipement 21 defini */
+				"3157",	"4095",	"-19",	"-10",	"yes",	"no";	/* equipement 22 defini */
 		};
 
 		FAV_CS_SPI: gpio-controller@dummy0 {
