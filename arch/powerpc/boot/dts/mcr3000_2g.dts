@@ -437,7 +437,7 @@
 			compatible = "fsl,mpc885-fec-enet", "fsl,pq1-fec-enet";
 			reg = <0xe00 0x188>;
 			local-mac-address = [ 00 00 00 00 00 00 ];
-			interrupts = <3 1>;
+			interrupts = <5 1>;
 			interrupt-parent = <&PIC>;
 			phy-handle = <&PHY1 &PHY5>;
 			linux,network-index = <0>;
@@ -520,7 +520,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <5 2 0 2>;
+				interrupts = <3 2 0 2>;
 				interrupt-parent = <&PIC>;
 				reg = <0x930 0x20>;
 				compatible = "fsl,mpc885-cpm-pic", "fsl,cpm1-pic";
