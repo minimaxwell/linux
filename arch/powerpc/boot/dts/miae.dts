@@ -732,6 +732,7 @@
 				#size-cells = <1>;
 				ranges = <0x0 0x2000 0x2000>;
 
+				/* conserver les 4 premiers Kbytes pour QMC */
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
 					reg = <0x1000 0x0bc0>;
@@ -814,8 +815,8 @@
 			tsa: tsa@9c0 {
 				compatible = "fsl,mpc885-tsa", "fsl,cpm1-tsa";
 				reg = <0x9c0 0x440 0x930 0x20>;
-				/* parametres possible : none, SCC3, SCC4 (ou SMC2 si defini) */
-				scc_tdm = "SCC4";
+				/* parametres possible : none, SCC3, SCC4 */
+				scc_qmc_miae = "SCC4";
 				/* vitesse bus numerique 4 ou 8 MHz */
 				data_rate = <4>;
 			};
@@ -882,11 +883,12 @@
 				far-id = <4>;
 			};
 
-			scc4t: tdm@a60 {
-				device_type = "tdm";
-				tdm_name = "scc4";
-				compatible = "fsl,mpc885-scc-tdm", "fsl,cpm1-scc-tdm";
-				reg = <0xa60 0x20 0x3f00 0x80>;
+			scc4q: qmc@a60 {
+				device_type = "qmc";
+				qmc_name = "scc4";
+				offset_channel = <16>;	/* cause micropatch */
+				compatible = "fsl,mpc885-scc-qmc", "fsl,cpm1-scc-qmc";
+				reg = <0xa60 0x20 0x3f00 0xc0 0x2000 0x1000>;
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0xc0>;
