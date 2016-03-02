@@ -897,16 +897,17 @@ void phy_state_machine(struct work_struct *work)
 		}
 		break;
 	case PHY_DOUBLE_ATTACHEMENT:
-		err = phy_read_status(phydev);
+		if (phydev->addr != 1) {
+			err = phy_read_status(phydev);
 
-		if (err)
-			break;
+			if (err)
+				break;
 
-		if (!phydev->link) {
-			phydev->state = PHY_NOLINK;
-			break;
+			if (!phydev->link) {
+				phydev->state = PHY_NOLINK;
+				break;
+			}
 		}
-
 		/* Only register a CHANGE if we are
 		 * polling or ignoring interrupts
 		 */
