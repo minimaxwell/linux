@@ -988,15 +988,6 @@ void phy_state_machine(struct work_struct *work)
 		}
 		break;
 	case PHY_RESUMING:
-		err = phy_clear_interrupt(phydev);
-		if (err)
-			break;
-
-		err = phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED);
-
-		if (err)
-			break;
-
 		if (AUTONEG_ENABLE == phydev->autoneg) {
 			err = phy_aneg_done(phydev);
 			if (err < 0)

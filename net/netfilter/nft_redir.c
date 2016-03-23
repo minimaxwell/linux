@@ -28,27 +28,31 @@ int nft_redir_init(const struct nft_ctx *ctx,
 		   const struct nlattr * const tb[])
 {
 	struct nft_redir *priv = nft_expr_priv(expr);
-	u32 nla_be32;
+	unsigned int plen;
 	int err;
 
 	err = nft_chain_validate_dependency(ctx->chain, NFT_CHAIN_T_NAT);
 	if (err < 0)
 		return err;
 
+	plen = FIELD_SIZEOF(struct nf_nat_range, min_addr.all);
 	if (tb[NFTA_REDIR_REG_PROTO_MIN]) {
-		nla_be32 = nla_get_be32(tb[NFTA_REDIR_REG_PROTO_MIN]);
-		priv->sreg_proto_min = ntohl(nla_be32);
-		err = nft_validate_input_register(priv->sreg_proto_min);
-		if (err < 0)
-			return err;
-
-		if (tb[NFTA_REDIR_REG_PROTO_MAX]) {
-			nla_be32 = nla_get_be32(tb[NFTA_REDIR_REG_PROTO_MAX]);
-			priv->sreg_proto_max = ntohl(nla_be32);
-			err = nft_validate_input_register(priv->sreg_proto_max);
-			if (err < 0)
-				return err;
-		} else {
+ 		priv->sreg_proto_min =
+			nft_parse_register(tb[NFTA_REDIR_REG_PROTO_MIN]);
+ 
+		err = nft_validate_register_load(priv->sreg_proto_min, plen);
+ 		if (err < 0)
+ 			return err;
+ 
+ 		if (tb[NFTA_REDIR_REG_PROTO_MAX]) {
+ 			priv->sreg_proto_max =
+				nft_parse_register(tb[NFTA_REDIR_REG_PROTO_MAX]);
+ 
+			err = nft_validate_register_load(priv->sreg_proto_max,
+							 plen);
+ 			if (err < 0)
+ 				return err;
+ 		} else {
 			priv->sreg_proto_max = priv->sreg_proto_min;
 		}
 	}
