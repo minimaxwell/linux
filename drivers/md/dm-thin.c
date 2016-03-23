@@ -990,24 +990,6 @@ static void schedule_external_copy(struct thin_c *tc, dm_block_t virt_block,
 		schedule_zero(tc, virt_block, data_dest, cell, bio);
 }
 
-static void set_pool_mode(struct pool *pool, enum pool_mode new_mode);
-
-static void check_for_space(struct pool *pool)
-{
-	int r;
-	dm_block_t nr_free;
-
-	if (get_pool_mode(pool) != PM_OUT_OF_DATA_SPACE)
-		return;
-
-	r = dm_pool_get_free_block_count(pool->pmd, &nr_free);
-	if (r)
-		return;
-
-	if (nr_free)
-		set_pool_mode(pool, PM_WRITE);
-}
-
 /*
  * A non-zero return indicates read_only or fail_io mode.
  * Many callers don't care about the return value.
@@ -1022,8 +1004,6 @@ static int commit(struct pool *pool)
 	r = dm_pool_commit_metadata(pool->pmd);
 	if (r)
 		metadata_operation_failed(pool, "dm_pool_commit_metadata", r);
-	else
-		check_for_space(pool);
 
 	return r;
 }
@@ -1041,6 +1021,8 @@ static void check_low_water_mark(struct pool *pool, dm_block_t free_blocks)
 		dm_table_event(pool->ti->table);
 	}
 }
+
+static void set_pool_mode(struct pool *pool, enum pool_mode new_mode);
 
 static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 {
@@ -1842,7 +1824,7 @@ static void set_pool_mode(struct pool *pool, enum pool_mode new_mode)
 		pool->process_bio = process_bio_read_only;
 		pool->process_discard = process_discard;
 		pool->process_prepared_mapping = process_prepared_mapping;
-		pool->process_prepared_discard = process_prepared_discard;
+		pool->process_prepared_discard = process_prepared_discard_passdown;
 
 		if (!pool->pf.error_if_no_space && no_space_timeout)
 			queue_delayed_work(pool->wq, &pool->no_space_timeout, no_space_timeout);
@@ -2003,6 +1985,17 @@ static int thin_bio_map(struct dm_target *ti, struct bio *bio)
 		return DM_MAPIO_REMAPPED;
 
 	case -ENODATA:
+		if (get_pool_mode(tc->pool) == PM_READ_ONLY) {
+			/*
+			 * This block isn't provisioned, and we have no way
+			 * of doing so.
+			 */
+			handle_unserviceable_bio(tc->pool, bio);
+			cell_defer_no_holder_no_free(tc, &cell1);
+			return DM_MAPIO_SUBMITTED;
+		}
+		/* fall through */
+
 	case -EWOULDBLOCK:
 		/*
 		 * In future, the failed dm_thin_find_block above could
@@ -2596,7 +2589,7 @@ static int pool_ctr(struct dm_target *ti, unsigned argc, char **argv)
 						metadata_low_callback,
 						pool);
 	if (r)
-		goto out_flags_changed;
+		goto out_free_pt;
 
 	pt->callbacks.congested_fn = pool_is_congested;
 	dm_table_add_target_callbacks(ti->table, &pt->callbacks);
@@ -2967,12 +2960,6 @@ static int pool_message(struct dm_target *ti, unsigned argc, char **argv)
 	struct pool_c *pt = ti->private;
 	struct pool *pool = pt->pool;
 
-	if (get_pool_mode(pool) >= PM_READ_ONLY) {
-		DMERR("%s: unable to service pool target messages in READ_ONLY or FAIL mode",
-		      dm_device_name(pool->pool_md));
-		return -EINVAL;
-	}
-
 	if (!strcasecmp(argv[0], "create_thin"))
 		r = process_create_thin_mesg(argc, argv, pool);
 
@@ -3261,13 +3248,13 @@ static void thin_dtr(struct dm_target *ti)
 	struct thin_c *tc = ti->private;
 	unsigned long flags;
 
+	thin_put(tc);
+	wait_for_completion(&tc->can_destroy);
+
 	spin_lock_irqsave(&tc->pool->lock, flags);
 	list_del_rcu(&tc->list);
 	spin_unlock_irqrestore(&tc->pool->lock, flags);
 	synchronize_rcu();
-
-	thin_put(tc);
-	wait_for_completion(&tc->can_destroy);
 
 	mutex_lock(&dm_thin_pool_table.mutex);
 

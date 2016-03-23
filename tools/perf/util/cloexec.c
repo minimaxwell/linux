@@ -7,12 +7,6 @@
 
 static unsigned long flag = PERF_FLAG_FD_CLOEXEC;
 
-int __weak sched_getcpu(void)
-{
-	errno = ENOSYS;
-	return -1;
-}
-
 static int perf_flag_probe(void)
 {
 	/* use 'safest' configuration as used in perf_evsel__fallback() */
@@ -31,10 +25,6 @@ static int perf_flag_probe(void)
 	if (cpu < 0)
 		cpu = 0;
 
-	/*
-	 * Using -1 for the pid is a workaround to avoid gratuitous jump label
-	 * changes.
-	 */
 	while (1) {
 		/* check cloexec flag */
 		fd = sys_perf_event_open(&attr, pid, cpu, -1,
@@ -57,23 +47,15 @@ static int perf_flag_probe(void)
 		  err, strerror_r(err, sbuf, sizeof(sbuf)));
 
 	/* not supported, confirm error related to PERF_FLAG_FD_CLOEXEC */
-	while (1) {
-		fd = sys_perf_event_open(&attr, pid, cpu, -1, 0);
-		if (fd < 0 && pid == -1 && errno == EACCES) {
-			pid = 0;
-			continue;
-		}
-		break;
-	}
+	fd = sys_perf_event_open(&attr, pid, cpu, -1, 0);
 	err = errno;
-
-	if (fd >= 0)
-		close(fd);
 
 	if (WARN_ONCE(fd < 0 && err != EBUSY,
 		      "perf_event_open(..., 0) failed unexpectedly with error %d (%s)\n",
 		      err, strerror_r(err, sbuf, sizeof(sbuf))))
 		return -1;
+
+	close(fd);
 
 	return 0;
 }

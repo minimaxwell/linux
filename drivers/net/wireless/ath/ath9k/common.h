@@ -53,7 +53,7 @@ struct ath_beacon_config {
 	u16 dtim_period;
 	u16 bmiss_timeout;
 	u8 dtim_count;
-	u8 enable_beacon;
+	bool enable_beacon;
 	bool ibss_creator;
 	u32 nexttbtt;
 	u32 intval;

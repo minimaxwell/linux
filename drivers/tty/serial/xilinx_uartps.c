@@ -1303,9 +1303,9 @@ static SIMPLE_DEV_PM_OPS(cdns_uart_dev_pm_ops, cdns_uart_suspend,
  */
 static int cdns_uart_probe(struct platform_device *pdev)
 {
-	int rc, id, irq;
+	int rc, id;
 	struct uart_port *port;
-	struct resource *res;
+	struct resource *res, *res2;
 	struct cdns_uart *cdns_uart_data;
 
 	cdns_uart_data = devm_kzalloc(&pdev->dev, sizeof(*cdns_uart_data),
@@ -1352,9 +1352,9 @@ static int cdns_uart_probe(struct platform_device *pdev)
 		goto err_out_clk_disable;
 	}
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq <= 0) {
-		rc = -ENXIO;
+	res2 = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+	if (!res2) {
+		rc = -ENODEV;
 		goto err_out_clk_disable;
 	}
 
@@ -1383,7 +1383,7 @@ static int cdns_uart_probe(struct platform_device *pdev)
 		 * and triggers invocation of the config_port() entry point.
 		 */
 		port->mapbase = res->start;
-		port->irq = irq;
+		port->irq = res2->start;
 		port->dev = &pdev->dev;
 		port->uartclk = clk_get_rate(cdns_uart_data->uartclk);
 		port->private_data = cdns_uart_data;

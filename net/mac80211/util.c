@@ -3050,7 +3050,7 @@ int ieee80211_check_combinations(struct ieee80211_sub_if_data *sdata,
 		wdev_iter = &sdata_iter->wdev;
 
 		if (sdata_iter == sdata ||
-		    !ieee80211_sdata_running(sdata_iter) ||
+		    rcu_access_pointer(sdata_iter->vif.chanctx_conf) == NULL ||
 		    local->hw.wiphy->software_iftypes & BIT(wdev_iter->iftype))
 			continue;
 

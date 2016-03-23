@@ -99,7 +99,6 @@
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
-#include <linux/usb.h>
 
 #include "musb_core.h"
 
@@ -481,7 +480,7 @@ static irqreturn_t musb_stage0_irq(struct musb *musb, u8 int_usb,
 						 + msecs_to_jiffies(20);
 				schedule_delayed_work(
 					&musb->finish_resume_work,
-					msecs_to_jiffies(USB_RESUME_TIMEOUT));
+					msecs_to_jiffies(20));
 
 				musb->xceiv->state = OTG_STATE_A_HOST;
 				musb->is_active = 1;
@@ -1522,30 +1521,16 @@ irqreturn_t musb_interrupt(struct musb *musb)
 		is_host_active(musb) ? "host" : "peripheral",
 		musb->int_usb, musb->int_tx, musb->int_rx);
 
-	/**
-	 * According to Mentor Graphics' documentation, flowchart on page 98,
-	 * IRQ should be handled as follows:
-	 *
-	 * . Resume IRQ
-	 * . Session Request IRQ
-	 * . VBUS Error IRQ
-	 * . Suspend IRQ
-	 * . Connect IRQ
-	 * . Disconnect IRQ
-	 * . Reset/Babble IRQ
-	 * . SOF IRQ (we're not using this one)
-	 * . Endpoint 0 IRQ
-	 * . TX Endpoints
-	 * . RX Endpoints
-	 *
-	 * We will be following that flowchart in order to avoid any problems
-	 * that might arise with internal Finite State Machine.
+	/* the core can interrupt us for multiple reasons; docs have
+	 * a generic interrupt flowchart to follow
 	 */
-
 	if (musb->int_usb)
 		retval |= musb_stage0_irq(musb, musb->int_usb,
 				devctl);
 
+	/* "stage 1" is handling endpoint irqs */
+
+	/* handle endpoint 0 first */
 	if (musb->int_tx & 1) {
 		if (is_host_active(musb))
 			retval |= musb_h_ep0_irq(musb);
@@ -1553,24 +1538,13 @@ irqreturn_t musb_interrupt(struct musb *musb)
 			retval |= musb_g_ep0_irq(musb);
 	}
 
-	reg = musb->int_tx >> 1;
-	ep_num = 1;
-	while (reg) {
-		if (reg & 1) {
-			retval = IRQ_HANDLED;
-			if (is_host_active(musb))
-				musb_host_tx(musb, ep_num);
-			else
-				musb_g_tx(musb, ep_num);
-		}
-		reg >>= 1;
-		ep_num++;
-	}
-
+	/* RX on endpoints 1-15 */
 	reg = musb->int_rx >> 1;
 	ep_num = 1;
 	while (reg) {
 		if (reg & 1) {
+			/* musb_ep_select(musb->mregs, ep_num); */
+			/* REVISIT just retval = ep->rx_irq(...) */
 			retval = IRQ_HANDLED;
 			if (is_host_active(musb))
 				musb_host_rx(musb, ep_num);
@@ -1578,6 +1552,23 @@ irqreturn_t musb_interrupt(struct musb *musb)
 				musb_g_rx(musb, ep_num);
 		}
 
+		reg >>= 1;
+		ep_num++;
+	}
+
+	/* TX on endpoints 1-15 */
+	reg = musb->int_tx >> 1;
+	ep_num = 1;
+	while (reg) {
+		if (reg & 1) {
+			/* musb_ep_select(musb->mregs, ep_num); */
+			/* REVISIT just retval |= ep->tx_irq(...) */
+			retval = IRQ_HANDLED;
+			if (is_host_active(musb))
+				musb_host_tx(musb, ep_num);
+			else
+				musb_g_tx(musb, ep_num);
+		}
 		reg >>= 1;
 		ep_num++;
 	}

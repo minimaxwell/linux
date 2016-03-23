@@ -81,15 +81,18 @@ static inline int xsave_state_booting(struct xsave_struct *fx, u64 mask)
 	if (boot_cpu_has(X86_FEATURE_XSAVES))
 		asm volatile("1:"XSAVES"\n\t"
 			"2:\n\t"
-			     xstate_fault
-			: "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
+			: : "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
 			:   "memory");
 	else
 		asm volatile("1:"XSAVE"\n\t"
 			"2:\n\t"
-			     xstate_fault
-			: "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
+			: : "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
 			:   "memory");
+
+	asm volatile(xstate_fault
+		     : "0" (0)
+		     : "memory");
+
 	return err;
 }
 
@@ -108,15 +111,18 @@ static inline int xrstor_state_booting(struct xsave_struct *fx, u64 mask)
 	if (boot_cpu_has(X86_FEATURE_XSAVES))
 		asm volatile("1:"XRSTORS"\n\t"
 			"2:\n\t"
-			     xstate_fault
-			: "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
+			: : "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
 			:   "memory");
 	else
 		asm volatile("1:"XRSTOR"\n\t"
 			"2:\n\t"
-			     xstate_fault
-			: "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
+			: : "D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
 			:   "memory");
+
+	asm volatile(xstate_fault
+		     : "0" (0)
+		     : "memory");
+
 	return err;
 }
 
@@ -142,9 +148,9 @@ static inline int xsave_state(struct xsave_struct *fx, u64 mask)
 	 */
 	alternative_input_2(
 		"1:"XSAVE,
-		XSAVEOPT,
+		"1:"XSAVEOPT,
 		X86_FEATURE_XSAVEOPT,
-		XSAVES,
+		"1:"XSAVES,
 		X86_FEATURE_XSAVES,
 		[fx] "D" (fx), "a" (lmask), "d" (hmask) :
 		"memory");
@@ -171,7 +177,7 @@ static inline int xrstor_state(struct xsave_struct *fx, u64 mask)
 	 */
 	alternative_input(
 		"1: " XRSTOR,
-		XRSTORS,
+		"1: " XRSTORS,
 		X86_FEATURE_XSAVES,
 		"D" (fx), "m" (*fx), "a" (lmask), "d" (hmask)
 		: "memory");

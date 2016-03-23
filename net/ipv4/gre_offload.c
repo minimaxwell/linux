@@ -36,8 +36,7 @@ static struct sk_buff *gre_gso_segment(struct sk_buff *skb,
 				  SKB_GSO_TCP_ECN |
 				  SKB_GSO_GRE |
 				  SKB_GSO_GRE_CSUM |
-				  SKB_GSO_IPIP |
-				  SKB_GSO_SIT)))
+				  SKB_GSO_IPIP)))
 		goto out;
 
 	if (!skb->encapsulation)
@@ -248,9 +247,6 @@ static int gre_gro_complete(struct sk_buff *skb, int nhoff)
 		err = ptype->callbacks.gro_complete(skb, nhoff + grehlen);
 
 	rcu_read_unlock();
-
-	skb_set_inner_mac_header(skb, nhoff + grehlen);
-
 	return err;
 }
 

@@ -1314,11 +1314,8 @@ u8 rtl_is_special_data(struct ieee80211_hw *hw, struct sk_buff *skb, u8 is_tx)
 		}
 
 		return true;
-	} else if (ETH_P_IPV6 == ether_type) {
-		/* TODO: Handle any IPv6 cases that need special handling.
-		 * For now, always return false
-		 */
-		goto end;
+	} else if (0x86DD == ether_type) {
+		return true;
 	}
 
 end:

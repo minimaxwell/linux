@@ -349,7 +349,7 @@ struct cxl_afu {
 	struct device *chardev_s, *chardev_m, *chardev_d;
 	struct idr contexts_idr;
 	struct dentry *debugfs;
-	struct mutex contexts_lock;
+	spinlock_t contexts_lock;
 	struct mutex spa_mutex;
 	spinlock_t afu_cntl_lock;
 
@@ -389,10 +389,6 @@ struct cxl_context {
 	/* Problem state MMIO */
 	phys_addr_t psn_phys;
 	u64 psn_size;
-
-	/* Used to unmap any mmaps when force detaching */
-	struct address_space *mapping;
-	struct mutex mapping_lock;
 
 	spinlock_t sste_lock; /* Protects segment table entries */
 	struct cxl_sste *sstp;
@@ -471,7 +467,6 @@ void cxl_release_one_irq(struct cxl *adapter, int hwirq);
 int cxl_alloc_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter, unsigned int num);
 void cxl_release_irq_ranges(struct cxl_irq_ranges *irqs, struct cxl *adapter);
 int cxl_setup_irq(struct cxl *adapter, unsigned int hwirq, unsigned int virq);
-int cxl_update_image_control(struct cxl *adapter);
 
 /* common == phyp + powernv */
 struct cxl_process_element_common {
@@ -597,8 +592,7 @@ int cxl_alloc_sst(struct cxl_context *ctx);
 void init_cxl_native(void);
 
 struct cxl_context *cxl_context_alloc(void);
-int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master,
-		     struct address_space *mapping);
+int cxl_context_init(struct cxl_context *ctx, struct cxl_afu *afu, bool master);
 void cxl_context_free(struct cxl_context *ctx);
 int cxl_context_iomap(struct cxl_context *ctx, struct vm_area_struct *vma);
 

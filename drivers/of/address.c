@@ -450,17 +450,12 @@ static struct of_bus *of_match_bus(struct device_node *np)
 	return NULL;
 }
 
-static int of_empty_ranges_quirk(struct device_node *np)
+static int of_empty_ranges_quirk(void)
 {
 	if (IS_ENABLED(CONFIG_PPC)) {
-		/* To save cycles, we cache the result for global "Mac" setting */
+		/* To save cycles, we cache the result */
 		static int quirk_state = -1;
 
-		/* PA-SEMI sdc DT bug */
-		if (of_device_is_compatible(np, "1682m-sdc"))
-			return true;
-
-		/* Make quirk cached */
 		if (quirk_state < 0)
 			quirk_state =
 				of_machine_is_compatible("Power Macintosh") ||
@@ -495,7 +490,7 @@ static int of_translate_one(struct device_node *parent, struct of_bus *bus,
 	 * This code is only enabled on powerpc. --gcl
 	 */
 	ranges = of_get_property(parent, rprop, &rlen);
-	if (ranges == NULL && !of_empty_ranges_quirk(parent)) {
+	if (ranges == NULL && !of_empty_ranges_quirk()) {
 		pr_err("OF: no ranges; cannot translate\n");
 		return 1;
 	}
@@ -712,7 +707,7 @@ int __weak pci_register_io_range(phys_addr_t addr, resource_size_t size)
 	}
 
 	/* add the range to the list */
-	range = kzalloc(sizeof(*range), GFP_ATOMIC);
+	range = kzalloc(sizeof(*range), GFP_KERNEL);
 	if (!range) {
 		err = -ENOMEM;
 		goto end_register;
@@ -765,7 +760,7 @@ unsigned long __weak pci_address_to_pio(phys_addr_t address)
 	spin_lock(&io_range_lock);
 	list_for_each_entry(res, &io_range_list, list) {
 		if (address >= res->start && address < res->start + res->size) {
-			addr = address - res->start + offset;
+			addr = res->start - address + offset;
 			break;
 		}
 		offset += res->size;
@@ -845,10 +840,10 @@ struct device_node *of_find_matching_node_by_address(struct device_node *from,
 	struct resource res;
 
 	while (dn) {
-		if (!of_address_to_resource(dn, 0, &res) &&
-		    res.start == base_address)
+		if (of_address_to_resource(dn, 0, &res))
+			continue;
+		if (res.start == base_address)
 			return dn;
-
 		dn = of_find_matching_node(dn, matches);
 	}
 
