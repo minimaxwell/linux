@@ -28,7 +28,7 @@
 #define MI_Kp		0x40000000	/* Should always be set */
 
 /*
- * All pages PP exec bits are set to 000, which means Execute for Supervisor
+ * All pages' PP exec bits are set to 000, which means Execute for Supervisor
  * and no Execute for User.
  * Then we use the APG to say whether accesses are according to Page rules,
  * "all Supervisor" rules (Exec for all) and "all User" rules (Exec for noone)
@@ -101,9 +101,9 @@
 #define MD_Kp		0x40000000	/* Should always be set */
 
 /*
- * All pages PP exec bits are set to either 000 or 011, which means respectively
- * RW for Supervisor and no access for User, or RO for Supervisor and no access
- * for user.
+ * All pages' PP data bits are set to either 000 or 011, which means
+ * respectively RW for Supervisor and no access for User, or RO for
+ * Supervisor and no access for user.
  * Then we use the APG to say whether accesses are according to Page rules or
  * "all Supervisor" rules (Access to all)
  * Therefore, we define 2 APG groups. lsb is _PAGE_USER

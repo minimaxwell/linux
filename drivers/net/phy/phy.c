@@ -935,11 +935,17 @@ void phy_state_machine(struct work_struct *work)
 		phydev->adjust_link(phydev->attached_dev);
 		break;
 	case PHY_RUNNING:
-		/* Only register a CHANGE if we are
-		 * polling or ignoring interrupts
+		/* Only register a CHANGE if we are polling or ignoring
+		 * interrupts and link changed since latest checking.
 		 */
 		if (!phy_interrupt_is_valid(phydev)) {
-			phydev->state = PHY_CHANGELINK;
+			old_link = phydev->link;
+			err = phy_read_status(phydev);
+			if (err)
+				break;
+
+			if (old_link != phydev->link)
+				phydev->state = PHY_CHANGELINK;
 		}
 		break;
 	case PHY_DOUBLE_ATTACHEMENT:
@@ -1065,6 +1071,9 @@ void phy_state_machine(struct work_struct *work)
 
 	if (err < 0)
 		phy_error(phydev);
+
+	dev_dbg(&phydev->dev, "PHY state change %s -> %s\n",
+		phy_state_to_str(old_state), phy_state_to_str(phydev->state));
 
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
 			   HZ * PHY_STATE_TIME);
