@@ -115,40 +115,45 @@ struct dentry *debugfs_create_regset32(const char *name, umode_t mode,
 				     struct dentry *parent,
 				     struct debugfs_regset32 *regset);
 
-int debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
+void debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_regset32be(const char *name, umode_t mode,
 				     struct dentry *parent,
 				     struct debugfs_regset32 *regset);
 
-int debugfs_print_regs32be(struct seq_file *s, const struct debugfs_reg32 *regs,
+void debugfs_print_regs32be(struct seq_file *s, const struct debugfs_reg32 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_regset16(const char *name, umode_t mode,
 				     struct dentry *parent,
 				     struct debugfs_regset16 *regset);
 
-int debugfs_print_regs16(struct seq_file *s, const struct debugfs_reg16 *regs,
+void debugfs_print_regs16(struct seq_file *s, const struct debugfs_reg16 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_regset16be(const char *name, umode_t mode,
 				     struct dentry *parent,
 				     struct debugfs_regset16 *regset);
 
-int debugfs_print_regs16be(struct seq_file *s, const struct debugfs_reg16 *regs,
+void debugfs_print_regs16be(struct seq_file *s, const struct debugfs_reg16 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_regset8(const char *name, umode_t mode,
 				     struct dentry *parent,
 				     struct debugfs_regset8 *regset);
 
-int debugfs_print_regs8(struct seq_file *s, const struct debugfs_reg8 *regs,
+void debugfs_print_regs8(struct seq_file *s, const struct debugfs_reg8 *regs,
 			 int nregs, void __iomem *base, char *prefix);
 
 struct dentry *debugfs_create_u32_array(const char *name, umode_t mode,
 					struct dentry *parent,
 					u32 *array, u32 elements);
+
+struct dentry *debugfs_create_devm_seqfile(struct device *dev, const char *name,
+					   struct dentry *parent,
+					   int (*read_fn)(struct seq_file *s,
+							  void *data));
 
 bool debugfs_initialized(void);
 
@@ -156,7 +161,7 @@ bool debugfs_initialized(void);
 
 #include <linux/err.h>
 
-/* 
+/*
  * We do not return NULL from these functions if CONFIG_DEBUG_FS is not enabled
  * so users have a chance to detect if there was a real error or not.  We don't
  * want to duplicate the design decision mistakes of procfs and devfs again.

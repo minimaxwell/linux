@@ -97,6 +97,9 @@ x509.genkey
 # Kconfig presets
 all.config
 
+# Kdevelop4
+*.kdev4
+
 # CS home made
 toto*
 /arch/ppc

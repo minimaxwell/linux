@@ -405,7 +405,8 @@ static irqreturn_t cpm_uart_int(int irq, void *data)
 static int cpm_uart_startup(struct uart_port *port)
 {
 	int retval, i;
-	struct uart_cpm_port *pinfo = (struct uart_cpm_port *)port;
+	struct uart_cpm_port *pinfo =
+		container_of(port, struct uart_cpm_port, port);
 
 	pr_debug("CPM uart[%d]:startup\n", port->line);
 
@@ -485,7 +486,8 @@ inline void cpm_uart_wait_until_send(struct uart_cpm_port *pinfo)
  */
 static void cpm_uart_shutdown(struct uart_port *port)
 {
-	struct uart_cpm_port *pinfo = (struct uart_cpm_port *)port;
+	struct uart_cpm_port *pinfo =
+		container_of(port, struct uart_cpm_port, port);
 	int i;
 
 	pr_debug("CPM uart[%d]:shutdown\n", port->line);
