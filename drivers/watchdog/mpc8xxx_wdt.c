@@ -299,31 +299,6 @@ static struct platform_driver mpc8xxx_wdt_driver = {
 	},
 };
 
-/*
- * We do wdt initialization in two steps: arch_initcall probes the wdt
- * very early to start pinging the watchdog (misc devices are not yet
- * available), and later module_init() just registers the misc device.
- */
-static int mpc8xxx_wdt_init_late(void)
-{
-	int ret;
-
-	if (!wd_base)
-		return -ENODEV;
-
-	watchdog_set_nowayout(&mpc8xxx_wdt_dev, nowayout);
-
-	ret = watchdog_register_device(&mpc8xxx_wdt_dev);
-	if (ret) {
-		pr_err("cannot register watchdog device (err=%d)\n", ret);
-		return ret;
-	}
-	return 0;
-}
-#ifndef MODULE
-module_init(mpc8xxx_wdt_init_late);
-#endif
-
 static int __init mpc8xxx_wdt_init(void)
 {
 	return platform_driver_register(&mpc8xxx_wdt_driver);
