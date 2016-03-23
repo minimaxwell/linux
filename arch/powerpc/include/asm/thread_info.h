@@ -49,7 +49,6 @@ struct thread_info {
 	u32 ac_stime;
 	u32 ac_utime;
 #endif
-	struct restart_block restart_block;
 	unsigned long	local_flags;		/* private flags for thread */
 
 	/* low level flags - has atomic operations done on it */

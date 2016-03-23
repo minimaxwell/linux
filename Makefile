@@ -1,8 +1,8 @@
-VERSION = 3
-PATCHLEVEL = 19
+VERSION = 4
+PATCHLEVEL = 0
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Diseased Newt
+NAME = Hurr durr I'ma sheep
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
