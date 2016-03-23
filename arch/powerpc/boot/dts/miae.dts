@@ -286,39 +286,41 @@
 		};
 		
 		GPIO {
+			/* Champs de bits passe a gpio_request_one() dans le probe de gpio_miae.c */
 			/* 0 = sortie initialisee active */
 			/* 1 = entree */
 			/* 2 = sortie initialisee inactive */
+			/* 4 = active low */
 			compatible = "s3k,gpios-appli";
 			reg = <4 0x42 4>;
-			gpios = <&torin   15 1	// TOR in 1
-				&torin    14 1	// TOR in 2
-				&torin    13 1	// TOR in 3
-				&torin    12 1	// TOR in 4
-				&torin    11 1	// TOR in 5
-				&torin    10 1	// TOR in 6
-				&torin     9 1	// TOR in 7
-				&torin     8 1	// TOR in 8
-				&torin     7 1	// TOR in 9
-				&torin     6 1	// TOR in 10
-				&torin     5 1	// TOR in 11
-				&torout   15 2	// TOR out 1
-				&torout   14 2	// TOR out 2
-				&torout   13 2	// TOR out 3
-				&torout   12 2	// TOR out 4
-				&torout   11 2	// TOR out 5
-				&torout   10 2	// TOR out 6
-				&torout    9 2	// TOR out 7
-				&torout    8 2	// TOR out 8
-				&far      15 1	// BP Alt
-				&far      13 1	// Alternat 1
-				&far      14 1	// Alternat 2
-				&far      12 1	// Alternat Combine
-				&far      11 1	// Presence Combine
-				&fav      11 1	// Alternat µMain1
-				&fav      15 1	// Alternat µMain2
-				&fav       9 1	// Alternat µCasque1
-				&fav      13 1>;	// Alternat µCasque2
+			gpios = <&torin   15 5	// TOR in 1
+				&torin    14 5	// TOR in 2
+				&torin    13 5	// TOR in 3
+				&torin    12 5	// TOR in 4
+				&torin    11 5	// TOR in 5
+				&torin    10 5	// TOR in 6
+				&torin     9 5	// TOR in 7
+				&torin     8 5	// TOR in 8
+				&torin     7 5	// TOR in 9
+				&torin     6 5	// TOR in 10
+				&torin     5 5	// TOR in 11
+				&torout   15 6	// TOR out 1
+				&torout   14 6	// TOR out 2
+				&torout   13 6	// TOR out 3
+				&torout   12 6	// TOR out 4
+				&torout   11 6	// TOR out 5
+				&torout   10 6	// TOR out 6
+				&torout    9 6	// TOR out 7
+				&torout    8 6	// TOR out 8
+				&far      15 5	// BP Alt
+				&far      13 5	// Alternat 1
+				&far      14 5	// Alternat 2
+				&far      12 5	// Alternat Combine
+				&far      11 5	// Presence Combine
+				&fav      11 5	// Alternat µMain1
+				&fav      15 5	// Alternat µMain2
+				&fav       9 5	// Alternat µCasque1
+				&fav      13 5>;	// Alternat µCasque2
 		};
 
 		GPIO_CA_CLA {
