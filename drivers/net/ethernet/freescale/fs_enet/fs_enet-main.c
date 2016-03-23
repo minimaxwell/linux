@@ -1537,7 +1537,7 @@ static const struct net_device_ops fs_enet_netdev_ops = {
 #endif
 };
 
-static struct of_device_id fs_enet_match[];
+static const struct of_device_id fs_enet_match[];
 static int fs_enet_probe(struct platform_device *ofdev)
 {
 	const struct of_device_id *match;
@@ -1769,7 +1769,7 @@ static int fs_enet_remove(struct platform_device *ofdev)
 	return 0;
 }
 
-static struct of_device_id fs_enet_match[] = {
+static const struct of_device_id fs_enet_match[] = {
 #ifdef CONFIG_FS_ENET_HAS_SCC
 	{
 		.compatible = "fsl,cpm1-scc-enet",

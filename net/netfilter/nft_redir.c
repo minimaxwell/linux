@@ -68,11 +68,11 @@ int nft_redir_dump(struct sk_buff *skb, const struct nft_expr *expr)
 	const struct nft_redir *priv = nft_expr_priv(expr);
 
 	if (priv->sreg_proto_min) {
-		if (nla_put_be32(skb, NFTA_REDIR_REG_PROTO_MIN,
-				 htonl(priv->sreg_proto_min)))
+		if (nft_dump_register(skb, NFTA_REDIR_REG_PROTO_MIN,
+				      priv->sreg_proto_min))
 			goto nla_put_failure;
-		if (nla_put_be32(skb, NFTA_REDIR_REG_PROTO_MAX,
-				 htonl(priv->sreg_proto_max)))
+		if (nft_dump_register(skb, NFTA_REDIR_REG_PROTO_MAX,
+				      priv->sreg_proto_max))
 			goto nla_put_failure;
 	}
 
