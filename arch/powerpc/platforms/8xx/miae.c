@@ -158,7 +158,7 @@ end:
 	return irq;
 }
 
-void fpgam_cascade(unsigned int irq, struct irq_desc *desc)
+void fpgam_cascade(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	int cascade_irq = fpgam_get_irq();

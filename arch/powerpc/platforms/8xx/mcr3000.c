@@ -239,7 +239,7 @@ end:
 	return irq;
 }
 
-static void cpld_cascade(unsigned int irq, struct irq_desc *desc)
+static void cpld_cascade(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	int cascade_irq = cpld_get_irq();

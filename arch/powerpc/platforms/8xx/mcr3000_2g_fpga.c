@@ -144,7 +144,7 @@ end:
 	return irq;
 }
 
-void fpga_cascade(unsigned int irq, struct irq_desc *desc)
+void fpga_cascade(struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	int cascade_irq = fpga_get_irq();
