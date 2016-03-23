@@ -86,6 +86,7 @@ static const char *phy_state_to_str(enum phy_state st)
 	PHY_STATE_STR(CHANGELINK)
 	PHY_STATE_STR(HALTED)
 	PHY_STATE_STR(RESUMING)
+	PHY_STATE_STR(DOUBLE_ATTACHEMENT)
 	}
 
 	return NULL;
