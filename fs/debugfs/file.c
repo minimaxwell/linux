@@ -722,15 +722,14 @@ static const struct file_operations fops_regset32 = {
 void debugfs_print_regs32be(struct seq_file *s, const struct debugfs_reg32 *regs,
 			   int nregs, void __iomem *base, char *prefix)
 {
-	int i, ret = 0;
+	int i;
 
 	for (i = 0; i < nregs; i++, regs++) {
 		if (prefix)
-			ret += seq_printf(s, "%s", prefix);
-		ret += seq_printf(s, "%s = 0x%08x\n", regs->name,
-				  readl_be(base + regs->offset));
+			seq_printf(s, "%s", prefix);
+		seq_printf(s, "%s = 0x%08x\n", regs->name,
+			   readl_be(base + regs->offset));
 	}
-	return ret;
 }
 EXPORT_SYMBOL_GPL(debugfs_print_regs32be);
 
@@ -819,15 +818,14 @@ EXPORT_SYMBOL_GPL(debugfs_create_regset32be);
 void debugfs_print_regs16(struct seq_file *s, const struct debugfs_reg16 *regs,
 			   int nregs, void __iomem *base, char *prefix)
 {
-	int i, ret = 0;
+	int i;
 
 	for (i = 0; i < nregs; i++, regs++) {
 		if (prefix)
-			ret += seq_printf(s, "%s", prefix);
-		ret += seq_printf(s, "%s = 0x%04x\n", regs->name,
-				  readw(base + regs->offset));
+			seq_printf(s, "%s", prefix);
+		seq_printf(s, "%s = 0x%04x\n", regs->name,
+			   readw(base + regs->offset));
 	}
-	return ret;
 }
 EXPORT_SYMBOL_GPL(debugfs_print_regs16);
 
@@ -854,15 +852,14 @@ static const struct file_operations fops_regset16 = {
 void debugfs_print_regs16be(struct seq_file *s, const struct debugfs_reg16 *regs,
 			   int nregs, void __iomem *base, char *prefix)
 {
-	int i, ret = 0;
+	int i;
 
 	for (i = 0; i < nregs; i++, regs++) {
 		if (prefix)
-			ret += seq_printf(s, "%s", prefix);
-		ret += seq_printf(s, "%s = 0x%04x\n", regs->name,
-				  readw_be(base + regs->offset));
+			seq_printf(s, "%s", prefix);
+		seq_printf(s, "%s = 0x%04x\n", regs->name,
+			   readw_be(base + regs->offset));
 	}
-	return ret;
 }
 EXPORT_SYMBOL_GPL(debugfs_print_regs16be);
 
@@ -951,15 +948,14 @@ EXPORT_SYMBOL_GPL(debugfs_create_regset16be);
 void debugfs_print_regs8(struct seq_file *s, const struct debugfs_reg8 *regs,
 			   int nregs, void __iomem *base, char *prefix)
 {
-	int i, ret = 0;
+	int i;
 
 	for (i = 0; i < nregs; i++, regs++) {
 		if (prefix)
-			ret += seq_printf(s, "%s", prefix);
-		ret += seq_printf(s, "%s = 0x%02x\n", regs->name,
-				  readb(base + regs->offset));
+			seq_printf(s, "%s", prefix);
+		seq_printf(s, "%s = 0x%02x\n", regs->name,
+			   readb(base + regs->offset));
 	}
-	return ret;
 }
 EXPORT_SYMBOL_GPL(debugfs_print_regs8);
 
