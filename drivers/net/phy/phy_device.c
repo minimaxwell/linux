@@ -653,6 +653,11 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		phy_detach(phydev);
 
 	return err;
+
+error:
+	put_device(d);
+	module_put(bus->owner);
+	return err;
 }
 EXPORT_SYMBOL(phy_attach_direct);
 
@@ -694,13 +699,14 @@ EXPORT_SYMBOL(phy_attach);
 /**
  * phy_detach - detach a PHY device from its network device
  * @phydev: target phy_device struct
+ *
+ * This detaches the phy device from its network device and the phy
+ * driver, and drops the reference count taken in phy_attach_direct().
  */
 void phy_detach(struct phy_device *phydev)
 {
+	struct mii_bus *bus;
 	int i;
-
-	if (phydev->bus->dev.driver)
-		module_put(phydev->bus->dev.driver->owner);
 
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;

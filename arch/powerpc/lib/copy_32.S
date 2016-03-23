@@ -88,6 +88,8 @@ _GLOBAL(memset)
 	subf	r6,r0,r6
 	cmplwi	0,r4,0
 	bne	2f	/* Use normal procedure if r4 is not zero */
+_GLOBAL(memset_nocache_branch)
+	b	2f	/* Skip optimised bloc until cache is enabled */
 
 	clrlwi	r7,r6,32-LG_CACHELINE_BYTES
 	add	r8,r7,r5
@@ -135,6 +137,7 @@ _GLOBAL(memmove)
 	/* fall through */
 
 _GLOBAL(memcpy)
+	b	generic_memcpy
 	add	r7,r3,r5		/* test if the src & dst overlap */
 	add	r8,r4,r5
 	cmplw	0,r4,r7

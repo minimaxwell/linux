@@ -1,8 +1,8 @@
 VERSION = 4
-PATCHLEVEL = 2
+PATCHLEVEL = 3
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Hurr durr I'ma sheep
+NAME = Blurry Fish Butt
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
