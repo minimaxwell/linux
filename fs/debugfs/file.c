@@ -22,6 +22,7 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/atomic.h>
+#include <linux/device.h>
 
 static ssize_t default_read_file(struct file *file, char __user *buf,
 				 size_t count, loff_t *ppos)
@@ -692,18 +693,19 @@ EXPORT_SYMBOL_GPL(debugfs_create_u32_array);
  * because some peripherals have several blocks of identical registers,
  * for example configuration of dma channels
  */
-int debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
-			   int nregs, void __iomem *base, char *prefix)
+void debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
+			  int nregs, void __iomem *base, char *prefix)
 {
-	int i, ret = 0;
+	int i;
 
 	for (i = 0; i < nregs; i++, regs++) {
 		if (prefix)
-			ret += seq_printf(s, "%s", prefix);
-		ret += seq_printf(s, "%s = 0x%08x\n", regs->name,
-				  readl(base + regs->offset));
+			seq_printf(s, "%s", prefix);
+		seq_printf(s, "%s = 0x%08x\n", regs->name,
+			   readl(base + regs->offset));
+		if (seq_has_overflowed(s))
+			break;
 	}
-	return ret;
 }
 EXPORT_SYMBOL_GPL(debugfs_print_regs32);
 

@@ -20,6 +20,7 @@
 
 #include <linux/types.h>
 
+struct device;
 struct file_operations;
 
 struct debugfs_blob_wrapper {
@@ -311,10 +312,9 @@ static inline struct dentry *debugfs_create_regset8(const char *name,
 	return ERR_PTR(-ENODEV);
 }
 
-static inline int debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
+static inline void debugfs_print_regs32(struct seq_file *s, const struct debugfs_reg32 *regs,
 			 int nregs, void __iomem *base, char *prefix)
 {
-	return 0;
 }
 
 static inline bool debugfs_initialized(void)
@@ -325,6 +325,15 @@ static inline bool debugfs_initialized(void)
 static inline struct dentry *debugfs_create_u32_array(const char *name, umode_t mode,
 					struct dentry *parent,
 					u32 *array, u32 elements)
+{
+	return ERR_PTR(-ENODEV);
+}
+
+static inline struct dentry *debugfs_create_devm_seqfile(struct device *dev,
+							 const char *name,
+							 struct dentry *parent,
+					   int (*read_fn)(struct seq_file *s,
+							  void *data))
 {
 	return ERR_PTR(-ENODEV);
 }
