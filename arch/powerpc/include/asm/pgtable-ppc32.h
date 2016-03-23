@@ -45,7 +45,7 @@ extern int icache_44x_need_flush;
 #define PTRS_PER_PGD	(1 << (32 - PGDIR_SHIFT))
 
 #define USER_PTRS_PER_PGD	(TASK_SIZE / PGDIR_SIZE)
-#define FIRST_USER_ADDRESS	0
+#define FIRST_USER_ADDRESS	0UL
 
 #define pte_ERROR(e) \
 	pr_err("%s:%d: bad pte %llx.\n", __FILE__, __LINE__, \
@@ -178,12 +178,11 @@ static inline unsigned long pte_update(pte_t *p,
 	andc	%1,%0,%5\n\
 	or	%1,%1,%6\n\
 	/* 0x200 == Extended encoding, bit 22 */ \
-	/* Bit 22 has to be 1 if neither _PAGE_USER nor _PAGE_RW are set */ \
-	rlwimi	%1,%1,32-2,0x200\n /* get _PAGE_USER */ \
-	rlwinm	%3,%1,32-1,0x200\n /* get _PAGE_RW */ \
-	or	%1,%3,%1\n\
-	xori	%1,%1,0x200\n"
-"	stwcx.	%1,0,%4\n\
+	/* Bit 22 has to be 1 when _PAGE_USER is unset and _PAGE_RO is set */ \
+	rlwimi	%1,%1,32-1,0x200\n /* get _PAGE_RO */ \
+	rlwinm	%3,%1,32-2,0x200\n /* get _PAGE_USER */ \
+	andc	%1,%1,%3\n\
+	stwcx.	%1,0,%4\n\
 	bne-	1b"
 	: "=&r" (old), "=&r" (tmp), "=m" (*p), "=&r" (tmp2)
 	: "r" (p), "r" (clr), "r" (set), "m" (*p)
@@ -333,8 +332,8 @@ static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry)
 /*
  * Encode and decode a swap entry.
  * Note that the bits we use in a PTE for representing a swap entry
- * must not include the _PAGE_PRESENT bit, the _PAGE_FILE bit, or the
- *_PAGE_HASHPTE bit (if used).  -- paulus
+ * must not include the _PAGE_PRESENT bit or the _PAGE_HASHPTE bit (if used).
+ *   -- paulus
  */
 #define __swp_type(entry)		((entry).val & 0x1f)
 #define __swp_offset(entry)		((entry).val >> 5)
