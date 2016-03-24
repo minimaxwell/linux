@@ -8,7 +8,7 @@
 
 / {
 	model = "MCR3000";
-	compatible = "fsl,mcr3000";
+	compatible = "fsl,mcr3000", "fsl,base";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -382,9 +382,10 @@
 				#size-cells = <1>;
 				ranges = <0x0 0x2000 0x2000>;
 
+				/* conserver les 4 premiers Kbytes pour QMC */
 				data@0 {
 					compatible = "fsl,cpm-muram-data";
-					reg = <0x0 0x1c00>; // pas correct, devrait etre 0x1c00 mais pb driver spi
+					reg = <0x1000 0x0bc0>; // pas correct, devrait etre 0x0c00 mais pb driver spi
 				};
 			};
 
@@ -454,6 +455,15 @@
 				fsl,cpm-command = <0xd0>;
 			};
 
+			tsa: tsa@9c0 {
+				compatible = "fsl,mpc866-tsa", "fsl,cpm1-tsa";
+				reg = <0x9c0 0x440 0x930 0x20>;
+				/* parametres possible : none, SCC4 */
+				scc_qmc_mcr = "SCC4";
+				/* parametre enregistrement : TS sup 0 a 16 */
+				ts_enreg = <16>;
+			};
+
 			smc1: serial@a80 {
 				device_type = "serial";
 				compatible = "fsl,mpc866-smc-uart", "fsl,cpm1-smc-uart";
@@ -501,6 +511,16 @@
 				interrupts = <27>;
 				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-brg = <4>;
+				fsl,cpm-command = <0xc0>;
+			};
+
+			scc4q: qmc@a60 {
+				device_type = "qmc";
+				qmc_name = "scc4";
+				compatible = "fsl,mpc866-scc-qmc", "fsl,cpm1-scc-qmc";
+				reg = <0xa60 0x20 0x3f00 0xb0 0x2000 0x1000>;
+				interrupts = <27>;
+				interrupt-parent = <&CPM_PIC>;
 				fsl,cpm-command = <0xc0>;
 			};
 
