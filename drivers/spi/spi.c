@@ -1506,6 +1506,9 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 		}
 	}
 
+	/* Bits per word */
+	if (!of_property_read_u32(nc, "spi-bits", &value))
+		spi->bits_per_word = value;
 	/* Device speed */
 	rc = of_property_read_u32(nc, "spi-max-frequency", &value);
 	if (rc) {
