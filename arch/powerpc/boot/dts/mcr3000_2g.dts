@@ -800,6 +800,7 @@
 			fsl,exec-units-mask = <0x4c>;
 			fsl,descriptor-types-mask = <0x05000155>;
 		};
+	};
 
 	chosen {
 		linux,stdout-path = &smc1;
