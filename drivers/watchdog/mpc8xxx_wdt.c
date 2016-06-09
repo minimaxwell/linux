@@ -145,8 +145,7 @@ static int mpc8xxx_wdt_ping(struct watchdog_device *w)
 		container_of(w, struct mpc8xxx_wdt_ddata, wdd);
 
 	wdt_last_ping = jiffies;
-	mpc8xxx_wdt_keepalive(ddata);
-	mod_timer(&ddata->timer, jiffies + WDT_INTERVAL);
+	mod_timer(&ddata->timer, jiffies);
 	return 0;
 }
 
