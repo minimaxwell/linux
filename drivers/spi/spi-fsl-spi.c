@@ -409,7 +409,6 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 	}
 
 	m->status = status;
-	spi_finalize_current_message(master);
 
 	if (status || !cs_change) {
 		ndelay(nsecs);
@@ -422,6 +421,7 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 		status = fsl_spi_setup_transfer(spi, &t);
 		status = fsl_spi_bufs(spi, &t, 0);
 	}
+	spi_finalize_current_message(master);
 
 	fsl_spi_setup_transfer(spi, NULL);
 	return 0;
