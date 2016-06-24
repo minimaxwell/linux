@@ -881,18 +881,9 @@ void phy_state_machine(struct work_struct *work)
 			break;
 
 		/* If AN is done, we're running */
-		if (err > 0) {
-			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1 || isMCR2G) {
-				if (active_phy == 0 && phydev->addr != 1)
-					active_phy = phydev->addr;
-				phydev->state = PHY_RUNNING;
-				netif_carrier_on(phydev->attached_dev);
-				phydev->adjust_link(phydev->attached_dev);
-			} else {
-				phydev->state = PHY_DOUBLE_ATTACHEMENT;
-			}
-
-		} else if (0 == phydev->link_timeout--)
+		if (err > 0)
+			phydev->state = PHY_CHANGELINK;
+		else if (0 == phydev->link_timeout--)
 			needs_aneg = true;
 		break;
 	case PHY_NOLINK:
