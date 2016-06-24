@@ -21,7 +21,7 @@
 
 #define MTU_MAX	(HDLC_MAX_MTU + 4) /* space for CRC and status */
 
-static struct pef2256_dev_priv *priv = NULL;
+static struct pef2256_dev_priv *priv;
 
 /* helper function - Read a register */
 static u8 pef2256_r8(u32 offset)
@@ -39,6 +39,7 @@ static void pef2256_w8(u32 offset, u8 val)
 static void pef2256_c8(u32 offset, u8 mask)
 {
 	u8 val = pef2256_r8(offset);
+
 	iowrite8(val & ~mask, priv->ioaddr + offset);
 }
 
@@ -46,6 +47,7 @@ static void pef2256_c8(u32 offset, u8 mask)
 static void pef2256_s8(u32 offset, u8 mask)
 {
 	u8 val = pef2256_r8(offset);
+
 	iowrite8(val | mask, priv->ioaddr + offset);
 }
 
@@ -263,18 +265,15 @@ static void init_falc(void)
 	else if (priv->channel_phase == CHANNEL_PHASE_3) {
 		pef2256_s8(SIC2, SIC2_SICS0);
 		pef2256_s8(SIC2, SIC2_SICS1);
-	}
-	else if (priv->channel_phase == CHANNEL_PHASE_4)
+	} else if (priv->channel_phase == CHANNEL_PHASE_4)
 		pef2256_s8(SIC2, SIC2_SICS2);
 	else if (priv->channel_phase == CHANNEL_PHASE_5) {
 		pef2256_s8(SIC2, SIC2_SICS0);
 		pef2256_s8(SIC2, SIC2_SICS2);
-	}
-	else if (priv->channel_phase == CHANNEL_PHASE_6) {
+	} else if (priv->channel_phase == CHANNEL_PHASE_6) {
 		pef2256_s8(SIC2, SIC2_SICS1);
 		pef2256_s8(SIC2, SIC2_SICS2);
-	}
-	else if (priv->channel_phase == CHANNEL_PHASE_7) {
+	} else if (priv->channel_phase == CHANNEL_PHASE_7) {
 		pef2256_s8(SIC2, SIC2_SICS0);
 		pef2256_s8(SIC2, SIC2_SICS1);
 		pef2256_s8(SIC2, SIC2_SICS2);
