@@ -901,7 +901,7 @@ CONFIG_HDLC_CISCO=y
 #
 # X.25/LAPB support is disabled
 #
-CONFIG_PEF2256=y
+# CONFIG_PEF2256 is not set
 # CONFIG_DLCI is not set
 # CONFIG_ISDN is not set
 
