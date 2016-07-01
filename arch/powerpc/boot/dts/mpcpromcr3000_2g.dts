@@ -13,7 +13,7 @@
 
 / {
 	model = "MCR3000_2G";
-	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB", "fsl,base";
+	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB", "fsl,base", "fsl,mpcpro";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -54,6 +54,7 @@
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
 			  2 0x0 0x92000000 0x00008000	// Eth Face avant
+			  3 0x0 0x83400000 0x00010000	// DPRAM (DSP)
 			  4 0x0 0x80000000 0x10000000	// Periphs
 			  5 0x0 0x90000000 0x10000000	// FPGA-MPCPRO
 			  6 0x0 0x81800000 0x00008000	// mezzanine
@@ -118,6 +119,13 @@
 			interrupts = <21 0x8>;
 			interrupt-parent = <&ipic>;
 			local-mac-address = [ 08 00 51 20 4D AF ];
+		};
+
+		fpga-mpcpro@5,0000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-mpcpro";
+			reg = <5 0x0 0x44>;
 		};
 		
 		fpgaf-info@4,0000002 { // Driver KNL
@@ -249,7 +257,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <23 1>;
+				interrupts = <23 0>;
 				interrupt-parent = <&ipic>;
 				reg = <0x0 0x90>;	// Mappage registres FPGAF
 				compatible = "s3k,mcr3000_2g-pic";
@@ -297,17 +305,86 @@
 			compatible = "s3k,mcr3000-mtsl";
 			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
 		};
+
+		codec {
+			compatible = "s3k,mcr3000-codec";
+		};
+
+		mcs {
+			compatible = "s3k,mcr3000-mcs";
+		};
+
+		alarmes {
+			compatible = "s3k,mcr3000-alarmes";
+			gpios = <&alin 13 1 	// ACQ_ALRM
+				&alout 15 1	// ALRM_MAJ
+				&alout 14 1>;	// ALRM_MIN
+		};
+		
+		dpram@3,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-dpram";
+			reg = <3 0x0 0x10000>;
+			interrupts = <18 0>;
+			interrupt-parent = <&ipic>;
+		};
+
+		dsp@7,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-dsp";
+			reg = <7 0x0 0x0008 5 0x100 0x02>;
+			interrupts = <0 1>;
+			interrupt-parent = <&FPGAF_PIC>;
+		};
+
+		msg-dsp {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-msg-dsp";
+			reg = <3 0x0 0x300>;
+			interrupts = <0 1>;
+			interrupt-parent = <&FPGAF_PIC>;
+		};
 		
 		fpga-loader@4,100009c {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
-			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
-			gpios = <&FPGA_CS0 1 1			// INITFPGA
-				 &qe_pio_a 11 1
-				 &rst 13 1 >;			// RST_FPGA
+			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;	/* Version FPGA ; NULL ; RSERIE */
+			gpios = <&FPGA_CS0 1 1		/* INIT FPGA */
+				 &qe_pio_a 11 1		/* DONE FPGA */
+				 &rst 13 1 >;		/* RST FPGA */
 		};
 		
+		c4e1@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-c4e1";
+			reg = <6 0x100 0x00FF 6 0x200 0x00FF 6 0x300 0x00FF 6 0x400 0x00FF 6 0x500 0x00FF>;
+			interrupts = <22 0>;
+			interrupt-parent = <&ipic>;
+		};
+
+		fpga-loader@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-mezz-loader";
+			reg = <6 0x500 2>; 		/* Version FPGA Mezz */
+			gpios = <&FPGA_CS1 1 1		/* INIT Mezz */
+				&qe_pio_b 11 1		/* DONE Mezz */
+				&rst 9 1 >;		/* RST Mezz */
+		};
+
+		cag@6,0 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-cag";
+			reg = <6 0x0 0x0020>;
+			interrupts = <22 0>;
+			interrupt-parent = <&ipic>;
+		};
 	};
 
 	soc8321@b0000000 {
@@ -517,11 +594,29 @@
 			compatible = "fsl,qe-muram", "fsl,cpm-muram";
 			ranges = <0x0 0x00010000 0x00004000>;
 
+			/* conserver les 4 premiers Kbytes pour QMC */
 			data-only@0 {
 				compatible = "fsl,qe-muram-data",
 					     "fsl,cpm-muram-data";
-				reg = <0x0 0x4000>;
+				reg = <0x1000 0x3000>;
 			};
+		};
+
+		tsa: tsa@9c0 {
+			compatible = "fsl,qe-tsa";
+			reg = <0x9c0 0x1>;	/* necessaire mais non utilise */
+			/* parametres possible : none, UCC4 */
+			ucc_qmc_mcr = "UCC4";
+			/* parametre enregistrement : TS sup 0 a 16 */
+			ts_enreg = <16>;
+		};
+
+		ucc4q: qmc@a20 {
+			device_type = "qmc";
+			compatible = "fsl,qe-ucc-qmc";
+			reg = <0x3200 0x1 0x9000 0xff 0x1000 0x1000>;
+			interrupts = <35>;
+			interrupt-parent = <&qeic>;
 		};
 
 		spi@4c0 {
@@ -620,7 +715,7 @@
 				at25,addr-mode = <2>;
 				at25,page-size = <32>;
 			};
-	};
+		};
 
 //		spi@500 {
 //			cell-index = <1>;
@@ -631,63 +726,63 @@
 //			mode = "cpu";
 //		};
 
-	eth0: ucc@3000 {
-		device_type = "network";
-		compatible = "ucc_geth";
-		cell-index = <2>;
-		reg = <0x3000 0x200>;
-		interrupts = <33>;
-		interrupt-parent = <&qeic>;
-		local-mac-address = [ 00 00 00 00 00 00 ];
-		rx-clock-name = "clk17";
-		tx-clock-name = "clk17";
-		phy-handle = <&phy1>;
-		pio-handle = <&ucc2pio>;
-		phy-connection-type = "rmii";
-	};
-
-	eth1: ucc@2200 {
-		device_type = "network";
-		compatible = "ucc_geth";
-		cell-index = <3>;
-		reg = <0x2200 0x200>;
-		interrupts = <34>;
-		interrupt-parent = <&qeic>;
-		local-mac-address = [ 00 00 00 00 00 00 ];
-		rx-clock-name = "clk12";
-		tx-clock-name = "clk12";
-		phy-handle = <&phy2>;
-		pio-handle = <&ucc3pio>;
-		phy-connection-type = "rmii";
-	};
-
-	mdio@3120 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		reg = <0x3120 0x18>;
-		compatible = "fsl,ucc-mdio";
-
-		phy1:ethernet-phy@1 {
-			interrupt-parent = <&ipic>;
-			reg = <0x1>;
-			device_type = "ethernet-phy";
+		eth0: ucc@3000 {
+			device_type = "network";
+			compatible = "ucc_geth";
+			cell-index = <2>;
+			reg = <0x3000 0x200>;
+			interrupts = <33>;
+			interrupt-parent = <&qeic>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
+			rx-clock-name = "clk17";
+			tx-clock-name = "clk17";
+			phy-handle = <&phy1>;
+			pio-handle = <&ucc2pio>;
+			phy-connection-type = "rmii";
 		};
-		phy2:ethernet-phy@2 {
+
+		eth1: ucc@2200 {
+			device_type = "network";
+			compatible = "ucc_geth";
+			cell-index = <3>;
+			reg = <0x2200 0x200>;
+			interrupts = <34>;
+			interrupt-parent = <&qeic>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
+			rx-clock-name = "clk12";
+			tx-clock-name = "clk12";
+			phy-handle = <&phy2>;
+			pio-handle = <&ucc3pio>;
+			phy-connection-type = "rmii";
+		};
+
+		mdio@3120 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x3120 0x18>;
+			compatible = "fsl,ucc-mdio";
+
+			phy1:ethernet-phy@1 {
+				interrupt-parent = <&ipic>;
+				reg = <0x1>;
+				device_type = "ethernet-phy";
+			};
+			phy2:ethernet-phy@2 {
+				interrupt-parent = <&ipic>;
+				reg = <0x2>;	
+				device_type = "ethernet-phy";
+			};
+		};
+
+		qeic:interrupt-controller@80 {
+			interrupt-controller;
+			compatible = "fsl,qe-ic";
+			#address-cells = <0>;
+			#interrupt-cells = <1>;
+			reg = <0x80 0x80>;
+			big-endian;
+			interrupts = <32 0x8 33 0x8>; //high:32 low:33
 			interrupt-parent = <&ipic>;
-			reg = <0x2>;	
-			device_type = "ethernet-phy";
 		};
 	};
-
-	qeic:interrupt-controller@80 {
-		interrupt-controller;
-		compatible = "fsl,qe-ic";
-		#address-cells = <0>;
-		#interrupt-cells = <1>;
-		reg = <0x80 0x80>;
-		big-endian;
-		interrupts = <32 0x8 33 0x8>; //high:32 low:33
-		interrupt-parent = <&ipic>;
-	};
-};
 };
