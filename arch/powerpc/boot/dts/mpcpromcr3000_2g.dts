@@ -278,7 +278,7 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-e1";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <20 1>;
+			interrupts = <20 0>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -291,12 +291,12 @@
 			interrupt-parent = <&ipic>;
 		};
 		
-//		mtsl@4,3000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-mtsl";
-//			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
-//		};
+		mtsl@4,3000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-mtsl";
+			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
+		};
 		
 		fpga-loader@4,100009c {
 			#address-cells = <1>;
@@ -529,69 +529,74 @@
 			reg = <0x4c0 0x40>;
 			interrupts = <2>;
 			interrupt-parent = <&qeic>;
-			     /* port  pin cs-high(?) */
-			pios =  <3     3   0		/* EEPROM MPCPRO */
-				 2     3   0		/* TEMP MPCPRO */
-				 2     2   0		/* EEPROM carte base */
-				 2     5   0		/* TEMP carte base */
-				 2     27  0		/* POT1 */
-				 0     29  0		/* POT2 */
-				 2     28  0		/* CS_CODEC_F */
-				 1     16  0>;		/* CS_CODEC_R */
-				
-				 //&qe_pio_d 3 1	/* SICOFI 1 */
-				 //&qe_pio_ 8 1		/* SICOFI 2 */
-				 //&qe_pio_ 6 1		/* SICOFI 3 */
-				 //&FAV_CS_SPI 1 1	/* FAV SPI */
-				 //&FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 			mode = "cpu";
+			     /* port  pin assignment */
+			pios =  <2     27  0		/* POT1 */
+				 2     5   0		/* TEMP carte base */
+				 2     28  0		/* CS_CODEC_F/ARCOFI */
+				 2     2   0		/* EEPROM carte base */
 
-			eeprom@1 {
-				compatible = "atmel,at25", "cs,eeprom";
+				 0     29  0		/* POT2 */
+				 1     16  0		/* CS_CODEC_R/SICOFI */
+				 2     3   0		/* TEMP MPCPRO */
+				 3     3   0>;		/* EEPROM MPCPRO */
+
+			gpios = <&FPGA_CS0 0 1		/* FPGA Radio */
+				 &FPGA_CS1 0 1>;	/* FPGA Mezz */
+
+			pot1@0 {
+				compatible = "cs,mcr3000-pot1";
 				spi-max-frequency = <1000000>;
 				reg = <0>;
 				spi-cs-high;
-				at25,byte-len = <1024>;
-				at25,addr-mode = <2>;
-				at25,page-size = <32>;
 			};
-			lm74@2 {
+			lm74@1 {
 				compatible = "ns,lm74";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 				spi-cs-high;
 			};
+			arcofi@2 {
+				compatible = "infineon,mcr3000-arcofi";
+				spi-max-frequency = <1000000>;
+				reg = <2>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+			};
 			eeprom@3 {
 				compatible = "atmel,at25", "cs,eeprom";
 				spi-max-frequency = <1000000>;
-				reg = <2>;
+				reg = <3>;
 				spi-cs-high;
 				at25,byte-len = <1024>;
 				at25,addr-mode = <2>;
 				at25,page-size = <32>;
 			};
-			lm74@4 {
-				compatible = "ns,lm74";
-				spi-max-frequency = <1000000>;
-				reg = <3>;
-				spi-cs-high;
-			};
-			pot1@5 {
-				compatible = "cs,mcr3000-pot1";
+			pot2@4 {
+				compatible = "cs,mcr3000-pot2";
 				spi-max-frequency = <1000000>;
 				reg = <4>;
 				spi-cs-high;
 			};
-			pot2@6 {
-				compatible = "cs,mcr3000-pot2";
+			sicofi@5 {
+				compatible = "infineon,mcr3000-sicofi";
 				spi-max-frequency = <1000000>;
 				reg = <5>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+			};
+			lm74@6 {
+				compatible = "ns,lm74";
+				spi-max-frequency = <1000000>;
+				reg = <6>;
 				spi-cs-high;
 			};
 			fpga-loader@7 {
 				compatible = "s3k,mcr3000-fpga-loader";
 				spi-max-frequency = <10000000>;
-				reg = <6>;
+				reg = <7>;
 				spi-cs-high;
 				loader = "mcr";
 				spi-bits = <16>;
@@ -599,10 +604,19 @@
 			mezz@8 {
 				compatible = "s3k,mcr3000-fpga-loader";
 				spi-max-frequency = <10000000>;
-				reg = <7>;
+				reg = <8>;
 				spi-cs-high;
 				loader = "mezz";
 				spi-bits = <16>;
+			};
+			eeprom@9 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <9>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
 			};
 	};
 

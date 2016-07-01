@@ -131,13 +131,9 @@ void __init mpc83xx_ipic_and_qe_init_IRQ(void)
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
 			irq = fpgaf_pic_init();
-			if (irq == NO_IRQ)
-				printk("@@@ failure !\n");
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpgaf_cascade);
 			irq = fpga_pic_init();
-			if (irq == NO_IRQ)
-				printk("@@@ failure !\n");
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpga_cascade);
 		}
