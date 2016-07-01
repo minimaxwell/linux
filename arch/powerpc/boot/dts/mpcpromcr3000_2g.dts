@@ -119,7 +119,7 @@
 			interrupt-parent = <&ipic>;
 			local-mac-address = [ 08 00 51 20 4D AF ];
 		};
-
+		
 		fpgaf-info@4,0000002 { // Driver KNL
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -255,7 +255,7 @@
 				compatible = "s3k,mcr3000_2g-pic";
 			};
 		};
-			
+		
 		fpga@4,1000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -281,7 +281,7 @@
 			interrupts = <20 0>;
 			interrupt-parent = <&ipic>;
 		};
-		
+
 		e1-wan@4,2000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -304,8 +304,8 @@
 			compatible = "s3k,mcr3000-fpga-mcr-loader";
 			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
+				 &qe_pio_a 11 1
 				 &rst 13 1 >;			// RST_FPGA
-			pios = <0 11 0>;				// DONEFPGA
 		};
 		
 	};
@@ -416,16 +416,16 @@
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x0 0x1>;	// necessaire mais non utilise
-			pios = <2 21 0		// PROGFPGA
-				1 23 0>;	// INITFPGA
+			gpios = <&qe_pio_c 21 1		//PROG
+				 &qe_pio_b 23 1>; 	//INIT
 		};
 		FPGA_CS1: gpio-controller@dummy1 {	//FPGA Mezz
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x1 0x1>; /* necessaire mais non utilise */
-			pios = <1 29 0		// PROG
-				1 15 0>;	// INIT
+			gpios = <&qe_pio_b 29 1		//PROG
+				 &qe_pio_b 15 1>; 	//INIT
 		};
 
 
@@ -433,7 +433,10 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			reg = <0x1400 0x100>;
-			ranges = <3 0x1448 0x18>;
+			ranges = < 0 0 0xb0001400 0x18
+				   1 0 0xb0001418 0x18
+				   2 0 0xb0001430 0x18
+				   3 0 0xb0001448 0x18>;
 			compatible = "fsl,mpc8323-qe-pario";
 			device_type = "par_io";
 			num-ports = <7>;
@@ -530,19 +533,18 @@
 			interrupts = <2>;
 			interrupt-parent = <&qeic>;
 			mode = "cpu";
-			     /* port  pin assignment */
-			pios =  <2     27  0		/* POT1 */
-				 2     5   0		/* TEMP carte base */
-				 2     28  0		/* CS_CODEC_F/ARCOFI */
-				 2     2   0		/* EEPROM carte base */
+			gpios = <&qe_pio_c  27  1		/* POT1 */
+				 &qe_pio_c   5  1		/* TEMP carte base */
+				 &qe_pio_c  28  1		/* CS_CODEC_F/ARCOFI */
+				 &qe_pio_c   2  1		/* EEPROM carte base */
 
-				 0     29  0		/* POT2 */
-				 1     16  0		/* CS_CODEC_R/SICOFI */
-				 2     3   0		/* TEMP MPCPRO */
-				 3     3   0>;		/* EEPROM MPCPRO */
-
-			gpios = <&FPGA_CS0 0 1		/* FPGA Radio */
-				 &FPGA_CS1 0 1>;	/* FPGA Mezz */
+				 &qe_pio_a  29  1		/* POT2 */
+				 &qe_pio_b  16  1		/* CS_CODEC_R/SICOFI */
+				 &qe_pio_c   3  1		/* TEMP MPCPRO */
+				 &FPGA_CS0   0  1		/* FPGA Radio */
+				 &FPGA_CS1   0  1		/* FPGA Mezz */
+				 &qe_pio_d   3  1>;		/* EEPROM MPCPRO */
+				
 
 			pot1@0 {
 				compatible = "cs,mcr3000-pot1";

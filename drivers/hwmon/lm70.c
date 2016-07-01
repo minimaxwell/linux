@@ -46,7 +46,6 @@
 #define LM70_CHIP_LM71		2	/* NS LM71 */
 #define LM70_CHIP_LM74		3	/* NS LM74 */
 
-extern int par_io_data_set(u8 port, u8 pin, u8 val);
 
 struct lm70 {
 	struct spi_device *spi;

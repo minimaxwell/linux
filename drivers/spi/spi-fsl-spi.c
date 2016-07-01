@@ -48,12 +48,6 @@
 #define TYPE_FSL	0
 #define TYPE_GRLIB	1
 
-extern int par_io_data_set(u8 port, u8 pin, u8 val);
-extern int par_io_data_get(u8 port, u8 pin);
-extern int par_io_data_get_port(u8 port);
-extern int par_io_config_pin(u8 port, u8 pin, int dir, int open_drain, int assignment, int has_irq);
-extern int of_get_par_io(struct device_node *np, struct qe_pio *pio);
-extern int of_par_io_count(struct device_node *np);
 
 static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events);
 
@@ -739,17 +733,9 @@ static void fsl_spi_cs_control(struct spi_device *spi, bool on)
 	struct mpc8xxx_spi_probe_info *pinfo = to_of_pinfo(pdata);
 	u16 cs = spi->chip_select;
 	int gpio = pinfo->gpios[cs];
-	struct qe_pio qe_pio = pinfo->pios[cs];
 	bool alow = pinfo->alow_flags[cs];
 
-#ifdef CONFIG_MPC832x_RDB 
-	if (cs != 7 && cs != 8)
-		par_io_data_set(qe_pio.port, qe_pio.pin, on ^ alow);
-	else	
-		gpio_set_value(gpio, on ^ alow);
-#else
 	gpio_set_value(gpio, on ^ alow);
-#endif
 }
 
 static int of_fsl_spi_get_chipselects(struct device *dev)
@@ -761,112 +747,6 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	int i = 0;
 	int ret;
 	
-#ifdef CONFIG_MPC832x_RDB 
-	int npios;
-	struct qe_pio *pios;
-	/*
-	 * we want to configure par_io as if they were gpios
-	 * 7 out 9 old gpios are now pios, but gpios 7 and 8 
-	 * are still gpios ; so we'll need to "skip" pios 7 
-	 * and 8, and still handle them as gpios
-	 */
-
-	ngpios = of_gpio_count(np);
-	npios = of_par_io_count(np);
-	if (ngpios <= 0) {
-		/*
-		 * SPI w/o chip-select line. One SPI device is still permitted
-		 * though.
-		 */
-		pdata->max_chipselect = 1;
-		return 0;
-	}
-	if (npios <= 0) {
-		/*
-		 * SPI w/o chip-select line. One SPI device is still permitted
-		 * though.
-		 */
-		pdata->max_chipselect = 1;
-		return 0;
-	}
-
-	pinfo->gpios = kmalloc((ngpios + npios) * sizeof(*pinfo->gpios), GFP_KERNEL);
-	if (!pinfo->gpios)
-		return -ENOMEM;
-	memset(pinfo->gpios, -1, (ngpios + npios) * sizeof(*pinfo->gpios));
-
-	pinfo->alow_flags = kzalloc((ngpios + npios) * sizeof(*pinfo->alow_flags),
-				    GFP_KERNEL);
-	if (!pinfo->alow_flags) {
-		ret = -ENOMEM;
-		goto err_alloc_flags;
-	}
-
-	pios = kmalloc((npios + ngpios) * sizeof(struct qe_pio), GFP_KERNEL);
-	if (!pios)
-		return -ENOMEM;
-	
-	ret = of_get_par_io(np, pios);
-	if (ret)
-		goto err_loop;
-	
-	/*
-	 *  pios[7] should be should be set as pios[9] since gpios 7 and
- 	 *  8 are still handled as gpios
- 	 */
-	pios[ngpios + npios - 1] = pios[npios - 1];
-
-	for (; i < npios + ngpios; i++) {
-		/* skip pios 7 and 8 */
-		if (i == npios - 1)
-			i +=2;
-		pinfo->pios = pios;
-		/* args for par_io_config_pin : 			*/
-		/* port, pin, dir, open_drain, assignment, has irq 	*/
-		ret = par_io_config_pin(pinfo->pios[i].port,
-					pinfo->pios[i].pin,
-					QE_PIO_DIR_OUT, 0, 	
-					pinfo->pios[i].assignment, 0);
-		if (ret) {
-			dev_err(dev, "can't set output direction for pio "
-				"#%d: %d\n", i, ret);
-			goto err_loop;
-		}
-		pinfo->alow_flags[i] = 1 & OF_GPIO_ACTIVE_LOW;
-	}
-
-	for (i = 0; i < ngpios; i++) {
-		int gpio;
-		enum of_gpio_flags flags;
-
-		gpio = of_get_gpio_flags(np, i, &flags);
-		if (!gpio_is_valid(gpio)) {
-			dev_err(dev, "invalid gpio #%d: %d\n", i, gpio);
-			ret = gpio;
-			goto err_loop;
-		}
-
-		ret = gpio_request(gpio, dev_name(dev));
-		if (ret) {
-			dev_err(dev, "can't request gpio #%d: %d\n", i, ret);
-			goto err_loop;
-		}
-
-		pinfo->gpios[i + npios - 1] = gpio;
-		pinfo->alow_flags[i + npios - 1] = flags & OF_GPIO_ACTIVE_LOW;
-
-		ret = gpio_direction_output(pinfo->gpios[i + npios - 1],
-					    pinfo->alow_flags[i + npios - 1]);
-		if (ret) {
-			dev_err(dev, "can't set output direction for gpio "
-				"#%d: %d\n", i + ngpios - 1, ret);
-			goto err_loop;
-		}
-	}
-
-	pdata->max_chipselect = ngpios + npios;
-#else
-
 	ngpios = of_gpio_count(np);
 	if (ngpios <= 0) {
 		/*
@@ -919,7 +799,6 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	}
 
 	pdata->max_chipselect = ngpios;
-#endif
 
 	pdata->cs_control = fsl_spi_cs_control;
 
