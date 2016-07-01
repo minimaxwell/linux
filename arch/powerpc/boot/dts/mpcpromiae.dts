@@ -292,6 +292,7 @@
 			#size-cells = <1>;
 			compatible = "lantiq,pef2256";
 			reg = <4 0x2000000 0xFF>;
+			data-rate = <4>;
 			interrupts = <8 1>;
 			interrupt-parent = <&ipic>;
 		};
