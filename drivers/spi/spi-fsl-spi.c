@@ -52,7 +52,7 @@ extern int par_io_data_set(u8 port, u8 pin, u8 val);
 extern int par_io_data_get(u8 port, u8 pin);
 extern int par_io_data_get_port(u8 port);
 extern int par_io_config_pin(u8 port, u8 pin, int dir, int open_drain, int assignment, int has_irq);
-extern int of_get_par_io(struct device_node *np, struct qe_pio *pio, bool *flags);
+extern int of_get_par_io(struct device_node *np, struct qe_pio *pio);
 extern int of_par_io_count(struct device_node *np);
 
 static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events);
@@ -759,7 +759,6 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 
 #ifdef CONFIG_MPC832x_RDB 
 	struct qe_pio *pios;
-	bool *flags;
 	
 	/* we want to configure par_io as if they were gpios */
 
@@ -776,26 +775,26 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	pios = kmalloc(ngpios * sizeof(struct qe_pio), GFP_KERNEL);
 	if (!pios)
 		return -ENOMEM;
-	flags = kzalloc(ngpios * sizeof(bool), GFP_KERNEL);
-	if (!flags) {
+	pinfo->alow_flags = kzalloc(ngpios * sizeof(*pinfo->alow_flags),
+				    GFP_KERNEL);
+	if (!pinfo->alow_flags) {
 		ret = -ENOMEM;
 		goto err_alloc_flags;
 	}
 	
-
-	ret = of_get_par_io(np, pios, flags);
+	ret = of_get_par_io(np, pios);
 	if (ret)
 		goto err_loop;
 
 	for (; i < ngpios; i++) {
 		pinfo->pios = pios;
-		pinfo->alow_flags = flags;
+		pinfo->alow_flags[i] = 0 & OF_GPIO_ACTIVE_LOW;
 		/* args for par_io_config_pin : 			*/
 		/* port, pin, dir, open_drain, assignment, has irq 	*/
 		ret = par_io_config_pin(pinfo->pios[i].port,
 					pinfo->pios[i].pin,
 					QE_PIO_DIR_OUT, 0, 	
-					pinfo->alow_flags[i], 0);
+					pinfo->pios[i].assignment, 0);
 		if (ret) {
 			dev_err(dev, "can't set output direction for pio "
 				"#%d: %d\n", i, ret);

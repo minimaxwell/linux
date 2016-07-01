@@ -146,7 +146,7 @@ int of_par_io_count(struct device_node *np)
 EXPORT_SYMBOL(of_par_io_count);
 
 /* get par_io instead of gpios in dtb */
-int of_get_par_io(struct device_node *np, struct qe_pio *pios, bool *flags)
+int of_get_par_io(struct device_node *np, struct qe_pio *pios)
 {
 	const int *pio_map;
 	int pio_map_len;
@@ -166,10 +166,10 @@ int of_get_par_io(struct device_node *np, struct qe_pio *pios, bool *flags)
 	while (pio_map_len > 0) {
 		pios[i].port = pio_map[0];
 		pios[i].pin = pio_map[1];
-		flags[i] = pio_map[2];
+		pios[i].assignment = pio_map[2];
 
-		//printk(KERN_ERR"@@@ pio : \n port %d, pin %d, flag %d\n",
-		//	pios[i].port, pios[i].pin, flags[i]);
+		//printk(KERN_ERR"@@@ pio : \n port %d, pin %d, assignment %d\n",
+		//	pios[i].port, pios[i].pin, pios[i].assignment);
 		pio_map += 3;
 		pio_map_len -= 3;
 		i++;

@@ -91,7 +91,7 @@
 			};
 			partition@400000 {
 				label = "kernel";
-				reg = <0x400000 0x300000>;
+				reg = <0x400000 0x400000>;
 			};
 		};
 
@@ -291,22 +291,22 @@
 			interrupt-parent = <&ipic>;
 		};
 		
-		mtsl@4,3000000 {
-			#address-cells = <1>;
-			#size-cells = <1>;
-			compatible = "s3k,mcr3000-mtsl";
-			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
-		};
-		
-//		fpga-loader@4,100009c {
+//		mtsl@4,3000000 {
 //			#address-cells = <1>;
 //			#size-cells = <1>;
-//			compatible = "s3k,mcr3000-fpga-mcr-loader";
-//			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
-//			gpios = <&FPGA_CS0 1 1			// INITFPGA
-//				 &CPM1_PIO_E 23 1		// DONEFPGA
-//				 &rst 13 1 >;			// RST_FPGA
+//			compatible = "s3k,mcr3000-mtsl";
+//			reg = <4 0x3000000 0xFFFF 4 0x0000040 0x02>;
 //		};
+		
+		fpga-loader@4,100009c {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-mcr-loader";
+			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
+			gpios = <&FPGA_CS0 1 1			// INITFPGA
+				 &rst 13 1 >;			// RST_FPGA
+			pio = <0 11 0>;				// DONEFPGA
+		};
 		
 	};
 
@@ -416,16 +416,16 @@
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x0 0x1>;	// necessaire mais non utilise
-			pios = <2 21 1		// PROGFPGA
-				1 23 1>;	// INITFPGA
+			pios = <2 21 0		// PROGFPGA
+				1 23 0>;	// INITFPGA
 		};
 		FPGA_CS1: gpio-controller@dummy1 {	//FPGA Mezz
 			#gpio-cells = <2>;
 			compatible = "s3k,mcr3000-fpga-cs";
 			gpio-controller;
 			reg = <0x1 0x1>; /* necessaire mais non utilise */
-			pios = <1 29 1		// PROG
-				1 15 1>;	// INIT
+			pios = <1 29 0		// PROG
+				1 15 0>;	// INIT
 		};
 
 
