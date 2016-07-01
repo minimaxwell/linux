@@ -22,6 +22,7 @@
 		ethernet1 = &eth0;
 		serial0 = &serial0;
 		serial1 = &serial1;
+		serial2 = &serial2;
 	};
 
 	cpus {
@@ -112,14 +113,14 @@
 			//};
 		};
 
-		eth2@2,0 {
+/*		eth2@2,0 {
 			compatible = "micrel,ks8851-mll";
 			reg =  <2 0x00 0xff
 				2 0x100 0xff>;
 			interrupts = <21 0x8>;
 			interrupt-parent = <&ipic>;
 			local-mac-address = [ 08 00 51 20 4D AF ];
-		};
+		};*/
 
 		fpga-mpcpro@5,0000000 {
 			#address-cells = <1>;
@@ -581,12 +582,10 @@
 				 */
 					2    0    1      0    2    0  /* TxD5 */
 					2    8    2      0    2    0  /* RxD5 */
+					2   24    0      0    2    0  /* CD */
 
-					2   29    2      0    0    0  /* CTS5 */
-					2   31    1      0    2    0  /* RTS5 */
-
-					2   24    2      0    0    0  /* CD */
-
+					2   29    0      0    2    1  /* CTS5 */
+					2   31    1      0    0    0  /* RTS5 */
 				>;
 			};
 		};
@@ -627,6 +626,7 @@
 			ts_enreg = <16>;
 		};
 
+
 		ucc4q: qmc@a20 {
 			device_type = "qmc";
 			compatible = "fsl,qe-ucc-qmc";
@@ -635,12 +635,12 @@
 			interrupt-parent = <&qeic>;
 		};
 
-		ucc@2400 {
+		serial2: ucc@2400 {
 			device_type = "serial";
 			compatible = "ucc_uart";
 			cell-index = <5>;	/* The UCC number, 1-7*/
 			port-number = <0>;	/* Which ttyQEx device */
-//			soft-uart;		/* We need Soft-UART */
+			soft-uart;		/* We need Soft-UART */
 			reg = <0x2400 0x200>;
 			interrupts = <40>;	/* From Table 18-12 */
 			interrupt-parent = < &qeic >;
@@ -648,8 +648,8 @@
 			 * For Soft-UART, we need to set TX to 1X, which
 			 * means specifying separate clock sources.
 			 */
-			rx-clock-name = "brg5";
-			tx-clock-name = "brg6";
+			rx-clock-name = "brg6";
+			tx-clock-name = "brg5";
 			pio-handle = < &ucc5pio >;
 		};
 
@@ -751,15 +751,6 @@
 			};
 		};
 
-//		spi@500 {
-//			cell-index = <1>;
-//			compatible = "fsl,spi";
-//			reg = <0x500 0x40>;
-//			interrupts = <1>;
-//			interrupt-parent = <&qeic>;
-//			mode = "cpu";
-//		};
-
 		eth0: ucc@3000 {
 			device_type = "network";
 			compatible = "ucc_geth";
@@ -799,11 +790,13 @@
 			phy1:ethernet-phy@1 {
 				interrupt-parent = <&ipic>;
 				reg = <0x1>;
+				interrupts = <17 8>;
 				device_type = "ethernet-phy";
 			};
 			phy2:ethernet-phy@2 {
 				interrupt-parent = <&ipic>;
 				reg = <0x2>;	
+				interrupts = <17 8>;
 				device_type = "ethernet-phy";
 			};
 		};
