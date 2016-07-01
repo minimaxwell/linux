@@ -639,13 +639,14 @@
 			ts_enreg = <16>;
 		};
 
-
 		ucc4q: qmc@a20 {
 			device_type = "qmc";
 			compatible = "fsl,qe-ucc-qmc";
-			reg = <0x3200 0x1 0x9000 0xff 0x1000 0x1000>;
+			cell-index = <4>;	/* The UCC number, 1-7*/
+			reg = <0x3200 0x200 0x10000 0x1000>;
 			interrupts = <35>;
 			interrupt-parent = <&qeic>;
+			clock-name = "clk1";
 		};
 
 		ucc@2000 {
@@ -680,7 +681,7 @@
 			 */
 			rx-clock-name = "brg6";
 			tx-clock-name = "brg5";
-			pio-handle = < &ucc5pio >;
+//			pio-handle = < &ucc5pio >;
 		};
 
 		spi@4c0 {
