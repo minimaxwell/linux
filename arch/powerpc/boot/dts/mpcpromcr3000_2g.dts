@@ -12,7 +12,7 @@
 /dts-v1/;
 
 / {
-	model = "MPCPROMCR3000_2G";
+	model = "MCR3000_2G";
 	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -53,8 +53,8 @@
 		compatible = "simple-bus";
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
-			  2 0x0 0x92000000 0x00008000>;	// Eth Face avant
-			  //2 0x0 0x90000000 0x10000000>;	// Periphs
+			  2 0x0 0x92000000 0x00008000	// Eth Face avant
+			  4 0x0 0x90000000 0x10000000>;	// Periphs
 		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
 
@@ -99,9 +99,13 @@
 			//};
 		};
 
-		eth5@2,0 {
+		eth2@2,0 {
 			compatible = "micrel,ks8851-mll";
-			interrupts = <5>;
+			reg =  <2 0x00 0xff
+				2 0x100 0xff>;
+			interrupts = <21 0x8>;
+			interrupt-parent = <&ipic>;
+			local-mac-address = [ 08 00 51 20 4D AF ];
 		};
 
 		fpgaf-info@4,0000002 { // Driver KNL
@@ -511,72 +515,157 @@
 			};
 		};
 
-		spi@500 {
-			cell-index = <1>;
-			compatible = "fsl,spi";
-			reg = <0x500 0x40>;
-			interrupts = <1>;
-			interrupt-parent = <&qeic>;
-			mode = "cpu";
-		};
-
-		eth0: ucc@3000 {
-			device_type = "network";
-			compatible = "ucc_geth";
-			cell-index = <2>;
-			reg = <0x3000 0x200>;
-			interrupts = <33>;
-			interrupt-parent = <&qeic>;
-			local-mac-address = [ 00 00 00 00 00 00 ];
-			rx-clock-name = "clk17";
-			tx-clock-name = "clk17";
-			phy-handle = <&phy1>;
-			pio-handle = <&ucc2pio>;
-			phy-connection-type = "rmii";
-		};
-
-		eth1: ucc@2200 {
-			device_type = "network";
-			compatible = "ucc_geth";
-			cell-index = <3>;
-			reg = <0x2200 0x200>;
-			interrupts = <34>;
-			interrupt-parent = <&qeic>;
-			local-mac-address = [ 00 00 00 00 00 00 ];
-			rx-clock-name = "clk12";
-			tx-clock-name = "clk12";
-			phy-handle = <&phy2>;
-			pio-handle = <&ucc3pio>;
-			phy-connection-type = "rmii";
-		};
-
-		mdio@3120 {
+		spi@4c0 {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x3120 0x18>;
-			compatible = "fsl,ucc-mdio";
+			cell-index = <0>;
+			compatible = "fsl,spi";
+			reg = <0x4c0 0x40>;
+			interrupts = <2>;
+			interrupt-parent = <&qeic>;
+			     /* port  pin cs-high(?) */
+			pios =  <3     3   0		/* EEPROM MPCPRO */
+				 2     3   0		/* TEMP MPCPRO */
+				 2     2   0		/* EEPROM carte base */
+				 2     5   0		/* TEMP carte base */
+				 2     27  0		/* POT1 */
+				 0     29  0		/* POT2 */
+				 2     28  0		/* CS_CODEC_F */
+				 1     16  0>;		/* CS_CODEC_R */
+				
+				 //&qe_pio_d 3 1	/* SICOFI 1 */
+				 //&qe_pio_ 8 1		/* SICOFI 2 */
+				 //&qe_pio_ 6 1		/* SICOFI 3 */
+				 //&FAV_CS_SPI 1 1	/* FAV SPI */
+				 //&FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
+			mode = "cpu";
 
-			phy1:ethernet-phy@1 {
-				interrupt-parent = <&ipic>;
-				reg = <0x1>;
-				device_type = "ethernet-phy";
+			eeprom@1 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <0>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
 			};
-			phy2:ethernet-phy@2 {
-				interrupt-parent = <&ipic>;
-				reg = <0x2>;	
-				device_type = "ethernet-phy";
+			lm74@2 {
+				compatible = "ns,lm74";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+				spi-cs-high;
 			};
-		};
+			eeprom@3 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <2>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
+			};
+			lm74@4 {
+				compatible = "ns,lm74";
+				spi-max-frequency = <1000000>;
+				reg = <3>;
+				spi-cs-high;
+			};
+			pot1@5 {
+				compatible = "cs,mcr3000-pot1";
+				spi-max-frequency = <1000000>;
+				reg = <4>;
+				spi-cs-high;
+			};
+			pot2@6 {
+				compatible = "cs,mcr3000-pot2";
+				spi-max-frequency = <1000000>;
+				reg = <5>;
+				spi-cs-high;
+			};
+			fpga-loader@7 {
+				compatible = "s3k,mcr3000-fpga-loader";
+				spi-max-frequency = <10000000>;
+				reg = <6>;
+				spi-cs-high;
+				loader = "mcr";
+				spi-bits = <16>;
+			};
+			mezz@8 {
+				compatible = "s3k,mcr3000-fpga-loader";
+				spi-max-frequency = <10000000>;
+				reg = <7>;
+				spi-cs-high;
+				loader = "mezz";
+				spi-bits = <16>;
+			};
+	};
 
-		qeic:interrupt-controller@80 {
-			interrupt-controller;
-			compatible = "fsl,qe-ic";
-			#address-cells = <0>;
-			#interrupt-cells = <1>;
-			reg = <0x80 0x80>;
-			big-endian;
-			interrupts = <32 0x8 33 0x8>; //high:32 low:33
+//		spi@500 {
+//			cell-index = <1>;
+//			compatible = "fsl,spi";
+//			reg = <0x500 0x40>;
+//			interrupts = <1>;
+//			interrupt-parent = <&qeic>;
+//			mode = "cpu";
+//		};
+
+	eth0: ucc@3000 {
+		device_type = "network";
+		compatible = "ucc_geth";
+		cell-index = <2>;
+		reg = <0x3000 0x200>;
+		interrupts = <33>;
+		interrupt-parent = <&qeic>;
+		local-mac-address = [ 00 00 00 00 00 00 ];
+		rx-clock-name = "clk17";
+		tx-clock-name = "clk17";
+		phy-handle = <&phy1>;
+		pio-handle = <&ucc2pio>;
+		phy-connection-type = "rmii";
+	};
+
+	eth1: ucc@2200 {
+		device_type = "network";
+		compatible = "ucc_geth";
+		cell-index = <3>;
+		reg = <0x2200 0x200>;
+		interrupts = <34>;
+		interrupt-parent = <&qeic>;
+		local-mac-address = [ 00 00 00 00 00 00 ];
+		rx-clock-name = "clk12";
+		tx-clock-name = "clk12";
+		phy-handle = <&phy2>;
+		pio-handle = <&ucc3pio>;
+		phy-connection-type = "rmii";
+	};
+
+	mdio@3120 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x3120 0x18>;
+		compatible = "fsl,ucc-mdio";
+
+		phy1:ethernet-phy@1 {
 			interrupt-parent = <&ipic>;
+			reg = <0x1>;
+			device_type = "ethernet-phy";
+		};
+		phy2:ethernet-phy@2 {
+			interrupt-parent = <&ipic>;
+			reg = <0x2>;	
+			device_type = "ethernet-phy";
 		};
 	};
+
+	qeic:interrupt-controller@80 {
+		interrupt-controller;
+		compatible = "fsl,qe-ic";
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+		reg = <0x80 0x80>;
+		big-endian;
+		interrupts = <32 0x8 33 0x8>; //high:32 low:33
+		interrupt-parent = <&ipic>;
+	};
+};
 };

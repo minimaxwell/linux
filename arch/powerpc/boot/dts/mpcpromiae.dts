@@ -1,6 +1,6 @@
 /*
- * MPC8321E Device Tree Source
- *
+ * MPC8321E MIA ethernet Device Tree Source
+ * FIXME : 
  * Copyright 2007 Freescale Semiconductor Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -12,7 +12,7 @@
 /dts-v1/;
 
 / {
-	model = "MPCPROMIAE";
+	model = "MIAE";
 	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB";
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -46,14 +46,16 @@
 		reg = <0x00000000 0x20000000>;
 	};
 
-	localbus@b0000000 {
+	localbus@b0000100 {
 		#address-cells = <2>;
 		#size-cells = <1>;
 		device_type = "soc";
 		compatible = "simple-bus";
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
-			  2 0x0 0x90000000 0x10000000>;	// Periphs
+			  2 0x0 0x92000000 0x10000000	// Periphs
+			  3 0x0 0xe0000000 0x00008000	// DPRAM
+			  4 0x0 0x80000000 0x10000000>;	// Periphs
 		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
 
@@ -97,6 +99,15 @@
 			//	reg = <0x0 0x4000>;
 			//};
 		};
+
+//		eth2@2,0 {
+//			compatible = "micrel,ks8851-mll";
+//			reg =  <2 0x00 0xff
+//				2 0x100 0xff>;
+//			local-mac-address = [ 08 00 51 20 4D B2 ];
+//			interrupts = < 5 >;
+//			interrupt-parent = <&ipic>;
+//		};
 
 		fpga-m@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
@@ -234,7 +245,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <6 1>;
+				interrupts = <3 0x8>;
 				interrupt-parent = <&ipic>;
 				reg = <0x00 0x60>;	/* Mappage registres FPGAM */
 				compatible = "s3k,miae-pic";
@@ -567,35 +578,35 @@
 //			io-channel-names = "channel_1";
 //			dev-channel = "channel_1";
 //		};
-		
-		POT_A_PO {
-			compatible = "pot-miae", "cs,mia-fav";
-			fav-id = <3>;
-			user-name = "pot_a";
-			dev-name = "none";
-			dev-channel = "channel_0";
-		};
-		POT_B_PO {
-			compatible = "pot-miae", "cs,mia-fav";
-			fav-id = <3>;
-			user-name = "pot_b";
-			dev-name = "none";
-			dev-channel = "channel_1";
-		};
-		POT_C_PO {
-			compatible = "pot-miae", "cs,mia-fav";
-			fav-id = <3>;
-			user-name = "pot_c";
-			dev-name = "none";
-			dev-channel = "channel_2";
-		};
-		POT_D_PO {
-			compatible = "pot-miae", "cs,mia-fav";
-			fav-id = <3>;
-			user-name = "pot_d";
-			dev-name = "none";
-			dev-channel = "channel_3";
-		};
+//		
+//		POT_A_PO {
+//			compatible = "pot-miae", "cs,mia-fav";
+//			fav-id = <3>;
+//			user-name = "pot_a";
+//			dev-name = "none";
+//			dev-channel = "channel_0";
+//		};
+//		POT_B_PO {
+//			compatible = "pot-miae", "cs,mia-fav";
+//			fav-id = <3>;
+//			user-name = "pot_b";
+//			dev-name = "none";
+//			dev-channel = "channel_1";
+//		};
+//		POT_C_PO {
+//			compatible = "pot-miae", "cs,mia-fav";
+//			fav-id = <3>;
+//			user-name = "pot_c";
+//			dev-name = "none";
+//			dev-channel = "channel_2";
+//		};
+//		POT_D_PO {
+//			compatible = "pot-miae", "cs,mia-fav";
+//			fav-id = <3>;
+//			user-name = "pot_d";
+//			dev-name = "none";
+//			dev-channel = "channel_3";
+//		};
 	};
 
 	soc8321@b0000000 {
@@ -791,14 +802,66 @@
 			};
 		};
 
-		spi@500 {
-			cell-index = <1>;
+		spi@4c0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			cell-index = <0>;
 			compatible = "fsl,spi";
-			reg = <0x500 0x40>;
-			interrupts = <1>;
+			reg = <0x4c0 0x40>;
+			interrupts = <2>;
 			interrupt-parent = <&qeic>;
+			     /* port  pin cs-high */
+			pios =  <3     3   1		/* EEPROM MPCPRO */
+				 2     4   1		/* TEMP MPCPRO */
+				 2     2   1		/* EEPROM carte base */
+				 2     5   1>;		/* TEMP carte base */
+				 //&qe_pio_d 3 1	/* SICOFI 1 */
+				 //&qe_pio_ 8 1		/* SICOFI 2 */
+				 //&qe_pio_ 6 1		/* SICOFI 3 */
+				 //&FAV_CS_SPI 1 1	/* FAV SPI */
+				 //&FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 			mode = "cpu";
-		};
+
+			eeprom@1 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <0>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
+			};
+			lm74@2 {
+				compatible = "ns,lm74";
+				spi-max-frequency = <1000000>;
+				reg = <1>;
+				spi-cs-high;
+			};
+			eeprom@3 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <2>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
+			};
+			lm74@4 {
+				compatible = "ns,lm74";
+				spi-max-frequency = <1000000>;
+				reg = <3>;
+				spi-cs-high;
+			};
+                };
+
+//		spi@500 {
+//			cell-index = <1>;
+//			compatible = "fsl,spi";
+//			reg = <0x500 0x40>;
+//			interrupts = <1>;
+//			interrupt-parent = <&qeic>;
+//			mode = "cpu";
+//		};
 
 		eth0: ucc@3000 {
 			device_type = "network";
@@ -825,7 +888,7 @@
 			local-mac-address = [ 00 00 00 00 00 00 ];
 			rx-clock-name = "clk12";
 			tx-clock-name = "clk12";
-			phy-handle = <&phy3>;
+			phy-handle = <&phy3 &phy2>;
 			pio-handle = <&ucc3pio>;
 			phy-connection-type = "rmii";
 		};
@@ -843,12 +906,12 @@
 			};
 			phy2:ethernet-phy@2 {
 				interrupt-parent = <&ipic>;
-				reg = <0x3>;	
+				reg = <0x2>;	
 				device_type = "ethernet-phy";
 			};
 			phy3:ethernet-phy@3 {
 				interrupt-parent = <&ipic>;
-				reg = <0x2>;	
+				reg = <0x3>;	
 				device_type = "ethernet-phy";
 			};
 		};

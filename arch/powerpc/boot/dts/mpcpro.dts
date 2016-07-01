@@ -18,8 +18,6 @@
 	#size-cells = <1>;
 
 	aliases {
-		ethernet0 = &eth1;
-		ethernet1 = &eth0;
 		serial0 = &serial0;
 //		serial1 = &serial1;
 	};
@@ -53,7 +51,7 @@
 		compatible = "simple-bus";
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
-			  2 0x0 0x90000000 0x10000000>;	// Periphs
+			  2 0x0 0x92000000 0x10000000>;	// Periphs
 		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
 
@@ -96,6 +94,15 @@
 			//	label = "mpcpro-nand";
 			//	reg = <0x0 0x4000>;
 			//};
+		};
+
+		eth2@2,0 {
+			compatible = "micrel,ks8851-mll";
+			reg =  <2 0x00 0xff
+				2 0x100 0xff>;
+			interrupts = <21 0x8>;
+			interrupt-parent = <&ipic>;
+			local-mac-address = [ 08 00 51 20 4D B2 ];
 		};
 	};
 
@@ -299,36 +306,6 @@
 			interrupts = <1>;
 			interrupt-parent = <&qeic>;
 			mode = "cpu";
-		};
-
-		eth0: ucc@3000 {
-			device_type = "network";
-			compatible = "ucc_geth";
-			cell-index = <2>;
-			reg = <0x3000 0x200>;
-			interrupts = <33>;
-			interrupt-parent = <&qeic>;
-			local-mac-address = [ 00 00 00 00 00 00 ];
-			rx-clock-name = "clk17";
-			tx-clock-name = "clk17";
-			phy-handle = <&phy2>;
-			pio-handle = <&ucc2pio>;
-			phy-connection-type = "rmii";
-		};
-
-		eth1: ucc@2200 {
-			device_type = "network";
-			compatible = "ucc_geth";
-			cell-index = <3>;
-			reg = <0x2200 0x200>;
-			interrupts = <34>;
-			interrupt-parent = <&qeic>;
-			local-mac-address = [ 00 00 00 00 00 00 ];
-			rx-clock-name = "clk12";
-			tx-clock-name = "clk12";
-			phy-handle = <&phy1>;
-			pio-handle = <&ucc3pio>;
-			phy-connection-type = "rmii";
 		};
 
 		mdio@3120 {
