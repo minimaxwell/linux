@@ -39,13 +39,14 @@
 #include <linux/slab.h>
 #include <linux/of_device.h>
 
-
 #define DRVNAME		"lm70"
 
 #define LM70_CHIP_LM70		0	/* original NS LM70 */
 #define LM70_CHIP_TMP121	1	/* TI TMP121/TMP123 */
 #define LM70_CHIP_LM71		2	/* NS LM71 */
 #define LM70_CHIP_LM74		3	/* NS LM74 */
+
+extern int par_io_data_set(u8 port, u8 pin, u8 val);
 
 struct lm70 {
 	struct spi_device *spi;
@@ -60,7 +61,7 @@ static ssize_t lm70_sense_temp(struct device *dev,
 	struct lm70 *p_lm70 = dev_get_drvdata(dev);
 	struct spi_device *spi = p_lm70->spi;
 	int status, val = 0;
-	u8 rxbuf[2];
+	u8 rxbuf[4];
 	s16 raw = 0;
 
 	if (mutex_lock_interruptible(&p_lm70->lock))
@@ -70,12 +71,13 @@ static ssize_t lm70_sense_temp(struct device *dev,
 	 * spi_read() requires a DMA-safe buffer; so we use
 	 * spi_write_then_read(), transmitting 0 bytes.
 	 */
-	status = spi_write_then_read(spi, NULL, 0, &rxbuf[0], 2);
+
+	status = spi_write_then_read(spi, NULL, 0, &rxbuf[0], 4);
 	if (status < 0) {
 		pr_warn("spi_write_then_read failed with status %d\n", status);
 		goto out;
 	}
-	raw = (rxbuf[0] << 8) + rxbuf[1];
+	raw = (rxbuf[1] << 8) + rxbuf[2];
 	dev_dbg(dev, "rxbuf[0] : 0x%02x rxbuf[1] : 0x%02x raw=0x%04x\n",
 		rxbuf[0], rxbuf[1], raw);
 

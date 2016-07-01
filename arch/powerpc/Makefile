@@ -151,9 +151,9 @@ CFLAGS-$(CONFIG_E6500_CPU) += $(call cc-option,-mcpu=e6500,$(E5500_CPU))
 
 ifeq ($(CONFIG_PPC32),y)
 ifeq ($(CONFIG_PPC_E500MC),y)
-CFLAGS-y += $(call cc-option,-mcpu=e500mc,-mcpu=powerpc)
+CFLAGS-y += $(call cc-option,-mcpu=e500mc,-mcpu=e300c2)
 else
-CFLAGS-$(CONFIG_E500) += $(call cc-option,-mcpu=8540 -msoft-float,-mcpu=powerpc)
+CFLAGS-$(CONFIG_E500) += $(call cc-option,-mcpu=8540 -msoft-float,-mcpu=e300c2)
 endif
 endif
 
@@ -197,7 +197,7 @@ KBUILD_CFLAGS	+= $(call cc-option,-fno-dwarf2-cfi-asm)
 KBUILD_CFLAGS		+= $(call cc-option,-mno-string)
 
 ifeq ($(CONFIG_6xx),y)
-KBUILD_CFLAGS		+= -mcpu=powerpc
+KBUILD_CFLAGS		+= -mcpu=e300c2
 endif
 
 # Work around a gcc code-gen bug with -fno-omit-frame-pointer.

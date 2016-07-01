@@ -126,6 +126,58 @@ int par_io_config_pin(u8 port, u8 pin, int dir, int open_drain,
 }
 EXPORT_SYMBOL(par_io_config_pin);
 
+int of_par_io_count(struct device_node *np)
+{
+	const int *pio_map;
+	int pio_map_len;
+
+	pio_map = of_get_property(np, "pios", &pio_map_len);
+	if (pio_map == NULL) {
+		printk(KERN_ERR "pios is not set!\n");
+		return -1; 
+	}
+	pio_map_len /= sizeof(unsigned int);
+	if ((pio_map_len % 3) != 0) {
+		printk(KERN_ERR "pio format wrong!\n");
+		return -1;
+	}
+	return(pio_map_len /= 3);
+}
+EXPORT_SYMBOL(of_par_io_count);
+
+/* get par_io instead of gpios in dtb */
+int of_get_par_io(struct device_node *np, struct qe_pio *pios, bool *flags)
+{
+	const int *pio_map;
+	int pio_map_len;
+	int i;
+
+	pio_map = of_get_property(np, "pios", &pio_map_len);
+	if (pio_map == NULL) {
+	//	printk(KERN_ERR "pios is not set!\n");
+		return -1; 
+	}
+	pio_map_len /= sizeof(unsigned int);
+	if ((pio_map_len % 3) != 0) {
+		printk(KERN_ERR "pio format wrong!\n");
+		return -1;
+	}
+	i = 0;
+	while (pio_map_len > 0) {
+		pios[i].port = pio_map[0];
+		pios[i].pin = pio_map[1];
+		flags[i] = pio_map[2];
+
+		//printk(KERN_ERR"@@@ pio : \n port %d, pin %d, flag %d\n",
+		//	pios[i].port, pios[i].pin, flags[i]);
+		pio_map += 3;
+		pio_map_len -= 3;
+		i++;
+	}
+	return 0;
+}
+EXPORT_SYMBOL(of_get_par_io);
+
 int par_io_data_get(u8 port, u8 pin)
 {
 	u32 pin_mask, tmp_val;
@@ -146,9 +198,33 @@ int par_io_data_get(u8 port, u8 pin)
 }
 EXPORT_SYMBOL(par_io_data_get);
 
+int par_io_data_get_port(u8 port)
+{
+	u32 tmp_val;
+
+	if (port >= num_par_io_ports)
+		return -EINVAL;
+
+	/*tmp_val = in_be32(&par_io[port].cpdata) ;
+	printk(KERN_ERR"@@@ data %#x\n", tmp_val);
+	tmp_val = in_be32(&par_io[port].cpodr) ;
+	printk(KERN_ERR"@@@ odr %#x\n", tmp_val);*/
+	tmp_val = in_be32(&par_io[port].cppar1) ;
+	printk(KERN_ERR"@@@ par1 %#x\n", tmp_val);
+	/*tmp_val = in_be32(&par_io[port].cppar2) ;
+	printk(KERN_ERR"@@@ par2 %#x\n", tmp_val);
+	tmp_val = in_be32(&par_io[port].cpdir1) ;
+	printk(KERN_ERR"@@@ dir1 %#x\n", tmp_val);
+	tmp_val = in_be32(&par_io[port].cpdir2) ;
+	printk(KERN_ERR"@@@ dir2 %#x\n", tmp_val);*/
+	return tmp_val;
+}
+EXPORT_SYMBOL(par_io_data_get_port);
+
 int par_io_data_set(u8 port, u8 pin, u8 val)
 {
 	u32 pin_mask, tmp_val;
+
 	if (port >= num_par_io_ports)
 		return -EINVAL;
 	if (pin >= QE_PIO_PINS)

@@ -43,8 +43,19 @@
 #include "spi-fsl-cpm.h"
 #include "spi-fsl-spi.h"
 
+#include <asm/qe.h>
+
 #define TYPE_FSL	0
 #define TYPE_GRLIB	1
+
+extern int par_io_data_set(u8 port, u8 pin, u8 val);
+extern int par_io_data_get(u8 port, u8 pin);
+extern int par_io_data_get_port(u8 port);
+extern int par_io_config_pin(u8 port, u8 pin, int dir, int open_drain, int assignment, int has_irq);
+extern int of_get_par_io(struct device_node *np, struct qe_pio *pio, bool *flags);
+extern int of_par_io_count(struct device_node *np);
+
+static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events);
 
 struct fsl_spi_match_data {
 	int type;
@@ -293,12 +304,24 @@ static int fsl_spi_cpu_bufs(struct mpc8xxx_spi *mspi,
 
 	mspi->count = len;
 
-	/* enable rx ints */
-	mpc8xxx_spi_write_reg(&reg_base->mask, SPIM_NE);
+	/* why do we need it ? */
+	par_io_config_pin(2,  2, 1, 0, 0, 0);
+        par_io_config_pin(2,  3, 1, 0, 0, 0);
 
-	/* transmit word */
-	word = mspi->get_tx(mspi);
-	mpc8xxx_spi_write_reg(&reg_base->transmit, word);
+	for (;mspi->count; mspi->count--) { 
+		mpc8xxx_spi_write_reg(&reg_base->event, 0xff);
+		mpc8xxx_spi_write_reg(&reg_base->mask, 0x00);
+                if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NF) {
+			word = mspi->get_tx(mspi);
+			reg_base->transmit =  word;
+                }
+		udelay(10);
+                if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NE) {
+			u32 rx_data = (reg_base->receive << 8) >> 24;
+			if (mspi->rx)
+				mspi->get_rx(rx_data, mspi);
+                }
+	}
 
 	return 0;
 }
@@ -333,7 +356,8 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	mpc8xxx_spi->tx = t->tx_buf;
 	mpc8xxx_spi->rx = t->rx_buf;
 
-	reinit_completion(&mpc8xxx_spi->done);
+	/* spi is not using interrupt ? */
+	//reinit_completion(&mpc8xxx_spi->done);
 
 	if (mpc8xxx_spi->flags & SPI_CPM_MODE)
 		ret = fsl_spi_cpm_bufs(mpc8xxx_spi, t, is_dma_mapped);
@@ -342,7 +366,8 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	if (ret)
 		return ret;
 
-	wait_for_completion(&mpc8xxx_spi->done);
+	/* spi is not using interrupt */
+	//wait_for_completion(&mpc8xxx_spi->done);
 
 	/* disable rx ints */
 	mpc8xxx_spi_write_reg(&reg_base->mask, 0);
@@ -390,8 +415,9 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 			ndelay(nsecs);
 		}
 		cs_change = t->cs_change;
-		if (t->len)
+		if (t->len) {
 			status = fsl_spi_bufs(spi, t, m->is_dma_mapped);
+		}
 		if (status) {
 			status = -EMSGSIZE;
 			break;
@@ -519,15 +545,15 @@ static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events)
 
 	/* We need handle RX first */
 	if (events & SPIE_NE) {
-		u32 rx_data = mpc8xxx_spi_read_reg(&reg_base->receive);
+		u32 rx_data = (reg_base->receive << 8) >> 24;
 
 		if (mspi->rx)
 			mspi->get_rx(rx_data, mspi);
 	}
 
 	if ((events & SPIE_NF) == 0)
-		/* spin until TX is done */
-		while (((events =
+	/* spin until TX is done */
+	while (((events =
 			mpc8xxx_spi_read_reg(&reg_base->event)) &
 						SPIE_NF) == 0)
 			cpu_relax();
@@ -537,9 +563,9 @@ static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events)
 
 	mspi->count -= 1;
 	if (mspi->count) {
-		u32 word = mspi->get_tx(mspi);
+	u32 word = mspi->get_tx(mspi);
 
-		mpc8xxx_spi_write_reg(&reg_base->transmit, word);
+		//mpc8xxx_spi_write_reg(&reg_base->transmit, word);
 	} else {
 		complete(&mspi->done);
 	}
@@ -682,8 +708,9 @@ static struct spi_master * fsl_spi_probe(struct device *dev,
 		regval &= ~SPMODE_LEN(0xF);
 		regval |= SPMODE_LEN(mpc8xxx_spi->max_bits_per_word - 1);
 	}
-	if (mpc8xxx_spi->flags & SPI_QE_CPU_MODE)
-		regval |= SPMODE_OP;
+	//if (mpc8xxx_spi->flags & SPI_QE_CPU_MODE)
+	/* we're always on CPU mode */
+	regval |= SPMODE_OP;
 
 	mpc8xxx_spi_write_reg(&reg_base->mode, regval);
 
@@ -711,9 +738,14 @@ static void fsl_spi_cs_control(struct spi_device *spi, bool on)
 	struct mpc8xxx_spi_probe_info *pinfo = to_of_pinfo(pdata);
 	u16 cs = spi->chip_select;
 	int gpio = pinfo->gpios[cs];
+	struct qe_pio qe_pio = pinfo->pios[cs];
 	bool alow = pinfo->alow_flags[cs];
 
+#ifdef CONFIG_MPC832x_RDB 
+	par_io_data_set(qe_pio.port, qe_pio.pin, on ^ alow);
+#else
 	gpio_set_value(gpio, on ^ alow);
+#endif
 }
 
 static int of_fsl_spi_get_chipselects(struct device *dev)
@@ -725,6 +757,52 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	int i = 0;
 	int ret;
 
+#ifdef CONFIG_MPC832x_RDB 
+	struct qe_pio *pios;
+	bool *flags;
+	
+	/* we want to configure par_io as if they were gpios */
+
+	ngpios = of_par_io_count(np);
+	if (ngpios <= 0) {
+		/*
+		 * SPI w/o chip-select line. One SPI device is still permitted
+		 * though.
+		 */
+		pdata->max_chipselect = 1;
+		return 0;
+	}
+
+	pios = kmalloc(ngpios * sizeof(struct qe_pio), GFP_KERNEL);
+	if (!pios)
+		return -ENOMEM;
+	flags = kzalloc(ngpios * sizeof(bool), GFP_KERNEL);
+	if (!flags) {
+		ret = -ENOMEM;
+		goto err_alloc_flags;
+	}
+	
+
+	ret = of_get_par_io(np, pios, flags);
+	if (ret)
+		goto err_loop;
+
+	for (; i < ngpios; i++) {
+		pinfo->pios = pios;
+		pinfo->alow_flags = flags;
+		/* args for par_io_config_pin : 			*/
+		/* port, pin, dir, open_drain, assignment, has irq 	*/
+		ret = par_io_config_pin(pinfo->pios[i].port,
+					pinfo->pios[i].pin,
+					QE_PIO_DIR_OUT, 0, 	
+					pinfo->alow_flags[i], 0);
+		if (ret) {
+			dev_err(dev, "can't set output direction for pio "
+				"#%d: %d\n", i, ret);
+			goto err_loop;
+		}
+	}
+#else
 	ngpios = of_gpio_count(np);
 	if (ngpios <= 0) {
 		/*
@@ -775,6 +853,7 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 			goto err_loop;
 		}
 	}
+#endif
 
 	pdata->max_chipselect = ngpios;
 	pdata->cs_control = fsl_spi_cs_control;
