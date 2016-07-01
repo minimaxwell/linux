@@ -822,7 +822,7 @@
 			reg = <0x4c0 0x40>;
 			interrupts = <2>;
 			interrupt-parent = <&qeic>;
-			mode = "cpu";
+			mode = "cpu-qe";
 			     	/* port     pin cs-high */
 			gpios =  <&qe_pio_b 16   1	/* SICOFI 1 */
 				  &qe_pio_c  5   1	/* TEMP carte base */

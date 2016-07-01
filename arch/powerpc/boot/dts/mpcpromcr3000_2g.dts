@@ -692,7 +692,7 @@
 			reg = <0x4c0 0x40>;
 			interrupts = <2>;
 			interrupt-parent = <&qeic>;
-			mode = "cpu";
+			mode = "cpu-qe";
 			gpios = <&qe_pio_c  27  1		/* POT1 */
 				 &qe_pio_c   5  1		/* TEMP carte base */
 				 &qe_pio_c  28  1		/* CS_CODEC_F/ARCOFI */
