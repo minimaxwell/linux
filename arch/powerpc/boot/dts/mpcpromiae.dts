@@ -13,7 +13,7 @@
 
 / {
 	model = "MIAE";
-	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB";
+	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB", "fsl,base", "fsl,mpcpro";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
@@ -53,11 +53,21 @@
 		compatible = "simple-bus";
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
-			  2 0x0 0x92000000 0x10000000	// Periphs
-			  3 0x0 0xe0000000 0x00008000	// DPRAM
-			  4 0x0 0x80000000 0x10000000>;	// Periphs
+			  2 0x0 0x92000000 0x00008000	// Eth Face avant
+			  3 0x0 0x83400000 0x00010000	// DPRAM (DSP)
+			  4 0x0 0x80000000 0x10000000	// Periphs
+			  5 0x0 0x90000000 0x10000000	// FPGA-MPCPRO
+			  6 0x0 0x81800000 0x00008000	// mezzanine
+			  7 0x0 0x80800000 0x00008000>;	// DSP
 		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
+
+		fpga-mpcpro@5,0000000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "s3k,mcr3000-fpga-mpcpro";
+			reg = <5 0x0 0x44>;
+		};
 
 		flash@0,0 {
 			#address-cells = <1>;
@@ -263,11 +273,11 @@
 				&fav   14 1>;	/* Presence µMain2 */
 		};
 
-		//led_pwr {
-		//	compatible = "s3k,miae-led-pwr";
-		//	gpios = <&fav 6 2	/* led multi verte */
-		//		 &fav 7 0>;	/* led multi rouge */
-		//};
+		led_pwr {
+			compatible = "s3k,miae-led-pwr";
+			gpios = <&fav 6 2	/* led multi verte */
+				 &fav 7 0>;	/* led multi rouge */
+		};
 
 		e1@4,2000000 {
 			#address-cells = <1>;
