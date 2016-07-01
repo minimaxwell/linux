@@ -596,9 +596,6 @@ int phy_init_hw(struct phy_device *phydev)
 	else
 		ret = genphy_soft_reset(phydev);
 
-	/* configure leds, reset has return to default configuration */
-	phy_write(phydev, 0x1E, phy_read(phydev, 0x1E) | 0x4000);
-
 	if (ret < 0)
 		return ret;
 

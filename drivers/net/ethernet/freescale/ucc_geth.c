@@ -2003,6 +2003,12 @@ static void uec_configure_serdes(struct net_device *dev)
 	put_device(&tbiphy->dev);
 }
 
+/* For MPCPRO board: set the LEDs properly */
+static int fs_enet_phy_micrel_fixup(struct phy_device *phydev)
+{
+	return phy_write(phydev, 0x1E, phy_read(phydev, 0x1E) | 0x4000);
+}
+
 /* Configure the PHY for dev.
  * returns 0 if success.  -1 if failure
  */
@@ -4364,12 +4370,12 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	ugeth->notify_work[ACTIVE_LINK].kn = 
 		sysfs_get_dirent(ugeth->dev->kobj.sd, "active_link");
 
-	/* register the PHY board fixup (for CMPC885 board) */
-	/*err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
-					 fs_enet_phy_micrel_fixup);*/
+	/* register the PHY board fixup (for MPCPRO board) */
+	err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
+					 fs_enet_phy_micrel_fixup);
 	/* we can live without it, so just issue a warning */
-	/*if (err)
-		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");*/
+	if (err)
+		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");
 	return 0;
 
 out_remove_file:
