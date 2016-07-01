@@ -21,7 +21,7 @@
 		ethernet0 = &eth1;
 		ethernet1 = &eth0;
 		serial0 = &serial0;
-//		serial1 = &serial1;
+		serial1 = &serial1;
 	};
 
 	cpus {
@@ -80,7 +80,7 @@
 			};
 			partition@400000 {
 				label = "kernel";
-				reg = <0x400000 0x300000>;
+				reg = <0x400000 0x400000>;
 			};
 		};
 
@@ -263,11 +263,11 @@
 				&fav   14 1>;	/* Presence µMain2 */
 		};
 
-		led_pwr {
-			compatible = "s3k,miae-led-pwr";
-			gpios = <&fav 6 2	/* led multi verte */
-				 &fav 7 0>;	/* led multi rouge */
-		};
+		//led_pwr {
+		//	compatible = "s3k,miae-led-pwr";
+		//	gpios = <&fav 6 2	/* led multi verte */
+		//		 &fav 7 0>;	/* led multi rouge */
+		//};
 
 		e1@4,2000000 {
 			#address-cells = <1>;
@@ -578,35 +578,35 @@
 //			io-channel-names = "channel_1";
 //			dev-channel = "channel_1";
 //		};
-//		
-//		POT_A_PO {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <3>;
-//			user-name = "pot_a";
-//			dev-name = "none";
-//			dev-channel = "channel_0";
-//		};
-//		POT_B_PO {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <3>;
-//			user-name = "pot_b";
-//			dev-name = "none";
-//			dev-channel = "channel_1";
-//		};
-//		POT_C_PO {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <3>;
-//			user-name = "pot_c";
-//			dev-name = "none";
-//			dev-channel = "channel_2";
-//		};
-//		POT_D_PO {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <3>;
-//			user-name = "pot_d";
-//			dev-name = "none";
-//			dev-channel = "channel_3";
-//		};
+		
+		POT_A_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_a";
+			dev-name = "none";
+			dev-channel = "channel_0";
+		};
+		POT_B_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_b";
+			dev-name = "none";
+			dev-channel = "channel_1";
+		};
+		POT_C_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_c";
+			dev-name = "none";
+			dev-channel = "channel_2";
+		};
+		POT_D_PO {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <3>;
+			user-name = "pot_d";
+			dev-name = "none";
+			dev-channel = "channel_3";
+		};
 	};
 
 	soc8321@b0000000 {
@@ -641,15 +641,15 @@
 			interrupt-parent = <&ipic>;
 		};
 
-//		serial1: serial@4600 {
-//			cell-index = <1>;
-//			device_type = "serial";
-//			compatible = "fsl,ns16550", "ns16550";
-//			reg = <0x4600 0x100>;
-//			clock-frequency = <0>;
-//			interrupts = <10 0x8>;
-//			interrupt-parent = <&ipic>;
-//		};
+		serial1: serial@4600 {
+			cell-index = <1>;
+			device_type = "serial";
+			compatible = "fsl,ns16550", "ns16550";
+			reg = <0x4600 0x100>;
+			clock-frequency = <0>;
+			interrupts = <10 0x8>;
+			interrupt-parent = <&ipic>;
+		};
 
 		dma@82a8 {
 			#address-cells = <1>;
@@ -714,7 +714,10 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			reg = <0x1400 0x100>;
-			ranges = <3 0x1448 0x18>;
+			ranges = < 0 0 0xb0001400 0x18
+				   1 0 0xb0001418 0x18
+				   2 0 0xb0001430 0x18
+				   3 0 0xb0001448 0x18>;
 			compatible = "fsl,mpc8323-qe-pario";
 			device_type = "par_io";
 			num-ports = <7>;
@@ -810,48 +813,193 @@
 			reg = <0x4c0 0x40>;
 			interrupts = <2>;
 			interrupt-parent = <&qeic>;
-			     /* port  pin cs-high */
-			pios =  <3     3   1		/* EEPROM MPCPRO */
-				 2     4   1		/* TEMP MPCPRO */
-				 2     2   1		/* EEPROM carte base */
-				 2     5   1>;		/* TEMP carte base */
-				 //&qe_pio_d 3 1	/* SICOFI 1 */
-				 //&qe_pio_ 8 1		/* SICOFI 2 */
-				 //&qe_pio_ 6 1		/* SICOFI 3 */
-				 //&FAV_CS_SPI 1 1	/* FAV SPI */
-				 //&FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 			mode = "cpu";
+			     	/* port     pin cs-high */
+			gpios =  <&qe_pio_b 16   1	/* SICOFI 1 */
+				  &qe_pio_c  5   1	/* TEMP carte base */
+				  &qe_pio_c 28   1	/* SICOFI 2 */
+				  &qe_pio_d  3   1	/* EEPROM MPCPRO */
+				  &qe_pio_c 23   1	/* SICOFI 3 */
+				  &qe_pio_c  3   1	/* TEMP MPCPRO */
+				  &qe_pio_c  2   1	/* EEPROM carte base */
+				  &FAV_CS_SPI 1  1	/* FAV SPI */
+				  &FAV_CS_SPI 2  1>;	/* FAV POSTE FPGA */
 
-			eeprom@1 {
-				compatible = "atmel,at25", "cs,eeprom";
-				spi-max-frequency = <1000000>;
-				reg = <0>;
-				spi-cs-high;
-				at25,byte-len = <1024>;
-				at25,addr-mode = <2>;
-				at25,page-size = <32>;
-			};
-			lm74@2 {
+//			sicofi@0 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-far";
+//				far-id = <0 2 3 4 5 6 7>;
+//				spi-max-frequency = <1000000>;
+//				reg = <0>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_1";
+//				analog_in = "-2dB -2dB -2dB -2dB";
+//				analog_out = "6dB 6dB 6dB 6dB";
+//				niveau_in = "-10dB -10dB -10dB -10dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
+//			sicofi_nvcs@0 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-far";
+//				far-id = <1>;
+//				spi-max-frequency = <1000000>;
+//				reg = <0>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_1";
+//				analog_in = "-2dB -2dB -2dB -2dB";
+//				analog_out = "0dB 0dB 0dB 0dB";
+//				niveau_in = "-10dB -10dB -10dB -10dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
+			lm74@1 {
 				compatible = "ns,lm74";
 				spi-max-frequency = <1000000>;
 				reg = <1>;
 				spi-cs-high;
 			};
+//			sicofi@2 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-far";
+//				far-id = <0 2 3 5 6 7>;
+//				spi-max-frequency = <1000000>;
+//				reg = <2>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_2";
+//				analog_in = "-2dB 0dB 0dB 12dB";
+//				analog_out = "3dB 3dB 3dB 4,5dB";
+//				niveau_in = "-10dB -10dB -10dB -31dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
+//			sicofi_nvcs@2 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-far";
+//				far-id = <1>;
+//				spi-max-frequency = <1000000>;
+//				reg = <2>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_2";
+//				analog_in = "-2dB 0dB 0dB 18dB";
+//				analog_out = "6dB 3dB 3dB 4,5dB";
+//				niveau_in = "-10dB -10dB -10dB -37dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
+//			sicofi_gw@2 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-far";
+//				far-id = <4>;
+//				spi-max-frequency = <1000000>;
+//				reg = <2>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_2";
+//				analog_in = "-3dB -3dB -3dB -3dB";
+//				analog_out = "3dB 3dB 3dB 3dB";
+//				niveau_in = "-10dB -10dB -10dB -10dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
 			eeprom@3 {
 				compatible = "atmel,at25", "cs,eeprom";
 				spi-max-frequency = <1000000>;
-				reg = <2>;
+				reg = <3>;
 				spi-cs-high;
 				at25,byte-len = <1024>;
 				at25,addr-mode = <2>;
 				at25,page-size = <32>;
 			};
-			lm74@4 {
+//			sicofi@4 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-fav";
+//				fav-id = <0 1 2 4 7>;
+//				spi-max-frequency = <1000000>;
+//				reg = <4>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_3";
+//				analog_in = "12dB -7dB 12dB -7dB";
+//				analog_out = "6dB 6dB 6dB 6dB";
+//				niveau_in = "-27dB -8dB -27dB -8dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//			};
+//			sicofi_nvcs@4 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-fav";
+//				fav-id = <5 6>;
+//				spi-max-frequency = <1000000>;
+//				reg = <4>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_3";
+//				analog_in = "12dB -7dB 12dB -7dB";
+//				analog_out = "6dB 6dB 6dB 6dB";
+//				niveau_in = "-27dB -8dB -27dB -8dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//				io-channels = <&iio 2>, <&iio 3>;
+//				iio-name = "ad7923";
+//				io-channel-names = "channel_2", "channel_3";
+//				iio-channel = "channel_2", "channel_3";
+//			};
+//			sicofi_postes@4 {
+//				compatible = "infineon,miae-sicofi", "cs,mia-fav";
+//				fav-id = <3>;
+//				spi-max-frequency = <1000000>;
+//				reg = <4>;
+//				spi-cs-high;
+//				spi-cpha;
+//				spi-troll;
+//				name_codec = "codec_3";
+//				analog_in = "12dB -7dB 12dB -7dB";
+//				analog_out = "6dB 6dB 6dB 6dB";
+//				niveau_in = "-27dB -8dB -27dB -8dB";
+//				niveau_out = "-10dB -10dB -10dB -10dB";
+//				io-channels = <&iio 0>, <&iio 1>;
+//				iio-name = "ad7923";
+//				io-channel-names = "channel_0", "channel_1";
+//				iio-channel = "channel_0", "channel_1";
+//			};
+			lm74@5 {
 				compatible = "ns,lm74";
 				spi-max-frequency = <1000000>;
-				reg = <3>;
+				reg = <5>;
 				spi-cs-high;
 			};
+			eeprom@6 {
+				compatible = "atmel,at25", "cs,eeprom";
+				spi-max-frequency = <1000000>;
+				reg = <6>;
+				spi-cs-high;
+				at25,byte-len = <1024>;
+				at25,addr-mode = <2>;
+				at25,page-size = <32>;
+			};
+//			iio: csfav@7 {
+//				compatible = "iio,ad7923", "cs,mia-fav";
+//				spi-max-frequency = <2000000>;
+//				reg = <7>;
+//				spi-cs-high;
+//				spi-cpol;
+//				fav-id = <3 5 6>;
+//				#io-channel-cells = <1>;
+//			};
+//			gpiofav: csfavgw@7 {
+//				compatible = "gpio,max7301", "cs,mia-fav";
+//				spi-max-frequency = <2000000>;
+//				reg = <7>;
+//				spi-cs-high;
+//				#gpio-cells = <2>;
+//				gpio-controller;
+//				fav-id = <4>;
+//			};
+//			csfavfpga@8 {
+//				compatible = "cs,fpga-poste", "cs,mia-fav";
+//				spi-max-frequency = <2000000>;
+//				reg = <8>;
+//				spi-cs-high;
+//				fav-id = <3>;
+//			};
                 };
 
 //		spi@500 {
