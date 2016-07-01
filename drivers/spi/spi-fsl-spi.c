@@ -43,12 +43,8 @@
 #include "spi-fsl-cpm.h"
 #include "spi-fsl-spi.h"
 
-#include <asm/qe.h>
-
 #define TYPE_FSL	0
 #define TYPE_GRLIB	1
-
-static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events);
 
 struct fsl_spi_match_data {
 	int type;
@@ -294,47 +290,15 @@ static int fsl_spi_cpu_bufs(struct mpc8xxx_spi *mspi,
 {
 	u32 word;
 	struct fsl_spi_reg *reg_base = mspi->reg_base;
-	int i = 0;
-	int j = 0;
-	int quickfix = 0;
-	 
+
 	mspi->count = len;
-	if (len > 4096) { //FIXME 
-		mspi->count = len*2;
-		quickfix = 1;
-	}
 
-	/* why do we need it ? */
-	par_io_config_pin(2,  2, 1, 0, 0, 0);
-        par_io_config_pin(2,  3, 1, 0, 0, 0);
+	/* enable rx ints */
+	mpc8xxx_spi_write_reg(&reg_base->mask, SPIM_NE);
 
-	for (;mspi->count; mspi->count--) { 
-		mpc8xxx_spi_write_reg(&reg_base->event, 0xff);
-		mpc8xxx_spi_write_reg(&reg_base->mask, 0x00);
-                if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NF) {
-			if (quickfix == 1) {
-				if (i == 0) {
-					word = mspi->get_tx(mspi);
-					reg_base->transmit =  word << 16;
-					j++;
-				} else {
-					
-					reg_base->transmit =  word << 24;
-					j--;
-				}
-			} else { 
-				word = mspi->get_tx(mspi);
-				reg_base->transmit =  word << 24;
-			}
-                }
-		udelay(10);
-                if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NE) {
-			u32 rx_data = (reg_base->receive << 8) >> 24;
-			/* first read is when we issue command, skip it */
-			if (mspi->rx && mspi->count != len)
-				mspi->get_rx(rx_data, mspi);
-                }
-	}
+	/* transmit word */
+	word = mspi->get_tx(mspi);
+	mpc8xxx_spi_write_reg(&reg_base->transmit, word);
 
 	return 0;
 }
@@ -369,8 +333,7 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	mpc8xxx_spi->tx = t->tx_buf;
 	mpc8xxx_spi->rx = t->rx_buf;
 
-	/* spi is not using interrupt ? */
-	//reinit_completion(&mpc8xxx_spi->done);
+	reinit_completion(&mpc8xxx_spi->done);
 
 	if (mpc8xxx_spi->flags & SPI_CPM_MODE)
 		ret = fsl_spi_cpm_bufs(mpc8xxx_spi, t, is_dma_mapped);
@@ -379,8 +342,7 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	if (ret)
 		return ret;
 
-	/* spi is not using interrupt */
-	//wait_for_completion(&mpc8xxx_spi->done);
+	wait_for_completion(&mpc8xxx_spi->done);
 
 	/* disable rx ints */
 	mpc8xxx_spi_write_reg(&reg_base->mask, 0);
@@ -428,9 +390,8 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 			ndelay(nsecs);
 		}
 		cs_change = t->cs_change;
-		if (t->len) {
+		if (t->len)
 			status = fsl_spi_bufs(spi, t, m->is_dma_mapped);
-		}
 		if (status) {
 			status = -EMSGSIZE;
 			break;
@@ -558,15 +519,15 @@ static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events)
 
 	/* We need handle RX first */
 	if (events & SPIE_NE) {
-		u32 rx_data = (reg_base->receive << 8) >> 24;
+		u32 rx_data = mpc8xxx_spi_read_reg(&reg_base->receive);
 
 		if (mspi->rx)
 			mspi->get_rx(rx_data, mspi);
 	}
 
 	if ((events & SPIE_NF) == 0)
-	/* spin until TX is done */
-	while (((events =
+		/* spin until TX is done */
+		while (((events =
 			mpc8xxx_spi_read_reg(&reg_base->event)) &
 						SPIE_NF) == 0)
 			cpu_relax();
@@ -576,9 +537,9 @@ static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events)
 
 	mspi->count -= 1;
 	if (mspi->count) {
-	u32 word = mspi->get_tx(mspi);
+		u32 word = mspi->get_tx(mspi);
 
-		//mpc8xxx_spi_write_reg(&reg_base->transmit, word);
+		mpc8xxx_spi_write_reg(&reg_base->transmit, word);
 	} else {
 		complete(&mspi->done);
 	}
@@ -721,9 +682,8 @@ static struct spi_master * fsl_spi_probe(struct device *dev,
 		regval &= ~SPMODE_LEN(0xF);
 		regval |= SPMODE_LEN(mpc8xxx_spi->max_bits_per_word - 1);
 	}
-	//if (mpc8xxx_spi->flags & SPI_QE_CPU_MODE)
-	/* we're always on CPU mode */
-	regval |= SPMODE_OP;
+	if (mpc8xxx_spi->flags & SPI_QE_CPU_MODE)
+		regval |= SPMODE_OP;
 
 	mpc8xxx_spi_write_reg(&reg_base->mode, regval);
 
@@ -764,7 +724,7 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	int ngpios;
 	int i = 0;
 	int ret;
-	
+
 	ngpios = of_gpio_count(np);
 	if (ngpios <= 0) {
 		/*
@@ -817,7 +777,6 @@ static int of_fsl_spi_get_chipselects(struct device *dev)
 	}
 
 	pdata->max_chipselect = ngpios;
-
 	pdata->cs_control = fsl_spi_cs_control;
 
 	return 0;

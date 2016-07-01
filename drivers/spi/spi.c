@@ -39,7 +39,6 @@
 #include <linux/acpi.h>
 
 #define CREATE_TRACE_POINTS
-#define DEBUG 
 #include <trace/events/spi.h>
 
 static void spidev_release(struct device *dev)
