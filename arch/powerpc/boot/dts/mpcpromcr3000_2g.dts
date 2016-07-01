@@ -54,7 +54,19 @@
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
 			  2 0x0 0x92000000 0x00008000	// Eth Face avant
-			  4 0x0 0x90000000 0x10000000>;	// Periphs
+			  4 0x0 0x80000000 0x10000000	// Periphs
+			  5 0x0 0x90000000 0x10000000	// FPGA-MPCPRO
+			  6 0x0 0x81800000 0x00008000	// mezzanine
+			  7 0x0 0x80800000 0x00008000>;	// DSP
+
+//			  5 0x0 0x80000000 0x00800000>;	// FPGA-Firmware
+//			  6 0x0 0x80800000 0x00800000	// DSP
+//			  7 0x0 0x81000000 0x00800000	// FPGA-Radio
+//			  8 0x0 0x81800000 0x00800000	// mezzanine
+//			  9 0x0 0x82000000 0x00800000	// controleur E1
+//			 10 0x0 0x83000000 0x00400000	// matrice
+//			 11 0x0 0x83400000 0x00800000	// DPRAM (DSP)
+//			 12 0x0 0x83c00000 0x00800000>;	// DPRAM (semaphores)
 		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
 
@@ -237,7 +249,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <14 1>;
+				interrupts = <22>;
 				interrupt-parent = <&ipic>;
 				reg = <0x0 0x90>;	// Mappage registres FPGAF
 				compatible = "s3k,mcr3000_2g-pic";
@@ -251,9 +263,7 @@
 			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
 			/* registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA */
 			ranges = <0 4 0x1000000 0x0200>;
-//			interrupts = <0>;
-//			interrupt-parent = <&FPGA_PIC>;
-			interrupts = <6 1>;
+			interrupts = <19>;
 			interrupt-parent = <&ipic>;
 			serie: gpio-controller@0E4 {
 				#gpio-cells = <2>;
@@ -261,36 +271,14 @@
 				reg = <0x0E4 2>;
 				gpio-controller;
 			};
-//			FPGA_PIC: pic@1000000 {
-//				interrupt-controller;
-//				#address-cells = <0>;
-//				#interrupt-cells = <1>;
-//				interrupts = <6 1>;
-//				interrupt-parent = <&ipic>;
-//				reg = <0x0 0x0200>;	/* Mappage registres FPGA */
-//				compatible = "s3k,mcr3000-fpga-pic";
-//			};
 		};
 		
-//		uart-fpga@4,1000000 {
-//			#address-cells = <1>;
-//			#size-cells = <1>;
-//			compatible = "ns16550a";
-//			/* adresse uart 16550a et taille utile */
-//			reg = <4 0x1000100 0x100>;
-//			reg-shift = <1>;
-//			fifo-size = <32>;
-//			clock = "fpga";
-//			interrupts = <1>;
-//			interrupt-parent = <&FPGA_PIC>;
-//		};
-
 		e1@4,2000000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-e1";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <8 1>;
+			interrupts = <20>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -299,7 +287,7 @@
 			#size-cells = <1>;
 			compatible = "lantiq,pef2256";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <8 1>;
+			interrupts = <20>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -422,6 +410,24 @@
 			reg = <0x700 0x100>;
 			device_type = "ipic";
 		};
+
+		FPGA_CS0: gpio-controller@dummy0 {	//FPGA Radio
+			#gpio-cells = <2>;
+			compatible = "s3k,mcr3000-fpga-cs";
+			gpio-controller;
+			reg = <0x0 0x1>;	// necessaire mais non utilise
+			pios = <2 21 1		// PROGFPGA
+				1 23 1>;	// INITFPGA
+		};
+		FPGA_CS1: gpio-controller@dummy1 {	//FPGA Mezz
+			#gpio-cells = <2>;
+			compatible = "s3k,mcr3000-fpga-cs";
+			gpio-controller;
+			reg = <0x1 0x1>; /* necessaire mais non utilise */
+			pios = <1 29 1		// PROG
+				1 15 1>;	// INIT
+		};
+
 
 		par_io@1400 {
 			#address-cells = <1>;
