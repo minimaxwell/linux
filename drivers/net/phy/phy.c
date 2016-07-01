@@ -539,6 +539,12 @@ void phy_start_machine(struct phy_device *phydev)
 				isMCR2G = 1;
 		}
 	}
+	if (of_find_compatible_node(NULL, NULL, "fsl,mpcpro")) {
+		if (of_get_property(of_find_compatible_node(NULL, NULL, "fsl,mpcpro"), "model", NULL)) {
+			if (strcmp(of_get_property(of_find_compatible_node(NULL, NULL, "fsl,mpcpro"), "model", NULL), "MCR3000_2G") == 0)
+				isMCR2G = 1;
+		}
+	}
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
 }
 
