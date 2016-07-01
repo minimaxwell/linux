@@ -148,8 +148,8 @@ static int __init fsl_spi_init(struct spi_board_info *board_infos,
 
 static void mpc83xx_spi_cs_control(struct spi_device *spi, bool on)
 {
-	pr_debug("%s %d %d\n", __func__, spi->chip_select, on);
-	par_io_data_set(3, 13, on);
+	//pr_debug("%s %d %d\n", __func__, spi->chip_select, on);
+	//par_io_data_set(3, 13, on);
 }
 
 static struct mmc_spi_platform_data mpc832x_mmc_pdata = {
@@ -166,21 +166,22 @@ static struct spi_board_info mpc832x_spi_boardinfo = {
 
 static int __init mpc832x_spi_init(void)
 {
-//	par_io_config_pin(3,  0, 3, 0, 1, 0); /* SPI1 MOSI, I/O */
-//	par_io_config_pin(3,  1, 3, 0, 1, 0); /* SPI1 MISO, I/O */
-//	par_io_config_pin(3,  2, 3, 0, 1, 0); /* SPI1 CLK,  I/O */
+	par_io_config_pin(3,  0, 3, 0, 1, 0); /* SPI1 MOSI, I/O */
+	par_io_config_pin(3,  1, 3, 0, 1, 0); /* SPI1 MISO, I/O */
+	par_io_config_pin(3,  2, 3, 0, 1, 0); /* SPI1 CLK,  I/O */
 //	par_io_config_pin(3,  3, 2, 0, 1, 0); /* SPI1 SEL,  I   */
-//
+
 //	par_io_config_pin(3, 13, 1, 0, 0, 0); /* !SD_CS,    O */
 //	par_io_config_pin(3, 14, 2, 0, 0, 0); /* SD_INSERT, I */
 //	par_io_config_pin(3, 15, 2, 0, 0, 0); /* SD_PROTECT,I */
+	
 
 	/*
 	 * Don't bother with legacy stuff when device tree contains
 	 * mmc-spi-slot node.
 	 */
-	if (of_find_compatible_node(NULL, NULL, "mmc-spi-slot"))
-		return 0;
+	//if (of_find_compatible_node(NULL, NULL, "mmc-spi-slot"))
+	//	return 0;
 	return fsl_spi_init(&mpc832x_spi_boardinfo, 1, mpc83xx_spi_cs_control);
 }
 machine_device_initcall(mpc832x_rdb, mpc832x_spi_init);

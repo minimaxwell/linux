@@ -29,7 +29,11 @@
 
 #include <saf3000/fpgam.h>
 
+#ifdef CONFIG_PPC_83xx 
+#include "mpc83xx.h"
+#else
 #include "mpc8xx.h"
+#endif
 #include "miae.h"
 
 /*
