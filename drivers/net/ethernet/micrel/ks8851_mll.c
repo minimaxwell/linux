@@ -38,6 +38,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_net.h>
+#include <linux/syscalls.h>
 
 #define	DRV_NAME	"ks8851_mll"
 
@@ -486,9 +487,8 @@ static u8 ks_rdreg8(struct ks_net *ks, int offset)
 	u16 data;
 	u8 shift_bit = offset & 0x03;
 	u8 shift_data = (offset & 1) << 3;
-	ks->cmd_reg_cache = (u16) offset | (u16)(BE0 << shift_bit);
-	iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
-	data  = ioread16(ks->hw_addr);
+	data  = ioread16((void *)((int)ks->hw_addr | offset));
+	
 	return (u8)(data >> shift_data);
 }
 
@@ -502,9 +502,7 @@ static u8 ks_rdreg8(struct ks_net *ks, int offset)
 
 static u16 ks_rdreg16(struct ks_net *ks, int offset)
 {
-	ks->cmd_reg_cache = (u16)offset | ((BE1 | BE0) << (offset & 0x02));
-	iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
-	return ioread16(ks->hw_addr);
+	return ioread16((void *)((int)ks->hw_addr | offset));
 }
 
 /**
@@ -518,9 +516,7 @@ static void ks_wrreg8(struct ks_net *ks, int offset, u8 value)
 {
 	u8  shift_bit = (offset & 0x03);
 	u16 value_write = (u16)(value << ((offset & 1) << 3));
-	ks->cmd_reg_cache = (u16)offset | (BE0 << shift_bit);
-	iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
-	iowrite16(value_write, ks->hw_addr);
+	iowrite16(value_write, (void *)((int)ks->hw_addr | offset));
 }
 
 /**
@@ -533,9 +529,7 @@ static void ks_wrreg8(struct ks_net *ks, int offset, u8 value)
 
 static void ks_wrreg16(struct ks_net *ks, int offset, u16 value)
 {
-	ks->cmd_reg_cache = (u16)offset | ((BE1 | BE0) << (offset & 0x02));
-	iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
-	iowrite16(value, ks->hw_addr);
+	iowrite16(value, (void *)((int)ks->hw_addr | offset));
 }
 
 /**
@@ -547,9 +541,12 @@ static void ks_wrreg16(struct ks_net *ks, int offset, u16 value)
  */
 static inline void ks_inblk(struct ks_net *ks, u16 *wptr, u32 len)
 {
+	u16 tmp;
 	len >>= 1;
-	while (len--)
-		*wptr++ = (u16)ioread16(ks->hw_addr);
+	while (len--) {
+		tmp = (u16)ioread16(ks->hw_addr_cmd);
+		*wptr++ = (tmp >> 8 | ((tmp & 0xff) << 8));
+	}
 }
 
 /**
@@ -561,9 +558,12 @@ static inline void ks_inblk(struct ks_net *ks, u16 *wptr, u32 len)
  */
 static inline void ks_outblk(struct ks_net *ks, u16 *wptr, u32 len)
 {
+	u16 tmp;
 	len >>= 1;
-	while (len--)
-		iowrite16(*wptr++, ks->hw_addr);
+	while (len--) {
+		tmp = *wptr++;
+		iowrite16((tmp >> 8 | (tmp & 0xff)<<8), ks->hw_addr_cmd);
+	}
 }
 
 static void ks_disable_int(struct ks_net *ks)
@@ -596,7 +596,8 @@ static inline void ks_save_cmd_reg(struct ks_net *ks)
 	/*ks8851 MLL has a bug to read back the command register.
 	* So rely on software to save the content of command register.
 	*/
-	ks->cmd_reg_cache_int = ks->cmd_reg_cache;
+	/* we don't need cmd_reg FPGA is handling this */
+	//ks->cmd_reg_cache_int = ks->cmd_reg_cache;
 }
 
 /**
@@ -607,8 +608,8 @@ static inline void ks_save_cmd_reg(struct ks_net *ks)
  */
 static inline void ks_restore_cmd_reg(struct ks_net *ks)
 {
-	ks->cmd_reg_cache = ks->cmd_reg_cache_int;
-	iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
+	//ks->cmd_reg_cache = ks->cmd_reg_cache_int;
+	//iowrite16(ks->cmd_reg_cache, ks->hw_addr_cmd);
 }
 
 /**
@@ -814,7 +815,7 @@ static void ks_rcv(struct ks_net *ks, struct net_device *netdev)
 		if (likely(skb)) {
 			skb_reserve(skb, 2);
 			/* read data block including CRC 4 bytes */
-			ks_read_qmu(ks, (u16 *)skb->data, frame_hdr->len);
+			ks_read_qmu(ks, (u16 *)skb->data, frame_hdr->len +4);
 			skb_put(skb, frame_hdr->len - 4);
 			skb->protocol = eth_type_trans(skb, netdev);
 			netif_rx(skb);
@@ -1229,6 +1230,17 @@ static void ks_set_rx_mode(struct net_device *netdev)
 	}
 } /* ks_set_rx_mode */
 
+static void ks_read_mac(struct ks_net *ks)
+{
+	u16 addr[3];
+
+	addr[0] = ks_rdreg16(ks, KS_MARH);
+	addr[1] = ks_rdreg16(ks, KS_MARM);
+	addr[2] = ks_rdreg16(ks, KS_MARL);
+
+	memcpy(ks->mac_addr, addr, ETH_ALEN);
+}
+
 static void ks_set_mac(struct ks_net *ks, u8 *data)
 {
 	u16 *pw = (u16 *)data;
@@ -1524,7 +1536,8 @@ static int ks_hw_init(struct ks_net *ks)
 	if (!ks->frame_head_info)
 		return false;
 
-	ks_set_mac(ks, KS_DEFAULT_MAC_ADDRESS);
+	/* u-boot has already set mac adress, not messing around */
+	//ks_set_mac(ks, KS_DEFAULT_MAC_ADDRESS);
 	return true;
 }
 
@@ -1543,7 +1556,7 @@ static int ks8851_probe(struct platform_device *pdev)
 	struct net_device *netdev;
 	struct ks_net *ks;
 	u16 id, data;
-	const char *mac;
+	//const char *mac;
 
 	netdev = alloc_etherdev(sizeof(struct ks_net));
 	if (!netdev)
@@ -1561,6 +1574,9 @@ static int ks8851_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
+	/* FPGA handle cmd/data access, but we use hw_addr_cmd	 */
+ 	/* because we do "DMA" acces using another addr.	 */ 
+ 	/* maybe change name to hw_addr_dma ?			 */ 
 	io_c = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	ks->hw_addr_cmd = devm_ioremap_resource(&pdev->dev, io_c);
 	if (IS_ERR(ks->hw_addr_cmd)) {
@@ -1617,7 +1633,7 @@ static int ks8851_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, netdev);
 
-	ks_soft_reset(ks, GRR_GSR);
+	//ks_soft_reset(ks, GRR_GSR);
 	ks_hw_init(ks);
 	ks_disable_qmu(ks);
 	ks_setup(ks);
@@ -1626,8 +1642,11 @@ static int ks8851_probe(struct platform_device *pdev)
 	data = ks_rdreg16(ks, KS_OBCR);
 	ks_wrreg16(ks, KS_OBCR, data | OBCR_ODS_16MA);
 
+	/* u-boot has already set MAC address from eeprom, */
+	/* not messing around, instead update ks->mac_add  */
+	ks_read_mac(ks);
 	/* overwriting the default MAC address */
-	if (pdev->dev.of_node) {
+	/*if (pdev->dev.of_node) {
 		mac = of_get_mac_address(pdev->dev.of_node);
 		if (mac)
 			memcpy(ks->mac_addr, mac, ETH_ALEN);
@@ -1641,7 +1660,7 @@ static int ks8851_probe(struct platform_device *pdev)
 			goto err_pdata;
 		}
 		memcpy(ks->mac_addr, pdata->mac_addr, ETH_ALEN);
-	}
+	}*/
 	if (!is_valid_ether_addr(ks->mac_addr)) {
 		/* Use random MAC address if none passed */
 		eth_random_addr(ks->mac_addr);

@@ -102,7 +102,6 @@
 				2 0x100 0xff>;
 			interrupts = <21 0x8>;
 			interrupt-parent = <&ipic>;
-			local-mac-address = [ 08 00 51 20 4D B2 ];
 		};
 	};
 

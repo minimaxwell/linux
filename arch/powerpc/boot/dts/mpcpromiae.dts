@@ -110,14 +110,13 @@
 			//};
 		};
 
-//		eth2@2,0 {
-//			compatible = "micrel,ks8851-mll";
-//			reg =  <2 0x00 0xff
-//				2 0x100 0xff>;
-//			local-mac-address = [ 08 00 51 20 4D B2 ];
-//			interrupts = < 5 >;
-//			interrupt-parent = <&ipic>;
-//		};
+		eth2@2,0 {
+			compatible = "micrel,ks8851-mll";
+			reg =  <2 0x00 0xff
+				2 0x100 0xff>;
+			interrupts = <21 0x8>;
+			interrupt-parent = <&ipic>;
+		};
 
 		fpga-m@4,0000000 { // Driver LDB (deviendra peut etre obsolete)
 			#address-cells = <1>;
