@@ -166,14 +166,14 @@ static struct spi_board_info mpc832x_spi_boardinfo = {
 
 static int __init mpc832x_spi_init(void)
 {
-	par_io_config_pin(3,  0, 3, 0, 1, 0); /* SPI1 MOSI, I/O */
-	par_io_config_pin(3,  1, 3, 0, 1, 0); /* SPI1 MISO, I/O */
-	par_io_config_pin(3,  2, 3, 0, 1, 0); /* SPI1 CLK,  I/O */
-	par_io_config_pin(3,  3, 2, 0, 1, 0); /* SPI1 SEL,  I   */
-
-	par_io_config_pin(3, 13, 1, 0, 0, 0); /* !SD_CS,    O */
-	par_io_config_pin(3, 14, 2, 0, 0, 0); /* SD_INSERT, I */
-	par_io_config_pin(3, 15, 2, 0, 0, 0); /* SD_PROTECT,I */
+//	par_io_config_pin(3,  0, 3, 0, 1, 0); /* SPI1 MOSI, I/O */
+//	par_io_config_pin(3,  1, 3, 0, 1, 0); /* SPI1 MISO, I/O */
+//	par_io_config_pin(3,  2, 3, 0, 1, 0); /* SPI1 CLK,  I/O */
+//	par_io_config_pin(3,  3, 2, 0, 1, 0); /* SPI1 SEL,  I   */
+//
+//	par_io_config_pin(3, 13, 1, 0, 0, 0); /* !SD_CS,    O */
+//	par_io_config_pin(3, 14, 2, 0, 0, 0); /* SD_INSERT, I */
+//	par_io_config_pin(3, 15, 2, 0, 0, 0); /* SD_PROTECT,I */
 
 	/*
 	 * Don't bother with legacy stuff when device tree contains

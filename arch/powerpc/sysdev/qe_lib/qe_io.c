@@ -126,7 +126,7 @@ int par_io_config_pin(u8 port, u8 pin, int dir, int open_drain,
 }
 EXPORT_SYMBOL(par_io_config_pin);
 
-int par_io_data_set(u8 port, u8 pin, u8 val)
+int par_io_data_get(u8 port, u8 pin)
 {
 	u32 pin_mask, tmp_val;
 
@@ -137,11 +137,31 @@ int par_io_data_set(u8 port, u8 pin, u8 val)
 	/* calculate pin location */
 	pin_mask = (u32) (1 << (QE_PIO_PINS - 1 - pin));
 
+	tmp_val = in_be32(&par_io[port].cpdata) ;
+	
+	if (tmp_val & pin_mask)
+		return 1;
+	else 
+		return 0;
+}
+EXPORT_SYMBOL(par_io_data_get);
+
+int par_io_data_set(u8 port, u8 pin, u8 val)
+{
+	u32 pin_mask, tmp_val;
+	if (port >= num_par_io_ports)
+		return -EINVAL;
+	if (pin >= QE_PIO_PINS)
+		return -EINVAL;
+	/* calculate pin location */
+	pin_mask = (u32) (1 << (QE_PIO_PINS - 1 - pin));
+
 	tmp_val = in_be32(&par_io[port].cpdata);
 
-	if (val == 0)		/* clear */
+
+	if (val == 0) 		/* clear */
 		out_be32(&par_io[port].cpdata, ~pin_mask & tmp_val);
-	else			/* set */
+	else 			/* set */
 		out_be32(&par_io[port].cpdata, pin_mask | tmp_val);
 
 	return 0;
