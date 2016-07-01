@@ -362,7 +362,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-c4e1";
-			reg = <6 0x100 0x00FF 6 0x200 0x00FF 6 0x300 0x00FF 6 0x400 0x00FF 6 0x500 0x00FF>;
+			reg = <6 0x0 0x600>;
 			interrupts = <22 0>;
 			interrupt-parent = <&ipic>;
 		};
