@@ -18,4 +18,4 @@ obj-$(CONFIG_MPC837x_RDB)	+= mpc837x_rdb.o
 obj-$(CONFIG_ASP834x)		+= asp834x.o
 obj-$(CONFIG_KMETER1)		+= km83xx.o
 obj-$(CONFIG_MPCPRO)     	+= mcr3000_2g.o mcr3000_2g_clock.o miae.o \
-				     mcr3000_2g_fpga.o
+				     mcr3000_2g_fpga.o mpcpro.o
