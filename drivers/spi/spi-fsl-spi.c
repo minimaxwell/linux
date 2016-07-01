@@ -318,7 +318,8 @@ static int fsl_spi_cpu_bufs(struct mpc8xxx_spi *mspi,
 		udelay(10);
                 if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NE) {
 			u32 rx_data = (reg_base->receive << 8) >> 24;
-			if (mspi->rx)
+			/* first read is when we issue command, skip it */
+			if (mspi->rx && mspi->count != len)
 				mspi->get_rx(rx_data, mspi);
                 }
 	}
