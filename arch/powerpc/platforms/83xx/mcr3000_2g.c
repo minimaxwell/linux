@@ -142,15 +142,19 @@ end:
 
 void fpgaf_cascade(unsigned int irq, struct irq_desc *desc)
 {
-	struct irq_chip *chip = irq_desc_get_chip(desc);
+	//struct irq_chip *chip = irq_desc_get_chip(desc);
 	int cascade_irq = fpgaf_get_irq();
+	unsigned int vec; 
 
 	while (cascade_irq >= 0) {
 		generic_handle_irq(cascade_irq);
 		cascade_irq = fpgaf_get_irq();
 	}
 
-	chip->irq_eoi(&desc->irq_data);
+	vec = (unsigned int)irqd_to_hwirq(&desc->irq_data);
+
+	out_be16(&fpgaf_regs->it_ack, ~(1 << (15-vec)));
+	//chip->irq_eoi(&desc->irq_data);
 }
 
 /*
