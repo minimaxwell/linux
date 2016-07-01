@@ -36,6 +36,7 @@
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 #include <linux/of_platform.h>
+#include <linux/micrel_phy.h>
 
 #include <asm/uaccess.h>
 #include <asm/irq.h>
@@ -46,7 +47,19 @@
 #include <asm/ucc_fast.h>
 #include <asm/machdep.h>
 
-#include "ucc_geth.h"
+#include "ucc_geth.h"	
+
+#include <net/arp.h>
+#include <linux/inetdevice.h>
+#include <linux/if_vlan.h>
+#include <linux/syscalls.h>
+
+#define PHY_ISOLATE 1
+#define PHY_POWER_DOWN 2
+#define LINK_MONITOR_RETRY (2*HZ)
+#define MODE_MANU 1
+#define MODE_AUTO 2
+
 
 #undef DEBUG
 
@@ -1670,7 +1683,278 @@ static void adjust_link(struct net_device *dev)
 
 	if (new_state && netif_msg_link(ugeth))
 		phy_print_status(phydev);
+
+	/*cancel_delayed_work_sync(&ugeth->link_queue);*/
+	/*if (ugeth->mode == MODE_AUTO) schedule_delayed_work(&ugeth->link_queue, 0);*/
 }
+
+void fs_sysfs_notify(struct work_struct *work)
+{
+	struct fs_notify_work *notify =
+			container_of(work, struct fs_notify_work, notify_queue);
+
+	sysfs_notify_dirent(notify->kn);
+}
+
+
+void fs_send_gratuitous_arp(struct work_struct *work)
+{
+	struct ucc_geth_private *ugeth =
+			container_of(work, struct ucc_geth_private, arp_queue);
+	__be32 ip_addr;
+	struct sk_buff *skb;
+
+	int fd, i = 0, nb_line = 0, ret, j, k = 0;
+	char buf[300];
+	char lines[10][50];
+	char iface_and_vlan[10];
+	int id;
+	char iface[10];
+	char sanitized_iface[5] ;
+
+	ip_addr = inet_select_addr(ugeth->ndev, 0, 0);
+	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, ugeth->ndev, ip_addr, NULL,
+			ugeth->ndev->dev_addr, NULL);
+	if (skb == NULL)
+		printk("arp_create failure -> gratuitous arp not sent\n");
+	else {
+		mm_segment_t old_fs = get_fs();
+		//send skb on eth1
+		arp_xmit(skb);
+		//dev_err(ugeth->dev, "gratuitous arp sent\n");
+
+		//find all vlan on eth1
+		//FIXME : is there a clean way ? 
+	
+		set_fs(KERNEL_DS);
+
+		fd = sys_open("/proc/net/vlan/config", O_RDONLY, 0);
+		if (fd >= 0) {
+			while (sys_read(fd, &buf[i], 1) == 1 ) {
+				//remove header (2 lines)
+				//VLAN Dev name    | VLAN ID \n
+				//Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD \n
+				if (buf[i] == '\n')
+					nb_line++;
+				if (nb_line >= 2)
+					i++;
+			}
+			//split on each line
+			nb_line = 0;
+			for (j=1;j<i;j++) {
+				if (buf[j] == '\n') {
+					lines[nb_line][k] = '\n';
+					nb_line++;
+					k = 0;
+				}
+				lines[nb_line][k] = buf[j];
+				k++;
+			}
+			
+			//each line is something like :
+			//eth1.64        | 64  | eth1\n
+			for (i = 0; i < nb_line; i++) {
+				//dev_err(ugeth->dev, lines[i]);
+				ret = sscanf(lines[i], "\n%s %*s %d %*s %s", iface_and_vlan, &id, iface); 
+				if (ret == 3) {
+					//dev_err(ugeth->dev, "\n----\nret : %d\n----\niface_and_vlan : *%s*\nid: *%d*\n\niface *%s*\n----\n",
+					//		 ret, iface_and_vlan, id, iface);
+					//if iface = eth1, send arp on corresponding vlan
+					strcpy(sanitized_iface,iface);
+					sanitized_iface[4] = '\0';
+					if (strcmp("eth1", sanitized_iface) == 0) {
+						skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr,
+								ugeth->ndev, ip_addr,
+								NULL,
+								ugeth->ndev->dev_addr,
+								NULL);
+						skb = vlan_put_tag(skb, htons(ETH_P_8021Q), id);
+						if (!skb) { 
+							dev_err(ugeth->dev, "failed to insert VLAN tag -> gratuitous arp not sent\n");
+						}
+						arp_xmit(skb);
+						//dev_err(ugeth->dev, "gratuitous arp sent on %s.%d\n", iface, id);
+					}
+				}
+			}
+			sys_close(fd);
+		}
+		set_fs(old_fs);
+	}
+}
+
+
+void fs_link_switch(struct ucc_geth_private *ugeth)
+{
+	struct phy_device *phydev = ugeth->phydev;
+	unsigned long flags;
+	int value;
+
+	/* Do not suspend the PHY, but isolate it. We can't get a powered 
+	   down PHY's link status */
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+
+	if (phydev == ugeth->phydevs[0]) {
+		if (ugeth->phydevs[1]) {
+			phydev = ugeth->phydevs[1];
+			dev_err(ugeth->dev, "Switch to PHY B\n");
+			/* In the open function, autoneg was disabled for PHY B.
+			   It must be enabled when PHY B is activated for the 
+			   first time. */
+			phydev->autoneg = AUTONEG_ENABLE;
+		}
+	}
+	else {
+		phydev = ugeth->phydevs[0];
+		dev_err(ugeth->dev, "Switch to PHY A\n");
+	}
+
+	if (ugeth->phydevs[1]) {
+		/* Active phy has changed -> notify user space */
+		schedule_work(&ugeth->notify_work[ACTIVE_LINK].notify_queue);
+	}
+
+	spin_lock_irqsave(&ugeth->lock, flags);
+	ugeth->phydev = phydev;
+	ugeth->change_time = jiffies;
+	spin_unlock_irqrestore(&ugeth->lock, flags);
+
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+	if (phydev->drv->config_aneg)
+		phydev->drv->config_aneg(phydev);
+
+	if (ugeth->phydev->link)
+	{
+		netif_carrier_on(ugeth->phydev->attached_dev);
+
+		/* Send gratuitous ARP */
+		schedule_work(&ugeth->arp_queue);
+	}
+}
+
+// #define DOUBLE_ATTACH_DEBUG 1
+
+void fs_link_monitor(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct ucc_geth_private *ugeth =
+			container_of(dwork, struct ucc_geth_private, link_queue);
+	struct phy_device *phydev = ugeth->phydev;
+	struct phy_device *changed_phydevs[2] = {NULL, NULL};
+	int nb_changed_phydevs = 0;
+
+	#ifdef DOUBLE_ATTACH_DEBUG
+	int value;	
+	printk("Current PHY : %s\n", ugeth->phydev==ugeth->phydevs[0] ? "PHY 0": "PHY 1");
+	printk("PHY 0 (addr=%d) : %s ", ugeth->phydevs[0]->addr, ugeth->phydevs[0]->link ? "Up": "Down");
+	value = phy_read(ugeth->phydevs[0], MII_BMSR);
+	if (value & 0x0004)
+		printk ("(Up in MII_BMSR) ");
+	else
+		printk ("(Down in MII_BMSR) ");
+	value = phy_read(ugeth->phydevs[0], MII_BMCR);
+	if (value & 0x0400) 
+		printk ("isolated\n");
+	else
+		printk ("not isolated\n");
+	
+	if (ugeth->phydevs[1]) {
+		printk("PHY 1 (addr=%d) : %s ", ugeth->phydevs[1]->addr, ugeth->phydevs[1]->link ? "Up": "Down");
+		value = phy_read(ugeth->phydevs[1], MII_BMSR);
+		if (value & 0x0004) 
+			printk ("(Up in MII_BMSR) ");
+		else
+			printk ("(Down in MII_BMSR) ");
+		value = phy_read(ugeth->phydevs[1], MII_BMCR);
+		if (value & 0x0400) 
+			printk ("isolated\n");
+		else
+			printk ("not isolated\n");
+	}
+	#endif
+	if (ugeth->phydevs[0]->state != PHY_RUNNING && ugeth->phydevs[1] && ugeth->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
+		ugeth->phydevs[1]->state = PHY_RUNNING;
+	#ifdef DOUBLE_ATTACH_DEBUG
+		dev_err(ugeth->dev, "PHY is now running \n");
+	#endif
+	}
+
+	/* If there's only one PHY -> Nothing to do */
+	if (! ugeth->phydevs[1]) {
+		if (!phydev->link && ugeth->mode == MODE_AUTO) 
+			schedule_delayed_work(&ugeth->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+
+	/* If we are not in AUTO mode, don't do anything */
+	if (ugeth->mode != MODE_AUTO) return;
+	
+	/* If elapsed time since last change is too small, wait for a while */
+	if (jiffies - ugeth->change_time < LINK_MONITOR_RETRY) {
+		schedule_delayed_work(&ugeth->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+	/* Which phydev(s) has changed ? */
+	if (ugeth->phydevs[0]->link != ugeth->phy_oldlinks[0]) {
+		changed_phydevs[nb_changed_phydevs++] = ugeth->phydevs[0];
+		ugeth->phy_oldlinks[0] = ugeth->phydevs[0]->link;
+		/* phyA link status has changed -> notify user space */
+		schedule_work(&ugeth->notify_work[PHY0_LINK].notify_queue);
+
+	} 
+	if (ugeth->phydevs[1]->link != ugeth->phy_oldlinks[1]) {
+		changed_phydevs[nb_changed_phydevs++] = ugeth->phydevs[1];
+		ugeth->phy_oldlinks[1] = ugeth->phydevs[1]->link;
+		/* phyB link status has changed -> notify user space */
+		schedule_work(&ugeth->notify_work[PHY1_LINK].notify_queue);
+	}
+
+	/* If nothing has changed, exit */
+	if (! nb_changed_phydevs) {
+		/* Check the consistency of the carrier before exiting */
+		if (ugeth->phydev->link && ! netif_carrier_ok(ugeth->phydev->attached_dev))
+			netif_carrier_on(ugeth->phydev->attached_dev);
+		return;
+	}
+
+
+	/*
+	 * If no one was in charge (no active link) PHY0 become the 
+	 * active link but if either PHY0 or PHY1 was already active,
+	 * don't change anything, we leave him in charge
+	 */		
+	if (ugeth->phydevs[1] && !ugeth->phy_oldlinks[1]) {
+		if (ugeth->phydev != ugeth->phydevs[0] && ugeth->phydevs[1]->link && ugeth->phydevs[0]->link) {
+			fs_link_switch(ugeth);
+		}
+	}
+		
+	
+	/* If the active PHY has a link and carrier is off, 
+	   call netif_carrier_on */
+	if (phydev->link) {
+		if (! netif_carrier_ok(ugeth->phydev->attached_dev))
+			netif_carrier_on(ugeth->phydev->attached_dev);
+		return;
+	}
+
+	/* If we reach this point, the active PHY has lost its link */
+	/* If the other PHY has a link -> switch */
+	if ((phydev == ugeth->phydevs[0] && ugeth->phydevs[1]->link) ||
+	    (phydev == ugeth->phydevs[1] && ugeth->phydevs[0]->link))
+	{
+		fs_link_switch(ugeth);
+	} else {
+		ugeth->change_time = jiffies;
+		schedule_delayed_work(&ugeth->link_queue, LINK_MONITOR_RETRY);
+	}
+	
+}
+		
 
 /* Initialize TBI PHY interface for communicating with the
  * SERDES lynx PHY on the chip.  We communicate with this PHY
@@ -1731,6 +2015,8 @@ static int init_phy(struct net_device *dev)
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
 	priv->oldduplex = -1;
+	priv->change_time = jiffies;
+	priv->mode = MODE_AUTO;
 
 	phydev = of_phy_connect(dev, ug_info->phy_node, &adjust_link, 0,
 				priv->phy_interface);
@@ -1755,6 +2041,18 @@ static int init_phy(struct net_device *dev)
 	phydev->advertising = phydev->supported;
 
 	priv->phydev = phydev;
+
+	priv->phydevs[0] = phydev;
+	priv->phy_oldlinks[0] = 0;
+	
+	priv->phydevs[1] = of_phy_connect(dev, ug_info->phy_node2, 
+				&adjust_link, 0, priv->phy_interface);
+	priv->phy_oldlinks[1] = 0;
+
+	if (priv->phydevs[1] && priv->disable_phy == PHY_POWER_DOWN) {
+		if (priv->phydevs[1]->drv->suspend) 
+			priv->phydevs[1]->drv->suspend(priv->phydevs[1]);
+	}
 
 	return 0;
 }
@@ -3675,6 +3973,120 @@ static int ucc_geth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return phy_mii_ioctl(ugeth->phydev, rq, cmd);
 }
 
+/* sysfs hook function */
+static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",ugeth->phydev == ugeth->phydevs[1]?1:0);
+}
+
+static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+	int active = simple_strtol(buf, NULL, 10);
+
+	if (active != 1) active = 0;
+	if (!ugeth->phydevs[active]) {
+		dev_warn(dev, "PHY on address %d does not exist\n", active);
+		return count;
+	}
+	if (ugeth->phydevs[active] != ugeth->phydev) {
+		fs_link_switch(ugeth);
+		cancel_delayed_work_sync(&ugeth->link_queue);
+		if (!ugeth->phydev->link && ugeth->mode == MODE_AUTO) schedule_delayed_work(&ugeth->link_queue, LINK_MONITOR_RETRY);
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_attr_active_link_store);
+
+static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ctrl;
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+
+	ctrl = phy_read(ugeth->phydevs[0], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ugeth->phydevs[0]->link ? 2 : 1);
+}
+
+static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
+
+static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ctrl;
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+	
+	ctrl = phy_read(ugeth->phydevs[1], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ugeth->phydevs[1]->link ? 2 : 1);
+}
+
+static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
+
+static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+	struct phy_device *phydev = ugeth->phydevs[0];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (mode && ugeth->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && ugeth->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
+	return count;
+}
+
+static DEVICE_ATTR(phy0_mode, S_IWUSR, NULL, fs_attr_phy0_mode_store);
+
+static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+	struct phy_device *phydev = ugeth->phydevs[1];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (mode && ugeth->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && ugeth->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
+	return count;
+}
+
+static DEVICE_ATTR(phy1_mode, S_IWUSR, NULL, fs_attr_phy1_mode_store);
+
+static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",ugeth->mode);
+}
+
+static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct ucc_geth_private *ugeth = netdev_priv(ndev);
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (ugeth->mode != mode) {
+		ugeth->mode = mode;
+		if (mode == MODE_AUTO) {
+			cancel_delayed_work_sync(&ugeth->link_queue);
+			schedule_delayed_work(&ugeth->link_queue, 0);
+		}
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
+
 static const struct net_device_ops ucc_geth_netdev_ops = {
 	.ndo_open		= ucc_geth_open,
 	.ndo_stop		= ucc_geth_close,
@@ -3698,7 +4110,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	struct ucc_geth_private *ugeth = NULL;
 	struct ucc_geth_info *ug_info;
 	struct resource res;
-	int err, ucc_num, max_speed = 0;
+	int err, ucc_num, max_speed = 0, ret;
 	const unsigned int *prop;
 	const char *sprop;
 	const void *mac_addr;
@@ -3716,6 +4128,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 		PHY_INTERFACE_MODE_TBI, PHY_INTERFACE_MODE_RTBI,
 		PHY_INTERFACE_MODE_SGMII,
 	};
+	char *Disable_PHY;
 
 	ugeth_vdbg("%s: IN", __func__);
 
@@ -3801,6 +4214,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 			return err;
 		ug_info->phy_node = of_node_get(np);
 	}
+	ug_info->phy_node2 = of_parse_phandle(np, "phy-handle", 1);
 
 	/* Find the TBI PHY node.  If it's not there, we don't support SGMII */
 	ug_info->tbi_node = of_parse_phandle(np, "tbi-handle", 0);
@@ -3922,7 +4336,51 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	ugeth->ndev = dev;
 	ugeth->node = np;
 
+	ugeth->disable_phy = 0;
+	Disable_PHY = (char *)of_get_property(np, 
+		"PHY-disable", NULL);
+	if (Disable_PHY) {
+		printk("PHY-disable = %s\n", Disable_PHY);
+		if (! strcmp(Disable_PHY, "power-down"))
+			ugeth->disable_phy = PHY_POWER_DOWN;
+		else if (! strcmp(Disable_PHY, "isolate"))
+			ugeth->disable_phy = PHY_ISOLATE;
+	}
+
+	ret = 0;
+	ret |= device_create_file(ugeth->dev, &dev_attr_active_link);
+	ret |= device_create_file(ugeth->dev, &dev_attr_phy0_link);
+	if (ug_info->phy_node2) ret |= device_create_file(ugeth->dev, &dev_attr_phy1_link);
+	ret |= device_create_file(ugeth->dev, &dev_attr_phy0_mode);
+	if (ug_info->phy_node2) ret |= device_create_file(ugeth->dev, &dev_attr_phy1_mode);
+	ret |= device_create_file(ugeth->dev, &dev_attr_mode);
+	if (ret)
+		goto out_remove_file;
+
+	ugeth->notify_work[PHY0_LINK].kn = 
+		sysfs_get_dirent(ugeth->dev->kobj.sd, "phy0_link");
+	ugeth->notify_work[PHY1_LINK].kn = 
+		sysfs_get_dirent(ugeth->dev->kobj.sd, "phy1_link");
+	ugeth->notify_work[ACTIVE_LINK].kn = 
+		sysfs_get_dirent(ugeth->dev->kobj.sd, "active_link");
+
+	/* register the PHY board fixup (for CMPC885 board) */
+	/*err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
+					 fs_enet_phy_micrel_fixup);*/
+	/* we can live without it, so just issue a warning */
+	/*if (err)
+		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");*/
 	return 0;
+
+out_remove_file:
+	device_remove_file(ugeth->dev, &dev_attr_active_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy0_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy1_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy0_mode);
+	device_remove_file(ugeth->dev, &dev_attr_phy1_mode);
+	device_remove_file(ugeth->dev, &dev_attr_mode);
+	unregister_netdev(dev);
+	return ret;
 }
 
 static int ucc_geth_remove(struct platform_device* ofdev)
@@ -3930,6 +4388,13 @@ static int ucc_geth_remove(struct platform_device* ofdev)
 	struct net_device *dev = platform_get_drvdata(ofdev);
 	struct ucc_geth_private *ugeth = netdev_priv(dev);
 
+	device_remove_file(ugeth->dev, &dev_attr_active_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy0_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy1_link);
+	device_remove_file(ugeth->dev, &dev_attr_phy0_mode);
+	device_remove_file(ugeth->dev, &dev_attr_phy1_mode);
+	device_remove_file(ugeth->dev, &dev_attr_mode);
+	
 	unregister_netdev(dev);
 	free_netdev(dev);
 	ucc_geth_memclean(ugeth);
