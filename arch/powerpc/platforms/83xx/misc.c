@@ -131,9 +131,13 @@ void __init mpc83xx_ipic_and_qe_init_IRQ(void)
 		/* MCR3000_2G configuration */
 		if (!strcmp(model, "MCR3000_2G")) {
 			irq = fpgaf_pic_init();
+			if (irq == NO_IRQ)
+				printk("@@@ failure !\n");
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpgaf_cascade);
 			irq = fpga_pic_init();
+			if (irq == NO_IRQ)
+				printk("@@@ failure !\n");
 			if (irq != NO_IRQ)
 				irq_set_chained_handler(irq, fpga_cascade);
 		}
@@ -220,7 +224,7 @@ int __init mpc83xx_declare_of_platform_devices(void)
 		pr_err("MODEL: failed to identify model\n");
 	}
 
-	of_platform_bus_probe(NULL, of_bus_ids, NULL);
+	//of_platform_bus_probe(NULL, of_bus_ids, NULL); ??
 	return 0;
 }
 

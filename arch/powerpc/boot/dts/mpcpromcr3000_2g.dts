@@ -249,7 +249,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <22>;
+				interrupts = <23 1>;
 				interrupt-parent = <&ipic>;
 				reg = <0x0 0x90>;	// Mappage registres FPGAF
 				compatible = "s3k,mcr3000_2g-pic";
@@ -263,7 +263,7 @@
 			reg = <4 0x1000000 0x0200 6 0x0 0x0002 4 0x60 0x02 4 0x10000E8 0x02>;
 			/* registres FPGA - Registre ident MEZZ (1G) - Registre NetRef FPGAF - Registre BRG5 FPGA */
 			ranges = <0 4 0x1000000 0x0200>;
-			interrupts = <19>;
+			interrupts = <19 0>;
 			interrupt-parent = <&ipic>;
 			serie: gpio-controller@0E4 {
 				#gpio-cells = <2>;
@@ -278,7 +278,7 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-e1";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <20>;
+			interrupts = <20 1>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -287,7 +287,7 @@
 			#size-cells = <1>;
 			compatible = "lantiq,pef2256";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <20>;
+			interrupts = <20 0>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -305,7 +305,7 @@
 			reg = <4 0x100009c 2 4 0 0 4 0x10000e2 2>;			// Version FPGA ; NULL ; RSERIE
 			gpios = <&FPGA_CS0 1 1			// INITFPGA
 				 &rst 13 1 >;			// RST_FPGA
-			pio = <0 11 0>;				// DONEFPGA
+			pios = <0 11 0>;				// DONEFPGA
 		};
 		
 	};
