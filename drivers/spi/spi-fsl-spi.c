@@ -48,7 +48,6 @@
 #define TYPE_FSL	0
 #define TYPE_GRLIB	1
 
-
 static void fsl_spi_cpu_irq(struct mpc8xxx_spi *mspi, u32 events);
 
 struct fsl_spi_match_data {
@@ -295,8 +294,15 @@ static int fsl_spi_cpu_bufs(struct mpc8xxx_spi *mspi,
 {
 	u32 word;
 	struct fsl_spi_reg *reg_base = mspi->reg_base;
-
+	int i = 0;
+	int j = 0;
+	int quickfix = 0;
+	 
 	mspi->count = len;
+	if (len > 4096) { //FIXME 
+		mspi->count = len*2;
+		quickfix = 1;
+	}
 
 	/* why do we need it ? */
 	par_io_config_pin(2,  2, 1, 0, 0, 0);
@@ -306,8 +312,20 @@ static int fsl_spi_cpu_bufs(struct mpc8xxx_spi *mspi,
 		mpc8xxx_spi_write_reg(&reg_base->event, 0xff);
 		mpc8xxx_spi_write_reg(&reg_base->mask, 0x00);
                 if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NF) {
-			word = mspi->get_tx(mspi);
-			reg_base->transmit =  word << 24;
+			if (quickfix == 1) {
+				if (i == 0) {
+					word = mspi->get_tx(mspi);
+					reg_base->transmit =  word << 16;
+					j++;
+				} else {
+					
+					reg_base->transmit =  word << 24;
+					j--;
+				}
+			} else { 
+				word = mspi->get_tx(mspi);
+				reg_base->transmit =  word << 24;
+			}
                 }
 		udelay(10);
                 if (mpc8xxx_spi_read_reg(&reg_base->event) & SPIE_NE) {
