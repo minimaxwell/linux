@@ -808,11 +808,31 @@
 			compatible = "fsl,qe-muram", "fsl,cpm-muram";
 			ranges = <0x0 0x00010000 0x00004000>;
 
+			/* conserver les 4 premiers Kbytes pour QMC */
 			data-only@0 {
 				compatible = "fsl,qe-muram-data",
 					     "fsl,cpm-muram-data";
-				reg = <0x0 0x4000>;
+				reg = <0x1000 0x3000>;
 			};
+		};
+
+		tsa: tsa@9c0 {
+			compatible = "fsl,qe-tsa";
+			reg = <0x9c0 0x1>;	/* necessaire mais non utilise */
+			/* parametres possible : none, UCC4 */
+			ucc_qmc_miae = "UCC4";
+			/* vitesse bus numerique 4 ou 8 MHz */
+			data_rate = <4>;
+		};
+
+		ucc4q: qmc@a20 {
+			device_type = "qmc";
+			compatible = "fsl,qe-ucc-qmc";
+			cell-index = <4>;	/* The UCC number, 1-7*/
+			reg = <0x3200 0x200 0x10000 0x1000>;
+			interrupts = <35>;
+			interrupt-parent = <&qeic>;
+			clock-name = "clk1";
 		};
 
 		spi@4c0 {
