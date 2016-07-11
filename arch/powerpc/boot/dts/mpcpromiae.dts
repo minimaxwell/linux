@@ -283,7 +283,7 @@
 			#size-cells = <1>;
 			compatible = "s3k,mcr3000-e1";
 			reg = <4 0x2000000 0xFF>;
-			interrupts = <8 1>;
+			interrupts = <20 0>;
 			interrupt-parent = <&ipic>;
 		};
 		
@@ -293,7 +293,7 @@
 			compatible = "lantiq,pef2256";
 			reg = <4 0x2000000 0xFF>;
 			data-rate = <4>;
-			interrupts = <8 1>;
+			interrupts = <20 0>;
 			interrupt-parent = <&ipic>;
 		};
 		
