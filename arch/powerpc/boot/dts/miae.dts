@@ -584,7 +584,7 @@
 			#gpio-cells = <2>;
 			compatible = "cs-fav-poste";
 			gpio-controller;
-			reg = <4 0x44 2>;	/* necessaire mais non utilise */
+			reg = <4 0x44 2>;
 			gpios = <&fav 5 1	/* CS FAV */
 				 &fav 4 1	/* CS Ident equipement */
 				 &fav 3 1>;	/* CS FPGA */
@@ -926,7 +926,7 @@
 					 &CPM1_PIO_D 6 1	/* SICOFI 3 */
 					 &CPM1_PIO_B 14 1	/* TEMP MPC885 */
 					 &CPM1_PIO_B 21 1	/* EEPROM CMPC885 */
-					 &FAV_CS_SPI 1 1	/* FAV SPI */
+					 &FAV_CS_SPI 0 1	/* FAV SPI */
 					 &FAV_CS_SPI 2 1>;	/* FAV POSTE FPGA */
 				sicofi@0 {
 					compatible = "infineon,miae-sicofi", "cs,mia-far";
