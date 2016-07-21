@@ -254,7 +254,7 @@
 				interrupt-controller;
 				#address-cells = <0>;
 				#interrupt-cells = <1>;
-				interrupts = <3 0x8>;
+				interrupts = <19 0>;
 				interrupt-parent = <&ipic>;
 				reg = <0x00 0x60>;	/* Mappage registres FPGAM */
 				compatible = "s3k,miae-pic";
@@ -333,7 +333,7 @@
 				&fav      13 1>;	// Alternat µCasque2
 		};
 
-		GPIO_CA_CLA {
+/*		GPIO_CA_CLA {
 			compatible = "s3k,gpios-def-ca", "cs,mia-far";
 			far-id = <0 7>;
 			names = "tor_in_1",
@@ -398,7 +398,7 @@
 				"Ec. droite Casque_b",
 				"Ec. gauche Casque_b";
 		};
-
+*/
 		GPIO_CA_NVCS {
 			compatible = "s3k,gpios-def-ca", "cs,mia-far";
 			far-id = <1>;
@@ -464,7 +464,7 @@
 				"Ec. droite Casque_b",
 				"Ec. gauche Casque_b";
 		};
-
+/*
 		GPIO_CA_GW {
 			compatible = "s3k,gpios-def-ca", "cs,mia-far";
 			far-id = <4>;
@@ -530,7 +530,7 @@
 				"not used",
 				"not used";
 		};
-		
+*/		
 		IDENT_EQUIPT_NVCS {
 			compatible = "ident-equipt-fav", "cs,mia-fav";
 			fav-id = <3 5 6>;
@@ -564,32 +564,32 @@
 			#gpio-cells = <2>;
 			compatible = "cs-fav-poste";
 			gpio-controller;
-			reg = <4 0x44 2>;	/* necessaire mais non utilise */
+			reg = <4 0x44 2>;
 			gpios = <&fav 5 1	/* CS FAV */
 				 &fav 4 1	/* CS Ident equipement */
 				 &fav 3 1>;	/* CS FPGA */
 		};
 		
-//		POT_A_NVCS {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <5 6>;
-//			user-name = "pot_a";
-//			dev-name = "ad7923";
-//			io-channels = <&iio 0>;
-//			io-channel-names = "channel_0";
-//			dev-channel = "channel_0";
-//		};
-//		POT_B_NVCS {
-//			compatible = "pot-miae", "cs,mia-fav";
-//			fav-id = <5 6>;
-//			user-name = "pot_b";
-//			dev-name = "ad7923";
-//			io-channels = <&iio 1>;
-//			io-channel-names = "channel_1";
-//			dev-channel = "channel_1";
-//		};
+		POT_A_NVCS {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <5 6>;
+			user-name = "pot_a";
+			dev-name = "ad7923";
+			io-channels = <&iio 0>;
+			io-channel-names = "channel_0";
+			dev-channel = "channel_0";
+		};
+		POT_B_NVCS {
+			compatible = "pot-miae", "cs,mia-fav";
+			fav-id = <5 6>;
+			user-name = "pot_b";
+			dev-name = "ad7923";
+			io-channels = <&iio 1>;
+			io-channel-names = "channel_1";
+			dev-channel = "channel_1";
+		};
 		
-		POT_A_PO {
+/*		POT_A_PO {
 			compatible = "pot-miae", "cs,mia-fav";
 			fav-id = <3>;
 			user-name = "pot_a";
@@ -617,7 +617,7 @@
 			dev-name = "none";
 			dev-channel = "channel_3";
 		};
-	};
+*/	};
 
 	soc8321@b0000000 {
 		#address-cells = <1>;
@@ -852,37 +852,37 @@
 				  &qe_pio_c 23   1	/* SICOFI 3 */
 				  &qe_pio_c  3   1	/* TEMP MPCPRO */
 				  &qe_pio_c  2   1	/* EEPROM carte base */
-				  &FAV_CS_SPI 1  1	/* FAV SPI */
+				  &FAV_CS_SPI 0  1	/* FAV SPI */
 				  &FAV_CS_SPI 2  1>;	/* FAV POSTE FPGA */
 
-//			sicofi@0 {
-//				compatible = "infineon,miae-sicofi", "cs,mia-far";
-//				far-id = <0 2 3 4 5 6 7>;
-//				spi-max-frequency = <1000000>;
-//				reg = <0>;
-//				spi-cs-high;
-//				spi-cpha;
-//				spi-troll;
-//				name_codec = "codec_1";
-//				analog_in = "-2dB -2dB -2dB -2dB";
-//				analog_out = "6dB 6dB 6dB 6dB";
-//				niveau_in = "-10dB -10dB -10dB -10dB";
-//				niveau_out = "-10dB -10dB -10dB -10dB";
-//			};
-//			sicofi_nvcs@0 {
-//				compatible = "infineon,miae-sicofi", "cs,mia-far";
-//				far-id = <1>;
-//				spi-max-frequency = <1000000>;
-//				reg = <0>;
-//				spi-cs-high;
-//				spi-cpha;
-//				spi-troll;
-//				name_codec = "codec_1";
-//				analog_in = "-2dB -2dB -2dB -2dB";
-//				analog_out = "0dB 0dB 0dB 0dB";
-//				niveau_in = "-10dB -10dB -10dB -10dB";
-//				niveau_out = "-10dB -10dB -10dB -10dB";
-//			};
+/*			sicofi@0 {
+				compatible = "infineon,miae-sicofi", "cs,mia-far";
+				far-id = <0 2 3 4 5 6 7>;
+				spi-max-frequency = <1000000>;
+				reg = <0>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+				name_codec = "codec_1";
+				analog_in = "-2dB -2dB -2dB -2dB";
+				analog_out = "6dB 6dB 6dB 6dB";
+				niveau_in = "-10dB -10dB -10dB -10dB";
+				niveau_out = "-10dB -10dB -10dB -10dB";
+			};
+*/			sicofi_nvcs@0 {
+				compatible = "infineon,miae-sicofi", "cs,mia-far";
+				far-id = <1>;
+				spi-max-frequency = <1000000>;
+				reg = <0>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+				name_codec = "codec_1";
+				analog_in = "-2dB -2dB -2dB -2dB";
+				analog_out = "0dB 0dB 0dB 0dB";
+				niveau_in = "-10dB -10dB -10dB -10dB";
+				niveau_out = "-10dB -10dB -10dB -10dB";
+			};
 			lm74@1 {
 				compatible = "ns,lm74";
 				spi-max-frequency = <1000000>;
@@ -903,20 +903,20 @@
 //				niveau_in = "-10dB -10dB -10dB -31dB";
 //				niveau_out = "-10dB -10dB -10dB -10dB";
 //			};
-//			sicofi_nvcs@2 {
-//				compatible = "infineon,miae-sicofi", "cs,mia-far";
-//				far-id = <1>;
-//				spi-max-frequency = <1000000>;
-//				reg = <2>;
-//				spi-cs-high;
-//				spi-cpha;
-//				spi-troll;
-//				name_codec = "codec_2";
-//				analog_in = "-2dB 0dB 0dB 18dB";
-//				analog_out = "6dB 3dB 3dB 4,5dB";
-//				niveau_in = "-10dB -10dB -10dB -37dB";
-//				niveau_out = "-10dB -10dB -10dB -10dB";
-//			};
+			sicofi_nvcs@2 {
+				compatible = "infineon,miae-sicofi", "cs,mia-far";
+				far-id = <1>;
+				spi-max-frequency = <1000000>;
+				reg = <2>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+				name_codec = "codec_2";
+				analog_in = "-2dB 0dB 0dB 18dB";
+				analog_out = "6dB 3dB 3dB 4,5dB";
+				niveau_in = "-10dB -10dB -10dB -37dB";
+				niveau_out = "-10dB -10dB -10dB -10dB";
+			};
 //			sicofi_gw@2 {
 //				compatible = "infineon,miae-sicofi", "cs,mia-far";
 //				far-id = <4>;
@@ -954,24 +954,24 @@
 //				niveau_in = "-27dB -8dB -27dB -8dB";
 //				niveau_out = "-10dB -10dB -10dB -10dB";
 //			};
-//			sicofi_nvcs@4 {
-//				compatible = "infineon,miae-sicofi", "cs,mia-fav";
-//				fav-id = <5 6>;
-//				spi-max-frequency = <1000000>;
-//				reg = <4>;
-//				spi-cs-high;
-//				spi-cpha;
-//				spi-troll;
-//				name_codec = "codec_3";
-//				analog_in = "12dB -7dB 12dB -7dB";
-//				analog_out = "6dB 6dB 6dB 6dB";
-//				niveau_in = "-27dB -8dB -27dB -8dB";
-//				niveau_out = "-10dB -10dB -10dB -10dB";
-//				io-channels = <&iio 2>, <&iio 3>;
-//				iio-name = "ad7923";
-//				io-channel-names = "channel_2", "channel_3";
-//				iio-channel = "channel_2", "channel_3";
-//			};
+			sicofi_nvcs@4 {
+				compatible = "infineon,miae-sicofi", "cs,mia-fav";
+				fav-id = <5 6>;
+				spi-max-frequency = <1000000>;
+				reg = <4>;
+				spi-cs-high;
+				spi-cpha;
+				spi-troll;
+				name_codec = "codec_3";
+				analog_in = "12dB -7dB 12dB -7dB";
+				analog_out = "6dB 6dB 6dB 6dB";
+				niveau_in = "-27dB -8dB -27dB -8dB";
+				niveau_out = "-10dB -10dB -10dB -10dB";
+				io-channels = <&iio 2>, <&iio 3>;
+				iio-name = "ad7923";
+				io-channel-names = "channel_2", "channel_3";
+				iio-channel = "channel_2", "channel_3";
+			};
 //			sicofi_postes@4 {
 //				compatible = "infineon,miae-sicofi", "cs,mia-fav";
 //				fav-id = <3>;
@@ -1005,15 +1005,15 @@
 				at25,addr-mode = <2>;
 				at25,page-size = <32>;
 			};
-//			iio: csfav@7 {
-//				compatible = "iio,ad7923", "cs,mia-fav";
-//				spi-max-frequency = <2000000>;
-//				reg = <7>;
-//				spi-cs-high;
-//				spi-cpol;
-//				fav-id = <3 5 6>;
-//				#io-channel-cells = <1>;
-//			};
+			iio: csfav@7 {
+				compatible = "iio,ad7923", "cs,mia-fav";
+				spi-max-frequency = <2000000>;
+				reg = <7>;
+				spi-cs-high;
+				spi-cpol;
+				fav-id = <3 5 6>;
+				#io-channel-cells = <1>;
+			};
 //			gpiofav: csfavgw@7 {
 //				compatible = "gpio,max7301", "cs,mia-fav";
 //				spi-max-frequency = <2000000>;
