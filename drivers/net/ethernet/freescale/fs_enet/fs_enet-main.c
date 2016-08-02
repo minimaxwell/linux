@@ -1132,6 +1132,123 @@ static int fs_init_phy(struct net_device *dev)
 	return 0;
 }
 
+/**************************************************************************************/
+/* sysfs hook function */
+static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->phydev == fep->phydevs[1]?1:0);
+}
+
+static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	int active = simple_strtol(buf, NULL, 10);
+
+	if (active != 1) active = 0;
+	if (!fep->phydevs[active]) {
+		dev_warn(dev, "PHY on address %d does not exist\n", active);
+		return count;
+	}
+	if (fep->phydevs[active] != fep->phydev) {
+		fs_link_switch(fep);
+		cancel_delayed_work_sync(&fep->link_queue);
+		if (!fep->phydev->link && fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_attr_active_link_store);
+
+static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ctrl;
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	ctrl = phy_read(fep->phydevs[0], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[0]->link ? 2 : 1);
+}
+
+static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
+
+static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ctrl;
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	
+	ctrl = phy_read(fep->phydevs[1], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[1]->link ? 2 : 1);
+}
+
+static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
+
+static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = fep->phydevs[0];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
+	return count;
+}
+
+static DEVICE_ATTR(phy0_mode, S_IWUSR, NULL, fs_attr_phy0_mode_store);
+
+static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = fep->phydevs[1];
+
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
+	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
+	
+	return count;
+}
+
+static DEVICE_ATTR(phy1_mode, S_IWUSR, NULL, fs_attr_phy1_mode_store);
+
+static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+
+	return sprintf(buf, "%d\n",fep->mode);
+}
+
+static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct net_device *ndev = dev_get_drvdata(dev);
+	struct fs_enet_private *fep = netdev_priv(ndev);
+	int mode = simple_strtol(buf, NULL, 10);
+	
+	if (fep->mode != mode) {
+		fep->mode = mode;
+		if (mode == MODE_AUTO) {
+			cancel_delayed_work_sync(&fep->link_queue);
+			schedule_delayed_work(&fep->link_queue, 0);
+		}
+	}
+	
+	return count;
+}
+	
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
+
+/**************************************************************************************/
+
 static int fs_enet_open(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
@@ -1139,6 +1256,7 @@ static int fs_enet_open(struct net_device *dev)
 	int err;
 	int value;
 	int idx;
+	int ret;
 
 	/* to initialize the fep->cur_rx,... */
 	/* not doing this, will cause a crash in fs_enet_rx_napi */
@@ -1164,6 +1282,32 @@ static int fs_enet_open(struct net_device *dev)
 		napi_disable(&fep->napi_tx);
 		return err;
 	}
+
+	ret = 0;
+	ret |= device_create_file(fep->dev, &dev_attr_active_link);
+	ret |= device_create_file(fep->dev, &dev_attr_phy0_link);
+	if (fep->fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_link);
+	ret |= device_create_file(fep->dev, &dev_attr_phy0_mode);
+	if (fep->fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_mode);
+	ret |= device_create_file(fep->dev, &dev_attr_mode);
+	if (ret) {
+		device_remove_file(fep->dev, &dev_attr_active_link);
+		device_remove_file(fep->dev, &dev_attr_phy0_link);
+		device_remove_file(fep->dev, &dev_attr_phy1_link);
+		device_remove_file(fep->dev, &dev_attr_phy0_mode);
+		device_remove_file(fep->dev, &dev_attr_phy1_mode);
+		device_remove_file(fep->dev, &dev_attr_mode);
+		unregister_netdev(fep->ndev);
+		return ret;
+	}
+
+	fep->notify_work[PHY0_LINK].kn = 
+		sysfs_get_dirent(fep->dev->kobj.sd, "phy0_link");
+	fep->notify_work[PHY1_LINK].kn = 
+		sysfs_get_dirent(fep->dev->kobj.sd, "phy1_link");
+	fep->notify_work[ACTIVE_LINK].kn = 
+		sysfs_get_dirent(fep->dev->kobj.sd, "active_link");
+
 	phy_start(fep->phydevs[0]);
 
 	if (fep->phydevs[1]) {
@@ -1199,6 +1343,14 @@ static int fs_enet_close(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	unsigned long flags;
+
+	/* remove sysfs files */
+	device_remove_file(fep->dev, &dev_attr_active_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_link);
+	device_remove_file(fep->dev, &dev_attr_phy1_link);
+	device_remove_file(fep->dev, &dev_attr_phy0_mode);
+	device_remove_file(fep->dev, &dev_attr_phy1_mode);
+	device_remove_file(fep->dev, &dev_attr_mode);
 
 	netif_stop_queue(dev);
 	netif_carrier_off(dev);
@@ -1415,123 +1567,6 @@ static int fs_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 extern int fs_mii_connect(struct net_device *dev);
 extern void fs_mii_disconnect(struct net_device *dev);
 
-/**************************************************************************************/
-/* sysfs hook function */
-static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-
-	return sprintf(buf, "%d\n",fep->phydev == fep->phydevs[1]?1:0);
-}
-
-static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-	int active = simple_strtol(buf, NULL, 10);
-
-	if (active != 1) active = 0;
-	if (!fep->phydevs[active]) {
-		dev_warn(dev, "PHY on address %d does not exist\n", active);
-		return count;
-	}
-	if (fep->phydevs[active] != fep->phydev) {
-		fs_link_switch(fep);
-		cancel_delayed_work_sync(&fep->link_queue);
-		if (!fep->phydev->link && fep->mode == MODE_AUTO) schedule_delayed_work(&fep->link_queue, LINK_MONITOR_RETRY);
-	}
-	
-	return count;
-}
-	
-static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_attr_active_link_store);
-
-static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int ctrl;
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-
-	ctrl = phy_read(fep->phydevs[0], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[0]->link ? 2 : 1);
-}
-
-static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
-
-static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int ctrl;
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-	
-	ctrl = phy_read(fep->phydevs[1], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : fep->phydevs[1]->link ? 2 : 1);
-}
-
-static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
-
-static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-	struct phy_device *phydev = fep->phydevs[0];
-
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
-	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
-	
-	return count;
-}
-
-static DEVICE_ATTR(phy0_mode, S_IWUSR, NULL, fs_attr_phy0_mode_store);
-
-static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-	struct phy_device *phydev = fep->phydevs[1];
-
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (mode && fep->phydev->drv->resume) phydev->drv->resume(phydev);
-	if (!mode && fep->phydev->drv->suspend) phydev->drv->suspend(phydev);
-	
-	return count;
-}
-
-static DEVICE_ATTR(phy1_mode, S_IWUSR, NULL, fs_attr_phy1_mode_store);
-
-static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-
-	return sprintf(buf, "%d\n",fep->mode);
-}
-
-static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct fs_enet_private *fep = netdev_priv(ndev);
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (fep->mode != mode) {
-		fep->mode = mode;
-		if (mode == MODE_AUTO) {
-			cancel_delayed_work_sync(&fep->link_queue);
-			schedule_delayed_work(&fep->link_queue, 0);
-		}
-	}
-	
-	return count;
-}
-	
-static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
-
-/**************************************************************************************/
-
 #ifdef CONFIG_FS_ENET_HAS_FEC
 #define IS_FEC(match) ((match)->data == &fs_fec_ops)
 #else
@@ -1712,24 +1747,6 @@ static int fs_enet_probe(struct platform_device *ofdev)
 
 	pr_info("%s: fs_enet: %pM\n", ndev->name, ndev->dev_addr);
 
-	ret = 0;
-	ret |= device_create_file(fep->dev, &dev_attr_active_link);
-	ret |= device_create_file(fep->dev, &dev_attr_phy0_link);
-	if (fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_link);
-	ret |= device_create_file(fep->dev, &dev_attr_phy0_mode);
-	if (fpi->phy_node2) ret |= device_create_file(fep->dev, &dev_attr_phy1_mode);
-	ret |= device_create_file(fep->dev, &dev_attr_mode);
-	if (ret)
-		goto out_remove_file;
-
-	fep->notify_work[PHY0_LINK].kn = 
-		sysfs_get_dirent(fep->dev->kobj.sd, "phy0_link");
-	fep->notify_work[PHY1_LINK].kn = 
-		sysfs_get_dirent(fep->dev->kobj.sd, "phy1_link");
-	fep->notify_work[ACTIVE_LINK].kn = 
-		sysfs_get_dirent(fep->dev->kobj.sd, "active_link");
-
-	/* register the PHY board fixup (for CMPC885 board) */
 	err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
 					 fs_enet_phy_micrel_fixup);
 	/* we can live without it, so just issue a warning */
@@ -1737,14 +1754,6 @@ static int fs_enet_probe(struct platform_device *ofdev)
 		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");
 	return 0;
 
-out_remove_file:
-	device_remove_file(fep->dev, &dev_attr_active_link);
-	device_remove_file(fep->dev, &dev_attr_phy0_link);
-	device_remove_file(fep->dev, &dev_attr_phy1_link);
-	device_remove_file(fep->dev, &dev_attr_phy0_mode);
-	device_remove_file(fep->dev, &dev_attr_phy1_mode);
-	device_remove_file(fep->dev, &dev_attr_mode);
-	unregister_netdev(ndev);
 out_free_bd:
 	fep->ops->free_bd(ndev);
 out_cleanup_data:
