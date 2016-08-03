@@ -1367,7 +1367,6 @@ static int process_sip_response(struct sk_buff *skb, unsigned int protoff,
 	struct nf_conn *ct = nf_ct_get(skb, &ctinfo);
 	unsigned int matchoff, matchlen, matchend;
 	unsigned int code, cseq, i;
-	char buf[21];
 
 	if (*datalen < strlen("SIP/2.0 200"))
 		return NF_ACCEPT;
@@ -1382,13 +1381,8 @@ static int process_sip_response(struct sk_buff *skb, unsigned int protoff,
 		nf_ct_helper_log(skb, ct, "cannot parse cseq");
 		return NF_DROP;
 	}
-	if (matchlen > sizeof(buf) - 1) {
-		nf_ct_helper_log(skb, ct, "cannot parse cseq (to big)");
-		return NF_DROP;
-	}
-	memcpy(buf, *dptr + matchoff, matchlen);
-	buf[matchlen] = 0;
-	if (kstrtouint(buf, 10, &cseq)) {
+	cseq = simple_strtoul(*dptr + matchoff, NULL, 10);
+	if (!cseq) {
 		nf_ct_helper_log(skb, ct, "cannot get cseq");
 		return NF_DROP;
 	}
@@ -1437,7 +1431,6 @@ static int process_sip_request(struct sk_buff *skb, unsigned int protoff,
 
 	for (i = 0; i < ARRAY_SIZE(sip_handlers); i++) {
 		const struct sip_handler *handler;
-		char buf[21];
 
 		handler = &sip_handlers[i];
 		if (handler->request == NULL)
@@ -1451,13 +1444,8 @@ static int process_sip_request(struct sk_buff *skb, unsigned int protoff,
 			nf_ct_helper_log(skb, ct, "cannot parse cseq");
 			return NF_DROP;
 		}
-		if (matchlen > sizeof(buf) - 1) {
-			nf_ct_helper_log(skb, ct, "cannot parse cseq (to big)");
-			return NF_DROP;
-		}
-		memcpy(buf, *dptr + matchoff, matchlen);
-		buf[matchlen] = 0;
-		if (kstrtouint(buf, 10, &cseq)) {
+		cseq = simple_strtoul(*dptr + matchoff, NULL, 10);
+		if (!cseq) {
 			nf_ct_helper_log(skb, ct, "cannot get cseq");
 			return NF_DROP;
 		}
