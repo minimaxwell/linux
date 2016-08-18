@@ -41,6 +41,8 @@ MODULE_DESCRIPTION("PHY library");
 MODULE_AUTHOR("Andy Fleming");
 MODULE_LICENSE("GPL");
 
+extern void fpga_reset_eth(void);
+
 void phy_device_free(struct phy_device *phydev)
 {
 	put_device(&phydev->dev);
@@ -665,6 +667,10 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	phydev->dev_flags = flags;
 
 	phydev->interface = interface;
+	
+#if defined(CONFIG_MPCPRO)
+	phydev->drv->soft_reset = soft_and_fpga_reset;
+#endif
 
 	phydev->state = PHY_READY;
 
@@ -1167,6 +1173,32 @@ int genphy_soft_reset(struct phy_device *phydev)
 	return phy_poll_reset(phydev);
 }
 EXPORT_SYMBOL(genphy_soft_reset);
+
+#if defined(CONFIG_MPCPRO)
+/**
+ * soft_and_fpga_reset - software reset the PHY via BMCR_RESET bit
+ * and fpgaf/m reset of the PHY
+ * @phydev: target phy_device struct
+ *
+ * Description: Perform a software PHY reset using the standard
+ * BMCR_RESET bit, then trigger fpgaf/m reset of the PHY and poll for the reset bit to be cleared.
+ *
+ * Returns: 0 on success, < 0 on failure
+ */
+int soft_and_fpga_reset(struct phy_device *phydev)
+{
+	int ret;
+
+	ret = phy_write(phydev, MII_BMCR, BMCR_RESET);
+	if (ret < 0)
+		return ret;
+	/* reset eth0/1 PHY with fpgaf/m */
+	fpga_reset_eth();
+	
+	return phy_poll_reset(phydev);
+}
+EXPORT_SYMBOL(soft_and_fpga_reset);
+#endif
 
 int genphy_config_init(struct phy_device *phydev)
 {

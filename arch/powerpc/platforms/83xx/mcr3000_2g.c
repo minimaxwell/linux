@@ -39,6 +39,7 @@
  * Controlleur d'IRQ du FPGA Firmware 
  */
 static struct fpgaf *fpgaf_regs;
+
 static struct irq_domain *fpgaf_pic_host;
 
 static void fpgaf_mask_irq(struct irq_data *d)
@@ -156,6 +157,24 @@ void fpgaf_cascade(struct irq_desc *desc)
 	out_be16(&fpgaf_regs->it_ack, ~(1 << (15-vec)));
 	//chip->irq_eoi(&desc->irq_data);
 }
+
+int fpgaf_ident(void)
+{
+	return in_be16(&fpgaf_regs->ident);
+} 
+EXPORT_SYMBOL(fpgaf_ident);
+
+void fpgaf_reset_eth(void)
+{
+	out_be16(&fpgaf_regs->reset, 0xfc);
+	out_be16(&fpgaf_regs->reset, 0xff);
+	/* 
+	 * After the de-assertion of reset, it is recommended to wait a minimum 
+ 	 * of 100 µs before starting programming on the MIIM (MDC/MDIO) interface.
+	 */
+	udelay(100);
+}
+EXPORT_SYMBOL(fpgaf_reset_eth);
 
 /*
  * Init des devices

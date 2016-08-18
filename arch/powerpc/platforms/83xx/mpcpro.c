@@ -39,6 +39,20 @@
 #define DBG(fmt...)
 #endif
 
+extern int fpgaf_ident(void);
+extern int fpgam_ident(void);
+extern void fpgaf_reset_eth(void);
+extern void fpgam_reset_eth(void);
+
+void fpga_reset_eth(void)
+{
+	if (fpgaf_ident() >> 8 == 0x22)
+		fpgaf_reset_eth();
+	else if (fpgam_ident() >> 8 == 0x23)
+		fpgam_reset_eth();
+}
+EXPORT_SYMBOL(fpga_reset_eth);
+
 #ifdef CONFIG_QUICC_ENGINE
 static int __init of_fsl_spi_probe(char *type, char *compatible, u32 sysclk,
 				   struct spi_board_info *board_infos,
