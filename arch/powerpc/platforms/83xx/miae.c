@@ -172,24 +172,6 @@ void fpgam_cascade(struct irq_desc *desc)
 	}
 }
 
-int fpgam_ident(void)
-{
-	return in_be16(&fpgam_regs->ident);
-} 
-EXPORT_SYMBOL(fpgam_ident);
-
-void fpgam_reset_eth(void)
-{
-	out_be16(&fpgam_regs->reset, 0xf8);
-	out_be16(&fpgam_regs->reset, 0xff);
-	/* 
-	 * After the de-assertion of reset, it is recommended to wait a minimum 
- 	 * of 100 µs before starting programming on the MIIM (MDC/MDIO) interface.
-	 */
-	udelay(100);
-}
-EXPORT_SYMBOL(fpgam_reset_eth);
-
 /*
  * Init des devices
  */
