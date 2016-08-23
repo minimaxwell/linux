@@ -282,6 +282,8 @@ arch_initcall(mpc8xx_early_ping_watchdog);
 
 static void __init mcr3000_setup_arch(void)
 {
+	/* Le BTL devrait laisser le DER a 0 */
+	mtspr(SPRN_DER, mfspr(SPRN_DER) & ~DER_TRE);
 	cpm_reset();
 	init_ioports();
 	init_ioports_fev292();

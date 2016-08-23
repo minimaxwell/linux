@@ -82,6 +82,8 @@ arch_initcall(mpc8xx_early_ping_watchdog);
 
 static void __init cmpc885_setup_arch(void)
 {
+	/* Le BTL devrait laisser le DER a 0 */
+	mtspr(SPRN_DER, mfspr(SPRN_DER) & ~DER_TRE);
 	cpm_reset();
 	/* Set FEC1 and FEC2 to RMII mode on 100Mbps speed */
 	mpc8xx_immr->im_cpm.cp_cptr = 0x00000180;
