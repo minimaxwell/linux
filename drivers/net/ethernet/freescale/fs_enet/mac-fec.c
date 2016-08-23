@@ -135,13 +135,14 @@ static int allocate_bd(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	const struct fs_platform_info *fpi = fep->fpi;
+	int offset;
 
-	fep->ring_base = (void __force __iomem *)dma_alloc_coherent(fep->dev,
-					    (fpi->tx_ring + fpi->rx_ring) *
-					    sizeof(cbd_t), &fep->ring_mem_addr,
-					    GFP_KERNEL);
-	if (fep->ring_base == NULL)
+	offset = cpm_muram_alloc((fpi->tx_ring + fpi->rx_ring) * sizeof(cbd_t),
+				 sizeof(cbd_t));
+	if (IS_ERR_VALUE(offset))
 		return -ENOMEM;
+	fep->ring_base = cpm_muram_addr(offset);
+	fep->ring_mem_addr = cpm_muram_dma(fep->ring_base);
 
 	return 0;
 }
@@ -149,13 +150,9 @@ static int allocate_bd(struct net_device *dev)
 static void free_bd(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
-	const struct fs_platform_info *fpi = fep->fpi;
 
 	if(fep->ring_base)
-		dma_free_coherent(fep->dev, (fpi->tx_ring + fpi->rx_ring)
-					* sizeof(cbd_t),
-					(void __force *)fep->ring_base,
-					fep->ring_mem_addr);
+		cpm_muram_free(cpm_muram_offset(fep->ring_base));
 }
 
 static void cleanup_data(struct net_device *dev)
