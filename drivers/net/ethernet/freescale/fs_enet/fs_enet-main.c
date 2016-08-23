@@ -1592,7 +1592,7 @@ static int fs_enet_probe(struct platform_device *ofdev)
 
 	fpi->rx_ring = 32;
 	fpi->tx_ring = 64;
-	fpi->rx_copybreak = 240;
+	fpi->rx_copybreak = 112;
 	fpi->napi_weight = 17;
 	fpi->phy_node = of_parse_phandle(ofdev->dev.of_node, "phy-handle", 0);
 	if (!fpi->phy_node && of_phy_is_fixed_link(ofdev->dev.of_node)) {
