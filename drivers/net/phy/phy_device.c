@@ -666,10 +666,6 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 
 	phydev->interface = interface;
 
-	/* on our PHY de-activate suspend/resume function */
-	phydev->drv->suspend = NULL;
-	phydev->drv->resume = NULL;
-
 	phydev->state = PHY_READY;
 
 	/* Do initial configuration here, now that
@@ -892,7 +888,7 @@ int genphy_setup_forced(struct phy_device *phydev)
 	if (ctl < 0)
 		return ctl;
 	
-	ctl &= BMCR_ISOLATE;
+	ctl &= BMCR_ISOLATE | BMCR_PDOWN;
 	
 	phydev->pause = 0;
 	phydev->asym_pause = 0;
