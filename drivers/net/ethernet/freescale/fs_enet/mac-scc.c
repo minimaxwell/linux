@@ -115,10 +115,8 @@ static int do_pd_setup(struct fs_enet_private *fep)
 	return 0;
 }
 
-#define SCC_NAPI_RX_EVENT_MSK	(SCCE_ENET_RXF | SCCE_ENET_RXB)
-#define SCC_NAPI_TX_EVENT_MSK	(SCCE_ENET_TXB)
-#define SCC_RX_EVENT		(SCCE_ENET_RXF)
-#define SCC_TX_EVENT		(SCCE_ENET_TXB)
+#define SCC_NAPI_RX_EVENT_MSK	(SCCE_ENET_RXF | SCCE_ENET_RXB | SCCE_ENET_TXB)
+#define SCC_RX_EVENT		(SCCE_ENET_RXF | SCCE_ENET_TXB)
 #define SCC_ERR_EVENT_MSK	(SCCE_ENET_TXE | SCCE_ENET_BSY)
 
 static int setup_data(struct net_device *dev)

@@ -124,10 +124,8 @@ out:
 	return ret;
 }
 
-#define FCC_NAPI_RX_EVENT_MSK	(FCC_ENET_RXF | FCC_ENET_RXB)
-#define FCC_NAPI_TX_EVENT_MSK	(FCC_ENET_TXB)
-#define FCC_RX_EVENT		(FCC_ENET_RXF)
-#define FCC_TX_EVENT		(FCC_ENET_TXB)
+#define FCC_NAPI_EVENT_MSK	(FCC_ENET_RXF | FCC_ENET_RXB | FCC_ENET_TXB)
+#define FCC_EVENT		(FCC_ENET_RXF | FCC_ENET_TXB)
 #define FCC_ERR_EVENT_MSK	(FCC_ENET_TXE)
 
 static int setup_data(struct net_device *dev)
