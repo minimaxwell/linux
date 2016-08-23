@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 4.4.14 Kernel Configuration
+# Linux/powerpc 4.4.19 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -1074,12 +1074,12 @@ CONFIG_PHYLIB=y
 # CONFIG_BROADCOM_PHY is not set
 # CONFIG_BCM7XXX_PHY is not set
 # CONFIG_BCM87XX_PHY is not set
-CONFIG_ICPLUS_PHY=y
+# CONFIG_ICPLUS_PHY is not set
 # CONFIG_REALTEK_PHY is not set
 # CONFIG_NATIONAL_PHY is not set
 # CONFIG_STE10XP is not set
 # CONFIG_LSI_ET1011C_PHY is not set
-# CONFIG_MICREL_PHY is not set
+CONFIG_MICREL_PHY=y
 # CONFIG_DP83848_PHY is not set
 # CONFIG_DP83867_PHY is not set
 # CONFIG_MICROCHIP_PHY is not set
@@ -1100,10 +1100,7 @@ CONFIG_USB_NET_DRIVERS=y
 # CONFIG_USB_LAN78XX is not set
 # CONFIG_USB_USBNET is not set
 # CONFIG_USB_IPHETH is not set
-CONFIG_WLAN=y
-# CONFIG_HOSTAP is not set
-# CONFIG_WL_MEDIATEK is not set
-# CONFIG_WL_TI is not set
+# CONFIG_WLAN is not set
 
 #
 # Enable WiMAX (Networking options) to see the WiMAX drivers
