@@ -13,20 +13,6 @@
 #include <asm-generic/checksum.h>
 #else
 /*
- * computes the checksum of a memory block at buff, length len,
- * and adds in "sum" (32-bit)
- *
- * returns a 32-bit number suitable for feeding into itself
- * or csum_tcpudp_magic
- *
- * this function must be called with even lengths, except
- * for the last fragment, which may be odd
- *
- * it's best to have buff aligned on a 32-bit boundary
- */
-extern __wsum csum_partial(const void *buff, int len, __wsum sum);
-
-/*
  * Computes the checksum of a memory block at src, length len,
  * and adds in "sum" (32-bit), while copying the block to dst.
  * If an access exception occurs on src or dst, it stores -EFAULT
@@ -65,15 +51,6 @@ static inline __sum16 csum_fold(__wsum sum)
 	   it will carry from the lower half into the upper half,
 	   giving us the correct sum in the upper half. */
 	return (__force __sum16)(~((__force u32)sum + tmp) >> 16);
-}
-
-/*
- * this routine is used for miscellaneous IP-like checksums, mainly
- * in icmp.c
- */
-static inline __sum16 ip_compute_csum(const void *buff, int len)
-{
-	return csum_fold(csum_partial(buff, len, 0));
 }
 
 static inline __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
@@ -119,7 +96,13 @@ static inline __wsum csum_add(__wsum csum, __wsum addend)
 {
 #ifdef __powerpc64__
 	u64 res = (__force u64)csum;
+#endif
+	if (__builtin_constant_p(csum) && csum == 0)
+		return addend;
+	if (__builtin_constant_p(addend) && addend == 0)
+		return csum;
 
+#ifdef __powerpc64__
 	res += (__force u64)addend;
 	return (__force __wsum)((u32)res + (res >> 32));
 #else
@@ -167,6 +150,63 @@ static inline __wsum ip_fast_csum_nofold(const void *iph, unsigned int ihl)
 static inline __sum16 ip_fast_csum(const void *iph, unsigned int ihl)
 {
 	return csum_fold(ip_fast_csum_nofold(iph, ihl));
+}
+
+/*
+ * computes the checksum of a memory block at buff, length len,
+ * and adds in "sum" (32-bit)
+ *
+ * returns a 32-bit number suitable for feeding into itself
+ * or csum_tcpudp_magic
+ *
+ * this function must be called with even lengths, except
+ * for the last fragment, which may be odd
+ *
+ * it's best to have buff aligned on a 32-bit boundary
+ */
+__wsum __csum_partial(const void *buff, int len, __wsum sum);
+
+static inline __wsum csum_partial(const void *buff, int len, __wsum sum)
+{
+	if (__builtin_constant_p(len) && len == 0)
+		return sum;
+
+	if (__builtin_constant_p(len) && len <= 16 && (len & 1) == 0) {
+		__wsum sum1;
+
+		if (len == 2)
+			sum1 = (__force u32)*(u16 *)buff;
+		if (len >= 4)
+			sum1 = *(u32 *)buff;
+		if (len == 6)
+			sum1 = csum_add(sum1, (__force u32)*(u16 *)(buff + 4));
+		if (len >= 8)
+			sum1 = csum_add(sum1, *(u32 *)(buff + 4));
+		if (len == 10)
+			sum1 = csum_add(sum1, (__force u32)*(u16 *)(buff + 8));
+		if (len >= 12)
+			sum1 = csum_add(sum1, *(u32 *)(buff + 8));
+		if (len == 14)
+			sum1 = csum_add(sum1, (__force u32)*(u16 *)(buff + 12));
+		if (len >= 16)
+			sum1 = csum_add(sum1, *(u32 *)(buff + 12));
+
+		sum = csum_add(sum1, sum);
+	} else if (__builtin_constant_p(len) && (len & 3) == 0) {
+		sum = csum_add(ip_fast_csum_nofold(buff, len >> 2), sum);
+	} else {
+		sum = __csum_partial(buff, len, sum);
+	}
+	return sum;
+}
+
+/*
+ * this routine is used for miscellaneous IP-like checksums, mainly
+ * in icmp.c
+ */
+static inline __sum16 ip_compute_csum(const void *buff, int len)
+{
+	return csum_fold(csum_partial(buff, len, 0));
 }
 
 #endif
