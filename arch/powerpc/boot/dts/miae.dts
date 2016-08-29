@@ -1080,7 +1080,7 @@
 				};
 				iio: csfav@7 {
 					compatible = "iio,ad7923", "cs,mia-fav";
-					spi-max-frequency = <2000000>;
+					spi-max-frequency = <1000000>;
 					reg = <7>;
 					spi-cs-high;
 					spi-cpol;
@@ -1089,7 +1089,7 @@
 				};
 				gpiofav: csfavgw@7 {
 					compatible = "gpio,max7301", "cs,mia-fav";
-					spi-max-frequency = <2000000>;
+					spi-max-frequency = <1000000>;
 					reg = <7>;
 					spi-cs-high;
 					#gpio-cells = <2>;
@@ -1098,7 +1098,7 @@
 				};
 				csfavfpga@8 {
 					compatible = "cs,fpga-poste", "cs,mia-fav";
-					spi-max-frequency = <2000000>;
+					spi-max-frequency = <1000000>;
 					reg = <8>;
 					spi-cs-high;
 					fav-id = <3>;
