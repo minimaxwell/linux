@@ -157,7 +157,7 @@ static int mpc8xxx_wdt_stop(struct watchdog_device *w)
 }
 
 static struct watchdog_info mpc8xxx_wdt_info = {
-	.options = WDIOF_KEEPALIVEPING | WDIOF_SETTIMEOUT,
+	.options = WDIOF_KEEPALIVEPING | WDIOF_SETTIMEOUT | WDIOF_MAGICCLOSE,
 	.firmware_version = 1,
 	.identity = "MPC8xxx",
 };
