@@ -50,8 +50,6 @@ struct mpc8xxx_wdt_type {
 	bool hw_enabled;
 };
 
-static struct watchdog_device mpc8xxx_wdt_dev;
-
 #define WDT_INTERVAL (HZ / 2)
 static int hz_swtc;
 static unsigned long wdt_last_ping;
@@ -80,25 +78,7 @@ MODULE_PARM_DESC(reset,
 	"Watchdog Interrupt/Reset Mode. 0 = interrupt, 1 = reset");
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
-static int set_param_nowayout(const char *val, const struct kernel_param *kp)
-{
-	int res = param_set_bool(val, kp);
-
-	if (res)
-		return res;
-
-	if (nowayout)
-		set_bit(WDOG_NO_WAY_OUT, &mpc8xxx_wdt_dev.status);
-	else
-		clear_bit(WDOG_NO_WAY_OUT, &mpc8xxx_wdt_dev.status);
-
-	return 0;
-}
-static struct kernel_param_ops param_ops = {
-	.set = set_param_nowayout,
-	.get = param_get_int,
-};
-module_param_cb(nowayout, &param_ops, &nowayout, 0644);
+module_param(nowayout, bool, 0);
 MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 		 "(default=" __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
@@ -151,7 +131,7 @@ static int mpc8xxx_wdt_ping(struct watchdog_device *w)
 
 static int mpc8xxx_wdt_set_timeout(struct watchdog_device *w, unsigned int timeout)
 {
-	mpc8xxx_wdt_dev.timeout = timeout;
+	w->timeout = timeout;
 	if (watchdog_active(w))
 		mpc8xxx_wdt_ping(w);
 	return 0;
