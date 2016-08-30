@@ -311,6 +311,7 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	unsigned int len = t->len;
 	u8 bits_per_word;
 	int ret;
+	unsigned long ms, speed;
 
 	reg_base = mpc8xxx_spi->reg_base;
 	bits_per_word = spi->bits_per_word;
@@ -342,7 +343,13 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	if (ret)
 		return ret;
 
-	wait_for_completion(&mpc8xxx_spi->done);
+	speed = t->speed_hz / 1000;
+	speed = max(speed - 1, 1);
+	ms = t->len * 8 / speed;
+	ms += ms + 100; /* some tolerance */
+
+	ms = wait_for_completion_timeout(&mpc8xxx_spi->done,
+					 msecs_to_jiffies(ms));
 
 	/* disable rx ints */
 	mpc8xxx_spi_write_reg(&reg_base->mask, 0);
@@ -350,7 +357,11 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 	if (mpc8xxx_spi->flags & SPI_CPM_MODE)
 		fsl_spi_cpm_bufs_complete(mpc8xxx_spi);
 
-	return mpc8xxx_spi->count;
+	if (ms > 0)
+		return mpc8xxx_spi->count;
+
+	dev_err(&spi->dev,"SPI Tranfer timeout\n");
+	return -ETIMEDOUT;
 }
 
 static int fsl_spi_do_one_msg(struct spi_master *master,
@@ -392,10 +403,11 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 		cs_change = t->cs_change;
 		if (t->len)
 			status = fsl_spi_bufs(spi, t, m->is_dma_mapped);
-		if (status) {
+		if (status > 0)
 			status = -EMSGSIZE;
+		if (status)
 			break;
-		}
+
 		m->actual_length += t->len;
 
 		if (t->delay_usecs)
@@ -408,20 +420,21 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 		}
 	}
 
-	m->status = status;
-
 	if (status || !cs_change) {
 		ndelay(nsecs);
 		fsl_spi_chipselect(spi, BITBANG_CS_INACTIVE);
 	}
 
-	if (spi->mode & SPI_TROLL) {
+	if (!status && spi->mode & SPI_TROLL) {
 		struct spi_transfer t= {.len=1,.tx_buf = "", .bits_per_word = 4};
 
 		status = fsl_spi_setup_transfer(spi, &t);
-		status = fsl_spi_bufs(spi, &t, 0);
+		if (!status)
+			status = fsl_spi_bufs(spi, &t, 0);
 	}
 	fsl_spi_setup_transfer(spi, NULL);
+
+	m->status = status;
 
 	spi_finalize_current_message(master);
 	return 0;
