@@ -173,7 +173,7 @@ int __max730x_probe(struct max7301 *ts)
 
 	/* Power up the chip and disable IRQ output */
 	ts->write(dev, 0x04, 0x01);
-	
+
 	if (pdata) {
 		ts->input_pullup_active = pdata->input_pullup_active;
 		ts->chip.base = pdata->base;
