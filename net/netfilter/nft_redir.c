@@ -23,6 +23,22 @@ const struct nla_policy nft_redir_policy[NFTA_REDIR_MAX + 1] = {
 };
 EXPORT_SYMBOL_GPL(nft_redir_policy);
 
+int nft_redir_validate(const struct nft_ctx *ctx,
+		       const struct nft_expr *expr,
+		       const struct nft_data **data)
+{
+	int err;
+
+	err = nft_chain_validate_dependency(ctx->chain, NFT_CHAIN_T_NAT);
+	if (err < 0)
+		return err;
+
+	return nft_chain_validate_hooks(ctx->chain,
+					(1 << NF_INET_PRE_ROUTING) |
+					(1 << NF_INET_LOCAL_OUT));
+}
+EXPORT_SYMBOL_GPL(nft_redir_validate);
+
 int nft_redir_init(const struct nft_ctx *ctx,
 		   const struct nft_expr *expr,
 		   const struct nlattr * const tb[])
@@ -31,28 +47,28 @@ int nft_redir_init(const struct nft_ctx *ctx,
 	unsigned int plen;
 	int err;
 
-	err = nft_chain_validate_dependency(ctx->chain, NFT_CHAIN_T_NAT);
+	err = nft_redir_validate(ctx, expr, NULL);
 	if (err < 0)
 		return err;
 
 	plen = FIELD_SIZEOF(struct nf_nat_range, min_addr.all);
 	if (tb[NFTA_REDIR_REG_PROTO_MIN]) {
- 		priv->sreg_proto_min =
+		priv->sreg_proto_min =
 			nft_parse_register(tb[NFTA_REDIR_REG_PROTO_MIN]);
- 
+
 		err = nft_validate_register_load(priv->sreg_proto_min, plen);
- 		if (err < 0)
- 			return err;
- 
- 		if (tb[NFTA_REDIR_REG_PROTO_MAX]) {
- 			priv->sreg_proto_max =
+		if (err < 0)
+			return err;
+
+		if (tb[NFTA_REDIR_REG_PROTO_MAX]) {
+			priv->sreg_proto_max =
 				nft_parse_register(tb[NFTA_REDIR_REG_PROTO_MAX]);
- 
+
 			err = nft_validate_register_load(priv->sreg_proto_max,
 							 plen);
- 			if (err < 0)
- 				return err;
- 		} else {
+			if (err < 0)
+				return err;
+		} else {
 			priv->sreg_proto_max = priv->sreg_proto_min;
 		}
 	}
@@ -90,13 +106,6 @@ nla_put_failure:
 	return -1;
 }
 EXPORT_SYMBOL_GPL(nft_redir_dump);
-
-int nft_redir_validate(const struct nft_ctx *ctx, const struct nft_expr *expr,
-		       const struct nft_data **data)
-{
-	return nft_chain_validate_dependency(ctx->chain, NFT_CHAIN_T_NAT);
-}
-EXPORT_SYMBOL_GPL(nft_redir_validate);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Arturo Borrero Gonzalez <arturo.borrero.glez@gmail.com>");
