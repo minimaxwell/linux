@@ -453,18 +453,6 @@ static int at25_remove(struct spi_device *spi)
 
 /*-------------------------------------------------------------------------*/
 
-#define INFO(_byte_len, _name, _page_size, _flags)	\
-	((kernel_ulong_t)&(struct spi_eeprom) {				\
-		.byte_len = (_byte_len),				\
-		.name = _name,						\
-		.page_size = (_page_size),				\
-		.flags = (_flags),					\
-	})
-
-static struct spi_device_id at25_ids[] = {
-	{"at25" , 0},
-};
-
 static const struct of_device_id at25_of_match[] = {
 	{ .compatible = "atmel,at25", },
 	{ }
@@ -478,7 +466,6 @@ static struct spi_driver at25_driver = {
 	},
 	.probe		= at25_probe,
 	.remove		= at25_remove,
-	.id_table = at25_ids,
 };
 
 module_spi_driver(at25_driver);
