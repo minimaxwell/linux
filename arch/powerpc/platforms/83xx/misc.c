@@ -23,16 +23,10 @@
 #include <asm/qe_ic.h>
 #include <sysdev/fsl_soc.h>
 #include <sysdev/fsl_pci.h>
-#include <asm-generic/gpio.h>
-
-#include <saf3000/saf3000.h>
 
 #include "mpc83xx.h"
-#include "mcr3000_2g.h"
-#include "miae.h"
 
 static __be32 __iomem *restart_reg_base;
-extern void __init direct16_gpiochip_init(const char *);
 
 static int __init mpc83xx_restart_init(void)
 {
@@ -118,37 +112,8 @@ void __init mpc83xx_qe_init_IRQ(void)
 
 void __init mpc83xx_ipic_and_qe_init_IRQ(void)
 {
-	struct device_node *np;
-	const char *model = "";
-	int irq;
-	
 	mpc83xx_ipic_init_IRQ();
 	mpc83xx_qe_init_IRQ();
-
-	np = of_find_node_by_path("/");
-	if (np) {
-		model = of_get_property(np, "model", NULL);
-		/* MCR3000_2G configuration */
-		if (!strcmp(model, "MCR3000_2G")) {
-			irq = fpgaf_pic_init();
-			if (irq != NO_IRQ)
-				irq_set_chained_handler(irq, fpgaf_cascade);
-			irq = fpga_pic_init();
-			if (irq != NO_IRQ)
-				irq_set_chained_handler(irq, fpga_cascade);
-		}
-		/* MIAE configuration */
-		if (!strcmp(model, "MIAE")) {
-			irq = fpgam_pic_init();
-			if (irq != NO_IRQ)
-				irq_set_chained_handler(irq, fpgam_cascade);
-		}
-
-		/* if CMPC885 configuration there nothing to do */
-
-	} else {
-		printk(KERN_ERR "MODEL: failed to identify model\n");
-	}
 }
 #endif /* CONFIG_QUICC_ENGINE */
 
@@ -165,62 +130,7 @@ static const struct of_device_id of_bus_ids[] __initconst = {
 
 int __init mpc83xx_declare_of_platform_devices(void)
 {
-	struct device_node *np;
-	const char *model = "";
-
-	np = of_find_node_by_path("/");
-	if (np) {
-
-		model = of_get_property(np, "model", NULL);
-
-		//mpc8xx_early_ping_watchdog();
-		proc_mkdir("s3k",0);
-		of_platform_bus_probe(NULL, of_bus_ids, NULL);
-
-		/* MCR3000_2G configuration */
-		if (!strcmp(model, "MCR3000_2G")) {
-			pr_info("%s declare_of_platform_devices()\n", model);
-		
-			u16_gpiochip_init("s3k,mcr3000-fpga-f-gpio");
-			fpgaf_init_platform_devices();
-			fpga_init_platform_devices();
-			
-			fpga_clk_init();
-			//cpm1_clk_setup(CPM_CLK_SMC2, CPM_CLK5, CPM_CLK_RTX);
-
-			/* FIXME: hu ? */
-			/*mpc8xx_immr = ioremap(get_immrbase(), 0x4000);
-			if (!mpc8xx_immr) {
-				printk(KERN_CRIT "Could not map IMMR\n");
-			} else {
-				cpm8xx_t __iomem *cpmp; *//* Pointer to comm processor space *//*
-				struct spi_pram *spp;
-
-				cpmp = &mpc8xx_immr->im_cpm;
-				spp = (struct spi_pram *)&cpmp->cp_dparam[PROFF_SPI];
-				out_be16(&spp->rpbase, 0x1bc0);
-			}
-			iounmap(mpc8xx_immr);
-			*/
-		} 
-		/* MIAE configuration */
-		else if (!strcmp(model, "MIAE")) {
-			pr_info("CMM declare_of_platform_devices()\n");
-		
-			u16_gpiochip_init("s3k,mcr3000-fpga-m-gpio");
-			direct16_gpiochip_init("s3k,mcr3000-fpga-m-direct-gpio");
-			fpgam_init_platform_devices();
-		} 
-		/* CMPC885 configuration by default */
-		else {
-			pr_info("%s declare_of_platform_devices()\n", model);
-		
-		}
-	} else {
-		pr_err("MODEL: failed to identify model\n");
-	}
-
-	//of_platform_bus_probe(NULL, of_bus_ids, NULL); ??
+	of_platform_bus_probe(NULL, of_bus_ids, NULL);
 	return 0;
 }
 

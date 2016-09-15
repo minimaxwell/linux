@@ -13,7 +13,7 @@
 
 / {
 	model = "MCR3000_2G";
-	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB", "fsl,base", "fsl,mpcpro";
+	compatible = "CMPCPRO", "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB", "fsl,base", "fsl,mpcpro";
 	#address-cells = <1>;
 	#size-cells = <1>;
 

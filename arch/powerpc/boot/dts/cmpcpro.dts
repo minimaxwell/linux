@@ -13,7 +13,7 @@
 
 / {
 	model = "MPCPRO";
-	compatible = "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB";
+	compatible = "CMPCPRO", "MPC8321E", "MPC8323ERDB", "MPC832xRDB", "MPC83xxRDB";
 	#address-cells = <1>;
 	#size-cells = <1>;
 
