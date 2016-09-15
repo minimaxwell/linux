@@ -334,15 +334,6 @@ config MTD_GPIO_ADDR
 
 	  If compiled as a module, it will be called gpio-addr-flash.
 
-config MTD_MCR3000
-	bool "System flash on MCR3000 board"
-	depends on MTD_COMPLEX_MAPPINGS
-	select MTD_CFI
-	help
-	  This enables access routines for the flash chips on the CSSI
-	  type MCR3000 board. If you have one of these boards and would
-	  like to use the flash chips on it, say 'Y'.
-
 config MTD_UCLINUX
 	bool "Generic uClinux RAM/ROM filesystem support"
 	depends on (MTD_RAM=y || MTD_ROM=y) && (!MMU || COLDFIRE)
