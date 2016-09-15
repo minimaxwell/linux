@@ -28,6 +28,7 @@
 #include <linux/module.h>
 #include <linux/prctl.h>
 #include <linux/delay.h>
+#include <linux/reboot.h>
 #include <linux/kprobes.h>
 #include <linux/kexec.h>
 #include <linux/backlight.h>
@@ -61,10 +62,6 @@
 #include <asm/tm.h>
 #include <asm/debug.h>
 #include <sysdev/fsl_pci.h>
-#ifdef CONFIG_8xx
-#include <asm/8xx_immap.h>
-#include <asm/fs_pd.h>
-#endif
 
 #if defined(CONFIG_DEBUGGER) || defined(CONFIG_KEXEC)
 int (*__debugger)(struct pt_regs *regs) __read_mostly;
@@ -767,23 +764,14 @@ void SMIException(struct pt_regs *regs)
 	die("System Management Interrupt", regs, SIGABRT);
 }
 
-#ifdef CONFIG_8xx
 void watchdog_exception(struct pt_regs *regs)
 {
-	car8xx_t __iomem *clk_r = immr_map(im_clkrst);
-
-	/* print trace */	
 	printk("Watchdog Reset:\n");
 	print_modules();
 	show_regs(regs);
-	
-	/* restart processor */
-	local_irq_disable();
-	setbits32(&clk_r->car_plprcr, 0x00000080);
-	mtmsr(mfmsr() & ~0x1000);
-	in_8(&clk_r->res[0]);
+		
+	kernel_restart(NULL);
 }
-#endif
 
 void handle_hmi_exception(struct pt_regs *regs)
 {
