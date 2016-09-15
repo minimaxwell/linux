@@ -38,23 +38,6 @@ config MPC832x_RDB
 	help
 	  This option enables support for the MPC8323 RDB board.
 
-config SAF3000MPCPRO
-	bool "SAF3000MPCPRO"
-	help
-	  SAF3000 platform based on MPCPRO CPU (MCR3000_2G, CMPC885)
-
-config MPCPRO
-	bool "Support for MPCPRO (MCR 2G, MIAe / VGoIP)"
-	depends on SAF3000MPCPRO
-
-config MCR3000_2G
-	bool "Support for MCR3000 2G (MCR 2G)"
-	depends on MPCPRO 
-
-config MIAE
-	bool "Support for MIA Ethernet (MIAe) and VGoIP"
-	depends on MPCPRO
-
 config MPC834x_MDS
 	bool "Freescale MPC834x MDS"
 	select DEFAULT_UIMAGE

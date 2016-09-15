@@ -19,8 +19,9 @@ config MPC86XADS
 	  The MPC86xADS is meant to serve as a platform for s/w and h/w
 	  development around the MPC86X processor families.
 
-config SAF3000
+config SAF3000_8XX
 	bool "SAF3000"
+	select SAF3000
 	select DEFAULT_UIMAGE
 	select CPM1
 	help
@@ -59,23 +60,6 @@ config TQM8XX
 	  support for the mpc8xx based boards from TQM.
 
 endchoice
-
-config MCR3000
-	bool "Support for MCR3000 (MCR 1G)"
-	depends on SAF3000
-
-config CMPC885
-	bool "Support for CMPC885 (MCR 2G, MIAe / VGoIP)"
-	depends on SAF3000
-	select PPC_CLOCK
-	
-config MCR3000_2G
-	bool "Support for MCR3000 2G (MCR 2G)"
-	depends on CMPC885
-
-config MIAE
-	bool "Support for MIA Ethernet (MIAe) and VGoIP"
-	depends on CMPC885
 
 menu "Freescale Ethernet driver platform-specific options"
 	depends on (FS_ENET && MPC885ADS)

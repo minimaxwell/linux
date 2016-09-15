@@ -10,6 +10,4 @@ endif
 
 source "drivers/platform/chrome/Kconfig"
 
-if SAF3000 || SAF3000MPCPRO
 source "drivers/platform/saf3000/Kconfig"
-endif
