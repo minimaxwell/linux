@@ -764,6 +764,7 @@ void SMIException(struct pt_regs *regs)
 	die("System Management Interrupt", regs, SIGABRT);
 }
 
+#ifdef CONFIG_SAF3000
 void watchdog_exception(struct pt_regs *regs)
 {
 	printk("Watchdog Reset:\n");
@@ -772,6 +773,7 @@ void watchdog_exception(struct pt_regs *regs)
 		
 	kernel_restart(NULL);
 }
+#endif
 
 void handle_hmi_exception(struct pt_regs *regs)
 {

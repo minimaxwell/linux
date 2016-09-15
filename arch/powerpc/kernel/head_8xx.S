@@ -227,7 +227,11 @@ i##n:								\
 			  ret_from_except)
 
 /* System reset */
+#ifdef CONFIG_SAF3000
 	EXCEPTION(0x100, Reset, watchdog_exception, EXC_XFER_STD)
+#else
+	EXCEPTION(0x100, Reset, reset_exception, EXC_XFER_STD)
+#endif
 
 /* Machine check */
 	. = 0x200
