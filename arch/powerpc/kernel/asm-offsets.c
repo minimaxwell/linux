@@ -90,6 +90,9 @@ int main(void)
 	DEFINE(KSP_LIMIT, offsetof(struct thread_struct, ksp_limit));
 #endif /* CONFIG_PPC64 */
 
+#ifdef CONFIG_CC_STACKPROTECTOR
+	DEFINE(TSK_STACK_CANARY, offsetof(struct task_struct, stack_canary));
+#endif
 	DEFINE(KSP, offsetof(struct thread_struct, ksp));
 	DEFINE(PT_REGS, offsetof(struct thread_struct, regs));
 #ifdef CONFIG_BOOKE
