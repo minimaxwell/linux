@@ -20,6 +20,7 @@
 	aliases {
 		ethernet0 = &eth1;
 		ethernet1 = &eth0;
+		ethernet2 = &eth2;
 		serial0 = &serial0;
 		serial1 = &serial1;
 		serial2 = &serial2;
@@ -112,10 +113,11 @@
 			//};
 		};
 
-		eth2@2,0 {
+		eth2: eth2@2,0 {
 			compatible = "micrel,ks8851-mll";
 			reg =  <2 0x00 0xff
 				2 0x100 0xff>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
 			interrupts = <21 0x8>;
 			interrupt-parent = <&ipic>;
 		};
