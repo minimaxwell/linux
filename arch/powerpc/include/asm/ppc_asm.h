@@ -565,7 +565,6 @@ END_FTR_SECTION_NESTED(CPU_FTR_HAS_PPR,CPU_FTR_HAS_PPR,945)
 #endif
 #define MTMSRD(r)	mtmsr	r
 #define MTMSR_EERI(reg)	mtmsr	reg
-#define CLR_TOP32(r)
 #endif
 
 #endif /* __KERNEL__ */
