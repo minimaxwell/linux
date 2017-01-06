@@ -1209,6 +1209,8 @@
 				     : "r" ((unsigned long)(v)) \
 				     : "memory")
 #endif
+#define wrtspr(rn)	asm volatile("mtspr " __stringify(rn) ",0" : \
+				     : : "memory")
 
 static inline unsigned long mfvtb (void)
 {
