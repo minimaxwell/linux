@@ -49,10 +49,7 @@
 
 #include "ucc_geth.h"	
 
-#include <net/arp.h>
-#include <linux/inetdevice.h>
-#include <linux/if_vlan.h>
-#include <linux/syscalls.h>
+#include <linux/custom_phy_handling.h>
 
 #define PHY_ISOLATE 1
 #define PHY_POWER_DOWN 2
@@ -1688,102 +1685,6 @@ static void adjust_link(struct net_device *dev)
 	/*if (ugeth->mode == MODE_AUTO) schedule_delayed_work(&ugeth->link_queue, 0);*/
 }
 
-void fs_sysfs_notify(struct work_struct *work)
-{
-	struct fs_notify_work *notify =
-			container_of(work, struct fs_notify_work, notify_queue);
-
-	sysfs_notify_dirent(notify->kn);
-}
-
-
-void fs_send_gratuitous_arp(struct work_struct *work)
-{
-	struct ucc_geth_private *ugeth =
-			container_of(work, struct ucc_geth_private, arp_queue);
-	__be32 ip_addr;
-	struct sk_buff *skb;
-
-	int fd, i = 0, nb_line = 0, ret, j, k = 0;
-	char buf[300];
-	char lines[10][50];
-	char iface_and_vlan[10];
-	int id;
-	char iface[10];
-	char sanitized_iface[5] ;
-
-	ip_addr = inet_select_addr(ugeth->ndev, 0, 0);
-	skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr, ugeth->ndev, ip_addr, NULL,
-			ugeth->ndev->dev_addr, NULL);
-	if (skb == NULL)
-		printk("arp_create failure -> gratuitous arp not sent\n");
-	else {
-		mm_segment_t old_fs = get_fs();
-		//send skb on eth1
-		arp_xmit(skb);
-		//dev_err(ugeth->dev, "gratuitous arp sent\n");
-
-		//find all vlan on eth1
-		//FIXME : is there a clean way ? 
-	
-		set_fs(KERNEL_DS);
-
-		fd = sys_open("/proc/net/vlan/config", O_RDONLY, 0);
-		if (fd >= 0) {
-			while (sys_read(fd, &buf[i], 1) == 1 ) {
-				//remove header (2 lines)
-				//VLAN Dev name    | VLAN ID \n
-				//Name-Type: VLAN_NAME_TYPE_RAW_PLUS_VID_NO_PAD \n
-				if (buf[i] == '\n')
-					nb_line++;
-				if (nb_line >= 2)
-					i++;
-			}
-			//split on each line
-			nb_line = 0;
-			for (j=1;j<i;j++) {
-				if (buf[j] == '\n') {
-					lines[nb_line][k] = '\n';
-					nb_line++;
-					k = 0;
-				}
-				lines[nb_line][k] = buf[j];
-				k++;
-			}
-			
-			//each line is something like :
-			//eth1.64        | 64  | eth1\n
-			for (i = 0; i < nb_line; i++) {
-				//dev_err(ugeth->dev, lines[i]);
-				ret = sscanf(lines[i], "\n%s %*s %d %*s %s", iface_and_vlan, &id, iface); 
-				if (ret == 3) {
-					//dev_err(ugeth->dev, "\n----\nret : %d\n----\niface_and_vlan : *%s*\nid: *%d*\n\niface *%s*\n----\n",
-					//		 ret, iface_and_vlan, id, iface);
-					//if iface = eth1, send arp on corresponding vlan
-					strcpy(sanitized_iface,iface);
-					sanitized_iface[4] = '\0';
-					if (strcmp("eth1", sanitized_iface) == 0) {
-						skb = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_addr,
-								ugeth->ndev, ip_addr,
-								NULL,
-								ugeth->ndev->dev_addr,
-								NULL);
-						skb = vlan_insert_tag_set_proto(skb, htons(ETH_P_8021Q), id);
-						if (!skb) { 
-							dev_err(ugeth->dev, "failed to insert VLAN tag -> gratuitous arp not sent\n");
-						}
-						arp_xmit(skb);
-						//dev_err(ugeth->dev, "gratuitous arp sent on %s.%d\n", iface, id);
-					}
-				}
-			}
-			sys_close(fd);
-		}
-		set_fs(old_fs);
-	}
-}
-
-
 void fs_link_switch(struct ucc_geth_private *ugeth)
 {
 	struct phy_device *phydev = ugeth->phydev;
@@ -1833,6 +1734,7 @@ void fs_link_switch(struct ucc_geth_private *ugeth)
 		schedule_work(&ugeth->arp_queue);
 	}
 }
+EXPORT_SYMBOL(fs_link_switch);
 
 // #define DOUBLE_ATTACH_DEBUG 1
 
@@ -3978,121 +3880,7 @@ static int ucc_geth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	return phy_mii_ioctl(ugeth->phydev, rq, cmd);
 }
-
-/* sysfs hook function */
-static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-
-	return sprintf(buf, "%d\n",ugeth->phydev == ugeth->phydevs[1]?1:0);
-}
-
-static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-	int active = simple_strtol(buf, NULL, 10);
-
-	if (active != 1) active = 0;
-	if (!ugeth->phydevs[active]) {
-		dev_warn(dev, "PHY on address %d does not exist\n", active);
-		return count;
-	}
-	if (ugeth->phydevs[active] != ugeth->phydev) {
-		fs_link_switch(ugeth);
-		cancel_delayed_work_sync(&ugeth->link_queue);
-		if (!ugeth->phydev->link && ugeth->mode == MODE_AUTO) schedule_delayed_work(&ugeth->link_queue, LINK_MONITOR_RETRY);
-	}
 	
-	return count;
-}
-	
-static DEVICE_ATTR(active_link, S_IRUGO | S_IWUSR, fs_attr_active_link_show, fs_attr_active_link_store);
-
-static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int ctrl;
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-
-	ctrl = phy_read(ugeth->phydevs[0], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ugeth->phydevs[0]->link ? 2 : 1);
-}
-
-static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
-
-static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int ctrl;
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-	
-	ctrl = phy_read(ugeth->phydevs[1], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ugeth->phydevs[1]->link ? 2 : 1);
-}
-
-static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
-
-static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-	struct phy_device *phydev = ugeth->phydevs[0];
-
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (mode && ugeth->phydev->drv->resume) phydev->drv->resume(phydev);
-	if (!mode && ugeth->phydev->drv->suspend) phydev->drv->suspend(phydev);
-	
-	return count;
-}
-
-static DEVICE_ATTR(phy0_mode, S_IWUSR, NULL, fs_attr_phy0_mode_store);
-
-static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-	struct phy_device *phydev = ugeth->phydevs[1];
-
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (mode && ugeth->phydev->drv->resume) phydev->drv->resume(phydev);
-	if (!mode && ugeth->phydev->drv->suspend) phydev->drv->suspend(phydev);
-	
-	return count;
-}
-
-static DEVICE_ATTR(phy1_mode, S_IWUSR, NULL, fs_attr_phy1_mode_store);
-
-static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-
-	return sprintf(buf, "%d\n",ugeth->mode);
-}
-
-static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct net_device *ndev = dev_get_drvdata(dev);
-	struct ucc_geth_private *ugeth = netdev_priv(ndev);
-	int mode = simple_strtol(buf, NULL, 10);
-	
-	if (ugeth->mode != mode) {
-		ugeth->mode = mode;
-		if (mode == MODE_AUTO) {
-			cancel_delayed_work_sync(&ugeth->link_queue);
-			schedule_delayed_work(&ugeth->link_queue, 0);
-		}
-	}
-	
-	return count;
-}
-	
-static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, fs_attr_mode_show, fs_attr_mode_store);
-
 static const struct net_device_ops ucc_geth_netdev_ops = {
 	.ndo_open		= ucc_geth_open,
 	.ndo_stop		= ucc_geth_close,
@@ -4353,13 +4141,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 			ugeth->disable_phy = PHY_ISOLATE;
 	}
 
-	ret = 0;
-	ret |= device_create_file(ugeth->dev, &dev_attr_active_link);
-	ret |= device_create_file(ugeth->dev, &dev_attr_phy0_link);
-	if (ug_info->phy_node2) ret |= device_create_file(ugeth->dev, &dev_attr_phy1_link);
-	ret |= device_create_file(ugeth->dev, &dev_attr_phy0_mode);
-	if (ug_info->phy_node2) ret |= device_create_file(ugeth->dev, &dev_attr_phy1_mode);
-	ret |= device_create_file(ugeth->dev, &dev_attr_mode);
+	ret = phy_create_files(dev);
 	if (ret)
 		goto out_remove_file;
 
@@ -4379,12 +4161,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	return 0;
 
 out_remove_file:
-	device_remove_file(ugeth->dev, &dev_attr_active_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy0_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy1_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy0_mode);
-	device_remove_file(ugeth->dev, &dev_attr_phy1_mode);
-	device_remove_file(ugeth->dev, &dev_attr_mode);
+	phy_delete_files(dev);
 	unregister_netdev(dev);
 	return ret;
 }
@@ -4394,12 +4171,7 @@ static int ucc_geth_remove(struct platform_device* ofdev)
 	struct net_device *dev = platform_get_drvdata(ofdev);
 	struct ucc_geth_private *ugeth = netdev_priv(dev);
 
-	device_remove_file(ugeth->dev, &dev_attr_active_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy0_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy1_link);
-	device_remove_file(ugeth->dev, &dev_attr_phy0_mode);
-	device_remove_file(ugeth->dev, &dev_attr_phy1_mode);
-	device_remove_file(ugeth->dev, &dev_attr_mode);
+	phy_delete_files(dev);
 	
 	unregister_netdev(dev);
 	free_netdev(dev);
