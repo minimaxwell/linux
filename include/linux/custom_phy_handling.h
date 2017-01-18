@@ -38,10 +38,6 @@ void phy_delete_files(struct net_device *ndev);
 void fs_send_gratuitous_arp(struct work_struct *work);
 void fs_sysfs_notify(struct work_struct *work);
 
-#if defined(CONFIG_FS_ENET)
-void fs_link_switch(struct fs_enet_private *fep);
-#elif defined(CONFIG_UCC_GETH)
-void fs_link_switch(struct ucc_geth_private *ugeth);
-#endif
-
+void fs_link_switch(struct net_device *ndev);
+void fs_link_monitor(struct work_struct *work);
 

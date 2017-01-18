@@ -158,6 +158,9 @@ struct fs_enet_private {
 	int disable_phy;
 	int use_PHY5;
 
+	void (*link_switch)(struct net_device *ndev);
+	void (*link_monitor)(struct work_struct *work);
+
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];
 	struct delayed_work link_queue;

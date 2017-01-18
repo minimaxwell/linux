@@ -1226,6 +1226,12 @@ struct ucc_geth_private {
 	u16 skb_dirtytx[NUM_TX_QUEUES];
 
 	struct ugeth_mii_info *mii_info;
+
+	int gpio;
+	int use_PHY5;
+	void (*link_switch)(struct net_device *ndev);
+	void (*link_monitor)(struct work_struct *work);
+
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];
 	struct delayed_work link_queue;
