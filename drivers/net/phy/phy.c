@@ -523,14 +523,18 @@ EXPORT_SYMBOL(phy_start_aneg);
 /**
  * phy_start_machine - start PHY state machine tracking
  * @phydev: the phy_device struct
+ * @handler: callback function for state change notifications
  *
  * Description: The PHY infrastructure can run a state machine
  *   which tracks whether the PHY is starting up, negotiating,
  *   etc.  This function starts the timer which tracks the state
- *   of the PHY.  If you want to maintain your own state machine,
- *   do not call this function.
+ *   of the PHY.  If you want to be notified when the state changes,
+ *   pass in the callback @handler, otherwise, pass NULL.  If you
+ *   want to maintain your own state machine, do not call this
+ *   function.
  */
-void phy_start_machine(struct phy_device *phydev)
+void phy_start_machine(struct phy_device *phydev,
+			void (*handler)(struct net_device *))
 {
 	phy_ghost_ready = 0;
 	if (of_find_compatible_node(NULL, NULL, "fsl,cmpc885")) {
@@ -545,6 +549,8 @@ void phy_start_machine(struct phy_device *phydev)
 				isMCR2G = 1;
 		}
 	}
+	phydev->adjust_state = handler;
+
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
 }
 
@@ -564,6 +570,8 @@ void phy_stop_machine(struct phy_device *phydev)
 	if (phydev->state > PHY_UP)
 		phydev->state = PHY_UP;
 	mutex_unlock(&phydev->lock);
+
+	phydev->adjust_state = NULL;
 }
 
 /**
@@ -852,6 +860,9 @@ void phy_state_machine(struct work_struct *work)
 
 	if (phydev->drv->link_change_notify)
 		phydev->drv->link_change_notify(phydev);
+
+	if (phydev->adjust_state)
+		phydev->adjust_state(phydev->attached_dev);
 
 	switch(phydev->state) {
 	case PHY_DOWN:
