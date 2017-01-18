@@ -1175,8 +1175,12 @@ static int fs_enet_probe(struct platform_device *ofdev)
 		"PHY-disable", NULL);
 	if (Disable_PHY) {
 		printk("PHY-disable = %s\n", Disable_PHY);
-		if (! strcmp(Disable_PHY, "power-down"))
+		if (! strcmp(Disable_PHY, "power-down")) {
+			/* on MCR1G */
 			fep->disable_phy = PHY_POWER_DOWN;
+			fep->link_monitor = mcr1g_link_monitor;
+			fep->link_switch = mcr1g_link_switch;
+		}
 		else if (! strcmp(Disable_PHY, "isolate"))
 			fep->disable_phy = PHY_ISOLATE;
 	}

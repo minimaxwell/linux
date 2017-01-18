@@ -41,3 +41,5 @@ void fs_sysfs_notify(struct work_struct *work);
 void fs_link_switch(struct net_device *ndev);
 void fs_link_monitor(struct work_struct *work);
 
+void mcr1g_link_switch(struct net_device *ndev);
+void mcr1g_link_monitor(struct work_struct *work);

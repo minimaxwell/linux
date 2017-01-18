@@ -593,3 +593,73 @@ void fs_link_monitor(struct work_struct *work)
 	}
 	
 }
+
+
+/* MCR1G handlers */
+
+#if defined(CONFIG_FS_ENET)
+void mcr1g_link_switch(struct net_device *ndev)
+{
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct phy_device *phydev = ndev_priv->phydev;
+	unsigned long flags;
+
+	/* The PHY must be powered down to disable it (mcr3000 1G) */
+	if (phydev->drv->suspend) phydev->drv->suspend(phydev);
+
+	if (phydev == ndev_priv->phydevs[0]) {
+		if (ndev_priv->phydevs[1]) {
+			phydev = ndev_priv->phydevs[1];
+			dev_err(ndev_priv->dev, "Switch to PHYB\n");
+		}
+	}
+	else {
+		phydev = ndev_priv->phydevs[0];
+		dev_err(ndev_priv->dev, "Switch to PHYA\n");
+	}
+
+	if (ndev_priv->phydevs[1]) {
+		/* Active phy has changed -> notify user space */
+		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
+	}
+
+	spin_lock_irqsave(&ndev_priv->lock, flags);
+	ndev_priv->change_time = jiffies;
+	ndev_priv->phydev = phydev;
+	spin_unlock_irqrestore(&ndev_priv->lock, flags);
+
+	if (phydev->drv->resume) phydev->drv->resume(phydev);
+
+	return;
+}
+EXPORT_SYMBOL(mcr1g_link_switch);
+
+void mcr1g_link_monitor(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct fs_enet_private *ndev_priv =
+                     container_of(dwork, struct fs_enet_private, link_queue);
+	struct phy_device *phydev = ndev_priv->phydev;
+	int value;
+
+	if (ndev_priv->phydevs[0]->state != PHY_RUNNING && ndev_priv->phydevs[1] && ndev_priv->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
+		ndev_priv->phydevs[1]->state = PHY_RUNNING;
+	}
+
+	/* If there's only one PHY -> Nothing to do */
+	if (! ndev_priv->phydevs[1]) {
+		if (!phydev->link && ndev_priv->mode == MODE_AUTO) 
+			schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
+		return;
+	}
+
+	if (!phydev->link && ndev_priv->mode == MODE_AUTO) {
+		if (ndev_priv->phydevs[1] && 
+		    (jiffies - ndev_priv->change_time >= LINK_MONITOR_RETRY))
+			ndev_priv->link_switch(ndev_priv->ndev);
+		schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
+	}
+	return;
+}
+EXPORT_SYMBOL(mcr1g_link_monitor);
+#endif
