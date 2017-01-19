@@ -160,6 +160,7 @@ struct fs_enet_private {
 
 	void (*link_switch)(struct net_device *ndev);
 	void (*link_monitor)(struct work_struct *work);
+	void (*adjust_state)(struct net_device *dev);
 
 	struct phy_device *phydev;
 	struct phy_device *phydevs[2];

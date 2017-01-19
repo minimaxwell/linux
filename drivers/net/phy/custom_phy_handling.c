@@ -21,6 +21,9 @@
 
 #include <linux/custom_phy_handling.h>
 
+int active_phy = 0;
+int phy_ghost_ready = 0;
+
 //FIXME
 static inline int phy_aneg_done(struct phy_device *phydev)
 {
@@ -648,6 +651,46 @@ void mcr1g_link_monitor(struct work_struct *work)
 	return;
 }
 EXPORT_SYMBOL(mcr1g_link_monitor);
+
+void mcr1g_adjust_state(struct net_device *ndev)
+{
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct phy_device *phydev = ndev_priv->phydev;
+	int err = 0;
+	
+	switch(phydev->state) {
+	case PHY_DOWN:
+	case PHY_STARTING:
+	case PHY_READY:
+	case PHY_PENDING:
+	case PHY_UP:
+		break;
+	case PHY_AN:
+		err = phy_read_status(phydev);
+		if (err < 0)
+			break;
+			
+		/* Check if negotiation is done.  Break if there's an error */
+		err = phy_aneg_done(phydev);
+		if (err < 0)
+			break;
+
+		if (err > 0) 
+			phydev->state = PHY_DOUBLE_ATTACHEMENT;
+		break;
+	case PHY_NOLINK:
+	case PHY_FORCING:
+	case PHY_RUNNING:
+	case PHY_DOUBLE_ATTACHEMENT:
+		phydev->state = PHY_CHANGELINK;
+		break;
+	case PHY_CHANGELINK:
+	case PHY_HALTED:
+	case PHY_RESUMING:
+		break;
+	}
+}
+EXPORT_SYMBOL(mcr1g_adjust_state);
 #endif
 
 #if defined(CONFIG_FS_ENET)
@@ -788,4 +831,128 @@ void miae_link_switch(struct net_device *ndev)
 	}
 }
 EXPORT_SYMBOL(miae_link_switch);
+
+void adjust_state(struct net_device *ndev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	struct phy_device *phydev = ndev_priv->phydev;
+	int err = 0;
+	
+	switch(phydev->state) {
+	case PHY_DOWN:
+	case PHY_STARTING:
+	case PHY_READY:
+	case PHY_PENDING:
+	case PHY_UP:
+		break;
+	case PHY_AN:
+		err = phy_read_status(phydev);
+		if (err < 0)
+			break;
+
+		if (!phydev->link) {
+			if (phydev->addr == PHYB_ADDR )
+				phy_write(phydev, MII_BMCR, phy_read(phydev, MII_BMCR) | BMCR_ISOLATE);
+			break;
+		} 
+			
+		/* Check if negotiation is done.  Break if there's an error */
+		err = phy_aneg_done(phydev);
+		if (err < 0)
+			break;
+
+		if (err > 0) 
+			phydev->state = PHY_CHANGELINK;
+		break;
+	case PHY_NOLINK:
+		if (phy_interrupt_is_valid(phydev))
+			break;
+
+		err = phy_read_status(phydev);
+		if (err)
+			break;
+
+		if (phydev->link) {
+			if (active_phy == 0 || active_phy == phydev->addr)
+			{
+				if (active_phy == 0 && phydev->addr != 1)
+					active_phy = phydev->addr;
+			} else {
+				phydev->state = PHY_DOUBLE_ATTACHEMENT;
+			}
+		}
+		break;
+	case PHY_FORCING:
+		err = genphy_update_link(phydev);
+		if (err)
+			break;
+
+		if (phydev->link) {
+			phydev->state = PHY_CHANGELINK;
+		}
+		break;
+	case PHY_RUNNING:
+	case PHY_DOUBLE_ATTACHEMENT:
+		if (phydev->addr != 1) {
+			err = phy_read_status(phydev);
+
+			if (err)
+				break;
+
+			if (!phydev->link) {
+				phydev->state = PHY_NOLINK;
+				break;
+			}
+		}
+		/* Only register a CHANGE if we are
+		 * polling or ignoring interrupts
+		 */
+		if (! (phy_read(phydev, MII_BMSR) & BMSR_ANEGCOMPLETE)) {
+			phydev->autoneg = AUTONEG_ENABLE;
+			phydev->state = PHY_AN;
+		} else if (phy_ghost_ready == 0) { 
+			/* set phy_ghost_ready to tell	  */
+			/* back up PHY is ready (AN done) */	
+			phy_ghost_ready = 1;
+		}
+		break;
+	case PHY_CHANGELINK:
+		err = phy_read_status(phydev);
+		if (err)
+			break;
+		if (phydev->link) {
+			if (active_phy == 0 || active_phy == phydev->addr || phydev->addr == 1) {
+				if (active_phy == 0 && phydev->addr != 1)
+					/* there was no active PHY,   */ 
+					/* we become the active PHY   */
+					active_phy = phydev->addr;
+				if (phydev->addr != active_phy)
+					 /* we are not the active_phy,  */ 
+					 /* go to DOUBLE_ATTACHEMENT    */
+					phydev->state = PHY_DOUBLE_ATTACHEMENT;
+					netif_carrier_on(phydev->attached_dev);
+				} 
+		} else {
+			if (active_phy == phydev->addr) {
+				active_phy = 0;
+				if (phy_ghost_ready)
+					active_phy = (phydev->addr == PHYB_ADDR ? PHYA_ADDR : PHYB_ADDR);
+			}
+			/* if we lost link on PHY1 or/and PHY2,		*/
+			/* change phy_ghost_ready to 0, since we'll use */
+			/* back up PHY (if he has a link ...)		*/
+			phy_ghost_ready = 0;
+		}
+		break;
+	case PHY_HALTED:
+	case PHY_RESUMING:
+		break;
+	}
+
+}
+EXPORT_SYMBOL(adjust_state);
 

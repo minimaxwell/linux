@@ -737,6 +737,8 @@ static int fs_init_phy(struct net_device *dev)
 
 	fep->phydev = phydev;
 	
+	fep->phydev->adjust_state = fep->adjust_state;
+	
 	fep->phydevs[0] = phydev;
 	fep->phy_oldlinks[0] = 0;
 	
@@ -1180,10 +1182,12 @@ static int fs_enet_probe(struct platform_device *ofdev)
 			fep->disable_phy = PHY_POWER_DOWN;
 			fep->link_monitor = mcr1g_link_monitor;
 			fep->link_switch = mcr1g_link_switch;
+			fep->adjust_state = mcr1g_adjust_state;
 		}
 		else if (! strcmp(Disable_PHY, "isolate")) {
 			fep->disable_phy = PHY_ISOLATE;
 			fep->link_switch = miae_link_switch;
+			fep->adjust_state = adjust_state;
 		}
 	}
 

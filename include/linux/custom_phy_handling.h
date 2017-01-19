@@ -43,8 +43,10 @@ void fs_link_monitor(struct work_struct *work);
 
 void mcr1g_link_switch(struct net_device *ndev);
 void mcr1g_link_monitor(struct work_struct *work);
+void mcr1g_adjust_state(struct net_device *dev);
 
 void mcr2g_link_switch(struct net_device *ndev);
 
 void miae_link_switch(struct net_device *ndev);
 
+void adjust_state(struct net_device *dev);
