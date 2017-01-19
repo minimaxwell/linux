@@ -516,18 +516,6 @@ void fs_link_monitor(struct work_struct *work)
 		return;
 	}
 
-	/* If the PHY must be powered down to disable it (mcr3000 1G) */
-	if (ndev_priv->disable_phy == PHY_POWER_DOWN)
-	{
-		if (!phydev->link && ndev_priv->mode == MODE_AUTO) {
-			if (ndev_priv->phydevs[1] && 
-			    (jiffies - ndev_priv->change_time >= LINK_MONITOR_RETRY))
-				ndev_priv->link_switch(ndev_priv->ndev);
-			schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
-		}
-		return;
-	}
-
 	/* If we are not in AUTO mode, don't do anything */
 	if (ndev_priv->mode != MODE_AUTO) return;
 	
@@ -591,7 +579,6 @@ void fs_link_monitor(struct work_struct *work)
 		ndev_priv->change_time = jiffies;
 		schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 	}
-	
 }
 
 
@@ -640,7 +627,6 @@ void mcr1g_link_monitor(struct work_struct *work)
 	struct fs_enet_private *ndev_priv =
                      container_of(dwork, struct fs_enet_private, link_queue);
 	struct phy_device *phydev = ndev_priv->phydev;
-	int value;
 
 	if (ndev_priv->phydevs[0]->state != PHY_RUNNING && ndev_priv->phydevs[1] && ndev_priv->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
 		ndev_priv->phydevs[1]->state = PHY_RUNNING;
@@ -742,3 +728,64 @@ void mcr2g_link_switch(struct net_device *ndev)
 EXPORT_SYMBOL(mcr2g_link_switch);
 #endif
 	
+/* MIAE handlers */
+
+void miae_link_switch(struct net_device *ndev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	struct phy_device *phydev = ndev_priv->phydev;
+	unsigned long flags;
+	int value;
+
+	/* Do not suspend the PHY, but isolate it. We can't get a powered 
+	   down PHY's link status */
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+
+	if (phydev == ndev_priv->phydevs[0]) {
+		if (ndev_priv->phydevs[1]) {
+			if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 1);
+
+			phydev = ndev_priv->phydevs[1];
+			dev_err(ndev_priv->dev, "Switch to PHY B\n");
+			/* In the open function, autoneg was disabled for PHY B.
+			   It must be enabled when PHY B is activated for the 
+			   first time. */
+			phydev->autoneg = AUTONEG_ENABLE;
+		}
+	}
+	else {
+		if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 0);
+		phydev = ndev_priv->phydevs[0];
+		dev_err(ndev_priv->dev, "Switch to PHY A\n");
+	}
+
+	if (ndev_priv->phydevs[1]) {
+		/* Active phy has changed -> notify user space */
+		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
+	}
+
+	spin_lock_irqsave(&ndev_priv->lock, flags);
+	ndev_priv->phydev = phydev;
+	ndev_priv->change_time = jiffies;
+	spin_unlock_irqrestore(&ndev_priv->lock, flags);
+
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+	if (phydev->drv->config_aneg)
+		phydev->drv->config_aneg(phydev);
+
+	if (ndev_priv->phydev->link)
+	{
+		netif_carrier_on(ndev_priv->phydev->attached_dev);
+
+		/* Send gratuitous ARP */
+		schedule_work(&ndev_priv->arp_queue);
+	}
+}
+EXPORT_SYMBOL(miae_link_switch);
+

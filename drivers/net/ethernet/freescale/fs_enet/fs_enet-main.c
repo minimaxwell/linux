@@ -1181,8 +1181,10 @@ static int fs_enet_probe(struct platform_device *ofdev)
 			fep->link_monitor = mcr1g_link_monitor;
 			fep->link_switch = mcr1g_link_switch;
 		}
-		else if (! strcmp(Disable_PHY, "isolate"))
+		else if (! strcmp(Disable_PHY, "isolate")) {
 			fep->disable_phy = PHY_ISOLATE;
+			fep->link_switch = miae_link_switch;
+		}
 	}
 
 	fep->use_PHY5 = 0;
