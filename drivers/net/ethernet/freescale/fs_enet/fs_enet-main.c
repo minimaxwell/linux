@@ -1188,8 +1188,10 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	fep->use_PHY5 = 0;
 	use_PHY5 = (char *)of_get_property(ofdev->dev.of_node, 
 		"use-PHY5", NULL);
-	if (use_PHY5) 
+	if (use_PHY5) { 
 		fep->use_PHY5=1;
+		fep->link_switch = mcr2g_link_switch;
+	}
 
 	ret = fep->ops->setup_data(ndev);
 	if (ret)

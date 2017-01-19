@@ -663,3 +663,82 @@ void mcr1g_link_monitor(struct work_struct *work)
 }
 EXPORT_SYMBOL(mcr1g_link_monitor);
 #endif
+
+#if defined(CONFIG_FS_ENET)
+/* MCR2G handlers, not needed on mcrpro*/
+
+void mcr2g_link_switch(struct net_device *ndev)
+{
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct phy_device *phydev = ndev_priv->phydev;
+	unsigned long flags;
+	int value;
+
+	/* Do not suspend the PHY, but isolate it. We can't get a powered 
+	   down PHY's link status */
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+
+	if (phydev == ndev_priv->phydevs[0]) {
+		if (ndev_priv->phydevs[1]) {
+			/* MCR3000_2G Front side eth connector */
+			/* Switch off PHY 1 */
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+			/* Unisolate PHY 5 */
+			phydev=ndev_priv->phydevs[1];
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, 
+				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+
+			if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 1);
+
+			phydev = ndev_priv->phydevs[1];
+			dev_err(ndev_priv->dev, "Switch to PHY B\n");
+			/* In the open function, autoneg was disabled for PHY B.
+			   It must be enabled when PHY B is activated for the 
+			   first time. */
+			phydev->autoneg = AUTONEG_ENABLE;
+		}
+	}
+	else {
+		/* MCR3000_2G Front side eth connector */
+		/* isolate PHY 5 */
+		value = phy_read(phydev, MII_BMCR);
+		phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+		/* Switch on PHY 1 */
+		phydev=ndev_priv->phydevs[0];
+		value = phy_read(phydev, MII_BMCR);
+		phy_write(phydev, MII_BMCR, 
+			((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+		if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 0);
+		phydev = ndev_priv->phydevs[0];
+		dev_err(ndev_priv->dev, "Switch to PHY A\n");
+	}
+
+	if (ndev_priv->phydevs[1]) {
+		/* Active phy has changed -> notify user space */
+		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
+	}
+
+	spin_lock_irqsave(&ndev_priv->lock, flags);
+	ndev_priv->phydev = phydev;
+	ndev_priv->change_time = jiffies;
+	spin_unlock_irqrestore(&ndev_priv->lock, flags);
+
+	value = phy_read(phydev, MII_BMCR);
+	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+	if (phydev->drv->config_aneg)
+		phydev->drv->config_aneg(phydev);
+
+	if (ndev_priv->phydev->link)
+	{
+		netif_carrier_on(ndev_priv->phydev->attached_dev);
+
+		/* Send gratuitous ARP */
+		schedule_work(&ndev_priv->arp_queue);
+	}
+}
+EXPORT_SYMBOL(mcr2g_link_switch);
+#endif
+	
