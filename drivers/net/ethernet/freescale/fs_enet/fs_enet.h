@@ -154,25 +154,14 @@ struct fs_enet_private {
 	struct mii_if_info mii_if;
 	unsigned int last_mii_status;
 	int interrupt;
-	int gpio;
-	int disable_phy;
-	int use_PHY5;
-
-	void (*link_switch)(struct net_device *ndev);
-	void (*link_monitor)(struct work_struct *work);
-	void (*adjust_state)(struct net_device *dev);
 
 	struct phy_device *phydev;
-	struct phy_device *phydevs[2];
+	int oldduplex, oldspeed, oldlink;	/* current settings */
+
 	struct delayed_work link_queue;
+	struct custom_phy_handler *custom_hdlr;
 	struct work_struct arp_queue;
 	struct fs_notify_work notify_work[3];
-
-	int oldduplex, oldspeed, oldlink;	/* current settings */
-	int change_time;
-	int mode;
-
-	int phy_oldlinks[2];
 
 	/* event masks */
 	u32 ev_napi;		/* mask of NAPI events */

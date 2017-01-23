@@ -45,7 +45,7 @@ static ssize_t fs_attr_active_link_show(struct device *dev, struct device_attrib
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
 
-	return sprintf(buf, "%d\n",ndev_priv->phydev == ndev_priv->phydevs[1]?1:0);
+	return sprintf(buf, "%d\n",ndev_priv->phydev == ndev_priv->custom_hdlr->phydevs[1]?1:0);
 }
 
 static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -59,14 +59,15 @@ static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attri
 	int active = simple_strtol(buf, NULL, 10);
 
 	if (active != 1) active = 0;
-	if (!ndev_priv->phydevs[active]) {
+	if (!ndev_priv->custom_hdlr->phydevs[active]) {
 		dev_warn(dev, "PHY on address %d does not exist\n", active);
 		return count;
 	}
-	if (ndev_priv->phydevs[active] != ndev_priv->phydev) {
-		ndev_priv->link_switch(ndev_priv->ndev);
+	printk(KERN_ERR"doing stuff in fs_attr_active_link_store\n");
+	if (ndev_priv->custom_hdlr->phydevs[active] != ndev_priv->phydev) {
+		ndev_priv->custom_hdlr->link_switch(ndev_priv->ndev);
 		cancel_delayed_work_sync(&ndev_priv->link_queue);
-		if (!ndev_priv->phydev->link && ndev_priv->mode == MODE_AUTO) schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
+		if (!ndev_priv->phydev->link && ndev_priv->custom_hdlr->mode == MODE_AUTO) schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 	}
 	
 	return count;
@@ -84,8 +85,8 @@ static ssize_t fs_attr_phy0_link_show(struct device *dev, struct device_attribut
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
 
-	ctrl = phy_read(ndev_priv->phydevs[0], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ndev_priv->phydevs[0]->link ? 2 : 1);
+	ctrl = phy_read(ndev_priv->custom_hdlr->phydevs[0], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ndev_priv->custom_hdlr->phydevs[0]->link ? 2 : 1);
 }
 
 static DEVICE_ATTR(phy0_link, S_IRUGO, fs_attr_phy0_link_show, NULL);
@@ -100,8 +101,8 @@ static ssize_t fs_attr_phy1_link_show(struct device *dev, struct device_attribut
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
 	
-	ctrl = phy_read(ndev_priv->phydevs[1], MII_BMCR);
-	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ndev_priv->phydevs[1]->link ? 2 : 1);
+	ctrl = phy_read(ndev_priv->custom_hdlr->phydevs[1], MII_BMCR);
+	return sprintf(buf, "%d\n", ctrl & BMCR_PDOWN ? 0 : ndev_priv->custom_hdlr->phydevs[1]->link ? 2 : 1);
 }
 
 static DEVICE_ATTR(phy1_link, S_IRUGO, fs_attr_phy1_link_show, NULL);
@@ -114,7 +115,7 @@ static ssize_t fs_attr_phy0_mode_store(struct device *dev, struct device_attribu
 #elif defined(CONFIG_UCC_GETH)
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
-	struct phy_device *phydev = ndev_priv->phydevs[0];
+	struct phy_device *phydev = ndev_priv->custom_hdlr->phydevs[0];
 
 	int mode = simple_strtol(buf, NULL, 10);
 	
@@ -134,7 +135,7 @@ static ssize_t fs_attr_phy1_mode_store(struct device *dev, struct device_attribu
 #elif defined(CONFIG_UCC_GETH)
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
-	struct phy_device *phydev = ndev_priv->phydevs[1];
+	struct phy_device *phydev = ndev_priv->custom_hdlr->phydevs[1];
 
 	int mode = simple_strtol(buf, NULL, 10);
 	
@@ -155,7 +156,7 @@ static ssize_t fs_attr_mode_show(struct device *dev, struct device_attribute *at
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
 
-	return sprintf(buf, "%d\n",ndev_priv->mode);
+	return sprintf(buf, "%d\n",ndev_priv->custom_hdlr->mode);
 }
 
 static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -168,8 +169,9 @@ static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *a
 #endif
 	int mode = simple_strtol(buf, NULL, 10);
 	
-	if (ndev_priv->mode != mode) {
-		ndev_priv->mode = mode;
+	printk(KERN_ERR"doing stuff in fs_attr_mode_store\n");
+	if (ndev_priv->custom_hdlr->mode != mode) {
+		ndev_priv->custom_hdlr->mode = mode;
 		if (mode == MODE_AUTO) {
 			cancel_delayed_work_sync(&ndev_priv->link_queue);
 			schedule_delayed_work(&ndev_priv->link_queue, 0);
@@ -358,59 +360,28 @@ void fs_link_switch(struct net_device *ndev)
 	unsigned long flags;
 	int value;
 
-	/* If the PHY must be powered down to disable it (mcr3000 1G) */
-	if (ndev_priv->disable_phy == PHY_POWER_DOWN)
-	{
-		if (phydev->drv->suspend) phydev->drv->suspend(phydev);
-
-		if (phydev == ndev_priv->phydevs[0]) {
-			if (ndev_priv->phydevs[1]) {
-				phydev = ndev_priv->phydevs[1];
-				dev_err(ndev_priv->dev, "Switch to PHYB\n");
-			}
-		}
-		else {
-			phydev = ndev_priv->phydevs[0];
-			dev_err(ndev_priv->dev, "Switch to PHYA\n");
-		}
-
-		if (ndev_priv->phydevs[1]) {
-			/* Active phy has changed -> notify user space */
-			schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
-		}
-
-		spin_lock_irqsave(&ndev_priv->lock, flags);
-		ndev_priv->change_time = jiffies;
-		ndev_priv->phydev = phydev;
-		spin_unlock_irqrestore(&ndev_priv->lock, flags);
-
-		if (phydev->drv->resume) phydev->drv->resume(phydev);
-
-		return;
-	}
-	
 	/* Do not suspend the PHY, but isolate it. We can't get a powered 
 	   down PHY's link status */
 	value = phy_read(phydev, MII_BMCR);
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
-	if (phydev == ndev_priv->phydevs[0]) {
-		if (ndev_priv->phydevs[1]) {
+	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
+		if (ndev_priv->custom_hdlr->phydevs[1]) {
 			/* MCR3000_2G Front side eth connector */
-			if (ndev_priv->use_PHY5) {
+			if (ndev_priv->custom_hdlr->use_PHY5) {
 				/* Switch off PHY 1 */
 				value = phy_read(phydev, MII_BMCR);
 				phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
 				/* Unisolate PHY 5 */
-				phydev=ndev_priv->phydevs[1];
+				phydev=ndev_priv->custom_hdlr->phydevs[1];
 				value = phy_read(phydev, MII_BMCR);
 				phy_write(phydev, MII_BMCR, 
 					((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
 			} 
 
-			if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 1);
+			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->phydevs[1];
+			phydev = ndev_priv->custom_hdlr->phydevs[1];
 			dev_err(ndev_priv->dev, "Switch to PHY B\n");
 			/* In the open function, autoneg was disabled for PHY B.
 			   It must be enabled when PHY B is activated for the 
@@ -420,29 +391,30 @@ void fs_link_switch(struct net_device *ndev)
 	}
 	else {
 		/* MCR3000_2G Front side eth connector */
-		if (ndev_priv->use_PHY5) {
+		if (ndev_priv->custom_hdlr->use_PHY5) {
 			/* isolate PHY 5 */
 			value = phy_read(phydev, MII_BMCR);
 			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
 			/* Switch on PHY 1 */
-			phydev=ndev_priv->phydevs[0];
+			phydev=ndev_priv->custom_hdlr->phydevs[0];
 			value = phy_read(phydev, MII_BMCR);
 			phy_write(phydev, MII_BMCR, 
 				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
 		}
-		if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 0);
-		phydev = ndev_priv->phydevs[0];
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 0);
+		phydev = ndev_priv->custom_hdlr->phydevs[0];
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->phydevs[1]) {
+	if (ndev_priv->custom_hdlr->phydevs[1]) {
 		/* Active phy has changed -> notify user space */
+		printk(KERN_ERR"Active phy has changed -> notify user space\n");
 		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 	}
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;
-	ndev_priv->change_time = jiffies;
+	ndev_priv->custom_hdlr->change_time = jiffies;
 	spin_unlock_irqrestore(&ndev_priv->lock, flags);
 
 	value = phy_read(phydev, MII_BMCR);
@@ -455,6 +427,7 @@ void fs_link_switch(struct net_device *ndev)
 		netif_carrier_on(ndev_priv->phydev->attached_dev);
 
 		/* Send gratuitous ARP */
+		printk(KERN_ERR"arp stuff\n");
 		schedule_work(&ndev_priv->arp_queue);
 	}
 }
@@ -478,67 +451,67 @@ void fs_link_monitor(struct work_struct *work)
 
 	#ifdef DOUBLE_ATTACH_DEBUG
 	int value;	
-	printk("Current PHY : %s\n", ndev_priv->phydev==ndev_priv->phydevs[0] ? "PHY 0": "PHY 1");
-	printk("PHY 0 (addr=%d) : %s ", ndev_priv->phydevs[0]->addr, ndev_priv->phydevs[0]->link ? "Up": "Down");
-	value = phy_read(ndev_priv->phydevs[0], MII_BMSR);
+	printk("Current PHY : %s\n", ndev_priv->phydev==ndev_priv->custom_hdlr->phydevs[0] ? "PHY 0": "PHY 1");
+	printk("PHY 0 (addr=%d) : %s ", ndev_priv->custom_hdlr->phydevs[0]->addr, ndev_priv->custom_hdlr->phydevs[0]->link ? "Up": "Down");
+	value = phy_read(ndev_priv->custom_hdlr->phydevs[0], MII_BMSR);
 	if (value & 0x0004)
 		printk ("(Up in MII_BMSR) ");
 	else
 		printk ("(Down in MII_BMSR) ");
-	value = phy_read(ndev_priv->phydevs[0], MII_BMCR);
+	value = phy_read(ndev_priv->custom_hdlr->phydevs[0], MII_BMCR);
 	if (value & 0x0400) 
 		printk ("isolated\n");
 	else
 		printk ("not isolated\n");
 	
-	if (ndev_priv->phydevs[1]) {
-		printk("PHY 1 (addr=%d) : %s ", ndev_priv->phydevs[1]->addr, ndev_priv->phydevs[1]->link ? "Up": "Down");
-		value = phy_read(ndev_priv->phydevs[1], MII_BMSR);
+	if (ndev_priv->custom_hdlr->phydevs[1]) {
+		printk("PHY 1 (addr=%d) : %s ", ndev_priv->custom_hdlr->phydevs[1]->addr, ndev_priv->custom_hdlr->phydevs[1]->link ? "Up": "Down");
+		value = phy_read(ndev_priv->custom_hdlr->phydevs[1], MII_BMSR);
 		if (value & 0x0004) 
 			printk ("(Up in MII_BMSR) ");
 		else
 			printk ("(Down in MII_BMSR) ");
-		value = phy_read(ndev_priv->phydevs[1], MII_BMCR);
+		value = phy_read(ndev_priv->custom_hdlr->phydevs[1], MII_BMCR);
 		if (value & 0x0400) 
 			printk ("isolated\n");
 		else
 			printk ("not isolated\n");
 	}
 	#endif
-	if (ndev_priv->phydevs[0]->state != PHY_RUNNING && ndev_priv->phydevs[1] && ndev_priv->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
-		ndev_priv->phydevs[1]->state = PHY_RUNNING;
+	if (ndev_priv->custom_hdlr->phydevs[0]->state != PHY_RUNNING && ndev_priv->custom_hdlr->phydevs[1] && ndev_priv->custom_hdlr->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
+		ndev_priv->custom_hdlr->phydevs[1]->state = PHY_RUNNING;
 	#ifdef DOUBLE_ATTACH_DEBUG
 		dev_err(ndev_priv->dev, "PHY is now running \n");
 	#endif
 	}
 
 	/* If there's only one PHY -> Nothing to do */
-	if (! ndev_priv->phydevs[1]) {
-		if (!phydev->link && ndev_priv->mode == MODE_AUTO) 
+	if (! ndev_priv->custom_hdlr->phydevs[1]) {
+		if (!phydev->link && ndev_priv->custom_hdlr->mode == MODE_AUTO) 
 			schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 		return;
 	}
 
 	/* If we are not in AUTO mode, don't do anything */
-	if (ndev_priv->mode != MODE_AUTO) return;
+	if (ndev_priv->custom_hdlr->mode != MODE_AUTO) return;
 	
 	/* If elapsed time since last change is too small, wait for a while */
-	if (jiffies - ndev_priv->change_time < LINK_MONITOR_RETRY) {
+	if (jiffies - ndev_priv->custom_hdlr->change_time < LINK_MONITOR_RETRY) {
 		schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 		return;
 	}
 
 	/* Which phydev(s) has changed ? */
-	if (ndev_priv->phydevs[0]->link != ndev_priv->phy_oldlinks[0]) {
-		changed_phydevs[nb_changed_phydevs++] = ndev_priv->phydevs[0];
-		ndev_priv->phy_oldlinks[0] = ndev_priv->phydevs[0]->link;
+	if (ndev_priv->custom_hdlr->phydevs[0]->link != ndev_priv->custom_hdlr->phy_oldlinks[0]) {
+		changed_phydevs[nb_changed_phydevs++] = ndev_priv->custom_hdlr->phydevs[0];
+		ndev_priv->custom_hdlr->phy_oldlinks[0] = ndev_priv->custom_hdlr->phydevs[0]->link;
 		/* phyA link status has changed -> notify user space */
 		schedule_work(&ndev_priv->notify_work[PHY0_LINK].notify_queue);
 
 	} 
-	if (ndev_priv->phydevs[1]->link != ndev_priv->phy_oldlinks[1]) {
-		changed_phydevs[nb_changed_phydevs++] = ndev_priv->phydevs[1];
-		ndev_priv->phy_oldlinks[1] = ndev_priv->phydevs[1]->link;
+	if (ndev_priv->custom_hdlr->phydevs[1]->link != ndev_priv->custom_hdlr->phy_oldlinks[1]) {
+		changed_phydevs[nb_changed_phydevs++] = ndev_priv->custom_hdlr->phydevs[1];
+		ndev_priv->custom_hdlr->phy_oldlinks[1] = ndev_priv->custom_hdlr->phydevs[1]->link;
 		/* phyB link status has changed -> notify user space */
 		schedule_work(&ndev_priv->notify_work[PHY1_LINK].notify_queue);
 	}
@@ -557,9 +530,9 @@ void fs_link_monitor(struct work_struct *work)
 	 * active link but if either PHY0 or PHY1 was already active,
 	 * don't change anything, we leave him in charge
 	 */		
-	if (ndev_priv->phydevs[1] && !ndev_priv->phy_oldlinks[1]) {
-		if (ndev_priv->phydev != ndev_priv->phydevs[0] && ndev_priv->phydevs[1]->link && ndev_priv->phydevs[0]->link) {
-			ndev_priv->link_switch(ndev_priv->ndev);
+	if (ndev_priv->custom_hdlr->phydevs[1] && !ndev_priv->custom_hdlr->phy_oldlinks[1]) {
+		if (ndev_priv->phydev != ndev_priv->custom_hdlr->phydevs[0] && ndev_priv->custom_hdlr->phydevs[1]->link && ndev_priv->custom_hdlr->phydevs[0]->link) {
+			ndev_priv->custom_hdlr->link_switch(ndev_priv->ndev);
 		}
 	}
 		
@@ -574,12 +547,12 @@ void fs_link_monitor(struct work_struct *work)
 
 	/* If we reach this point, the active PHY has lost its link */
 	/* If the other PHY has a link -> switch */
-	if ((phydev == ndev_priv->phydevs[0] && ndev_priv->phydevs[1]->link) ||
-	    (phydev == ndev_priv->phydevs[1] && ndev_priv->phydevs[0]->link))
+	if ((phydev == ndev_priv->custom_hdlr->phydevs[0] && ndev_priv->custom_hdlr->phydevs[1]->link) ||
+	    (phydev == ndev_priv->custom_hdlr->phydevs[1] && ndev_priv->custom_hdlr->phydevs[0]->link))
 	{
-		ndev_priv->link_switch(ndev_priv->ndev);
+		ndev_priv->custom_hdlr->link_switch(ndev_priv->ndev);
 	} else {
-		ndev_priv->change_time = jiffies;
+		ndev_priv->custom_hdlr->change_time = jiffies;
 		schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 	}
 }
@@ -597,24 +570,24 @@ void mcr1g_link_switch(struct net_device *ndev)
 	/* The PHY must be powered down to disable it (mcr3000 1G) */
 	if (phydev->drv->suspend) phydev->drv->suspend(phydev);
 
-	if (phydev == ndev_priv->phydevs[0]) {
-		if (ndev_priv->phydevs[1]) {
-			phydev = ndev_priv->phydevs[1];
+	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
+		if (ndev_priv->custom_hdlr->phydevs[1]) {
+			phydev = ndev_priv->custom_hdlr->phydevs[1];
 			dev_err(ndev_priv->dev, "Switch to PHYB\n");
 		}
 	}
 	else {
-		phydev = ndev_priv->phydevs[0];
+		phydev = ndev_priv->custom_hdlr->phydevs[0];
 		dev_err(ndev_priv->dev, "Switch to PHYA\n");
 	}
 
-	if (ndev_priv->phydevs[1]) {
+	if (ndev_priv->custom_hdlr->phydevs[1]) {
 		/* Active phy has changed -> notify user space */
 		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 	}
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
-	ndev_priv->change_time = jiffies;
+	ndev_priv->custom_hdlr->change_time = jiffies;
 	ndev_priv->phydev = phydev;
 	spin_unlock_irqrestore(&ndev_priv->lock, flags);
 
@@ -631,21 +604,21 @@ void mcr1g_link_monitor(struct work_struct *work)
                      container_of(dwork, struct fs_enet_private, link_queue);
 	struct phy_device *phydev = ndev_priv->phydev;
 
-	if (ndev_priv->phydevs[0]->state != PHY_RUNNING && ndev_priv->phydevs[1] && ndev_priv->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
-		ndev_priv->phydevs[1]->state = PHY_RUNNING;
+	if (ndev_priv->custom_hdlr->phydevs[0]->state != PHY_RUNNING && ndev_priv->custom_hdlr->phydevs[1] && ndev_priv->custom_hdlr->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
+		ndev_priv->custom_hdlr->phydevs[1]->state = PHY_RUNNING;
 	}
 
 	/* If there's only one PHY -> Nothing to do */
-	if (! ndev_priv->phydevs[1]) {
-		if (!phydev->link && ndev_priv->mode == MODE_AUTO) 
+	if (! ndev_priv->custom_hdlr->phydevs[1]) {
+		if (!phydev->link && ndev_priv->custom_hdlr->mode == MODE_AUTO) 
 			schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 		return;
 	}
 
-	if (!phydev->link && ndev_priv->mode == MODE_AUTO) {
-		if (ndev_priv->phydevs[1] && 
-		    (jiffies - ndev_priv->change_time >= LINK_MONITOR_RETRY))
-			ndev_priv->link_switch(ndev_priv->ndev);
+	if (!phydev->link && ndev_priv->custom_hdlr->mode == MODE_AUTO) {
+		if (ndev_priv->custom_hdlr->phydevs[1] && 
+		    (jiffies - ndev_priv->custom_hdlr->change_time >= LINK_MONITOR_RETRY))
+			ndev_priv->custom_hdlr->link_switch(ndev_priv->ndev);
 		schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
 	}
 	return;
@@ -708,21 +681,21 @@ void mcr2g_link_switch(struct net_device *ndev)
 	value = phy_read(phydev, MII_BMCR);
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
-	if (phydev == ndev_priv->phydevs[0]) {
-		if (ndev_priv->phydevs[1]) {
+	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
+		if (ndev_priv->custom_hdlr->phydevs[1]) {
 			/* MCR3000_2G Front side eth connector */
 			/* Switch off PHY 1 */
 			value = phy_read(phydev, MII_BMCR);
 			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
 			/* Unisolate PHY 5 */
-			phydev=ndev_priv->phydevs[1];
+			phydev=ndev_priv->custom_hdlr->phydevs[1];
 			value = phy_read(phydev, MII_BMCR);
 			phy_write(phydev, MII_BMCR, 
 				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
 
-			if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 1);
+			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->phydevs[1];
+			phydev = ndev_priv->custom_hdlr->phydevs[1];
 			dev_err(ndev_priv->dev, "Switch to PHY B\n");
 			/* In the open function, autoneg was disabled for PHY B.
 			   It must be enabled when PHY B is activated for the 
@@ -736,23 +709,23 @@ void mcr2g_link_switch(struct net_device *ndev)
 		value = phy_read(phydev, MII_BMCR);
 		phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
 		/* Switch on PHY 1 */
-		phydev=ndev_priv->phydevs[0];
+		phydev=ndev_priv->custom_hdlr->phydevs[0];
 		value = phy_read(phydev, MII_BMCR);
 		phy_write(phydev, MII_BMCR, 
 			((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
-		if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 0);
-		phydev = ndev_priv->phydevs[0];
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 0);
+		phydev = ndev_priv->custom_hdlr->phydevs[0];
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->phydevs[1]) {
+	if (ndev_priv->custom_hdlr->phydevs[1]) {
 		/* Active phy has changed -> notify user space */
 		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 	}
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;
-	ndev_priv->change_time = jiffies;
+	ndev_priv->custom_hdlr->change_time = jiffies;
 	spin_unlock_irqrestore(&ndev_priv->lock, flags);
 
 	value = phy_read(phydev, MII_BMCR);
@@ -789,11 +762,11 @@ void miae_link_switch(struct net_device *ndev)
 	value = phy_read(phydev, MII_BMCR);
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
-	if (phydev == ndev_priv->phydevs[0]) {
-		if (ndev_priv->phydevs[1]) {
-			if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 1);
+	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
+		if (ndev_priv->custom_hdlr->phydevs[1]) {
+			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->phydevs[1];
+			phydev = ndev_priv->custom_hdlr->phydevs[1];
 			dev_err(ndev_priv->dev, "Switch to PHY B\n");
 			/* In the open function, autoneg was disabled for PHY B.
 			   It must be enabled when PHY B is activated for the 
@@ -802,19 +775,19 @@ void miae_link_switch(struct net_device *ndev)
 		}
 	}
 	else {
-		if (ndev_priv->gpio != -1) ldb_gpio_set_value(ndev_priv->gpio, 0);
-		phydev = ndev_priv->phydevs[0];
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 0);
+		phydev = ndev_priv->custom_hdlr->phydevs[0];
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->phydevs[1]) {
+	if (ndev_priv->custom_hdlr->phydevs[1]) {
 		/* Active phy has changed -> notify user space */
 		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 	}
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;
-	ndev_priv->change_time = jiffies;
+	ndev_priv->custom_hdlr->change_time = jiffies;
 	spin_unlock_irqrestore(&ndev_priv->lock, flags);
 
 	value = phy_read(phydev, MII_BMCR);
@@ -956,3 +929,333 @@ void adjust_state(struct net_device *ndev)
 }
 EXPORT_SYMBOL(adjust_state);
 
+/**
+ * custom_probe() - setup custom handlers according to dtb.
+ * @ndev: Pointer to associated net device.
+ *
+ * Check if the interface as registered two phydevices.
+ * If this is the case, set up link_monitor,
+ * link_switch and adjust_state function of the 
+ * netdev accroding to the dtb. 
+ *
+ * If associated netdevice as to handle two phy_node 
+ * set up custom_hdlr pointer in net_device according to
+ * information contained in dtb (settings, associated board handler)
+ * pointer will be NULL otherwise 
+ */
+void custom_probe(struct net_device *ndev, struct platform_device *ofdev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	int ngpios = of_gpio_count(ofdev->dev.of_node);
+	int gpio = -1;
+	char *Disable_PHY;
+	char *use_PHY5;
+	struct custom_phy_handler *custom_hdlr;
+
+	custom_hdlr = kzalloc(sizeof(*custom_hdlr), GFP_KERNEL);
+	if (!custom_hdlr)
+		return -ENOMEM;
+
+	if (ngpios == 1) 
+		gpio = ldb_gpio_init(ofdev->dev.of_node, &ofdev->dev, 0, 1);
+
+	custom_hdlr->gpio = gpio;
+	
+	custom_hdlr->link_monitor = fs_link_monitor;
+	custom_hdlr->link_switch = fs_link_switch;
+	custom_hdlr->disable_phy = 0;
+	Disable_PHY = (char *)of_get_property(ofdev->dev.of_node, 
+		"PHY-disable", NULL);
+	if (Disable_PHY) {
+		printk("PHY-disable = %s\n", Disable_PHY);
+		if (! strcmp(Disable_PHY, "power-down")) {
+			/* on MCR1G */
+			custom_hdlr->disable_phy = PHY_POWER_DOWN;
+			custom_hdlr->link_monitor = mcr1g_link_monitor;
+			custom_hdlr->link_switch = mcr1g_link_switch;
+			custom_hdlr->adjust_state = mcr1g_adjust_state;
+		}
+		else if (! strcmp(Disable_PHY, "isolate")) {
+			custom_hdlr->disable_phy = PHY_ISOLATE;
+			custom_hdlr->link_switch = miae_link_switch;
+			custom_hdlr->adjust_state = adjust_state;
+		}
+	}
+
+	custom_hdlr->use_PHY5 = 0;
+	use_PHY5 = (char *)of_get_property(ofdev->dev.of_node, 
+		"use-PHY5", NULL);
+	if (use_PHY5) { 
+		custom_hdlr->use_PHY5=1;
+		custom_hdlr->link_switch = mcr2g_link_switch;
+	}
+
+	ndev_priv->custom_hdlr = custom_hdlr;
+	return;
+} 
+EXPORT_SYMBOL(custom_probe);
+
+/**
+ * custom_init() - init second phy if needed.
+ * @ndev: Pointer to associated net device.
+ *
+ * Initialise second phy on interface that use custom handlers
+ * for networking
+ * 	
+ * return: in case of success, return 0 and ENODEV
+ * if attaching to phy failed
+ */
+int custom_init(struct net_device *ndev, void (*hndlr)(struct net_device *), phy_interface_t iface)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct fs_platform_info *fpi = ndev_priv->fpi;
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+	struct ucc_geth_info *fpi = ndev_priv->ug_info;
+#endif
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+
+	/* if phy_node2 is NULL, leave the interface in normal operation */
+	if (!fpi->phy_node2)
+		return 0;
+
+	custom_hdlr->change_time = jiffies;
+	custom_hdlr->mode = MODE_AUTO;
+
+	ndev_priv->phydev->adjust_state = custom_hdlr->adjust_state;
+	
+	custom_hdlr->phydevs[0] = ndev_priv->phydev;
+	custom_hdlr->phy_oldlinks[0] = 0;
+	
+	custom_hdlr->phydevs[1] = of_phy_connect(ndev, ndev_priv->fpi->phy_node2, 
+				hndlr, 0, iface);
+	if (!custom_hdlr->phydevs[1]) {
+		dev_err(&ndev->dev, "Could not attach to PHY\n");
+		return -ENODEV;
+	}
+
+	custom_hdlr->phy_oldlinks[1] = 0;
+
+	if (custom_hdlr->disable_phy == PHY_POWER_DOWN) {
+		if (custom_hdlr->phydevs[1]->drv->suspend) 
+			custom_hdlr->phydevs[1]->drv->suspend(custom_hdlr->phydevs[1]);
+	}
+	return 0;
+} 
+EXPORT_SYMBOL(custom_init);
+
+int custom_open(struct net_device *ndev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+	int ret;
+	int value;
+	int idx;
+
+	ret = phy_create_files(ndev);
+	if (ret) {
+		phy_delete_files(ndev);
+		unregister_netdev(ndev_priv->ndev);
+		return ret;
+	}
+
+	ndev_priv->notify_work[PHY0_LINK].kn = 
+		sysfs_get_dirent(ndev_priv->dev->kobj.sd, "phy0_link");
+	ndev_priv->notify_work[PHY1_LINK].kn = 
+		sysfs_get_dirent(ndev_priv->dev->kobj.sd, "phy1_link");
+	ndev_priv->notify_work[ACTIVE_LINK].kn = 
+		sysfs_get_dirent(ndev_priv->dev->kobj.sd, "active_link");
+
+	phy_start(custom_hdlr->phydevs[1]);
+	/* If the PHY must be isolated to disable it (MIAe) */
+	if (custom_hdlr->disable_phy == PHY_ISOLATE) {
+		value = phy_read(custom_hdlr->phydevs[1], MII_BMCR);
+		phy_write(custom_hdlr->phydevs[1], MII_BMCR, 
+			((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
+		if (custom_hdlr->gpio != -1) {
+			ldb_gpio_set_value(custom_hdlr->gpio, 0);
+		}
+		/* autoneg must be disabled at this point. Otherwise, 
+		the driver will remove the ISOLATE bit in the command
+		register and break networking */
+		custom_hdlr->phydevs[1]->autoneg = AUTONEG_DISABLE;
+	}
+
+
+	INIT_DELAYED_WORK(&ndev_priv->link_queue, custom_hdlr->link_monitor);
+	INIT_WORK(&ndev_priv->arp_queue, fs_send_gratuitous_arp);
+	for (idx=0; idx<3; idx++)
+		INIT_WORK(&ndev_priv->notify_work[idx].notify_queue, fs_sysfs_notify);
+	schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
+
+	return 0;
+} 
+EXPORT_SYMBOL(custom_open);
+
+void custom_phy_stop(struct net_device *ndev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+
+	/* if custom_hdlr is NULL, leave the interface in normal operation */
+	if (!custom_hdlr) {
+		phy_stop(ndev_priv->phydev);	
+		return ;
+	}
+
+	/* remove sysfs files */
+	phy_delete_files(ndev);
+
+	cancel_delayed_work_sync(&ndev_priv->link_queue);
+	phy_stop(custom_hdlr->phydevs[0]);
+	phy_stop(custom_hdlr->phydevs[1]);
+} 
+EXPORT_SYMBOL(custom_phy_stop);
+
+void custom_phy_disconnect(struct net_device *ndev)
+{
+#if defined(CONFIG_FS_ENET)
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+
+	/* if custom_hdlr is NULL, leave the interface in normal operation */
+	if (!custom_hdlr) {
+		phy_disconnect(ndev_priv->phydev);
+		ndev_priv->phydev = NULL;
+		return ;
+	}
+
+	phy_disconnect(custom_hdlr->phydevs[0]);
+	phy_disconnect(custom_hdlr->phydevs[1]);
+	
+} 
+EXPORT_SYMBOL(custom_phy_disconnect);
+
+#if defined(CONFIG_FS_ENET)
+int custom_set_settings(struct net_device *ndev, struct ethtool_cmd *cmd)
+{
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+	int ret;
+	int value;
+
+	if (!custom_hdlr) {
+		return phy_ethtool_sset(ndev_priv->phydev, cmd);
+	}
+
+	if (cmd->phy_address == custom_hdlr->phydevs[1]->addr) 
+		ret = phy_ethtool_sset(custom_hdlr->phydevs[1], cmd);
+	else 
+		ret = phy_ethtool_sset(custom_hdlr->phydevs[0], cmd);
+
+	/* Only one PHY or no PIO E 18 -> exit */
+	if (custom_hdlr->gpio == -1) 
+		return ret;
+
+	/* If PHY B is isolated or in power down, Switch to PHY A */
+	value = phy_read(custom_hdlr->phydevs[1], MII_BMCR);
+	if (value & (BMCR_PDOWN | BMCR_ISOLATE)) {
+		if (ndev_priv->phydev == custom_hdlr->phydevs[1]) {
+			dev_err(ndev_priv->dev, "Switch to PHY A\n");
+			ndev_priv->phydev = custom_hdlr->phydevs[0];
+			if (custom_hdlr->gpio != -1) {
+				ldb_gpio_set_value(custom_hdlr->gpio, 0);
+			}
+		}
+		return ret;
+	}
+
+	/* If we reach this point, PHY B is eligible as active PHY */
+
+	/* If PHY A is isolated or in power down, Switch to PHY B */
+	value = phy_read(custom_hdlr->phydevs[0], MII_BMCR);
+	if (value & (BMCR_PDOWN | BMCR_ISOLATE)) {
+		if (ndev_priv->phydev == custom_hdlr->phydevs[0]) {
+			dev_err(ndev_priv->dev, "Switch to PHY B\n");
+			ndev_priv->phydev = custom_hdlr->phydevs[1];
+			if (custom_hdlr->gpio != -1) {
+				ldb_gpio_set_value(custom_hdlr->gpio, 1);
+			}
+		}
+		return ret;
+	}
+
+	/* If we reach this point, both PHYs are Powered up and not isolated. */
+	/* This is an error. The network will certainly not work as expected. */
+
+	return ret;
+} 
+EXPORT_SYMBOL(custom_set_settings);
+
+int custom_fs_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
+{
+	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
+	struct mii_ioctl_data *mii = (struct mii_ioctl_data *)&rq->ifr_data;
+	int ret, value;
+ 
+	if (!custom_hdlr) 
+		return phy_mii_ioctl(ndev_priv->phydev, rq, cmd);
+
+	if (custom_hdlr->phydevs[0]->addr == mii->phy_id)
+		ret = phy_mii_ioctl(custom_hdlr->phydevs[0], rq, cmd);
+	else if (custom_hdlr->phydevs[1]->addr == mii->phy_id)
+		ret = phy_mii_ioctl(custom_hdlr->phydevs[1], rq, cmd);
+	else
+		return -EINVAL;
+
+	/* Only one PHY or no PIO E 18 -> exit */
+	if (custom_hdlr->gpio == -1 || ! custom_hdlr->phydevs[1]) 
+		return ret;
+
+	/* If PHY B is isolated or in power down, Switch to PHY A */
+	value = phy_read(custom_hdlr->phydevs[1], MII_BMCR);
+	if (value & (BMCR_PDOWN | BMCR_ISOLATE)) {
+		if (ndev_priv->phydev == custom_hdlr->phydevs[1]) {
+			dev_err(ndev_priv->dev, "Switch to PHY A\n");
+			ndev_priv->phydev = custom_hdlr->phydevs[0];
+			if (custom_hdlr->gpio != -1) {
+				ldb_gpio_set_value(custom_hdlr->gpio, 0);
+			}
+		}
+		return ret;
+	}
+
+	/* If we reach this point, PHY B is eligible as active PHY */
+
+	/* If PHY A is isolated or in power down, Switch to PHY B */
+	value = phy_read(custom_hdlr->phydevs[0], MII_BMCR);
+	if (value & (BMCR_PDOWN | BMCR_ISOLATE)) {
+		if (ndev_priv->phydev == custom_hdlr->phydevs[0]) {
+			dev_err(ndev_priv->dev, "Switch to PHY B\n");
+			ndev_priv->phydev = custom_hdlr->phydevs[1];
+			if (custom_hdlr->gpio != -1) {
+				ldb_gpio_set_value(custom_hdlr->gpio, 1);
+			}
+		}
+		return ret;
+	}
+
+	/* If we reach this point, both PHYs are Powered up and not isolated. */
+	/* This is an error, the network will certainly not work as expected. */
+
+	return ret;
+} 
+EXPORT_SYMBOL(custom_fs_ioctl);
+#endif
