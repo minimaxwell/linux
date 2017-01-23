@@ -366,28 +366,26 @@ void fs_link_switch(struct net_device *ndev)
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
 	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
-		if (ndev_priv->custom_hdlr->phydevs[1]) {
-			/* MCR3000_2G Front side eth connector */
-			if (ndev_priv->custom_hdlr->use_PHY5) {
-				/* Switch off PHY 1 */
-				value = phy_read(phydev, MII_BMCR);
-				phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
-				/* Unisolate PHY 5 */
-				phydev=ndev_priv->custom_hdlr->phydevs[1];
-				value = phy_read(phydev, MII_BMCR);
-				phy_write(phydev, MII_BMCR, 
-					((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
-			} 
+		/* MCR3000_2G Front side eth connector */
+		if (ndev_priv->custom_hdlr->use_PHY5) {
+			/* Switch off PHY 1 */
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+			/* Unisolate PHY 5 */
+			phydev=ndev_priv->custom_hdlr->phydevs[1];
+			value = phy_read(phydev, MII_BMCR);
+			phy_write(phydev, MII_BMCR, 
+				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+		} 
 
-			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->custom_hdlr->phydevs[1];
-			dev_err(ndev_priv->dev, "Switch to PHY B\n");
-			/* In the open function, autoneg was disabled for PHY B.
-			   It must be enabled when PHY B is activated for the 
-			   first time. */
-			phydev->autoneg = AUTONEG_ENABLE;
-		}
+		phydev = ndev_priv->custom_hdlr->phydevs[1];
+		dev_err(ndev_priv->dev, "Switch to PHY B\n");
+		/* In the open function, autoneg was disabled for PHY B.
+		   It must be enabled when PHY B is activated for the 
+		   first time. */
+		phydev->autoneg = AUTONEG_ENABLE;
 	}
 	else {
 		/* MCR3000_2G Front side eth connector */
@@ -406,11 +404,8 @@ void fs_link_switch(struct net_device *ndev)
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->custom_hdlr->phydevs[1]) {
-		/* Active phy has changed -> notify user space */
-		printk(KERN_ERR"Active phy has changed -> notify user space\n");
-		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
-	}
+	/* Active phy has changed -> notify user space */
+	schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;
@@ -463,33 +458,12 @@ void fs_link_monitor(struct work_struct *work)
 		printk ("isolated\n");
 	else
 		printk ("not isolated\n");
-	
-	if (ndev_priv->custom_hdlr->phydevs[1]) {
-		printk("PHY 1 (addr=%d) : %s ", ndev_priv->custom_hdlr->phydevs[1]->addr, ndev_priv->custom_hdlr->phydevs[1]->link ? "Up": "Down");
-		value = phy_read(ndev_priv->custom_hdlr->phydevs[1], MII_BMSR);
-		if (value & 0x0004) 
-			printk ("(Up in MII_BMSR) ");
-		else
-			printk ("(Down in MII_BMSR) ");
-		value = phy_read(ndev_priv->custom_hdlr->phydevs[1], MII_BMCR);
-		if (value & 0x0400) 
-			printk ("isolated\n");
-		else
-			printk ("not isolated\n");
-	}
 	#endif
 	if (ndev_priv->custom_hdlr->phydevs[0]->state != PHY_RUNNING && ndev_priv->custom_hdlr->phydevs[1] && ndev_priv->custom_hdlr->phydevs[1]->state == PHY_DOUBLE_ATTACHEMENT) {
 		ndev_priv->custom_hdlr->phydevs[1]->state = PHY_RUNNING;
 	#ifdef DOUBLE_ATTACH_DEBUG
 		dev_err(ndev_priv->dev, "PHY is now running \n");
 	#endif
-	}
-
-	/* If there's only one PHY -> Nothing to do */
-	if (! ndev_priv->custom_hdlr->phydevs[1]) {
-		if (!phydev->link && ndev_priv->custom_hdlr->mode == MODE_AUTO) 
-			schedule_delayed_work(&ndev_priv->link_queue, LINK_MONITOR_RETRY);
-		return;
 	}
 
 	/* If we are not in AUTO mode, don't do anything */
@@ -571,20 +545,16 @@ void mcr1g_link_switch(struct net_device *ndev)
 	if (phydev->drv->suspend) phydev->drv->suspend(phydev);
 
 	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
-		if (ndev_priv->custom_hdlr->phydevs[1]) {
-			phydev = ndev_priv->custom_hdlr->phydevs[1];
-			dev_err(ndev_priv->dev, "Switch to PHYB\n");
-		}
+		phydev = ndev_priv->custom_hdlr->phydevs[1];
+		dev_err(ndev_priv->dev, "Switch to PHYB\n");
 	}
 	else {
 		phydev = ndev_priv->custom_hdlr->phydevs[0];
 		dev_err(ndev_priv->dev, "Switch to PHYA\n");
 	}
 
-	if (ndev_priv->custom_hdlr->phydevs[1]) {
-		/* Active phy has changed -> notify user space */
-		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
-	}
+	/* Active phy has changed -> notify user space */
+	schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->custom_hdlr->change_time = jiffies;
@@ -682,26 +652,24 @@ void mcr2g_link_switch(struct net_device *ndev)
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
 	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
-		if (ndev_priv->custom_hdlr->phydevs[1]) {
-			/* MCR3000_2G Front side eth connector */
-			/* Switch off PHY 1 */
-			value = phy_read(phydev, MII_BMCR);
-			phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
-			/* Unisolate PHY 5 */
-			phydev=ndev_priv->custom_hdlr->phydevs[1];
-			value = phy_read(phydev, MII_BMCR);
-			phy_write(phydev, MII_BMCR, 
-				((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
+		/* MCR3000_2G Front side eth connector */
+		/* Switch off PHY 1 */
+		value = phy_read(phydev, MII_BMCR);
+		phy_write(phydev, MII_BMCR, value | BMCR_ISOLATE);
+		/* Unisolate PHY 5 */
+		phydev=ndev_priv->custom_hdlr->phydevs[1];
+		value = phy_read(phydev, MII_BMCR);
+		phy_write(phydev, MII_BMCR, 
+			((value & ~BMCR_PDOWN) & ~BMCR_ISOLATE));
 
-			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->custom_hdlr->phydevs[1];
-			dev_err(ndev_priv->dev, "Switch to PHY B\n");
-			/* In the open function, autoneg was disabled for PHY B.
-			   It must be enabled when PHY B is activated for the 
-			   first time. */
-			phydev->autoneg = AUTONEG_ENABLE;
-		}
+		phydev = ndev_priv->custom_hdlr->phydevs[1];
+		dev_err(ndev_priv->dev, "Switch to PHY B\n");
+		/* In the open function, autoneg was disabled for PHY B.
+		   It must be enabled when PHY B is activated for the 
+		   first time. */
+		phydev->autoneg = AUTONEG_ENABLE;
 	}
 	else {
 		/* MCR3000_2G Front side eth connector */
@@ -718,10 +686,8 @@ void mcr2g_link_switch(struct net_device *ndev)
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->custom_hdlr->phydevs[1]) {
-		/* Active phy has changed -> notify user space */
-		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
-	}
+	/* Active phy has changed -> notify user space */
+	schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;
@@ -763,16 +729,14 @@ void miae_link_switch(struct net_device *ndev)
 	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
 
 	if (phydev == ndev_priv->custom_hdlr->phydevs[0]) {
-		if (ndev_priv->custom_hdlr->phydevs[1]) {
-			if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
+		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 1);
 
-			phydev = ndev_priv->custom_hdlr->phydevs[1];
-			dev_err(ndev_priv->dev, "Switch to PHY B\n");
-			/* In the open function, autoneg was disabled for PHY B.
-			   It must be enabled when PHY B is activated for the 
-			   first time. */
-			phydev->autoneg = AUTONEG_ENABLE;
-		}
+		phydev = ndev_priv->custom_hdlr->phydevs[1];
+		dev_err(ndev_priv->dev, "Switch to PHY B\n");
+		/* In the open function, autoneg was disabled for PHY B.
+		   It must be enabled when PHY B is activated for the 
+		   first time. */
+		phydev->autoneg = AUTONEG_ENABLE;
 	}
 	else {
 		if (ndev_priv->custom_hdlr->gpio != -1) ldb_gpio_set_value(ndev_priv->custom_hdlr->gpio, 0);
@@ -780,10 +744,8 @@ void miae_link_switch(struct net_device *ndev)
 		dev_err(ndev_priv->dev, "Switch to PHY A\n");
 	}
 
-	if (ndev_priv->custom_hdlr->phydevs[1]) {
-		/* Active phy has changed -> notify user space */
-		schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
-	}
+	/* Active phy has changed -> notify user space */
+	schedule_work(&ndev_priv->notify_work[ACTIVE_LINK].notify_queue);
 
 	spin_lock_irqsave(&ndev_priv->lock, flags);
 	ndev_priv->phydev = phydev;

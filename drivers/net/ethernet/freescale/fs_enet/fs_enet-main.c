@@ -770,9 +770,11 @@ static int fs_enet_open(struct net_device *dev)
 	}
 	phy_start(fep->phydev);
 
-	err = custom_open(fep->ndev);
-	if (err)
-		return err;
+	if (fep->custom_hdlr != NULL) {
+		err = custom_open(fep->ndev);
+		if (err)
+			return err;
+	}
 
 	netif_start_queue(dev);
 
