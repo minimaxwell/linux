@@ -709,8 +709,9 @@ void phy_change(struct work_struct *work)
 		goto phy_err;
 
 	mutex_lock(&phydev->lock);
-	if ((PHY_RUNNING == phydev->state) || (PHY_NOLINK == phydev->state))
+	if ((PHY_RUNNING == phydev->state) || (PHY_NOLINK == phydev->state)) {
 		phydev->state = PHY_CHANGELINK;
+	}
 	mutex_unlock(&phydev->lock);
 
 	atomic_dec(&phydev->irq_disable);
@@ -824,6 +825,7 @@ void phy_state_machine(struct work_struct *work)
 			container_of(dwork, struct phy_device, state_queue);
 	bool needs_aneg = false, do_suspend = false;
 	enum phy_state old_state;
+	enum phy_state int_state;
 	int err = 0;
 	int old_link;
 
@@ -836,6 +838,7 @@ void phy_state_machine(struct work_struct *work)
 
 	if (phydev->adjust_state)
 		phydev->adjust_state(phydev->attached_dev);
+	int_state = phydev->state;
 
 	switch(phydev->state) {
 	case PHY_DOWN:
@@ -1006,6 +1009,14 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
+	if (phydev->state != old_state || phydev->state != int_state) {
+		printk(KERN_ERR"PHY(addr=%d) : %s ", phydev->addr, phydev->link ? "Up": "Down");
+		printk(KERN_ERR"PHY(%d) state change %s -> %s -> %s\n",
+			phydev->addr,
+			phy_state_to_str(old_state),
+			phy_state_to_str(int_state),
+			phy_state_to_str(phydev->state));
+	}
 	dev_dbg(&phydev->dev, "PHY state change %s -> %s\n",
 		phy_state_to_str(old_state), phy_state_to_str(phydev->state));
 

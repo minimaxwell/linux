@@ -10,6 +10,7 @@
 #include <linux/inetdevice.h>
 #include <linux/if_vlan.h>
 #include <linux/syscalls.h>
+#include <linux/of_mdio.h>
 
 #include <saf3000/ldb_gpio.h>
 
@@ -428,7 +429,7 @@ void fs_link_switch(struct net_device *ndev)
 }
 EXPORT_SYMBOL(fs_link_switch);
 
-// #define DOUBLE_ATTACH_DEBUG 1
+#define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
 {
@@ -909,27 +910,30 @@ void custom_probe(struct net_device *ndev, struct platform_device *ofdev)
 {
 #if defined(CONFIG_FS_ENET)
 	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+	char *use_PHY5;
 #elif defined(CONFIG_UCC_GETH)
 	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
 #endif
 	int ngpios = of_gpio_count(ofdev->dev.of_node);
 	int gpio = -1;
 	char *Disable_PHY;
-	char *use_PHY5;
 	struct custom_phy_handler *custom_hdlr;
 
 	custom_hdlr = kzalloc(sizeof(*custom_hdlr), GFP_KERNEL);
 	if (!custom_hdlr)
 		return -ENOMEM;
 
-	if (ngpios == 1) 
+	if (ngpios == 1) { 
+		printk(KERN_ERR"gpios find \n\n\n");
 		gpio = ldb_gpio_init(ofdev->dev.of_node, &ofdev->dev, 0, 1);
+	}
 
 	custom_hdlr->gpio = gpio;
 	
 	custom_hdlr->link_monitor = fs_link_monitor;
 	custom_hdlr->link_switch = fs_link_switch;
 	custom_hdlr->disable_phy = 0;
+#if defined(CONFIG_FS_ENET)
 	Disable_PHY = (char *)of_get_property(ofdev->dev.of_node, 
 		"PHY-disable", NULL);
 	if (Disable_PHY) {
@@ -955,6 +959,16 @@ void custom_probe(struct net_device *ndev, struct platform_device *ofdev)
 		custom_hdlr->use_PHY5=1;
 		custom_hdlr->link_switch = mcr2g_link_switch;
 	}
+#elif defined(CONFIG_UCC_GETH)
+	Disable_PHY = (char *)of_get_property(ofdev->dev.of_node, 
+		"PHY-disable", NULL);
+	if (Disable_PHY) {
+		printk("PHY-disable = %s\n", Disable_PHY);
+		custom_hdlr->disable_phy = PHY_ISOLATE;
+		custom_hdlr->link_switch = miae_link_switch;
+		custom_hdlr->adjust_state = adjust_state;
+	}
+#endif
 
 	ndev_priv->custom_hdlr = custom_hdlr;
 	return;
@@ -994,8 +1008,13 @@ int custom_init(struct net_device *ndev, void (*hndlr)(struct net_device *), phy
 	custom_hdlr->phydevs[0] = ndev_priv->phydev;
 	custom_hdlr->phy_oldlinks[0] = 0;
 	
+#if defined(CONFIG_FS_ENET)
 	custom_hdlr->phydevs[1] = of_phy_connect(ndev, ndev_priv->fpi->phy_node2, 
 				hndlr, 0, iface);
+#elif defined(CONFIG_UCC_GETH)
+	custom_hdlr->phydevs[1] = of_phy_connect(ndev, ndev_priv->ug_info->phy_node2, 
+				hndlr, 0, iface);
+#endif
 	if (!custom_hdlr->phydevs[1]) {
 		dev_err(&ndev->dev, "Could not attach to PHY\n");
 		return -ENODEV;
@@ -1052,7 +1071,6 @@ int custom_open(struct net_device *ndev)
 		custom_hdlr->phydevs[1]->autoneg = AUTONEG_DISABLE;
 	}
 
-
 	INIT_DELAYED_WORK(&ndev_priv->link_queue, custom_hdlr->link_monitor);
 	INIT_WORK(&ndev_priv->arp_queue, fs_send_gratuitous_arp);
 	for (idx=0; idx<3; idx++)
@@ -1105,7 +1123,6 @@ void custom_phy_disconnect(struct net_device *ndev)
 
 	phy_disconnect(custom_hdlr->phydevs[0]);
 	phy_disconnect(custom_hdlr->phydevs[1]);
-	
 } 
 EXPORT_SYMBOL(custom_phy_disconnect);
 
@@ -1164,10 +1181,15 @@ int custom_set_settings(struct net_device *ndev, struct ethtool_cmd *cmd)
 	return ret;
 } 
 EXPORT_SYMBOL(custom_set_settings);
+#endif
 
 int custom_fs_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 {
+#if defined(CONFIG_FS_ENET)
 	struct fs_enet_private *ndev_priv = netdev_priv(ndev);
+#elif defined(CONFIG_UCC_GETH)
+	struct ucc_geth_private *ndev_priv = netdev_priv(ndev);
+#endif
 	struct custom_phy_handler *custom_hdlr = ndev_priv->custom_hdlr;
 	struct mii_ioctl_data *mii = (struct mii_ioctl_data *)&rq->ifr_data;
 	int ret, value;
@@ -1220,4 +1242,3 @@ int custom_fs_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 	return ret;
 } 
 EXPORT_SYMBOL(custom_fs_ioctl);
-#endif

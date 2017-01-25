@@ -1681,8 +1681,11 @@ static void adjust_link(struct net_device *dev)
 	if (new_state && netif_msg_link(ugeth))
 		phy_print_status(phydev);
 
-	/*cancel_delayed_work_sync(&ugeth->link_queue);*/
-	/*if (ugeth->mode == MODE_AUTO) schedule_delayed_work(&ugeth->link_queue, 0);*/
+	if (ugeth->custom_hdlr != NULL) {
+		cancel_delayed_work_sync(&ugeth->link_queue);
+		if (ugeth->custom_hdlr->mode == MODE_AUTO)
+			schedule_delayed_work(&ugeth->link_queue, 0);
+	}
 }
 
 /* Initialize TBI PHY interface for communicating with the
@@ -1750,8 +1753,6 @@ static int init_phy(struct net_device *dev)
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
 	priv->oldduplex = -1;
-	priv->change_time = jiffies;
-	priv->mode = MODE_AUTO;
 
 	phydev = of_phy_connect(dev, ug_info->phy_node, &adjust_link, 0,
 				priv->phy_interface);
@@ -1777,19 +1778,7 @@ static int init_phy(struct net_device *dev)
 
 	priv->phydev = phydev;
 
-	priv->phydevs[0] = phydev;
-	priv->phy_oldlinks[0] = 0;
-	
-	priv->phydevs[1] = of_phy_connect(dev, ug_info->phy_node2, 
-				&adjust_link, 0, priv->phy_interface);
-	priv->phy_oldlinks[1] = 0;
-
-	if (priv->phydevs[1] && priv->disable_phy == PHY_POWER_DOWN) {
-		if (priv->phydevs[1]->drv->suspend) 
-			priv->phydevs[1]->drv->suspend(priv->phydevs[1]);
-	}
-
-	return 0;
+	return custom_init(priv->ndev, &adjust_link, priv->phy_interface);
 }
 
 static void ugeth_dump_regs(struct ucc_geth_private *ugeth)
@@ -2091,7 +2080,7 @@ static void ucc_geth_stop(struct ucc_geth_private *ugeth)
 	 * Must be done before disabling the controller
 	 * or deadlock may happen.
 	 */
-	phy_stop(phydev);
+	custom_phy_stop(ugeth->ndev);
 
 	/* Disable the controller */
 	ugeth_disable(ugeth, COMM_DIR_RX_AND_TX);
@@ -3513,6 +3502,14 @@ static int ucc_geth_open(struct net_device *dev)
 	}
 
 	phy_start(ugeth->phydev);
+
+	if (ugeth->custom_hdlr != NULL) {
+		err = custom_open(ugeth->ndev);
+		if (err)
+			return err;
+	}
+
+
 	napi_enable(&ugeth->napi);
 	netif_start_queue(dev);
 
@@ -3538,7 +3535,7 @@ static int ucc_geth_close(struct net_device *dev)
 
 	cancel_work_sync(&ugeth->timeout_work);
 	ucc_geth_stop(ugeth);
-	phy_disconnect(ugeth->phydev);
+	custom_phy_disconnect(ugeth->ndev);
 	ugeth->phydev = NULL;
 
 	free_irq(ugeth->ug_info->uf_info.irq, ugeth->ndev);
@@ -3615,7 +3612,7 @@ static int ucc_geth_suspend(struct platform_device *ofdev, pm_message_t state)
 		setbits32(&ugeth->ug_regs->maccfg2, MACCFG2_MPE);
 		ucc_fast_enable(ugeth->uccf, COMM_DIR_RX_AND_TX);
 	} else if (!(ugeth->wol_en & WAKE_PHY)) {
-		phy_stop(ugeth->phydev);
+		custom_phy_stop(ugeth->ndev);
 	}
 
 	return 0;
@@ -3655,7 +3652,7 @@ static int ucc_geth_resume(struct platform_device *ofdev)
 	ugeth->oldspeed = 0;
 	ugeth->oldduplex = -1;
 
-	phy_stop(ugeth->phydev);
+	custom_phy_stop(ugeth->ndev);
 	phy_start(ugeth->phydev);
 
 	napi_enable(&ugeth->napi);
@@ -3705,7 +3702,7 @@ static int ucc_geth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	if (!ugeth->phydev)
 		return -ENODEV;
 
-	return phy_mii_ioctl(ugeth->phydev, rq, cmd);
+	return custom_fs_ioctl(ugeth->ndev, rq, cmd);
 }
 	
 static const struct net_device_ops ucc_geth_netdev_ops = {
@@ -3731,7 +3728,7 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	struct ucc_geth_private *ugeth = NULL;
 	struct ucc_geth_info *ug_info;
 	struct resource res;
-	int err, ucc_num, max_speed = 0, ret;
+	int err, ucc_num, max_speed = 0;
 	const unsigned int *prop;
 	const char *sprop;
 	const void *mac_addr;
@@ -3749,7 +3746,6 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 		PHY_INTERFACE_MODE_TBI, PHY_INTERFACE_MODE_RTBI,
 		PHY_INTERFACE_MODE_SGMII,
 	};
-	char *Disable_PHY;
 
 	ugeth_vdbg("%s: IN", __func__);
 
@@ -3957,29 +3953,8 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	ugeth->ndev = dev;
 	ugeth->node = np;
 
-	ugeth->link_monitor = &fs_link_monitor;
-	ugeth->link_switch = &fs_link_switch;
-	ugeth->disable_phy = 0;
-	Disable_PHY = (char *)of_get_property(np, 
-		"PHY-disable", NULL);
-	if (Disable_PHY) {
-		printk("PHY-disable = %s\n", Disable_PHY);
-		if (! strcmp(Disable_PHY, "power-down"))
-			ugeth->disable_phy = PHY_POWER_DOWN;
-		else if (! strcmp(Disable_PHY, "isolate"))
-			ugeth->disable_phy = PHY_ISOLATE;
-	}
-
-	ret = phy_create_files(dev);
-	if (ret)
-		goto out_remove_file;
-
-	ugeth->notify_work[PHY0_LINK].kn = 
-		sysfs_get_dirent(ugeth->dev->kobj.sd, "phy0_link");
-	ugeth->notify_work[PHY1_LINK].kn = 
-		sysfs_get_dirent(ugeth->dev->kobj.sd, "phy1_link");
-	ugeth->notify_work[ACTIVE_LINK].kn = 
-		sysfs_get_dirent(ugeth->dev->kobj.sd, "active_link");
+	if(ug_info->phy_node2)
+		custom_probe(ugeth->ndev, ofdev);
 
 	/* register the PHY board fixup (for MPCPRO board) */
 	err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
@@ -3988,11 +3963,6 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	if (err)
 		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");
 	return 0;
-
-out_remove_file:
-	phy_delete_files(dev);
-	unregister_netdev(dev);
-	return ret;
 }
 
 static int ucc_geth_remove(struct platform_device* ofdev)
