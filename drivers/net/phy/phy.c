@@ -709,9 +709,8 @@ void phy_change(struct work_struct *work)
 		goto phy_err;
 
 	mutex_lock(&phydev->lock);
-	if ((PHY_RUNNING == phydev->state) || (PHY_NOLINK == phydev->state)) {
+	if ((PHY_RUNNING == phydev->state) || (PHY_NOLINK == phydev->state))
 		phydev->state = PHY_CHANGELINK;
-	}
 	mutex_unlock(&phydev->lock);
 
 	atomic_dec(&phydev->irq_disable);

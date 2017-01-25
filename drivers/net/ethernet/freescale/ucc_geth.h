@@ -1236,13 +1236,9 @@ struct ucc_geth_private {
 	phy_interface_t phy_interface;
 	int max_speed;
 	uint32_t msg_enable;
-	int disable_phy;
 	int oldspeed;
 	int oldduplex;
 	int oldlink;
-	int change_time;
-	int mode;
-	int phy_oldlinks[2];
 	int wol_en;
 
 	struct device_node *node;

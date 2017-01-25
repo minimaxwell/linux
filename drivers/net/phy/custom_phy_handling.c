@@ -920,10 +920,8 @@ void custom_probe(struct net_device *ndev, struct platform_device *ofdev)
 	if (!custom_hdlr)
 		return -ENOMEM;
 
-	if (ngpios == 1) { 
-		printk(KERN_ERR"gpios find \n\n\n");
+	if (ngpios == 1) 
 		gpio = ldb_gpio_init(ofdev->dev.of_node, &ofdev->dev, 0, 1);
-	}
 
 	custom_hdlr->gpio = gpio;
 	
