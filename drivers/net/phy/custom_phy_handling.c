@@ -64,7 +64,6 @@ static ssize_t fs_attr_active_link_store(struct device *dev, struct device_attri
 		dev_warn(dev, "PHY on address %d does not exist\n", active);
 		return count;
 	}
-	printk(KERN_ERR"doing stuff in fs_attr_active_link_store\n");
 	if (ndev_priv->custom_hdlr->phydevs[active] != ndev_priv->phydev) {
 		ndev_priv->custom_hdlr->link_switch(ndev_priv->ndev);
 		cancel_delayed_work_sync(&ndev_priv->link_queue);
@@ -170,7 +169,6 @@ static ssize_t fs_attr_mode_store(struct device *dev, struct device_attribute *a
 #endif
 	int mode = simple_strtol(buf, NULL, 10);
 	
-	printk(KERN_ERR"doing stuff in fs_attr_mode_store\n");
 	if (ndev_priv->custom_hdlr->mode != mode) {
 		ndev_priv->custom_hdlr->mode = mode;
 		if (mode == MODE_AUTO) {
@@ -423,13 +421,12 @@ void fs_link_switch(struct net_device *ndev)
 		netif_carrier_on(ndev_priv->phydev->attached_dev);
 
 		/* Send gratuitous ARP */
-		printk(KERN_ERR"arp stuff\n");
 		schedule_work(&ndev_priv->arp_queue);
 	}
 }
 EXPORT_SYMBOL(fs_link_switch);
 
-#define DOUBLE_ATTACH_DEBUG 1
+//#define DOUBLE_ATTACH_DEBUG 1
 
 void fs_link_monitor(struct work_struct *work)
 {

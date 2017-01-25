@@ -1009,14 +1009,6 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
-	if (phydev->state != old_state || phydev->state != int_state) {
-		printk(KERN_ERR"PHY(addr=%d) : %s ", phydev->addr, phydev->link ? "Up": "Down");
-		printk(KERN_ERR"PHY(%d) state change %s -> %s -> %s\n",
-			phydev->addr,
-			phy_state_to_str(old_state),
-			phy_state_to_str(int_state),
-			phy_state_to_str(phydev->state));
-	}
 	dev_dbg(&phydev->dev, "PHY state change %s -> %s\n",
 		phy_state_to_str(old_state), phy_state_to_str(phydev->state));
 
