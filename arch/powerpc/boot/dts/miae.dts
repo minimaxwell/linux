@@ -701,7 +701,7 @@
 			interrupt-parent = <&PIC>;
 			phy-handle = <&PHY2 &PHY3>;
 			linux,network-index = <1>;
-			gpios = <&CPM1_PIO_E 18 1>;
+			gpios = <&CPM1_PIO_E 18 1>; //gpio selection PHY2/3 
 			PHY-disable = "isolate";
 		};
 

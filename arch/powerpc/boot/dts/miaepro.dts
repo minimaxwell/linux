@@ -1212,7 +1212,7 @@
 			phy-handle = <&phy3 &phy2>;
 			pio-handle = <&ucc3pio>;
 			phy-connection-type = "rmii";
-			gpios = <&qe_pio_c 21 1>; 
+			gpios = <&qe_pio_c 21 1>; //gpio selection PHY2/3 
 			PHY-disable = "isolate";
 		};
 
