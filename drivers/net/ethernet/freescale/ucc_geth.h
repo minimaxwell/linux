@@ -1226,21 +1226,19 @@ struct ucc_geth_private {
 	u16 skb_dirtytx[NUM_TX_QUEUES];
 
 	struct ugeth_mii_info *mii_info;
-	struct phy_device *phydev;
-	struct phy_device *phydevs[2];
+
+	struct custom_phy_handler *custom_hdlr;
 	struct delayed_work link_queue;
 	struct work_struct arp_queue;
 	struct fs_notify_work notify_work[3];
+
+	struct phy_device *phydev;
 	phy_interface_t phy_interface;
 	int max_speed;
 	uint32_t msg_enable;
-	int disable_phy;
 	int oldspeed;
 	int oldduplex;
 	int oldlink;
-	int change_time;
-	int mode;
-	int phy_oldlinks[2];
 	int wol_en;
 
 	struct device_node *node;

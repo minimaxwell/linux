@@ -1212,6 +1212,8 @@
 			phy-handle = <&phy3 &phy2>;
 			pio-handle = <&ucc3pio>;
 			phy-connection-type = "rmii";
+			gpios = <&qe_pio_c 21 1>; //gpio selection PHY2/3 
+			PHY-disable = "isolate";
 		};
 
 		mdio@3120 {
@@ -1223,16 +1225,19 @@
 			phy1:ethernet-phy@1 {
 				interrupt-parent = <&ipic>;
 				reg = <0x1>;
+				interrupts = <17 8>;
 				device_type = "ethernet-phy";
 			};
 			phy2:ethernet-phy@2 {
 				interrupt-parent = <&ipic>;
 				reg = <0x2>;	
+				interrupts = <17 8>;
 				device_type = "ethernet-phy";
 			};
 			phy3:ethernet-phy@3 {
 				interrupt-parent = <&ipic>;
 				reg = <0x3>;	
+				interrupts = <17 8>;
 				device_type = "ethernet-phy";
 			};
 		};
