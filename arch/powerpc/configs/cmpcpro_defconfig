@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 4.4.41 Kernel Configuration
+# Linux/powerpc 4.4.45 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -373,7 +373,7 @@ CONFIG_ZONE_DMA=y
 # CONFIG_NEED_DMA_MAP_STATE is not set
 CONFIG_NEED_SG_DMA_LENGTH=y
 CONFIG_FSL_SOC=y
-# CONFIG_FSL_LBC is not set
+CONFIG_FSL_LBC=y
 CONFIG_PPC_PCI_CHOICE=y
 # CONFIG_PCI is not set
 # CONFIG_PCI_DOMAINS is not set

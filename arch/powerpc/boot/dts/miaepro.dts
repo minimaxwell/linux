@@ -50,7 +50,10 @@
 	localbus@b0000100 {
 		#address-cells = <2>;
 		#size-cells = <1>;
-		compatible = "simple-bus";
+		compatible = "fsl,pq2pro-localbus", "simple-bus";
+		reg = <0xb0005000 0xd8>;
+		interrupt-parent = <&ipic>;
+		interrupts = <77 8>;
 		ranges = <0 0x0 0x40000000 0x04000000	// Boot Flash
 			  1 0x0 0xa0000000 0x00008000	// Nand Flash
 			  2 0x0 0x92000000 0x00008000	// Eth Face avant
@@ -59,8 +62,12 @@
 			  5 0x0 0x90000000 0x10000000	// FPGA-MPCPRO
 			  6 0x0 0x81800000 0x00008000	// mezzanine
 			  7 0x0 0x80800000 0x00008000>;	// DSP
-		reg = <0xb0000000 0x00000200>;
 		bus-frequency = <0>;
+
+		periphs: periphs@0,0 {
+			compatible = "s3k,periphs";
+			reg =  <4 0x00 0x1>;
+		};
 
 		fpga-mpcpro@5,0000000 {
 			#address-cells = <1>;
