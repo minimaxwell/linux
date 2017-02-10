@@ -79,7 +79,7 @@
 		};
 
 		nand@1,0 {
-			compatible = "s3k,mpcpro-nand";
+			compatible = "gpio-control-nand";
 			reg = <1 0x0 0x01>;
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -88,10 +88,6 @@
 				 &qe_pio_c 26 1		// ALE
 				 &qe_pio_c 25 1		// CLE
 				 0>;			// nwp
-			//partition@0 {
-			//	label = "mpcpro-nand";
-			//	reg = <0x0 0x4000>;
-			//};
 		};
 
 		eth2@2,0 {

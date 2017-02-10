@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 4.4.45 Kernel Configuration
+# Linux/powerpc 4.4.48 Kernel Configuration
 #
 # CONFIG_PPC64 is not set
 
@@ -813,13 +813,13 @@ CONFIG_MTD_NAND_ECC=y
 CONFIG_MTD_NAND=y
 # CONFIG_MTD_NAND_ECC_BCH is not set
 # CONFIG_MTD_SM_COMMON is not set
-# CONFIG_MTD_NAND_GPIO is not set
+CONFIG_MTD_NAND_GPIO=y
 # CONFIG_MTD_NAND_OMAP_BCH_BUILD is not set
 CONFIG_MTD_NAND_IDS=y
 # CONFIG_MTD_NAND_DISKONCHIP is not set
 # CONFIG_MTD_NAND_DOCG4 is not set
 # CONFIG_MTD_NAND_NANDSIM is not set
-CONFIG_MTD_NAND_PLATFORM=y
+# CONFIG_MTD_NAND_PLATFORM is not set
 # CONFIG_MTD_NAND_FSL_ELBC is not set
 # CONFIG_MTD_NAND_FSL_IFC is not set
 # CONFIG_MTD_NAND_FSL_UPM is not set
