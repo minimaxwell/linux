@@ -1246,7 +1246,7 @@ static int ucc_uart_probe(struct platform_device *ofdev)
 			 * kernel, then we use it.
 			 */
 			ret = request_firmware_nowait(THIS_MODULE,
-				FW_ACTION_HOTPLUG, "fsl_qe_ucode_uart_8323_11.bin", &ofdev->dev,
+				FW_ACTION_HOTPLUG, filename, &ofdev->dev,
 				GFP_KERNEL, &ofdev->dev, uart_firmware_cont);
 			if (ret) {
 				dev_err(&ofdev->dev,
