@@ -1177,15 +1177,6 @@
 			};
 		};
 
-//		spi@500 {
-//			cell-index = <1>;
-//			compatible = "fsl,spi";
-//			reg = <0x500 0x40>;
-//			interrupts = <1>;
-//			interrupt-parent = <&qeic>;
-//			mode = "cpu";
-//		};
-
 		eth0: ucc@3000 {
 			device_type = "network";
 			compatible = "ucc_geth";

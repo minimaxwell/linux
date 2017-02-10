@@ -63,15 +63,6 @@
 			  5 0x0 0x90000000 0x10000000	// FPGA-MPCPRO
 			  6 0x0 0x81800000 0x00008000	// mezzanine
 			  7 0x0 0x80800000 0x00008000>;	// DSP
-
-//			  5 0x0 0x80000000 0x00800000>;	// FPGA-Firmware
-//			  6 0x0 0x80800000 0x00800000	// DSP
-//			  7 0x0 0x81000000 0x00800000	// FPGA-Radio
-//			  8 0x0 0x81800000 0x00800000	// mezzanine
-//			  9 0x0 0x82000000 0x00800000	// controleur E1
-//			 10 0x0 0x83000000 0x00400000	// matrice
-//			 11 0x0 0x83400000 0x00800000	// DPRAM (DSP)
-//			 12 0x0 0x83c00000 0x00800000>;	// DPRAM (semaphores)
 		bus-frequency = <0>;
 
 		flash@0,0 {
@@ -685,7 +676,6 @@
 			 */
 			rx-clock-name = "brg6";
 			tx-clock-name = "brg5";
-//			pio-handle = < &ucc5pio >;
 		};
 
 		spi@4c0 {
