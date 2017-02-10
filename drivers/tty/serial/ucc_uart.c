@@ -681,12 +681,11 @@ static void qe_uart_init_ucc(struct uart_qe_port *qe_port)
 		clrsetbits_be32(&uccp->gumr_l,
 			UCC_SLOW_GUMR_L_MODE_MASK | UCC_SLOW_GUMR_L_TDCR_MASK |
 			UCC_SLOW_GUMR_L_RDCR_MASK,
-		//	UCC_SLOW_GUMR_L_MODE_UART | UCC_SLOW_GUMR_L_TDCR_1 |
-			UCC_SLOW_GUMR_L_MODE_QMC | UCC_SLOW_GUMR_L_TDCR_1 |
+			UCC_SLOW_GUMR_L_MODE_UART | UCC_SLOW_GUMR_L_TDCR_1 |
 			UCC_SLOW_GUMR_L_RDCR_16);
 
 		clrsetbits_be32(&uccp->gumr_h, UCC_SLOW_GUMR_H_RFW,
-			UCC_SLOW_GUMR_H_TRX | UCC_SLOW_GUMR_H_TTX | 0x4000);
+			UCC_SLOW_GUMR_H_TRX | UCC_SLOW_GUMR_H_TTX);
 	} else {
 		clrsetbits_be32(&uccp->gumr_l,
 			UCC_SLOW_GUMR_L_MODE_MASK | UCC_SLOW_GUMR_L_TDCR_MASK |
@@ -696,7 +695,7 @@ static void qe_uart_init_ucc(struct uart_qe_port *qe_port)
 
 		clrsetbits_be32(&uccp->gumr_h,
 			UCC_SLOW_GUMR_H_TRX | UCC_SLOW_GUMR_H_TTX,
-			UCC_SLOW_GUMR_H_RFW | UCC_SLOW_GUMR_H_TFL);
+			UCC_SLOW_GUMR_H_RFW);
 	}
 
 #ifdef LOOPBACK
@@ -716,12 +715,12 @@ static void qe_uart_init_ucc(struct uart_qe_port *qe_port)
 	out_be16(&uccp->upsmr, 0);
 
 	if (soft_uart) {
-		out_be16(&uccup->supsmr, 0x1030);
+		out_be16(&uccup->supsmr, 0x30);
 		out_be16(&uccup->res92, 0);
 		out_be32(&uccup->rx_state, 0x4);
 		out_be32(&uccup->rx_cnt, 0);
 		out_8(&uccup->rx_bitmark, 0x7);
-		out_8(&uccup->rx_length, 11);  /* TODO: See soft Uart spec 1+CL+MultidropEN+PEN+1+SL=1+8+0+0+1+1 */
+		out_8(&uccup->rx_length, 10);
 		out_be32(&uccup->dump_ptr, 0x4000);
 		out_8(&uccup->rx_temp_dlst_qe, 0);
 		out_be32(&uccup->rx_frame_rem, 0);
@@ -729,7 +728,6 @@ static void qe_uart_init_ucc(struct uart_qe_port *qe_port)
 		/* Soft-UART requires TX to be 1X */
 		out_8(&uccup->tx_mode,
 			UCC_UART_TX_STATE_UART | UCC_UART_TX_STATE_X1);
-			//UCC_UART_TX_STATE_UART | UCC_UART_TX_STATE_X16); /*FIXME en mode LOOPBACK X1 au lieu de X16 */
 		out_be16(&uccup->tx_state, 0);
 		out_8(&uccup->resD4, 0);
 		out_be16(&uccup->resD5, 0);
