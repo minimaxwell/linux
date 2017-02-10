@@ -83,17 +83,19 @@
 		};
 
 		nand@3,0 {
-			compatible = "s3k,mcr3000-nand";
+			compatible = "gpio-control-nand";
 			reg = <3 0x0 0x01>;
 			bank-width = <1>;
 			device-width = <1>;
 			#address-cells = <1>;
 			#size-cells = <1>;
-			gpios = <&CPM1_PIO_D 4 1 	// CLE
-				 &CPM1_PIO_D 5 1	// ALE
-				 &CPM1_PIO_D 3 1>;	// NCE
+			gpios = <&stw2 6 1>,	/* RDY */
+				<&CPM1_PIO_D 3 1>, 	/* nCE */
+				<&CPM1_PIO_D 5 1>, 	/* ALE */
+				<&CPM1_PIO_D 4 1>, 	/* CLE */
+				<0>;		/* nWP */
 		};
-		
+
 		mtsl@4,000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
