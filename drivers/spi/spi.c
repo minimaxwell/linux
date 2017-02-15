@@ -1556,7 +1556,7 @@ static void of_register_spi_devices(struct spi_master *master)
 		spi = of_register_spi_device(master, nc);
 		if (IS_ERR(spi))
 			dev_warn(&master->dev, "Failed to create SPI device for %s\n",
- 				nc->full_name);
+				nc->full_name);
 	}
 }
 #else

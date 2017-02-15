@@ -131,4 +131,3 @@ config PPC_MPC834x
 config PPC_MPC837x
 	bool
 	select ARCH_WANT_OPTIONAL_GPIOLIB
-

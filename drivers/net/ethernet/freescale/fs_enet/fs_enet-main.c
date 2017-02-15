@@ -997,7 +997,7 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	}
 
 	privsize = sizeof(*fep) +
-		   sizeof(struct sk_buff **) *
+	           sizeof(struct sk_buff **) *
 		     (fpi->rx_ring + fpi->tx_ring) +
 		   sizeof(char) * fpi->tx_ring;
 

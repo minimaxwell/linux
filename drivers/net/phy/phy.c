@@ -948,7 +948,8 @@ void phy_state_machine(struct work_struct *work)
 		phydev->adjust_link(phydev->attached_dev);
 
 		if (phy_interrupt_is_valid(phydev))
-			err = phy_config_interrupt(phydev, PHY_INTERRUPT_ENABLED);
+			err = phy_config_interrupt(phydev,
+						   PHY_INTERRUPT_ENABLED);
 		break;
 	case PHY_HALTED:
 		if (phydev->link) {

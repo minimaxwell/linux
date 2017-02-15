@@ -12,9 +12,6 @@
 #include <linux/stddef.h>
 #include <linux/kernel.h>
 #include <linux/of_platform.h>
-#include <linux/proc_fs.h>
-#include <linux/of_fdt.h>
-#include <linux/of_irq.h>
 #include <linux/pci.h>
 
 #include <asm/io.h>

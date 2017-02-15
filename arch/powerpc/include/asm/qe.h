@@ -107,15 +107,6 @@ struct qe_pio_regs {
 #endif
 };
 
-struct qe_pio {
-	u8	port;
-	u8	pin;
- 	int	dir;
-	int	open_drain;
-	int	assignment;
-	int	has_irq;
-};
-
 #define QE_PIO_DIR_IN	2
 #define QE_PIO_DIR_OUT	1
 extern void __par_io_config_pin(struct qe_pio_regs __iomem *par_io, u8 pin,
