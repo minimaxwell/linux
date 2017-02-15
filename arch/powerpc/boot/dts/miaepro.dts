@@ -788,6 +788,19 @@
 				gpio-controller;
 			};
 
+			ucc1pio:ucc_pin@01 {
+				pio-map = <
+				/*
+				 *    		      open       has
+				 *   port  pin  dir  drain  sel  irq
+				 */
+					0    0    1      0    1    0  /* SER1_TxD0 */
+					0    4    2      0    1    0  /* SER1_RXD0 */
+					0    8    0      0    1    0  /* CD */
+					0   12    0      0    0    0  /* SER1_RTS */
+					0   10    1      0    0    0  /* SER1_CTS */
+				>;
+			};
 			ucc2pio:ucc_pin@02 {
 				pio-map = <
 			/* port  pin  dir  open_drain  assignment  has_irq */
@@ -814,6 +827,20 @@
 				1 10  2  0  1  0	/* R2_CRS_DV */
 				1  8  2  0  1  0	/* R2_RXER */
 				1 14  2  0  1  0>;	/* R2_REF_CLK */
+			};
+			ucc5pio:ucc_pin@05 {
+				pio-map = <
+				/*
+				 *    		      open       has
+				 *   port  pin  dir  drain  sel  irq
+				 */
+					2    0    1      0    2    0  /* TxD5 */
+					2    8    2      0    2    0  /* RxD5 */
+					2   24    0      0    2    0  /* CD */
+
+					2   29    0      0    2    1  /* CTS5 */
+					2   31    1      0    0    0  /* RTS5 */
+				>;
 			};
 		};
 	};
@@ -861,6 +888,42 @@
 			interrupts = <35>;
 			interrupt-parent = <&qeic>;
 			clock-name = "clk1";
+		};
+
+		ucc@2000 {
+			device_type = "serial";
+			compatible = "ucc_uart";
+			cell-index = <1>;	/* The UCC number, 1-7*/
+			port-number = <1>;	/* Which ttyQEx device */
+			soft-uart;		/* We need Soft-UART */
+			reg = <0x2000 0x200>;
+			interrupts = <32>;	/* From Table 18-12 */
+			interrupt-parent = < &qeic >;
+			/*
+			 * For Soft-UART, we need to set TX to 1X, which
+			 * means specifying separate clock sources.
+			 */
+			rx-clock-name = "brg7";
+			tx-clock-name = "brg1";
+			pio-handle = < &ucc1pio >;
+		};
+
+		serial2: ucc@2400 {
+			device_type = "serial";
+			compatible = "ucc_uart";
+			cell-index = <5>;	/* The UCC number, 1-7*/
+			port-number = <0>;	/* Which ttyQEx device */
+			soft-uart;		/* We need Soft-UART */
+			reg = <0x2400 0x200>;
+			interrupts = <40>;	/* From Table 18-12 */
+			interrupt-parent = < &qeic >;
+			/*
+			 * For Soft-UART, we need to set TX to 1X, which
+			 * means specifying separate clock sources.
+			 */
+			rx-clock-name = "brg6";
+			tx-clock-name = "brg5";
+			pio-handle = < &ucc5pio >;
 		};
 
 		spi@4c0 {
