@@ -109,8 +109,10 @@ static int do_pd_setup(struct fs_enet_private *fep)
 	return 0;
 }
 
-#define FEC_NAPI_EVENT_MSK	(FEC_ENET_RXF | FEC_ENET_RXB | FEC_ENET_TXF)
-#define FEC_EVENT		(FEC_ENET_RXF | FEC_ENET_TXF)
+#define FEC_NAPI_RX_EVENT_MSK	(FEC_ENET_RXF | FEC_ENET_RXB)
+#define FEC_NAPI_TX_EVENT_MSK	(FEC_ENET_TXF)
+#define FEC_RX_EVENT		(FEC_ENET_RXF)
+#define FEC_TX_EVENT		(FEC_ENET_TXF)
 #define FEC_ERR_EVENT_MSK	(FEC_ENET_HBERR | FEC_ENET_BABR | \
 				 FEC_ENET_BABT | FEC_ENET_EBERR)
 
@@ -124,8 +126,10 @@ static int setup_data(struct net_device *dev)
 	fep->fec.hthi = 0;
 	fep->fec.htlo = 0;
 
-	fep->ev_napi = FEC_NAPI_EVENT_MSK;
-	fep->ev = FEC_EVENT;
+	fep->ev_napi_rx = FEC_NAPI_RX_EVENT_MSK;
+	fep->ev_napi_tx = FEC_NAPI_TX_EVENT_MSK;
+	fep->ev_rx = FEC_RX_EVENT;
+	fep->ev_tx = FEC_TX_EVENT;
 	fep->ev_err = FEC_ERR_EVENT_MSK;
 
 	return 0;
@@ -135,14 +139,13 @@ static int allocate_bd(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	const struct fs_platform_info *fpi = fep->fpi;
-	int offset;
 
-	offset = cpm_muram_alloc((fpi->tx_ring + fpi->rx_ring) * sizeof(cbd_t),
-				 sizeof(cbd_t));
-	if (IS_ERR_VALUE(offset))
+	fep->ring_base = (void __force __iomem *)dma_alloc_coherent(fep->dev,
+					    (fpi->tx_ring + fpi->rx_ring) *
+					    sizeof(cbd_t), &fep->ring_mem_addr,
+					    GFP_KERNEL);
+	if (fep->ring_base == NULL)
 		return -ENOMEM;
-	fep->ring_base = cpm_muram_addr(offset);
-	fep->ring_mem_addr = cpm_muram_dma(fep->ring_base);
 
 	return 0;
 }
@@ -150,9 +153,13 @@ static int allocate_bd(struct net_device *dev)
 static void free_bd(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
+	const struct fs_platform_info *fpi = fep->fpi;
 
 	if(fep->ring_base)
-		cpm_muram_free(cpm_muram_offset(fep->ring_base));
+		dma_free_coherent(fep->dev, (fpi->tx_ring + fpi->rx_ring)
+					* sizeof(cbd_t),
+					(void __force *)fep->ring_base,
+					fep->ring_mem_addr);
 }
 
 static void cleanup_data(struct net_device *dev)
@@ -389,28 +396,52 @@ static void stop(struct net_device *dev)
 	}
 }
 
-static void napi_clear_event_fs(struct net_device *dev)
+static void napi_clear_rx_event(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	struct fec __iomem *fecp = fep->fec.fecp;
 
-	FW(fecp, ievent, FEC_NAPI_EVENT_MSK);
+	FW(fecp, ievent, FEC_NAPI_RX_EVENT_MSK);
 }
 
-static void napi_enable_fs(struct net_device *dev)
+static void napi_enable_rx(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	struct fec __iomem *fecp = fep->fec.fecp;
 
-	FS(fecp, imask, FEC_NAPI_EVENT_MSK);
+	FS(fecp, imask, FEC_NAPI_RX_EVENT_MSK);
 }
 
-static void napi_disable_fs(struct net_device *dev)
+static void napi_disable_rx(struct net_device *dev)
 {
 	struct fs_enet_private *fep = netdev_priv(dev);
 	struct fec __iomem *fecp = fep->fec.fecp;
 
-	FC(fecp, imask, FEC_NAPI_EVENT_MSK);
+	FC(fecp, imask, FEC_NAPI_RX_EVENT_MSK);
+}
+
+static void napi_clear_tx_event(struct net_device *dev)
+{
+	struct fs_enet_private *fep = netdev_priv(dev);
+	struct fec __iomem *fecp = fep->fec.fecp;
+
+	FW(fecp, ievent, FEC_NAPI_TX_EVENT_MSK);
+}
+
+static void napi_enable_tx(struct net_device *dev)
+{
+	struct fs_enet_private *fep = netdev_priv(dev);
+	struct fec __iomem *fecp = fep->fec.fecp;
+
+	FS(fecp, imask, FEC_NAPI_TX_EVENT_MSK);
+}
+
+static void napi_disable_tx(struct net_device *dev)
+{
+	struct fs_enet_private *fep = netdev_priv(dev);
+	struct fec __iomem *fecp = fep->fec.fecp;
+
+	FC(fecp, imask, FEC_NAPI_TX_EVENT_MSK);
 }
 
 static void rx_bd_done(struct net_device *dev)
@@ -482,9 +513,12 @@ const struct fs_ops fs_fec_ops = {
 	.set_multicast_list	= set_multicast_list,
 	.restart		= restart,
 	.stop			= stop,
-	.napi_clear_event	= napi_clear_event_fs,
-	.napi_enable		= napi_enable_fs,
-	.napi_disable		= napi_disable_fs,
+	.napi_clear_rx_event	= napi_clear_rx_event,
+	.napi_enable_rx		= napi_enable_rx,
+	.napi_disable_rx	= napi_disable_rx,
+	.napi_clear_tx_event	= napi_clear_tx_event,
+	.napi_enable_tx		= napi_enable_tx,
+	.napi_disable_tx	= napi_disable_tx,
 	.rx_bd_done		= rx_bd_done,
 	.tx_kickstart		= tx_kickstart,
 	.get_int_events		= get_int_events,

@@ -21,7 +21,6 @@
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/if_ether.h>
-#include <linux/workqueue.h>
 
 #include <asm/immap_qe.h>
 #include <asm/qe.h>
@@ -40,15 +39,6 @@
 #define NUM_OF_PADDRS                   4
 #define ENET_INIT_PARAM_MAX_ENTRIES_RX  9
 #define ENET_INIT_PARAM_MAX_ENTRIES_TX  8
-
-#define PHY0_LINK 0
-#define PHY1_LINK 1
-#define ACTIVE_LINK 2
-
-struct fs_notify_work {
-	struct work_struct notify_queue;
-	struct kernfs_node *kn;
-};
 
 struct ucc_geth {
 	struct ucc_fast uccf;
@@ -1137,7 +1127,6 @@ struct ucc_geth_info {
 	u16 pausePeriod;
 	u16 extensionField;
 	struct device_node *phy_node;
-	struct device_node *phy_node2;
 	struct device_node *tbi_node;
 	u8 weightfactor[NUM_TX_QUEUES];
 	u8 interruptcoalescingmaxvalue[NUM_RX_QUEUES];
@@ -1226,12 +1215,6 @@ struct ucc_geth_private {
 	u16 skb_dirtytx[NUM_TX_QUEUES];
 
 	struct ugeth_mii_info *mii_info;
-
-	struct custom_phy_handler *custom_hdlr;
-	struct delayed_work link_queue;
-	struct work_struct arp_queue;
-	struct fs_notify_work notify_work[3];
-
 	struct phy_device *phydev;
 	phy_interface_t phy_interface;
 	int max_speed;

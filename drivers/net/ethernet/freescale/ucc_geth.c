@@ -36,7 +36,6 @@
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 #include <linux/of_platform.h>
-#include <linux/micrel_phy.h>
 
 #include <asm/uaccess.h>
 #include <asm/irq.h>
@@ -47,16 +46,7 @@
 #include <asm/ucc_fast.h>
 #include <asm/machdep.h>
 
-#include "ucc_geth.h"	
-
-#include <linux/custom_phy_handling.h>
-
-#define PHY_ISOLATE 1
-#define PHY_POWER_DOWN 2
-#define LINK_MONITOR_RETRY (2*HZ)
-#define MODE_MANU 1
-#define MODE_AUTO 2
-
+#include "ucc_geth.h"
 
 #undef DEBUG
 
@@ -1680,12 +1670,6 @@ static void adjust_link(struct net_device *dev)
 
 	if (new_state && netif_msg_link(ugeth))
 		phy_print_status(phydev);
-
-	if (ugeth->custom_hdlr != NULL) {
-		cancel_delayed_work_sync(&ugeth->link_queue);
-		if (ugeth->custom_hdlr->mode == MODE_AUTO)
-			schedule_delayed_work(&ugeth->link_queue, 0);
-	}
 }
 
 /* Initialize TBI PHY interface for communicating with the
@@ -1735,12 +1719,6 @@ static void uec_configure_serdes(struct net_device *dev)
 	put_device(&tbiphy->dev);
 }
 
-/* For MPCPRO board: set the LEDs properly */
-static int fs_enet_phy_micrel_fixup(struct phy_device *phydev)
-{
-	return phy_write(phydev, 0x1E, phy_read(phydev, 0x1E) | 0x4000);
-}
-
 /* Configure the PHY for dev.
  * returns 0 if success.  -1 if failure
  */
@@ -1778,7 +1756,7 @@ static int init_phy(struct net_device *dev)
 
 	priv->phydev = phydev;
 
-	return custom_init(priv->ndev, &adjust_link, priv->phy_interface);
+	return 0;
 }
 
 static void ugeth_dump_regs(struct ucc_geth_private *ugeth)
@@ -2080,7 +2058,7 @@ static void ucc_geth_stop(struct ucc_geth_private *ugeth)
 	 * Must be done before disabling the controller
 	 * or deadlock may happen.
 	 */
-	custom_phy_stop(ugeth->ndev);
+	phy_stop(phydev);
 
 	/* Disable the controller */
 	ugeth_disable(ugeth, COMM_DIR_RX_AND_TX);
@@ -3502,14 +3480,6 @@ static int ucc_geth_open(struct net_device *dev)
 	}
 
 	phy_start(ugeth->phydev);
-
-	if (ugeth->custom_hdlr != NULL) {
-		err = custom_open(ugeth->ndev);
-		if (err)
-			return err;
-	}
-
-
 	napi_enable(&ugeth->napi);
 	netif_start_queue(dev);
 
@@ -3535,7 +3505,7 @@ static int ucc_geth_close(struct net_device *dev)
 
 	cancel_work_sync(&ugeth->timeout_work);
 	ucc_geth_stop(ugeth);
-	custom_phy_disconnect(ugeth->ndev);
+	phy_disconnect(ugeth->phydev);
 	ugeth->phydev = NULL;
 
 	free_irq(ugeth->ug_info->uf_info.irq, ugeth->ndev);
@@ -3612,7 +3582,7 @@ static int ucc_geth_suspend(struct platform_device *ofdev, pm_message_t state)
 		setbits32(&ugeth->ug_regs->maccfg2, MACCFG2_MPE);
 		ucc_fast_enable(ugeth->uccf, COMM_DIR_RX_AND_TX);
 	} else if (!(ugeth->wol_en & WAKE_PHY)) {
-		custom_phy_stop(ugeth->ndev);
+		phy_stop(ugeth->phydev);
 	}
 
 	return 0;
@@ -3652,7 +3622,7 @@ static int ucc_geth_resume(struct platform_device *ofdev)
 	ugeth->oldspeed = 0;
 	ugeth->oldduplex = -1;
 
-	custom_phy_stop(ugeth->ndev);
+	phy_stop(ugeth->phydev);
 	phy_start(ugeth->phydev);
 
 	napi_enable(&ugeth->napi);
@@ -3702,9 +3672,9 @@ static int ucc_geth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	if (!ugeth->phydev)
 		return -ENODEV;
 
-	return custom_fs_ioctl(ugeth->ndev, rq, cmd);
+	return phy_mii_ioctl(ugeth->phydev, rq, cmd);
 }
-	
+
 static const struct net_device_ops ucc_geth_netdev_ops = {
 	.ndo_open		= ucc_geth_open,
 	.ndo_stop		= ucc_geth_close,
@@ -3831,7 +3801,6 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 			return err;
 		ug_info->phy_node = of_node_get(np);
 	}
-	ug_info->phy_node2 = of_parse_phandle(np, "phy-handle", 1);
 
 	/* Find the TBI PHY node.  If it's not there, we don't support SGMII */
 	ug_info->tbi_node = of_parse_phandle(np, "tbi-handle", 0);
@@ -3953,15 +3922,6 @@ static int ucc_geth_probe(struct platform_device* ofdev)
 	ugeth->ndev = dev;
 	ugeth->node = np;
 
-	if(ug_info->phy_node2)
-		custom_probe(ugeth->ndev, ofdev);
-
-	/* register the PHY board fixup (for MPCPRO board) */
-	err = phy_register_fixup_for_uid(PHY_ID_KSZ8041, 0xfffffff0,
-					 fs_enet_phy_micrel_fixup);
-	/* we can live without it, so just issue a warning */
-	if (err)
-		dev_warn(&ofdev->dev, "Cannot register PHY board fixup.\n");
 	return 0;
 }
 
@@ -3970,8 +3930,6 @@ static int ucc_geth_remove(struct platform_device* ofdev)
 	struct net_device *dev = platform_get_drvdata(ofdev);
 	struct ucc_geth_private *ugeth = netdev_priv(dev);
 
-	phy_delete_files(dev);
-	
 	unregister_netdev(dev);
 	free_netdev(dev);
 	ucc_geth_memclean(ugeth);
