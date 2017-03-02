@@ -1212,12 +1212,9 @@ static int __sctp_connect(struct sock *sk,
 
 	timeo = sock_sndtimeo(sk, f_flags & O_NONBLOCK);
 
-	if (assoc_id)
-		*assoc_id = asoc->assoc_id;
 	err = sctp_wait_for_connect(asoc, &timeo);
-	/* Note: the asoc may be freed after the return of
-	 * sctp_wait_for_connect.
-	 */
+	if ((err == 0 || err == -EINPROGRESS) && assoc_id)
+		*assoc_id = asoc->assoc_id;
 
 	/* Don't free association on exit. */
 	asoc = NULL;
@@ -4374,7 +4371,7 @@ static int sctp_getsockopt_disable_fragments(struct sock *sk, int len,
 static int sctp_getsockopt_events(struct sock *sk, int len, char __user *optval,
 				  int __user *optlen)
 {
-	if (len == 0)
+	if (len <= 0)
 		return -EINVAL;
 	if (len > sizeof(struct sctp_event_subscribe))
 		len = sizeof(struct sctp_event_subscribe);
@@ -5545,7 +5542,6 @@ static int sctp_getsockopt_hmac_ident(struct sock *sk, int len,
 	struct sctp_hmac_algo_param *hmacs;
 	__u16 data_len = 0;
 	u32 num_idents;
-	int i;
 
 	if (!ep->auth_enable)
 		return -EACCES;
@@ -5563,12 +5559,8 @@ static int sctp_getsockopt_hmac_ident(struct sock *sk, int len,
 		return -EFAULT;
 	if (put_user(num_idents, &p->shmac_num_idents))
 		return -EFAULT;
-	for (i = 0; i < num_idents; i++) {
-		__u16 hmacid = ntohs(hmacs->hmac_ids[i]);
-
-		if (copy_to_user(&p->shmac_idents[i], &hmacid, sizeof(__u16)))
-			return -EFAULT;
-	}
+	if (copy_to_user(p->shmac_idents, hmacs->hmac_ids, data_len))
+		return -EFAULT;
 	return 0;
 }
 
@@ -5974,9 +5966,6 @@ static int sctp_getsockopt(struct sock *sk, int level, int optname,
 
 	if (get_user(len, optlen))
 		return -EFAULT;
-
-	if (len < 0)
-		return -EINVAL;
 
 	lock_sock(sk);
 
@@ -6651,7 +6640,6 @@ static int sctp_msghdr_parse(const struct msghdr *msg, sctp_cmsgs_t *cmsgs)
 
 			if (cmsgs->srinfo->sinfo_flags &
 			    ~(SCTP_UNORDERED | SCTP_ADDR_OVER |
-			      SCTP_SACK_IMMEDIATELY |
 			      SCTP_ABORT | SCTP_EOF))
 				return -EINVAL;
 			break;
@@ -6675,7 +6663,6 @@ static int sctp_msghdr_parse(const struct msghdr *msg, sctp_cmsgs_t *cmsgs)
 
 			if (cmsgs->sinfo->snd_flags &
 			    ~(SCTP_UNORDERED | SCTP_ADDR_OVER |
-			      SCTP_SACK_IMMEDIATELY |
 			      SCTP_ABORT | SCTP_EOF))
 				return -EINVAL;
 			break;
@@ -6960,8 +6947,7 @@ static int sctp_wait_for_sndbuf(struct sctp_association *asoc, long *timeo_p,
 		 */
 		release_sock(sk);
 		current_timeo = schedule_timeout(current_timeo);
-		if (sk != asoc->base.sk)
-			goto do_error;
+		BUG_ON(sk != asoc->base.sk);
 		lock_sock(sk);
 
 		*timeo_p = current_timeo;

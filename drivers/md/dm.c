@@ -1109,8 +1109,12 @@ static void rq_completed(struct mapped_device *md, int rw, bool run_queue)
 	 * back into ->request_fn() could deadlock attempting to grab the
 	 * queue lock again.
 	 */
-	if (!md->queue->mq_ops && run_queue)
-		blk_run_queue_async(md->queue);
+	if (run_queue) {
+		if (md->queue->mq_ops)
+			blk_mq_run_hw_queues(md->queue, true);
+		else
+			blk_run_queue_async(md->queue);
+	}
 
 	/*
 	 * dm_put() must be at the end of this function. See the comment above
@@ -1187,8 +1191,6 @@ static void dm_unprep_request(struct request *rq)
 
 	if (clone)
 		free_rq_clone(clone);
-	else if (!tio->md->queue->mq_ops)
-		free_rq_tio(tio);
 }
 
 /*
@@ -1210,9 +1212,9 @@ static void dm_requeue_original_request(struct mapped_device *md,
 {
 	int rw = rq_data_dir(rq);
 
-	rq_end_stats(md, rq);
 	dm_unprep_request(rq);
 
+	rq_end_stats(md, rq);
 	if (!rq->q->mq_ops)
 		old_requeue_request(rq);
 	else {
@@ -1332,10 +1334,7 @@ static void dm_complete_request(struct request *rq, int error)
 	struct dm_rq_target_io *tio = tio_from_request(rq);
 
 	tio->error = error;
-	if (!rq->q->mq_ops)
-		blk_complete_request(rq);
-	else
-		blk_mq_complete_request(rq, error);
+	blk_complete_request(rq);
 }
 
 /*
@@ -2260,6 +2259,8 @@ static void cleanup_mapped_device(struct mapped_device *md)
 	if (md->bs)
 		bioset_free(md->bs);
 
+	cleanup_srcu_struct(&md->io_barrier);
+
 	if (md->disk) {
 		spin_lock(&_minor_lock);
 		md->disk->private_data = NULL;
@@ -2270,8 +2271,6 @@ static void cleanup_mapped_device(struct mapped_device *md)
 
 	if (md->queue)
 		blk_cleanup_queue(md->queue);
-
-	cleanup_srcu_struct(&md->io_barrier);
 
 	if (md->bdev) {
 		bdput(md->bdev);
@@ -2869,7 +2868,6 @@ EXPORT_SYMBOL_GPL(dm_device_name);
 
 static void __dm_destroy(struct mapped_device *md, bool wait)
 {
-	struct request_queue *q = dm_get_md_queue(md);
 	struct dm_table *map;
 	int srcu_idx;
 
@@ -2879,10 +2877,6 @@ static void __dm_destroy(struct mapped_device *md, bool wait)
 	idr_replace(&_minor_idr, MINOR_ALLOCED, MINOR(disk_devt(dm_disk(md))));
 	set_bit(DMF_FREEING, &md->flags);
 	spin_unlock(&_minor_lock);
-
-	spin_lock_irq(q->queue_lock);
-	queue_flag_set(QUEUE_FLAG_DYING, q);
-	spin_unlock_irq(q->queue_lock);
 
 	if (dm_request_based(md) && md->kworker_task)
 		flush_kthread_worker(&md->kworker);
@@ -3083,8 +3077,7 @@ static void unlock_fs(struct mapped_device *md)
  * Caller must hold md->suspend_lock
  */
 static int __dm_suspend(struct mapped_device *md, struct dm_table *map,
-			unsigned suspend_flags, int interruptible,
-			int dmf_suspended_flag)
+			unsigned suspend_flags, int interruptible)
 {
 	bool do_lockfs = suspend_flags & DM_SUSPEND_LOCKFS_FLAG;
 	bool noflush = suspend_flags & DM_SUSPEND_NOFLUSH_FLAG;
@@ -3151,8 +3144,6 @@ static int __dm_suspend(struct mapped_device *md, struct dm_table *map,
 	 * to finish.
 	 */
 	r = dm_wait_for_completion(md, interruptible);
-	if (!r)
-		set_bit(dmf_suspended_flag, &md->flags);
 
 	if (noflush)
 		clear_bit(DMF_NOFLUSH_SUSPENDING, &md->flags);
@@ -3214,9 +3205,11 @@ retry:
 
 	map = rcu_dereference_protected(md->map, lockdep_is_held(&md->suspend_lock));
 
-	r = __dm_suspend(md, map, suspend_flags, TASK_INTERRUPTIBLE, DMF_SUSPENDED);
+	r = __dm_suspend(md, map, suspend_flags, TASK_INTERRUPTIBLE);
 	if (r)
 		goto out_unlock;
+
+	set_bit(DMF_SUSPENDED, &md->flags);
 
 	dm_table_postsuspend_targets(map);
 
@@ -3250,11 +3243,10 @@ static int __dm_resume(struct mapped_device *md, struct dm_table *map)
 
 int dm_resume(struct mapped_device *md)
 {
-	int r;
+	int r = -EINVAL;
 	struct dm_table *map = NULL;
 
 retry:
-	r = -EINVAL;
 	mutex_lock_nested(&md->suspend_lock, SINGLE_DEPTH_NESTING);
 
 	if (!dm_suspended_md(md))
@@ -3278,6 +3270,8 @@ retry:
 		goto out;
 
 	clear_bit(DMF_SUSPENDED, &md->flags);
+
+	r = 0;
 out:
 	mutex_unlock(&md->suspend_lock);
 
@@ -3310,8 +3304,9 @@ static void __dm_internal_suspend(struct mapped_device *md, unsigned suspend_fla
 	 * would require changing .presuspend to return an error -- avoid this
 	 * until there is a need for more elaborate variants of internal suspend.
 	 */
-	(void) __dm_suspend(md, map, suspend_flags, TASK_UNINTERRUPTIBLE,
-			    DMF_SUSPENDED_INTERNALLY);
+	(void) __dm_suspend(md, map, suspend_flags, TASK_UNINTERRUPTIBLE);
+
+	set_bit(DMF_SUSPENDED_INTERNALLY, &md->flags);
 
 	dm_table_postsuspend_targets(map);
 }
