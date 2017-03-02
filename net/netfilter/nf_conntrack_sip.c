@@ -1639,7 +1639,7 @@ static int __init nf_conntrack_sip_init(void)
 	}
 
 	for (i = 0; i < ports_c; i++) {
-		memset(&sip[i], 0, sizeof(sip[i]));
+		memset(&sip[4 * i], 0, 4 * sizeof(sip[i]));
 
 		nf_ct_helper_init(&sip[4 * i], AF_INET, IPPROTO_UDP, "sip",
 				  SIP_PORT, ports[i], i, sip_exp_policy,
