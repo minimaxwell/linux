@@ -73,6 +73,10 @@ CACHELINE_MASK = (L1_CACHE_BYTES-1)
  * Use dcbz on the complete cache lines in the destination
  * to set them to zero.  This requires that the destination
  * area is cacheable.  -- paulus
+ *
+ * During early init, cache might not be active yet, so dcbz cannot be used.
+ * We therefore skip the optimised bloc that uses dcbz. This jump is
+ * replaced by a nop once cache is active. This is done in machine_init()
  */
 _GLOBAL(memset)
 	rlwimi	r4,r4,8,16,23
@@ -130,6 +134,10 @@ _GLOBAL(memset_nocache_branch)
  * the destination area is cacheable.
  * We only use this version if the source and dest don't overlap.
  * -- paulus.
+ *
+ * During early init, cache might not be active yet, so dcbz cannot be used.
+ * We therefore jump to generic_memcpy which doesn't use dcbz. This jump is
+ * replaced by a nop once cache is active. This is done in machine_init()
  */
 _GLOBAL(memmove)
 	cmplw	0,r3,r4

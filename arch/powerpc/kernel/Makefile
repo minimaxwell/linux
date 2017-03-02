@@ -14,10 +14,6 @@ CFLAGS_prom_init.o      += -fPIC
 CFLAGS_btext.o		+= -fPIC
 endif
 
-# -fstack-protector triggers protection checks in this code,
-# but it is being used too early to link to meaningful stack_chk logic.
-CFLAGS_prom_init.o += $(call cc-option, -fno-stack-protector)
-
 ifdef CONFIG_FUNCTION_TRACER
 # Do not trace early boot code
 CFLAGS_REMOVE_cputable.o = -pg -mno-sched-epilog

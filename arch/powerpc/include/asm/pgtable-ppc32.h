@@ -86,13 +86,13 @@ extern int icache_44x_need_flush;
  * We no longer map larger than phys RAM with the BATs so we don't have
  * to worry about the VMALLOC_OFFSET causing problems.  We do have to worry
  * about clashes between our early calls to ioremap() that start growing down
- * from IOREMAP_TOP being run into the VM area allocations (growing upwards
+ * from ioremap_base being run into the VM area allocations (growing upwards
  * from VMALLOC_START).  For this reason we have ioremap_bot to check when
  * we actually run into our mappings setup in the early boot with the VM
  * system.  This really does become a problem for machines with good amounts
  * of RAM.  -- Cort
  */
-#define VMALLOC_OFFSET (0x1000000U) /* 16M */
+#define VMALLOC_OFFSET (0x1000000) /* 16M */
 #ifdef PPC_PIN_SIZE
 #define VMALLOC_START (((_ALIGN((long)high_memory, PPC_PIN_SIZE) + VMALLOC_OFFSET) & ~(VMALLOC_OFFSET-1)))
 #else
@@ -269,6 +269,7 @@ static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry)
 	unsigned long set = pte_val(entry) &
 		(_PAGE_DIRTY | _PAGE_ACCESSED | _PAGE_RW | _PAGE_EXEC);
 	unsigned long clr = ~pte_val(entry) & _PAGE_RO;
+
 	pte_update(ptep, clr, set);
 }
 
@@ -305,8 +306,7 @@ static inline void __ptep_set_access_flags(pte_t *ptep, pte_t entry)
 #define pte_index(address)		\
 	(((address) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
 #define pte_offset_kernel(dir, addr)	\
-	(pmd_bad(*(dir)) ? NULL : (pte_t *)pmd_page_vaddr(*(dir)) + \
-				  pte_index(addr))
+	((pte_t *) pmd_page_vaddr(*(dir)) + pte_index(addr))
 #define pte_offset_map(dir, addr)		\
 	((pte_t *) kmap_atomic(pmd_page(*(dir))) + pte_index(addr))
 #define pte_unmap(pte)		kunmap_atomic(pte)

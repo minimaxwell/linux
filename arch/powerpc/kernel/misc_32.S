@@ -296,9 +296,12 @@ _GLOBAL(real_writeb)
  * Flush instruction cache.
  * This is a no-op on the 601.
  */
-#ifndef CONFIG_PPC_8xx
 _GLOBAL(flush_instruction_cache)
-#if defined(CONFIG_4xx)
+#if defined(CONFIG_8xx)
+	isync
+	lis	r5, IDC_INVALL@h
+	mtspr	SPRN_IC_CST, r5
+#elif defined(CONFIG_4xx)
 #ifdef CONFIG_403GCX
 	li      r3, 512
 	mtctr   r3
@@ -331,10 +334,9 @@ END_FTR_SECTION_IFSET(CPU_FTR_UNIFIED_ID_CACHE)
 	mfspr	r3,SPRN_HID0
 	ori	r3,r3,HID0_ICFI
 	mtspr	SPRN_HID0,r3
-#endif /* CONFIG_4xx */
+#endif /* CONFIG_8xx/4xx */
 	isync
 	blr
-#endif /* CONFIG_PPC_8xx */
 
 /*
  * Write any modified data cache blocks out to memory
@@ -515,6 +517,22 @@ END_FTR_SECTION_IFSET(CPU_FTR_COHERENT_ICACHE)
 	isync
 	blr
 #endif /* CONFIG_BOOKE */
+
+/*
+ * Clear pages using the dcbz instruction, which doesn't cause any
+ * memory traffic (except to write out any cache lines which get
+ * displaced).  This only works on cacheable memory.
+ *
+ * void clear_pages(void *page, int order) ;
+ */
+_GLOBAL(clear_pages)
+	li	r0,PAGE_SIZE/L1_CACHE_BYTES
+	slw	r0,r0,r4
+	mtctr	r0
+1:	dcbz	0,r3
+	addi	r3,r3,L1_CACHE_BYTES
+	bdnz	1b
+	blr
 
 /*
  * Copy a whole page.  We use the dcbz instruction on the destination

@@ -1,6 +1,7 @@
 config PPC64
 	bool "64-bit kernel"
 	default n
+	select HAVE_VIRT_CPU_ACCOUNTING
 	select ZLIB_DEFLATE
 	help
 	  This option selects whether a 32-bit or a 64-bit kernel
@@ -167,13 +168,6 @@ config PPC_E500MC
 config PPC_FPU
 	bool
 	default y if PPC64
-
-config PPC_8xx_PERF_EVENT
-	bool "PPC 8xx perf events"
-	depends on PPC_8xx && PERF_EVENTS
-	help
-	  This is Performance Events support for PPC 8xx. The 8xx doesn't
-	  have a PMU but some events are emulated using 8xx features.
 
 config FSL_EMB_PERFMON
 	bool "Freescale Embedded Perfmon"

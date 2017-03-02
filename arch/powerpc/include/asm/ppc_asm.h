@@ -24,16 +24,10 @@
  */
 
 #ifndef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
-#ifdef CONFIG_PPC64
 #define ACCOUNT_CPU_USER_ENTRY(ra, rb)
 #define ACCOUNT_CPU_USER_EXIT(ra, rb)
-#else /* CONFIG_PPC64 */
-#define ACCOUNT_CPU_USER_ENTRY(ti, ra, rb)
-#define ACCOUNT_CPU_USER_EXIT(ti, ra, rb)
-#endif /* CONFIG_PPC64 */
 #define ACCOUNT_STOLEN_TIME
-#else /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
-#ifdef CONFIG_PPC64
+#else
 #define ACCOUNT_CPU_USER_ENTRY(ra, rb)					\
 	MFTB(ra);			/* get timebase */		\
 	ld	rb,PACA_STARTTIME_USER(r13);				\
@@ -73,26 +67,6 @@ END_FW_FTR_SECTION_IFSET(FW_FEATURE_SPLPAR)
 #define ACCOUNT_STOLEN_TIME
 
 #endif /* CONFIG_PPC_SPLPAR */
-#else /* CONFIG_PPC64 */
-#define ACCOUNT_CPU_USER_ENTRY(ti, ra, rb)				\
-	MFTB(ra);							\
-	lwz rb, TI_AC_LEAVE(ti);					\
-	stw ra, TI_AC_STAMP(ti);	/* AC_STAMP = NOW */		\
-	subf rb, rb, ra;		/* R = NOW - AC_LEAVE */	\
-	lwz ra, TI_AC_UTIME(ti);					\
-	add ra, rb, ra;			/* AC_UTIME += R */		\
-	stw ra, TI_AC_UTIME(ti);					\
-
-#define ACCOUNT_CPU_USER_EXIT(ti, ra, rb)				\
-	MFTB(ra);							\
-	lwz rb, TI_AC_STAMP(ti);					\
-	stw ra, TI_AC_LEAVE(ti);					\
-	subf rb, rb, ra;		/* R = NOW - AC_STAMP */	\
-	lwz ra, TI_AC_STIME(ti);					\
-	add ra, rb, ra;			/* AC_STIME += R */		\
-	stw ra, TI_AC_STIME(ti);					\
-
-#endif /* CONFIG_PPC64 */
 
 #endif /* CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
 
@@ -557,6 +531,7 @@ END_FTR_SECTION_NESTED(CPU_FTR_HAS_PPR,CPU_FTR_HAS_PPR,945)
 #define MTMSRD(r)	mtmsrd	r
 #define MTMSR_EERI(reg)	mtmsrd	reg,1
 #else
+#define FIX_SRR1(ra, rb)
 #ifndef CONFIG_40x
 #define	RFI		rfi
 #else
@@ -564,6 +539,7 @@ END_FTR_SECTION_NESTED(CPU_FTR_HAS_PPR,CPU_FTR_HAS_PPR,945)
 #endif
 #define MTMSRD(r)	mtmsr	r
 #define MTMSR_EERI(reg)	mtmsr	reg
+#define CLR_TOP32(r)
 #endif
 
 #endif /* __KERNEL__ */

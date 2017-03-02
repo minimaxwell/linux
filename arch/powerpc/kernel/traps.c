@@ -268,6 +268,7 @@ void _exception(int signr, struct pt_regs *regs, int code, unsigned long addr)
 	force_sig_info(signr, &info, current);
 }
 
+#ifdef CONFIG_PPC64
 void system_reset_exception(struct pt_regs *regs)
 {
 	/* See if any machine dependent calls */
@@ -285,7 +286,6 @@ void system_reset_exception(struct pt_regs *regs)
 	/* What should we do here? We could issue a shutdown or hard reset. */
 }
 
-#ifdef CONFIG_PPC64
 /*
  * This function is called in real mode. Strictly no printk's please.
  *
@@ -657,19 +657,6 @@ int machine_check_e200(struct pt_regs *regs)
 	if (reason & MCSR_BUS_WRERR)
 		printk("Bus - Write Bus Error on buffered store or cache line push\n");
 
-	return 0;
-}
-#elif defined(CONFIG_PPC_8xx)
-int machine_check_8xx(struct pt_regs *regs)
-{
-	unsigned long reason = get_mc_reason(regs);
-
-	printk("Machine check in kernel mode.\n");
-	printk("Caused by (from SRR1=%lx): ", reason);
-	if (reason & 0x40000000)
-		printk("Fetch error at address %lx\n", regs->nip);
-	else
-		printk("Data access error at address %lx\n", regs->dar);
 	return 0;
 }
 #else

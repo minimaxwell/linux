@@ -175,12 +175,6 @@ transfer_to_handler:
 	addi	r12,r12,-1
 	stw	r12,4(r11)
 #endif
-#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
-	CURRENT_THREAD_INFO(r9, r1)
-	tophys(r9, r9)
-	ACCOUNT_CPU_USER_ENTRY(r9, r11, r12)
-#endif
-
 	b	3f
 
 2:	/* if from kernel, check interrupted DOZE/NAP mode and
@@ -204,9 +198,6 @@ transfer_to_handler_cont:
 	mflr	r9
 	lwz	r11,0(r9)		/* virtual address of handler */
 	lwz	r9,4(r9)		/* where to go when done */
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	mtspr	SPRN_NRI, r0
-#endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	lis	r12,reenable_mmu@h
 	ori	r12,r12,reenable_mmu@l
@@ -294,9 +285,7 @@ stack_ovf:
 	lis	r9,StackOverflow@ha
 	addi	r9,r9,StackOverflow@l
 	LOAD_MSR_KERNEL(r10,MSR_KERNEL)
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	mtspr	SPRN_NRI, r0
-#endif
+	FIX_SRR1(r10,r12)
 	mtspr	SPRN_SRR0,r9
 	mtspr	SPRN_SRR1,r10
 	SYNC
@@ -409,23 +398,14 @@ BEGIN_FTR_SECTION
 	lwarx	r7,0,r1
 END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	stwcx.	r0,0,r1			/* to clear the reservation */
-#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
-	andi.	r4,r8,MSR_PR
-	beq	3f
-	CURRENT_THREAD_INFO(r4, r1)
-	ACCOUNT_CPU_USER_EXIT(r4, r5, r7)
-3:
-#endif
 	lwz	r4,_LINK(r1)
 	lwz	r5,_CCR(r1)
 	mtlr	r4
 	mtcr	r5
 	lwz	r7,_NIP(r1)
+	FIX_SRR1(r8, r0)
 	lwz	r2,GPR2(r1)
 	lwz	r1,GPR1(r1)
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	mtspr	SPRN_NRI, r0
-#endif
 	mtspr	SPRN_SRR0,r7
 	mtspr	SPRN_SRR1,r8
 	SYNC
@@ -661,6 +641,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_SPE)
 #endif /* CONFIG_SMP */
 
 	tophys(r0,r4)
+	CLR_TOP32(r0)
 	mtspr	SPRN_SPRG_THREAD,r0	/* Update current THREAD phys addr */
 	lwz	r1,KSP(r4)	/* Load new stack pointer */
 
@@ -680,11 +661,7 @@ BEGIN_FTR_SECTION
 	mtspr	SPRN_SPEFSCR,r0		/* restore SPEFSCR reg */
 END_FTR_SECTION_IFSET(CPU_FTR_SPE)
 #endif /* CONFIG_SPE */
-#if defined(CONFIG_CC_STACKPROTECTOR) && !defined(CONFIG_SMP)
-	lwz	r0,TSK_STACK_CANARY(r2)
-	lis	r4,__stack_chk_guard@ha
-	stw	r0,__stack_chk_guard@l(r4)
-#endif
+
 	lwz	r0,_CCR(r1)
 	mtcrf	0xFF,r0
 	/* r3-r12 are destroyed -- Cort */
@@ -709,9 +686,6 @@ fast_exception_return:
 	lwz	r10,_LINK(r11)
 	mtlr	r10
 	REST_GPR(10, r11)
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	mtspr	SPRN_NRI, r0
-#endif
 	mtspr	SPRN_SRR1,r9
 	mtspr	SPRN_SRR0,r12
 	REST_GPR(9, r11)
@@ -794,10 +768,6 @@ restore_user:
 	lwz	r0,THREAD+THREAD_DBCR0(r2)
 	andis.	r10,r0,DBCR0_IDM@h
 	bnel-	load_dbcr0
-#endif
-#ifdef CONFIG_VIRT_CPU_ACCOUNTING_NATIVE
-	CURRENT_THREAD_INFO(r9, r1)
-	ACCOUNT_CPU_USER_EXIT(r9, r10, r11)
 #endif
 
 	b	restore
@@ -960,9 +930,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_NEED_PAIRED_STWCX)
 	.globl exc_exit_restart
 exc_exit_restart:
 	lwz	r12,_NIP(r1)
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	mtspr	SPRN_NRI, r0
-#endif
+	FIX_SRR1(r9,r10)
 	mtspr	SPRN_SRR0,r12
 	mtspr	SPRN_SRR1,r9
 	REST_4GPRS(9, r1)
@@ -1305,6 +1273,7 @@ _GLOBAL(enter_rtas)
 1:	tophys(r9,r1)
 	lwz	r8,INT_FRAME_SIZE+4(r9)	/* get return address */
 	lwz	r9,8(r9)	/* original msr value */
+	FIX_SRR1(r9,r0)
 	addi	r1,r1,INT_FRAME_SIZE
 	li	r0,0
 	mtspr	SPRN_SPRG_RTAS,r0

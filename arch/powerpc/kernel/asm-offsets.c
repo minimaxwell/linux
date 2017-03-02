@@ -68,10 +68,6 @@
 #include "../mm/mmu_decl.h"
 #endif
 
-#ifdef CONFIG_PPC_8xx
-#include <asm/fixmap.h>
-#endif
-
 int main(void)
 {
 	DEFINE(THREAD, offsetof(struct task_struct, thread));
@@ -90,9 +86,6 @@ int main(void)
 	DEFINE(KSP_LIMIT, offsetof(struct thread_struct, ksp_limit));
 #endif /* CONFIG_PPC64 */
 
-#ifdef CONFIG_CC_STACKPROTECTOR
-	DEFINE(TSK_STACK_CANARY, offsetof(struct task_struct, stack_canary));
-#endif
 	DEFINE(KSP, offsetof(struct thread_struct, ksp));
 	DEFINE(PT_REGS, offsetof(struct thread_struct, regs));
 #ifdef CONFIG_BOOKE
@@ -169,12 +162,6 @@ int main(void)
 	DEFINE(TI_PREEMPT, offsetof(struct thread_info, preempt_count));
 	DEFINE(TI_TASK, offsetof(struct thread_info, task));
 	DEFINE(TI_CPU, offsetof(struct thread_info, cpu));
-#if defined(CONFIG_VIRT_CPU_ACCOUNTING_NATIVE) && defined(CONFIG_PPC32)
-	DEFINE(TI_AC_STAMP, offsetof(struct thread_info, ac_stamp));
-	DEFINE(TI_AC_LEAVE, offsetof(struct thread_info, ac_leave));
-	DEFINE(TI_AC_STIME, offsetof(struct thread_info, ac_stime));
-	DEFINE(TI_AC_UTIME, offsetof(struct thread_info, ac_utime));
-#endif
 
 #ifdef CONFIG_PPC64
 	DEFINE(DCACHEL1LINESIZE, offsetof(struct ppc64_caches, dline_size));
@@ -783,10 +770,6 @@ int main(void)
 #endif
 
 	DEFINE(PPC_DBELL_SERVER, PPC_DBELL_SERVER);
-
-#ifdef CONFIG_PPC_8xx
-	DEFINE(VIRT_IMMR_BASE, __fix_to_virt(FIX_IMMR_BASE));
-#endif
 
 	return 0;
 }

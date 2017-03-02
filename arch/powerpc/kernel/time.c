@@ -165,9 +165,7 @@ DEFINE_PER_CPU(unsigned long, cputime_scaled_last_delta);
 
 cputime_t cputime_one_jiffy;
 
-#ifdef CONFIG_PPC_SPLPAR
 void (*dtl_consumer)(struct dtl_entry *, u64);
-#endif
 
 static void calc_cputime_factors(void)
 {
@@ -183,7 +181,6 @@ static void calc_cputime_factors(void)
 	__cputime_clockt_factor = res.result_low;
 }
 
-#ifdef CONFIG_PPC64
 /*
  * Read the SPURR on systems that have it, otherwise the PURR,
  * or if that doesn't exist return the timebase value passed in.
@@ -196,7 +193,6 @@ static u64 read_spurr(u64 tb)
 		return mfspr(SPRN_PURR);
 	return tb;
 }
-#endif
 
 #ifdef CONFIG_PPC_SPLPAR
 
@@ -298,7 +294,6 @@ static inline u64 calculate_stolen_time(u64 stop_tb)
  * Account time for a transition between system, hard irq
  * or soft irq state.
  */
-#ifdef CONFIG_PPC64
 static u64 vtime_delta(struct task_struct *tsk,
 			u64 *sys_scaled, u64 *stolen)
 {
@@ -385,69 +380,6 @@ void vtime_account_user(struct task_struct *tsk)
 	get_paca()->utime_sspurr = 0;
 	account_user_time(tsk, utime, utimescaled);
 }
-#else
-
-void vtime_account_user(struct task_struct *tsk)
-{
-	cputime_t delta_utime;
-	struct thread_info *ti = task_thread_info(tsk);
-
-	if (ti->ac_utime) {
-		delta_utime = ti->ac_utime;
-		account_user_time(tsk, delta_utime, delta_utime);
-		ti->ac_utime = 0;
-	}
-}
-
-/*
- * Called from the context switch with interrupts disabled, to charge all
- * accumulated times to the current process, and to prepare accounting on
- * the next process.
- */
-void arch_vtime_task_switch(struct task_struct *prev)
-{
-	struct thread_info *pi = task_thread_info(prev);
-	struct thread_info *ni = task_thread_info(current);
-
-	ni->ac_stamp = pi->ac_stamp;
-	ni->ac_stime = ni->ac_utime = 0;
-}
-
-/*
- * Account time for a transition between system, hard irq or soft irq state.
- * Note that this function is called with interrupts enabled.
- */
-static cputime_t vtime_delta(struct task_struct *tsk)
-{
-	struct thread_info *ti = task_thread_info(tsk);
-	__u32 delta_stime;
-	__u32 now;
-
-	WARN_ON_ONCE(!irqs_disabled());
-
-	now = mftbl();
-
-	delta_stime = ti->ac_stime + (now - ti->ac_stamp);
-	ti->ac_stime = 0;
-	ti->ac_stamp = now;
-
-	return (cputime_t)delta_stime;
-}
-
-void vtime_account_system(struct task_struct *tsk)
-{
-	cputime_t delta = vtime_delta(tsk);
-
-	account_system_time(tsk, 0, delta, delta);
-}
-EXPORT_SYMBOL_GPL(vtime_account_system);
-
-void vtime_account_idle(struct task_struct *tsk)
-{
-	account_idle_time(vtime_delta(tsk));
-}
-
-#endif
 
 #else /* ! CONFIG_VIRT_CPU_ACCOUNTING_NATIVE */
 #define calc_cputime_factors()
@@ -1004,8 +936,6 @@ void __init time_init(void)
 		       ppc_proc_freq / 1000000, ppc_proc_freq % 1000000);
 	}
 
-	mttbl(0);
-	mttbu(0);
 	tb_ticks_per_jiffy = ppc_tb_freq / HZ;
 	tb_ticks_per_sec = ppc_tb_freq;
 	tb_ticks_per_usec = ppc_tb_freq / 1000000;
