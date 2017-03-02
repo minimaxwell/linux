@@ -98,7 +98,7 @@ static int tftp_help(struct sk_buff *skb,
 	return ret;
 }
 
-static struct nf_conntrack_helper tftp[MAX_PORTS][2] __read_mostly;
+static struct nf_conntrack_helper tftp[MAX_PORTS * 2] __read_mostly;
 
 static const struct nf_conntrack_expect_policy tftp_exp_policy = {
 	.max_expected	= 1,
