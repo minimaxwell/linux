@@ -28,7 +28,7 @@
 #include <linux/of_device.h>
 
 #include <asm/io.h>
-#if IS_ENABLED(CONFIG_UCC_GETH)
+#if IS_ENABLED(CONFIG_UCC_GETH) || IS_ENABLED(CONFIG_CMPCPRO_NET)
 #include <soc/fsl/qe/ucc.h>
 #endif
 
@@ -228,7 +228,7 @@ static uint32_t __iomem *get_etsec_tbipa(void __iomem *p)
 }
 #endif
 
-#if IS_ENABLED(CONFIG_UCC_GETH)
+#if IS_ENABLED(CONFIG_UCC_GETH) || IS_ENABLED(CONFIG_CMPCPRO_NET)
 /*
  * Return the TBIPAR address for a QE MDIO node, starting from the address
  * of the mapped MII registers (struct fsl_pq_mii)
@@ -344,7 +344,7 @@ static const struct of_device_id fsl_pq_mdio_match[] = {
 		},
 	},
 #endif
-#if IS_ENABLED(CONFIG_UCC_GETH)
+#if IS_ENABLED(CONFIG_UCC_GETH) || IS_ENABLED(CONFIG_CMPCPRO_NET)
 	{
 		.compatible = "fsl,ucc-mdio",
 		.data = &(struct fsl_pq_mdio_data) {
