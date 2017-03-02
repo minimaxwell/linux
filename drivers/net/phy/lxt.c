@@ -278,7 +278,6 @@ static struct phy_driver lxt97x_driver[] = {
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= lxt970_ack_interrupt,
 	.config_intr	= lxt970_config_intr,
-	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= 0x001378e0,
 	.name		= "LXT971",
@@ -289,7 +288,6 @@ static struct phy_driver lxt97x_driver[] = {
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= lxt971_ack_interrupt,
 	.config_intr	= lxt971_config_intr,
-	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= 0x00137a10,
 	.name		= "LXT973-A2",
