@@ -1120,14 +1120,9 @@ static int genphy_config_advert(struct phy_device *phydev)
  */
 int genphy_setup_forced(struct phy_device *phydev)
 {
-	int ctl;
+	int ctl = phy_read(phydev, MII_BMCR);
 
-	ctl = phy_read(phydev, MII_BMCR);
-
-	if (ctl < 0)
-		return ctl;
-	
-	ctl &= BMCR_ISOLATE | BMCR_PDOWN;
+	ctl &= BMCR_LOOPBACK | BMCR_ISOLATE | BMCR_PDOWN;
 	
 	phydev->pause = 0;
 	phydev->asym_pause = 0;

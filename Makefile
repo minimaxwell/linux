@@ -1,8 +1,8 @@
 VERSION = 4
-PATCHLEVEL = 6
+PATCHLEVEL = 7
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Charred Weasel
+NAME = Psychotic Stoned Sheep
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-

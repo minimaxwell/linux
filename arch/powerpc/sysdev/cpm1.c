@@ -545,15 +545,9 @@ struct cpm1_gpio16_chip {
 	int irq[16];
 };
 
-static inline struct cpm1_gpio16_chip *
-to_cpm1_gpio16_chip(struct of_mm_gpio_chip *mm_gc)
-{
-	return container_of(mm_gc, struct cpm1_gpio16_chip, mm_gc);
-}
-
 static void cpm1_gpio16_save_regs(struct of_mm_gpio_chip *mm_gc)
 {
-	struct cpm1_gpio16_chip *cpm1_gc = to_cpm1_gpio16_chip(mm_gc);
+	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	struct cpm_ioport16 __iomem *iop = mm_gc->regs;
 
 	cpm1_gc->cpdata = in_be16(&iop->dat);
@@ -684,7 +678,7 @@ int cpm1_gpiochip_add16(struct device_node *np)
 	gc->set = cpm1_gpio16_set;
 	gc->to_irq = cpm1_gpio16_to_irq;
 
-	return of_mm_gpiochip_add(np, mm_gc);
+	return of_mm_gpiochip_add_data(np, mm_gc, cpm1_gc);
 }
 
 struct cpm1_gpio32_chip {
