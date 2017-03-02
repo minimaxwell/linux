@@ -801,8 +801,9 @@ int genphy_soft_reset(struct phy_device *phydev);
 int genphy_isolate(struct phy_device *phydev);
 void phy_driver_unregister(struct phy_driver *drv);
 void phy_drivers_unregister(struct phy_driver *drv, int n);
-int phy_driver_register(struct phy_driver *new_driver);
-int phy_drivers_register(struct phy_driver *new_driver, int n);
+int phy_driver_register(struct phy_driver *new_driver, struct module *owner);
+int phy_drivers_register(struct phy_driver *new_driver, int n,
+			 struct module *owner);
 void phy_state_machine(struct work_struct *work);
 void phy_change(struct work_struct *work);
 void phy_mac_interrupt(struct phy_device *phydev, int new_link);

@@ -1002,18 +1002,25 @@ void phy_state_machine(struct work_struct *work)
 	if (err < 0)
 		phy_error(phydev);
 
-	dev_dbg(&phydev->dev, "PHY state change %s -> %s\n",
-		phy_state_to_str(old_state), phy_state_to_str(phydev->state));
+	phydev_dbg(phydev, "PHY state change %s -> %s\n",
+		   phy_state_to_str(old_state),
+		   phy_state_to_str(phydev->state));
 
-	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
-			   HZ * PHY_STATE_TIME);
+	/* Only re-schedule a PHY state machine change if we are polling the
+	 * PHY, if PHY_IGNORE_INTERRUPT is set, then we will be moving
+	 * between states from phy_mac_interrupt()
+	 */
+	if (phydev->irq == PHY_POLL)
+		queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
+				   HZ * PHY_STATE_TIME);
 }
 
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)
 {
-	cancel_work_sync(&phydev->phy_queue);
 	phydev->link = new_link;
-	schedule_work(&phydev->phy_queue);
+
+	/* Trigger a state machine change */
+	queue_work(system_power_efficient_wq, &phydev->phy_queue);
 }
 EXPORT_SYMBOL(phy_mac_interrupt);
 
