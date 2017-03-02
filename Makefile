@@ -1,8 +1,8 @@
 VERSION = 4
-PATCHLEVEL = 8
+PATCHLEVEL = 9
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Psychotic Stoned Sheep
+NAME = Roaring Lionus
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
