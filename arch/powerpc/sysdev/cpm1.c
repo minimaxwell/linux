@@ -594,7 +594,7 @@ static void cpm1_gpio16_set(struct gpio_chip *gc, unsigned int gpio, int value)
 static int __cpm1_gpio16_to_irq(struct of_mm_gpio_chip *mm_gc,
 		unsigned int gpio)
 {
-	struct cpm1_gpio16_chip *cpm1_gc = to_cpm1_gpio16_chip(mm_gc);
+	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 
 	return cpm1_gc->irq[gpio] ? cpm1_gc->irq[gpio] : -ENXIO;
 }
@@ -602,7 +602,7 @@ static int __cpm1_gpio16_to_irq(struct of_mm_gpio_chip *mm_gc,
 static int cpm1_gpio16_to_irq(struct gpio_chip *gc, unsigned int gpio)
 {
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
-	struct cpm1_gpio16_chip *cpm1_gc = to_cpm1_gpio16_chip(mm_gc);
+	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	unsigned long flags;
 	int ret;
 
