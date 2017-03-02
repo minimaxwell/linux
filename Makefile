@@ -1,8 +1,8 @@
 VERSION = 4
-PATCHLEVEL = 5
+PATCHLEVEL = 6
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Blurry Fish Butt
+NAME = Charred Weasel
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-
