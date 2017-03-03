@@ -344,7 +344,7 @@ static int fsl_spi_bufs(struct spi_device *spi, struct spi_transfer *t,
 		return ret;
 
 	speed = t->speed_hz / 1000;
-	speed = max(speed - 1, 1);
+	speed = max(speed - 1, 1UL);
 	ms = t->len * 8 / speed;
 	ms += ms + 100; /* some tolerance */
 
