@@ -922,6 +922,8 @@ void phy_start(struct phy_device *phydev)
 	bool do_resume = false;
 	int err = 0;
 
+	//printk(KERN_ERR"phy_start for phydev(%d)\n", phydev->mdio.addr);
+	mdelay(200);
 	mutex_lock(&phydev->lock);
 
 	switch (phydev->state) {
