@@ -618,33 +618,6 @@ error:
 	return ret ? : -ENOENT;
 }
 
-/* Adjust symbol name and address */
-static int post_process_probe_trace_point(struct probe_trace_point *tp,
-					   struct map *map, unsigned long offs)
-{
-	struct symbol *sym;
-	u64 addr = tp->address + tp->offset - offs;
-
-	sym = map__find_symbol(map, addr);
-	if (!sym)
-		return -ENOENT;
-
-	if (strcmp(sym->name, tp->symbol)) {
-		/* If we have no realname, use symbol for it */
-		if (!tp->realname)
-			tp->realname = tp->symbol;
-		else
-			free(tp->symbol);
-		tp->symbol = strdup(sym->name);
-		if (!tp->symbol)
-			return -ENOMEM;
-	}
-	tp->offset = addr - sym->start;
-	tp->address -= offs;
-
-	return 0;
-}
-
 /*
  * Rename DWARF symbols to ELF symbols -- gcc sometimes optimizes functions
  * and generate new symbols with suffixes such as .constprop.N or .isra.N
@@ -657,9 +630,11 @@ static int
 post_process_offline_probe_trace_events(struct probe_trace_event *tevs,
 					int ntevs, const char *pathname)
 {
+	struct symbol *sym;
 	struct map *map;
 	unsigned long stext = 0;
-	int i, ret = 0;
+	u64 addr;
+	int i;
 
 	/* Prepare a map for offline binary */
 	map = dso__new_map(pathname);
@@ -669,14 +644,23 @@ post_process_offline_probe_trace_events(struct probe_trace_event *tevs,
 	}
 
 	for (i = 0; i < ntevs; i++) {
-		ret = post_process_probe_trace_point(&tevs[i].point,
-						     map, stext);
-		if (ret < 0)
-			break;
+		addr = tevs[i].point.address + tevs[i].point.offset - stext;
+		sym = map__find_symbol(map, addr);
+		if (!sym)
+			continue;
+		if (!strcmp(sym->name, tevs[i].point.symbol))
+			continue;
+		/* If we have no realname, use symbol for it */
+		if (!tevs[i].point.realname)
+			tevs[i].point.realname = tevs[i].point.symbol;
+		else
+			free(tevs[i].point.symbol);
+		tevs[i].point.symbol = strdup(sym->name);
+		tevs[i].point.offset = addr - sym->start;
 	}
 	map__put(map);
 
-	return ret;
+	return 0;
 }
 
 static int add_exec_to_probe_trace_events(struct probe_trace_event *tevs,
