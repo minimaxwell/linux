@@ -681,6 +681,9 @@ void phy_stop_machine(struct phy_device *phydev)
 		phydev->state = PHY_UP;
 	mutex_unlock(&phydev->lock);
 
+	/* Now we can run the state machine synchronously */
+	phy_state_machine(&phydev->state_queue.work);
+
 	phydev->adjust_state = NULL;
 }
 
@@ -1070,6 +1073,15 @@ void phy_state_machine(struct work_struct *work)
 
 			if (old_link != phydev->link)
 				phydev->state = PHY_CHANGELINK;
+		}
+		/*
+		 * Failsafe: check that nobody set phydev->link=0 between two
+		 * poll cycles, otherwise we won't leave RUNNING state as long
+		 * as link remains down.
+		 */
+		if (!phydev->link && phydev->state == PHY_RUNNING) {
+			phydev->state = PHY_CHANGELINK;
+			phydev_err(phydev, "no link in PHY_RUNNING\n");
 		}
 		break;
 	case PHY_DOUBLE_ATTACHEMENT:
