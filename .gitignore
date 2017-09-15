@@ -133,3 +133,8 @@ toto*
 /tools/perf/PERF-FEATURES
 /patch_knl
 /vmlinux.*
+
+/arch/powerpc/boot/decompress_inflate.c
+/tools/perf/pmu-events/jevents
+/tools/perf/pmu-events/pmu-events.c
+
