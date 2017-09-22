@@ -681,9 +681,6 @@ void phy_stop_machine(struct phy_device *phydev)
 		phydev->state = PHY_UP;
 	mutex_unlock(&phydev->lock);
 
-	/* Now we can run the state machine synchronously */
-	phy_state_machine(&phydev->state_queue.work);
-
 	phydev->adjust_state = NULL;
 }
 
