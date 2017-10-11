@@ -293,6 +293,21 @@
 				};
 			};
 */
+			
+			dma: dma@60900 {
+				compatible = "marvell,armada-3700-dma";
+				reg = <0x60900 0x100>,
+				      <0x60b00 0x100>;
+
+				interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH
+					      GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH
+					      GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH
+					      GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
+
+				#dma-cells = <1>;
+				dma-channels = <2>;
+		     	};
+
 			sdhci1: sdhci@d0000 {
 				compatible = "marvell,armada-3700-sdhci",
 					     "marvell,sdhci-xenon";

@@ -352,6 +352,13 @@ config MPC512X_DMA
 	---help---
 	  Enable support for the Freescale MPC512x built-in DMA engine.
 
+config MV_DMA
+	bool "Marvell DMA engine support"
+	depends on ARCH_MVEBU && !MV_XOR
+	select DMA_ENGINE
+	---help---
+	  Enable support for the Marvell DMA engine, for Armada 3700 SoCs.
+
 config MV_XOR
 	bool "Marvell XOR engine support"
 	depends on PLAT_ORION || ARCH_MVEBU || COMPILE_TEST
