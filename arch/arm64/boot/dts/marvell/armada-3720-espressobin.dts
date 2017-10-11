@@ -176,3 +176,13 @@
 		full-duplex;
 	};
 };
+
+&spi0 {
+	status = "okay";
+
+	spidev@0x00 {
+		compatible = "spidev", "armada-3700-spi";
+		spi-max-frequency = <30000000>;
+		reg = <0>;
+	};
+};
