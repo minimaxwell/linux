@@ -279,7 +279,7 @@
 				interrupts = <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
 				status = "disabled";
 			};
-
+/* Ignore XOR driver for the moment
 			xor@60900 {
 				compatible = "marvell,armada-3700-xor";
 				reg = <0x60900 0x100>,
@@ -292,7 +292,7 @@
 					interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 				};
 			};
-
+*/
 			sdhci1: sdhci@d0000 {
 				compatible = "marvell,armada-3700-sdhci",
 					     "marvell,sdhci-xenon";
