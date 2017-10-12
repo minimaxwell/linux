@@ -29,10 +29,19 @@
 
 #define MV_DMA_BUSWIDTH	(BIT(DMA_SLAVE_BUSWIDTH_4_BYTES))
 
+/* All known DMA / XOR controllers have at most 2 channels */
+#define MV_DMA_MAX_CHANNELS 2
+
+struct mv_dma_chan {
+	struct dma_chan chan;
+};
+
 struct mv_dma_device {
 	struct dma_device	dma_dev;
 	void __iomem	*base;
 	void __iomem	*high_base;
+	unsigned int 	nr_channels;
+	struct mv_dma_chan channels[MV_DMA_MAX_CHANNELS];
 };
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
@@ -56,6 +65,13 @@ static struct dma_async_tx_descriptor *mv_dma_prep_interleaved_dma(
 					unsigned long flags)
 {
 	return NULL;
+}
+
+static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
+					    dma_cookie_t cookie,
+					    struct dma_tx_state *txstate)
+{
+	return DMA_ERROR;
 }
 
 /* Right from mv_xor driver. For now, copy-paste, but might disapear if we
@@ -92,6 +108,81 @@ static const struct of_device_id mv_dma_dt_ids[] = {
 	},
 	{},
 };
+
+static int mv_dma_of_parse_channels(struct mv_dma_device *mv_dma_dev)
+{
+	int ret;
+	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
+	struct device *dev = dma_dev->dev;
+
+	ret = of_property_read_u32(dev->of_node, "dma-channels",
+					&mv_dma_dev->nr_channels);
+	if (ret) {
+		dev_err(dev, "failed to read dma-channels\n");
+		return ret;
+	}
+
+	if (mv_dma_dev->nr_channels > MV_DMA_MAX_CHANNELS) {
+		dev_err(dev, "Invalid number of channels in DT, "
+				"declared %d channels, max number is %d\n",
+				mv_dma_dev->nr_channels, MV_DMA_MAX_CHANNELS);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int mv_dma_init_channels(struct mv_dma_device *mv_dma_dev)
+{
+	int chan_id, ret;
+	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
+	struct mv_dma_chan *mv_chan;
+
+	ret = mv_dma_of_parse_channels(mv_dma_dev);
+	if (ret)
+		return ret;
+
+	for (chan_id = 0; chan_id < mv_dma_dev->nr_channels; chan_id++) {
+		mv_chan = &mv_dma_dev->channels[chan_id];
+		list_add_tail(&mv_chan->chan.device_node, &dma_dev->channels);
+	}
+
+	return 0;
+}
+
+/* Register a mv_dma_device to the underlying frameworks */
+static int mv_dma_device_register(struct mv_dma_device *mv_dma_dev)
+{
+	int ret;
+	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
+	struct device *dev = dma_dev->dev;
+
+	/* Register the device in DT DMA framework, so that slaves can find us */
+	ret = of_dma_controller_register(dev->of_node,
+				of_dma_xlate_by_chan_id, dma_dev);
+	if (ret) {
+		dev_info(dev, "Unable to register controller to OF\n");
+		return ret;
+	}
+
+	/* Register the device in the framework */
+	ret = dma_async_device_register(dma_dev);
+	if (ret) {
+		dev_info(dev, "Unable to register controller to MDA "
+				"Framework\n");
+		return ret;
+	}
+
+	return 0;
+}
+
+/* Perform all the controller init */
+static int mv_dma_init_controller(struct mv_dma_device *mv_dma_dev)
+{
+	mv_dma_configure_window(mv_dma_dev);
+
+	return 0;
+}
 
 static int mv_dma_probe(struct platform_device *pdev)
 {
@@ -132,10 +223,12 @@ static int mv_dma_probe(struct platform_device *pdev)
 	/* Initialize struct dma_device */
 	dma_cap_set(DMA_SLAVE, dma_dev->cap_mask);
 
+	/* Register all callbacks */
 	dma_dev->device_alloc_chan_resources = mv_dma_alloc_chan_resources;
 	dma_dev->device_free_chan_resources = mv_dma_free_chan_resources;
 	dma_dev->device_issue_pending = mv_dma_issue_pending;
 	dma_dev->device_prep_interleaved_dma = mv_dma_prep_interleaved_dma;
+	dma_dev->device_tx_status = mv_dma_tx_status;
 
 	dma_dev->src_addr_widths = MV_DMA_BUSWIDTH;
 	dma_dev->dst_addr_widths = MV_DMA_BUSWIDTH;
@@ -145,28 +238,27 @@ static int mv_dma_probe(struct platform_device *pdev)
 
 	INIT_LIST_HEAD(&dma_dev->channels);
 
-	/* Configure parameters from DT */
-
-	/* Register the device in the framework */
-	ret = of_dma_controller_register(pdev->dev.of_node,
-		of_dma_xlate_by_chan_id, dma_dev);
-	if (ret) {
-		dev_info(&pdev->dev, "Unable to register controller to OF\n");
+	/* create channels */
+	ret = mv_dma_init_channels(mv_dma_dev);
+	if (ret)
 		goto err;
-	}
 
-	/* Register the device in DT DMA framework, so that slaves can find us */
-	ret = dma_async_device_register(dma_dev);
-	if (ret) {
-		dev_info(&pdev->dev, "Unable to register controller to MDA "
-				"Framework\n");
+	/* Register to all underlying frameworks */
+	ret = mv_dma_device_register(mv_dma_dev);
+	if (ret)
 		goto err;
-	}
 
+	/* Now that everything is setup and register, configure the controller */
+	ret = mv_dma_init_controller(mv_dma_dev);
+	if(ret)
+		goto err;
+
+	dev_info(&pdev->dev, "%s complete\n", __func__);
+	return 0;
 	/* Configure the window */
-	mv_dma_configure_window(mv_dma_dev);
 
 err:
+	/* TODO : cleanup / deinit */
 	return 0;
 }
 
