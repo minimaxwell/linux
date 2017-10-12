@@ -27,7 +27,9 @@
 #define WINDOW_BAR_ENABLE(chan)	(0x40 + ((chan) << 2))
 #define WINDOW_OVERRIDE_CTRL(chan)	(0xA0 + ((chan) << 2))
 
-#define MV_DMA_BUSWIDTH	(BIT(DMA_SLAVE_BUSWIDTH_4_BYTES))
+#define MV_DMA_BUSWIDTH	( BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) | \
+			  BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) | \
+			  BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) )
 
 /* All known DMA / XOR controllers have at most 2 channels */
 #define MV_DMA_MAX_CHANNELS 2
@@ -101,6 +103,14 @@ static int mv_dma_slave_config(struct dma_chan *chan,
 
 	dev_info(dev, "%s, dir=%d, addr_cfg=%d\n", __func__,
 			config->direction, mv_chan->addr_cfg );
+
+	/* TODO : 
+	 * - Set DA_CFG_CHx depending on direction and addr_cfg
+	 * - Set SA_CFG_CHx depending on direction and adr_cfg
+	 * - Set data write format to 32bit or 64 bits depending on dir and cfg
+	 * - Set DA/SA to point to SPI FIFO / UART2 FIFO (we'll see about PCIe later)
+	 * - Set the burts limit
+	 * The rest will be handled in prep callback*/
 
 	return 0;
 }
