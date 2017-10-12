@@ -180,6 +180,10 @@
 &spi0 {
 	status = "okay";
 
+	dmas = <&dma 0 2
+		&dma 1 2>;
+	dma-names = "rx", "tx";
+
 	spidev@0x00 {
 		compatible = "spidev", "armada-3700-spi";
 		spi-max-frequency = <30000000>;

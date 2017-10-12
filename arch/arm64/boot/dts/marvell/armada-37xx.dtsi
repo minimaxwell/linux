@@ -304,7 +304,7 @@
 					      GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH
 					      GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
 
-				#dma-cells = <1>;
+				#dma-cells = <2>;
 				dma-channels = <2>;
 		     	};
 

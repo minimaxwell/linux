@@ -34,6 +34,7 @@
 
 struct mv_dma_chan {
 	struct dma_chan chan;
+	unsigned int addr_cfg;
 };
 
 struct mv_dma_device {
@@ -44,18 +45,32 @@ struct mv_dma_device {
 	struct mv_dma_chan channels[MV_DMA_MAX_CHANNELS];
 };
 
+static struct mv_dma_chan *to_mv_dma_chan(struct dma_chan *chan) {
+	return container_of(chan, struct mv_dma_chan, chan);
+}
+
+static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev) {
+	return container_of(dma_dev, struct mv_dma_device, dma_dev);
+}
+
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
 {
+	struct device *dev = chan->device->dev;
+	dev_info(dev, "%s\n", __func__);
 	return 0;
 }
 
 static void mv_dma_free_chan_resources(struct dma_chan *chan)
 {
+	struct device *dev = chan->device->dev;
+	dev_info(dev, "%s\n", __func__);
 	return;
 }
 
 static void mv_dma_issue_pending(struct dma_chan *chan)
 {
+	struct device *dev = chan->device->dev;
+	dev_info(dev, "%s\n", __func__);
 	return;
 }
 
@@ -64,6 +79,8 @@ static struct dma_async_tx_descriptor *mv_dma_prep_interleaved_dma(
 					struct dma_interleaved_template *xt,
 					unsigned long flags)
 {
+	struct device *dev = chan->device->dev;
+	dev_info(dev, "%s\n", __func__);
 	return NULL;
 }
 
@@ -71,9 +88,22 @@ static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
 					    dma_cookie_t cookie,
 					    struct dma_tx_state *txstate)
 {
+	struct device *dev = chan->device->dev;
+	dev_info(dev, "%s\n", __func__);
 	return DMA_ERROR;
 }
 
+static int mv_dma_slave_config(struct dma_chan *chan,
+			     struct dma_slave_config *config)
+{
+	struct device *dev = chan->device->dev;
+	struct mv_dma_chan *mv_chan = to_mv_dma_chan(chan);
+
+	dev_info(dev, "%s, dir=%d, addr_cfg=%d\n", __func__,
+			config->direction, mv_chan->addr_cfg );
+
+	return 0;
+}
 /* Right from mv_xor driver. For now, copy-paste, but might disapear if we
  * decide to merge this with mv_xor*/
 static void mv_dma_configure_window(struct mv_dma_device *mv_dma_dev)
@@ -144,10 +174,40 @@ static int mv_dma_init_channels(struct mv_dma_device *mv_dma_dev)
 
 	for (chan_id = 0; chan_id < mv_dma_dev->nr_channels; chan_id++) {
 		mv_chan = &mv_dma_dev->channels[chan_id];
+		mv_chan->chan.device = dma_dev;
 		list_add_tail(&mv_chan->chan.device_node, &dma_dev->channels);
 	}
 
 	return 0;
+}
+
+struct dma_chan *mv_dma_of_xlate_chan(struct of_phandle_args *dma_spec,
+						 struct of_dma *ofdma)
+{
+	struct mv_dma_device *mv_dma_dev = ofdma->of_dma_data;
+	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
+	struct mv_dma_chan *mv_chan;
+	struct dma_chan *chan, *candidate = NULL;
+
+	if (!mv_dma_dev || dma_spec->args_count != 2)
+		return NULL;
+
+	list_for_each_entry(chan, &dma_dev->channels, device_node)
+		if (chan->chan_id == dma_spec->args[0]) {
+			candidate = chan;
+			break;
+		}
+
+	if (!candidate)
+		return NULL;
+
+	mv_chan = to_mv_dma_chan(candidate);
+	if (!mv_chan)
+		return NULL;
+
+	mv_chan->addr_cfg = dma_spec->args[1];
+
+	return dma_get_slave_channel(candidate);
 }
 
 /* Register a mv_dma_device to the underlying frameworks */
@@ -157,14 +217,6 @@ static int mv_dma_device_register(struct mv_dma_device *mv_dma_dev)
 	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
 	struct device *dev = dma_dev->dev;
 
-	/* Register the device in DT DMA framework, so that slaves can find us */
-	ret = of_dma_controller_register(dev->of_node,
-				of_dma_xlate_by_chan_id, dma_dev);
-	if (ret) {
-		dev_info(dev, "Unable to register controller to OF\n");
-		return ret;
-	}
-
 	/* Register the device in the framework */
 	ret = dma_async_device_register(dma_dev);
 	if (ret) {
@@ -173,6 +225,14 @@ static int mv_dma_device_register(struct mv_dma_device *mv_dma_dev)
 		return ret;
 	}
 
+	/* Register the device in DT DMA framework, so that slaves can find us */
+	ret = of_dma_controller_register(dev->of_node,
+				mv_dma_of_xlate_chan, mv_dma_dev);
+	if (ret) {
+		dev_info(dev, "Unable to register controller to OF\n");
+		return ret;
+	}
+	
 	return 0;
 }
 
@@ -229,6 +289,7 @@ static int mv_dma_probe(struct platform_device *pdev)
 	dma_dev->device_issue_pending = mv_dma_issue_pending;
 	dma_dev->device_prep_interleaved_dma = mv_dma_prep_interleaved_dma;
 	dma_dev->device_tx_status = mv_dma_tx_status;
+	dma_dev->device_config = mv_dma_slave_config;
 
 	dma_dev->src_addr_widths = MV_DMA_BUSWIDTH;
 	dma_dev->dst_addr_widths = MV_DMA_BUSWIDTH;
