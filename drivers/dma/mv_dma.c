@@ -50,21 +50,37 @@
 #define MV_DMA_DESC_DMA_OWNED		BIT(31)
 #define MV_DMA_DESC_EOD_INT_EN		BIT(31)
 
-#define MV_DMA_CURR_DESC(chan)	(chan->high_base + 0x10 + (chan->idx * 4))
-#define MV_DMA_NEXT_DESC(chan)	(chan->high_base + 0x00 + (chan->idx * 4))
-#define MV_DMA_BYTE_COUNT(chan)	(chan->high_base + 0x20 + (chan->idx * 4))
-#define MV_DMA_DEST_POINTER(chan)	(chan->mmr_high_base + 0xB0 + (chan->idx * 4))
-#define MV_DMA_BLOCK_SIZE(chan)	(chan->mmr_high_base + 0xC0 + (chan->idx * 4))
-#define MV_DMA_INIT_VALUE_LOW(chan)	(chan->mmr_high_base + 0xE0)
-#define MV_DMA_INIT_VALUE_HIGH(chan)	(chan->mmr_high_base + 0xE4)
+/* High range per-channel registers */
+#define MV_DMA_NEXT_DESC(chan)		0x00
+#define MV_DMA_CURR_DES 		0x10
+#define MV_DMA_BYTE_COUNT		0x20
+#define MV_DMA_WINDOW_CTRL		0x40
+#define MV_DMA_ADDR_OVERRIDE_CTRL	0xA0
+#define MV_DMA_DEST_POINTER		0xB0
+#define MV_DMA_BLOCK_SIZE		0xC0
 
-#define MV_DMA_CFG_ADDR(chan)	(chan->mmr_base + 0x04 + (chan->idx * 4))
-#define MV_DMA_CFG(chan)	(chan->mmr_base + 0x10 + (chan->idx * 4))
-#define MV_DMA_ACTIVATION(chan)	(chan->mmr_base + 0x20 + (chan->idx * 4))
-#define MV_DMA_INTR_CAUSE(chan)	(chan->mmr_base + 0x30)
-#define MV_DMA_INTR_MASK(chan)	(chan->mmr_base + 0x40)
-#define MV_DMA_ERROR_CAUSE(chan)	(chan->mmr_base + 0x50)
-#define MV_DMA_ERROR_ADDR(chan)	(chan->mmr_base + 0x60)
+/* High range per-window registers */
+#define MV_DMA_WINDOW_BASE_ADDR		0x50
+#define MV_DMA_WINDOW_SIZE_MASK		0x70
+/* Only for window 0 to 3 */
+#define MV_DMA_WINDOW_HIGH_ADDR_REMAP	0x90
+
+/* High range global registers */
+#define MV_DMA_INIT_VALUE_LOW		0xE0
+#define MV_DMA_INIT_VALUE_HIGH		0xE4
+
+/* Low range per-channel registers */
+#define MV_DMA_CFG_ADDR			0x04
+#define MV_DMA_CFG			0x10
+#define MV_DMA_ACTIVATION		0x20
+#define MV_DMA_OUTSTANDING_RD		0x80
+
+/* Low range global registers */
+#define MV_DMA_CHAN_ARBITER		0x00
+#define MV_DMA_INTR_CAUSE		0x30
+#define MV_DMA_INTR_MASK		0x40
+#define MV_DMA_ERROR_CAUSE		0x50
+#define MV_DMA_ERROR_ADDR		0x60
 
 #define MV_DMA_INT_END_OF_DESC	BIT(0)
 #define MV_DMA_INT_END_OF_CHAIN	BIT(1)
