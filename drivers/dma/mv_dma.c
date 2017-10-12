@@ -21,6 +21,70 @@
 #include <linux/memory.h>
 #include <linux/io.h>
 
+/* Values for the MV_DMA_CFG_ADDR register */
+#define MV_DMA_CFG_ADDR_SA_CFG_DDR	0
+#define MV_DMA_CFG_ADDR_SA_CFG_PCIE	1
+#define MV_DMA_CFG_ADDR_SA_CFG_SPI	2
+#define MV_DMA_CFG_ADDR_SA_CFG_UART2	3
+#define MV_DMA_CFG_ADDR_SA_32BIT	BIT(4)
+#define MV_DMA_CFG_ADDR_SA_FIXED_ADDR	BIT(5)
+
+#define MV_DMA_CFG_ADDR_DA_CFG_DDR	(MV_DMA_CFG_ADDR_SA_CFG_DDR	<< 16)
+#define MV_DMA_CFG_ADDR_DA_CFG_PCIE	(MV_DMA_CFG_ADDR_SA_CFG_PCIE	<< 16)
+#define MV_DMA_CFG_ADDR_DA_CFG_SPI	(MV_DMA_CFG_ADDR_SA_CFG_SPI	<< 16)
+#define MV_DMA_CFG_ADDR_DA_CFG_UART2	(MV_DMA_CFG_ADDR_SA_CFG_UART2	<< 16)
+#define MV_DMA_CFG_ADDR_DA_32BIT	(MV_DMA_CFG_ADDR_SA_32BIT	<< 16)
+#define MV_DMA_CFG_ADDR_DA_FIXED_ADDR	(MV_DMA_CFG_ADDR_SA_FIXED_ADDR	<< 16)
+
+/* Values for the MV_DMA_CFG register */
+#define MV_DMA_OPERATION_MODE_XOR	0
+#define MV_DMA_OPERATION_MODE_MEMCPY	2
+#define MV_DMA_OPERATION_MODE_IN_DESC   7
+#define MV_DMA_DESCRIPTOR_SWAP		BIT(14)
+#define MV_DMA_DESC_SUCCESS		0x40000000
+
+#define MV_DMA_DESC_OPERATION_XOR       (0 << 24)
+#define MV_DMA_DESC_OPERATION_CRC32C    (1 << 24)
+#define MV_DMA_DESC_OPERATION_MEMCPY    (2 << 24)
+
+#define MV_DMA_DESC_DMA_OWNED		BIT(31)
+#define MV_DMA_DESC_EOD_INT_EN		BIT(31)
+
+#define MV_DMA_CURR_DESC(chan)	(chan->high_base + 0x10 + (chan->idx * 4))
+#define MV_DMA_NEXT_DESC(chan)	(chan->high_base + 0x00 + (chan->idx * 4))
+#define MV_DMA_BYTE_COUNT(chan)	(chan->high_base + 0x20 + (chan->idx * 4))
+#define MV_DMA_DEST_POINTER(chan)	(chan->mmr_high_base + 0xB0 + (chan->idx * 4))
+#define MV_DMA_BLOCK_SIZE(chan)	(chan->mmr_high_base + 0xC0 + (chan->idx * 4))
+#define MV_DMA_INIT_VALUE_LOW(chan)	(chan->mmr_high_base + 0xE0)
+#define MV_DMA_INIT_VALUE_HIGH(chan)	(chan->mmr_high_base + 0xE4)
+
+#define MV_DMA_CFG_ADDR(chan)	(chan->mmr_base + 0x04 + (chan->idx * 4))
+#define MV_DMA_CFG(chan)	(chan->mmr_base + 0x10 + (chan->idx * 4))
+#define MV_DMA_ACTIVATION(chan)	(chan->mmr_base + 0x20 + (chan->idx * 4))
+#define MV_DMA_INTR_CAUSE(chan)	(chan->mmr_base + 0x30)
+#define MV_DMA_INTR_MASK(chan)	(chan->mmr_base + 0x40)
+#define MV_DMA_ERROR_CAUSE(chan)	(chan->mmr_base + 0x50)
+#define MV_DMA_ERROR_ADDR(chan)	(chan->mmr_base + 0x60)
+
+#define MV_DMA_INT_END_OF_DESC	BIT(0)
+#define MV_DMA_INT_END_OF_CHAIN	BIT(1)
+#define MV_DMA_INT_STOPPED		BIT(2)
+#define MV_DMA_INT_PAUSED		BIT(3)
+#define MV_DMA_INT_ERR_DECODE	BIT(4)
+#define MV_DMA_INT_ERR_RDPROT	BIT(5)
+#define MV_DMA_INT_ERR_WRPROT	BIT(6)
+#define MV_DMA_INT_ERR_OWN		BIT(7)
+#define MV_DMA_INT_ERR_PAR		BIT(8)
+#define MV_DMA_INT_ERR_MBUS	BIT(9)
+
+#define MV_DMA_INTR_ERRORS		(MV_DMA_INT_ERR_DECODE | MV_DMA_INT_ERR_RDPROT | \
+				 MV_DMA_INT_ERR_WRPROT | MV_DMA_INT_ERR_OWN    | \
+				 MV_DMA_INT_ERR_PAR    | MV_DMA_INT_ERR_MBUS)
+
+#define MV_DMA_INTR_MASK_VALUE	(MV_DMA_INT_END_OF_DESC | MV_DMA_INT_END_OF_CHAIN | \
+				 MV_DMA_INT_STOPPED     | MV_DMA_INTR_ERRORS)
+
+
 #define WINDOW_BASE(w)		(0x50 + ((w) << 2))
 #define WINDOW_SIZE(w)		(0x70 + ((w) << 2))
 #define WINDOW_REMAP_HIGH(w)	(0x90 + ((w) << 2))
@@ -37,6 +101,10 @@
 struct mv_dma_chan {
 	struct dma_chan chan;
 	unsigned int addr_cfg;
+	struct mv_dma_device *mv_dma_dev;
+	/* if dma_chan chan_id field is not numbered the same way some day,
+	 * this driver will be broken. So, we have our own id.*/
+	int mv_chan_id;
 };
 
 struct mv_dma_device {
@@ -53,6 +121,48 @@ static struct mv_dma_chan *to_mv_dma_chan(struct dma_chan *chan) {
 
 static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev) {
 	return container_of(dma_dev, struct mv_dma_device, dma_dev);
+}
+
+static inline void mv_dma_write_high(struct mv_dma_device *mv_dma_dev, u32 reg, u32 val)
+{
+	return; /* TODO */
+}
+
+static inline void mv_dma_write_low(struct mv_dma_device *mv_dma_dev, u32 reg, u32 val)
+{
+	return; /* TODO */
+}
+
+static inline u32 mv_dma_read_high(struct mv_dma_device *mv_dma_dev, u32 reg)
+{
+	return 0; /* TODO */
+}
+
+static inline u32 mv_dma_read_low(struct mv_dma_device *mv_dma_dev, u32 reg)
+{
+	return 0; /* TODO */
+}
+
+static inline void mv_dma_write_chan_high(struct mv_dma_chan *chan, u32 reg,
+								u32 val)
+{
+	mv_dma_write_high(chan->mv_dma_dev, reg + (4 * chan->mv_chan_id), val);
+}
+
+static inline void mv_dma_write_chan_low(struct mv_dma_chan *chan, u32 reg,
+								u32 val)
+{
+	mv_dma_write_low(chan->mv_dma_dev, reg + (4 * chan->mv_chan_id), val);
+}
+
+static inline u32 mv_dma_read_chan_high(struct mv_dma_chan *chan, u32 reg)
+{
+	return mv_dma_read_high(chan->mv_dma_dev, reg + (4 * chan->mv_chan_id));
+}
+
+static inline u32 mv_dma_read_chan_low(struct mv_dma_chan *chan, u32 reg)
+{
+	return mv_dma_read_low(chan->mv_dma_dev, reg + (4 * chan->mv_chan_id));
 }
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
@@ -185,6 +295,8 @@ static int mv_dma_init_channels(struct mv_dma_device *mv_dma_dev)
 	for (chan_id = 0; chan_id < mv_dma_dev->nr_channels; chan_id++) {
 		mv_chan = &mv_dma_dev->channels[chan_id];
 		mv_chan->chan.device = dma_dev;
+		mv_chan->mv_dma_dev = mv_dma_dev;
+		mv_chan->mv_chan_id = chan_id;
 		list_add_tail(&mv_chan->chan.device_node, &dma_dev->channels);
 	}
 
@@ -196,28 +308,26 @@ struct dma_chan *mv_dma_of_xlate_chan(struct of_phandle_args *dma_spec,
 {
 	struct mv_dma_device *mv_dma_dev = ofdma->of_dma_data;
 	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
-	struct mv_dma_chan *mv_chan;
-	struct dma_chan *chan, *candidate = NULL;
+	struct mv_dma_chan *mv_chan, *candidate = NULL;
+	struct dma_chan *chan;
 
 	if (!mv_dma_dev || dma_spec->args_count != 2)
 		return NULL;
 
-	list_for_each_entry(chan, &dma_dev->channels, device_node)
-		if (chan->chan_id == dma_spec->args[0]) {
-			candidate = chan;
+	list_for_each_entry(chan, &dma_dev->channels, device_node) {
+		mv_chan = to_mv_dma_chan(chan);
+		if (mv_chan->mv_chan_id == dma_spec->args[0]) {
+			candidate = mv_chan;
 			break;
 		}
+	}
 
 	if (!candidate)
 		return NULL;
 
-	mv_chan = to_mv_dma_chan(candidate);
-	if (!mv_chan)
-		return NULL;
-
 	mv_chan->addr_cfg = dma_spec->args[1];
 
-	return dma_get_slave_channel(candidate);
+	return dma_get_slave_channel(&candidate->chan);
 }
 
 /* Register a mv_dma_device to the underlying frameworks */
