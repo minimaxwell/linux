@@ -761,6 +761,8 @@ static struct dma_chan *a3700_spi_dma_setup_channel(struct a3700_spi *spi,
 	}
 
 	dma_config.direction = dir;
+	dma_config.src_maxburst = 16;
+	dma_config.dst_maxburst = 16;
 
 	dev_info(dev, "Configuring chan for %s channel (%pK)\n", dirstr, chan);
 	ret = dmaengine_slave_config(chan, &dma_config);
