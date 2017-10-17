@@ -221,14 +221,25 @@ struct mv_dma_device {
 	struct mv_dma_chan channels[MV_DMA_MAX_CHANNELS];
 };
 
-static struct mv_dma_chan *to_mv_dma_chan(struct dma_chan *chan) {
+static struct mv_dma_chan *to_mv_dma_chan(struct dma_chan *chan)
+{
 	return container_of(chan, struct mv_dma_chan, chan);
 }
 
-static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev) {
+static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev)
+{
 	return container_of(dma_dev, struct mv_dma_device, dma_dev);
 }
 
+static struct mv_dma_slot *to_mv_dma_slot(struct dma_async_tx_descriptor *tx)
+{
+	return container_of(tx, struct mv_dma_desc, async_tx);
+}
+
+static struct device *mv_chan_to_devp(struct mv_dma_chan *mv_chan)
+{
+	return mv_chan->chan.device->dev;
+}
 /* Get the interrupt cause for this particular channel. The result is right
  * shifted. */
 static u32 mv_dma_interrupt_cause(struct mv_dma_chan *mv_chan)
@@ -244,16 +255,63 @@ static void mv_dma_interrupt_clear(struct mv_dma_chan *mv_chan, u32 mask)
 	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
 }
 
-static void mv_dma_interrupt_enable(struct mv_dma_chan *mv_chan)
-{
-	/* TODO */
-}
-
 static dma_cookie_t mv_dma_tx_submit(struct dma_async_tx_descriptor *tx)
 {
-	dma_cookie_t cookie;
+	struct mv_dma_slot *mv_slot = to_mv_dma_slot(tx);
+	struct mv_dma_chan *mv_chan = to_mv_dma_chan(tx->chan);
+	struct mv_dma_slot *old_chain_tail;
 
+	dma_cookie_t cookie;
+	int new_hw_chain = 1;
+
+	dev_dbg(mv_chan_to_devp(mv_chan),
+		"%s sw_desc %p: async_tx %p\n",
+		__func__, mv_slot, &mv_slot->async_tx);
+
+	spin_lock_bh(&mv_chan->lock);
 	cookie = dma_cookie_assign(tx);
+
+	if (list_empty(&mv_chan->chain)) {
+		/* If the chain is empty, we add the current slot to this chain
+		 * and we start the chain */
+		list_move_tail(&mv_slot->node, &mv_chan->chain);
+	} else {
+		new_hw_chain = 0;
+
+		old_chain_tail = list_entry(mv_chan->chain.prev,
+					    struct mv_dma_slot,
+					    node);
+		list_move_tail(&mv_slot->node, &mv_chan->chain);
+
+		dev_dbg(mv_chan_to_devp(mv_chan), "Append to last desc %pa\n",
+			&old_chain_tail->async_tx.phys);
+
+		/* fix up the hardware chain */
+		mv_desc_set_next_desc(old_chain_tail, mv_slot->async_tx.phys);
+
+		/* if the channel is not busy */
+		if (!mv_chan_is_busy(mv_chan)) {
+			u32 current_desc = mv_chan_get_current_desc(mv_chan);
+			/*
+			 * and the current desc is the end of the chain before
+			 * the append, then we need to start the channel.
+			 *
+			 * This happens when this function is called between the
+			 * moment the DMA engine finishes the last descriptor
+			 * in its list and the moment where the 'end of chain' is
+			 * processed and the async_tx_complete callback was called.
+			 *
+			 * I Guess...
+			 */
+			if (current_desc == old_chain_tail->async_tx.phys)
+				new_hw_chain = 1;
+		}
+	}
+
+	if (new_hw_chain)
+		mv_chan_start_new_chain(mv_chan, mv_slot);
+
+	spin_unlock_bh(&mv_chan->lock);
 
 	return cookie;
 }
@@ -363,7 +421,7 @@ static void mv_dma_chan_set_status(struct mv_dma_chan *mv_chan, u32 status)
 }
 
 /* Returns the burst_param to be configured into the DMA controller. */
-static u32 mv_dma_get_burst_param(struct mv_dma_chan *chan, u32 burst_size)
+static u32 mv_dma_get_burst_param(struct mv_dma_chan *mv_chan, u32 burst_size)
 {
 	switch(burst_size) {
 	case 8: return 0;
@@ -375,7 +433,7 @@ static u32 mv_dma_get_burst_param(struct mv_dma_chan *chan, u32 burst_size)
 	 * configuration, but might by non-optimal since this will solicitate
 	 * more the DMA engine.*/
 	default:
-		dev_info(chan->chan.device->dev, "Invalid burst size requested "
+		dev_info(mv_chan_to_devp(mv_chan), "Invalid burst size requested "
 				": %u, falling back to 8 bytes\n", burst_size);
 		return 0;
 	}
@@ -421,7 +479,8 @@ static void mv_dma_chan_config(struct mv_dma_chan *mv_chan,
 static int mv_dma_chan_config_addr(struct mv_dma_chan *mv_chan,
 			struct dma_slave_config *config)
 {
-	struct device *dev = mv_chan->chan.device->dev;
+	struct device *dev = mv_chan_to_devp(mv_chan);
+
 	u16 dev_addr_cfg = 0;
 	u16 src_addr_cfg = 0;
 	u16 dst_addr_cfg = 0;
