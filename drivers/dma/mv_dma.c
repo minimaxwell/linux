@@ -57,6 +57,17 @@
 #define MV_DMA_DESCRIPTOR_SWAP		BIT(14)
 #define MV_DMA_DESC_SUCCESS		0x40000000
 
+/* Values for the MV_DMA_ACTIVATION register */
+#define MV_DMA_XESTATUS		(0x03 << 4)
+#define MV_DMA_XERESTART	BIT(3)
+#define MV_DMA_XEPAUSE		BIT(2)
+#define MV_DMA_XESTOP		BIT(1)
+#define MV_DMA_XESTART		BIT(0)
+
+#define MV_DMA_XESTATUS_NOT_ACTIVE	0
+#define MV_DMA_XESTATUS_ACTIVE		1
+#define MV_DMA_XESTATUS_PAUSED		2
+
 #define MV_DMA_DESC_OPERATION_XOR       (0 << 24)
 #define MV_DMA_DESC_OPERATION_CRC32C    (1 << 24)
 #define MV_DMA_DESC_OPERATION_MEMCPY    (2 << 24)
@@ -95,6 +106,17 @@
 #define MV_DMA_L_INTR_MASK		0x40
 #define MV_DMA_L_ERROR_CAUSE		0x50
 #define MV_DMA_L_ERROR_ADDR		0x60
+
+#define MV_CH_BASE(chan) (chan->mv_dma_dev->base)
+#define MV_CH_HBASE(chan) (chan->mv_dma_dev->high_base)
+
+#define MV_CH_REG(chan, reg) (MV_CH_BASE(chan) + reg + 4 * chan->mv_chan_id)
+#define MV_CH_HREG(chan, reg) (MV_CH_HBASE(chan) + reg + 4 * chan->mv_chan_id)
+
+#define MV_DEV_REG(dev, reg) (dev->base + reg)
+#define MV_DEV_HREG(dev, reg) (dev->high_base + reg)
+
+#define MV_WIN_REG(dev, win, reg) (dev->high_base + reg + 4 * win)
 
 #define MV_DMA_INTR_MASK_VALUE	(MV_DMA_INT_END_OF_DESC | MV_DMA_INT_END_OF_CHAIN | \
 				 MV_DMA_INT_STOPPED     | MV_DMA_INTR_ERRORS)
@@ -145,6 +167,12 @@ struct mv_xor_desc {
 #define mv_phy_src_idx(src_idx) (src_idx ^ 1)
 #endif
 
+enum mv_chan_status {
+	MV_CHAN_NOT_ACTIVE = 0,
+	MV_CHAN_ACTIVE,
+	MV_CHAN_PAUSED,
+};
+
 struct mv_dma_chan {
 	struct dma_chan chan;
 	unsigned int addr_cfg;
@@ -170,77 +198,24 @@ static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev) {
 	return container_of(dma_dev, struct mv_dma_device, dma_dev);
 }
 
-/* generic register access helper functions */
-static inline void mv_dma_write(void __iomem *base, u32 val, u32 reg)
-{
-	writel_relaxed(val, base + reg);
-}
-
-static inline u32 mv_dma_read(void __iomem *base, u32 reg)
-{
-	return readl_relaxed(base + reg);
-}
-
-static inline void mv_dma_write_chan_low(struct mv_dma_chan *chan, u32 val, u32 reg)
-{
-	mv_dma_write(chan->mv_dma_dev->base, val, reg + (4 * chan->mv_chan_id));
-}
-
-static inline u32 mv_dma_read_chan_low(struct mv_dma_chan *chan, u32 reg)
-{
-	return mv_dma_read(chan->mv_dma_dev->base, reg + (4 * chan->mv_chan_id));
-}
-
-static inline void mv_dma_write_chan_high(struct mv_dma_chan *chan, u32 val, u32 reg)
-{
-	mv_dma_write(chan->mv_dma_dev->high_base, val,
-			reg + (4 * chan->mv_chan_id));
-}
-
-static inline u32 mv_dma_read_chan_high(struct mv_dma_chan *chan, u32 reg)
-{
-	return mv_dma_read(chan->mv_dma_dev->high_base, reg + (4 * chan->mv_chan_id));
-}
-
-static inline void mv_dma_write_window(void __iomem *base, u32 window,
-								  u32 val,
-								  u32 reg)
-{
-	mv_dma_write(base, val, reg + (4 * window));
-}
-
-static inline u32 mv_dma_read_window(void __iomem *base, u32 window, u32 reg)
-{
-	return mv_dma_read(base, reg + (4 * window));
-}
-
-static inline void mv_dma_clear_bits(void __iomem *base, u32 mask, u32 reg)
-{
-	u32 val = readl(base + reg);
-	reg &= ~mask;
-	writel(val, reg + base);
-}
-
-static inline void mv_dma_set_bits(void __iomem *base, u32 mask, u32 reg)
-{
-	u32 val = readl(base + reg);
-	reg |= mask;
-	writel(val, reg + base);
-}
-/* Specific register access helper functions */
-
 /* Get the interrupt cause for this particular channel. The result is right
  * shifted. */
-static u32 mv_dma_interrupt_cause(struct mv_dma_chan *chan)
+static u32 mv_dma_interrupt_cause(struct mv_dma_chan *mv_chan)
 {
-	u32 val = mv_dma_read(chan->mv_dma_dev->base, MV_DMA_L_INTR_CAUSE);
-	return val >> (16 * chan->mv_chan_id);
+	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
+	return val >> (16 * mv_chan->mv_chan_id);
 }
 
-static void mv_dma_interrupt_clear(struct mv_dma_chan *chan, u32 mask)
+static void mv_dma_interrupt_clear(struct mv_dma_chan *mv_chan, u32 mask)
 {
-	mv_dma_clear_bits(chan->mv_dma_dev->base, MV_DMA_L_INTR_CAUSE,
-					mask << (16 * chan->mv_chan_id));
+	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
+	val &= ~(mask << 16 * mv_chan->mv_chan_id);
+	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
+}
+
+static void mv_dma_interrupt_enable(struct mv_dma_chan *mv_chan)
+{
+	/* TODO */
 }
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
@@ -283,6 +258,17 @@ static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
 	return DMA_ERROR;
 }
 
+static u32 mv_dma_chan_status(struct mv_dma_chan *mv_chan) {
+	u32 chan_status = readl(MV_CH_REG(mv_chan, MV_DMA_L_CH_ACTIVATION));
+	return (chan_status & MV_DMA_XESTATUS) >> 4;
+}
+
+static void mv_dma_chan_set_status(struct mv_dma_chan *mv_chan, u32 status)
+{
+	/* This clears other activation bits. */
+	writel(status, MV_CH_REG(mv_chan, MV_DMA_L_CH_ACTIVATION));
+}
+
 /* Returns the burst_param to be configured into the DMA controller. */
 static u32 mv_dma_get_burst_param(struct mv_dma_chan *chan, u32 burst_size)
 {
@@ -306,19 +292,19 @@ static u32 mv_dma_get_burst_param(struct mv_dma_chan *chan, u32 burst_size)
  * and transfer type.
  * We use descriptor-based transfer types.
  * */
-static void mv_dma_chan_config(struct mv_dma_chan *chan,
+static void mv_dma_chan_config(struct mv_dma_chan *mv_chan,
 			     struct dma_slave_config *config)
 {
 	u32 chan_config = 0;
 
-	u32 burst_cfg = mv_dma_get_burst_param(chan, config->src_maxburst);
+	u32 burst_cfg = mv_dma_get_burst_param(mv_chan, config->src_maxburst);
 	chan_config |= (burst_cfg << 4);
-	burst_cfg = mv_dma_get_burst_param(chan, config->dst_maxburst);
+	burst_cfg = mv_dma_get_burst_param(mv_chan, config->dst_maxburst);
 	chan_config |= (burst_cfg << 8);
 
 	chan_config |= MV_DMA_OPERATION_MODE_IN_DESC;
 
-	mv_dma_write_chan_low(chan, chan_config, MV_DMA_L_CH_CFG);
+	writel(chan_config, MV_CH_REG(mv_chan, MV_DMA_L_CH_CFG));
 }
 
 /* Setup the controller to the correct address types, depending on the required
@@ -339,6 +325,7 @@ static int mv_dma_chan_config_addr(struct mv_dma_chan *mv_chan,
 	u16 dev_addr_cfg = 0;
 	u16 src_addr_cfg = 0;
 	u16 dst_addr_cfg = 0;
+	u32 addr_cfg;
 
 	/* For mem2dev or dev2mem, determine the dev address configuration */
 	switch(mv_chan->addr_cfg) {
@@ -389,8 +376,8 @@ static int mv_dma_chan_config_addr(struct mv_dma_chan *mv_chan,
 	}
 
 	/* Write address config to the controller */
-	mv_dma_write_chan_low(mv_chan, ((dst_addr_cfg << 16) | src_addr_cfg),
-						MV_DMA_L_CH_CFG_ADDR);
+	addr_cfg = ((dst_addr_cfg << 16) | src_addr_cfg);
+	writel(addr_cfg, MV_CH_REG(mv_chan, MV_DMA_L_CH_CFG_ADDR));
 
 	return 0;
 err_config:
@@ -439,7 +426,6 @@ static irqreturn_t mv_dma_interrupt_handler(int irq, void *data)
 	/* FIXME Clear everything ? */
 	mv_dma_interrupt_clear(chan, intr_cause);
 
-	mv_dma_interrupt_clear(chan, intr_cause);
 	return IRQ_HANDLED;
 }
 
@@ -447,30 +433,30 @@ static irqreturn_t mv_dma_interrupt_handler(int irq, void *data)
  * decide to merge this with mv_xor. This needs refacto.*/
 static void mv_dma_configure_window(struct mv_dma_device *mv_dma_dev)
 {
-	/* FIXME */
-	void __iomem *base = mv_dma_dev->high_base;
+	struct mv_dma_chan *mv_chan;
 	u32 win_enable = 0;
 	int i;
 
 	for (i = 0; i < 8; i++) {
-		mv_dma_write_window(base, i, 0, MV_DMA_H_WIN_BASE_ADDR);
-		mv_dma_write_window(base, i, 0, MV_DMA_H_WIN_SIZE_MASK);
+		writel(0, MV_WIN_REG(mv_dma_dev, i, MV_DMA_H_WIN_BASE_ADDR));
+		writel(0, MV_WIN_REG(mv_dma_dev, i, MV_DMA_H_WIN_SIZE_MASK));
 		if (i < 4)
-			mv_dma_write_window(mv_dma_dev, i, 0, MV_DMA_H_WIN_HIGH_ADDR_REMAP);
+			writel(0, MV_WIN_REG(mv_dma_dev, i, MV_DMA_H_WIN_HIGH_ADDR_REMAP));
 	}
 	/*
 	 * For Armada3700 open default 4GB Mbus window. The dram
 	 * related configuration are done at AXIS level.
 	 */
-	mv_dma_write_window(base, 0, 0xffff0000, MV_DMA_H_WIN_SIZE_MASK);
+	writel(0xffff0000, MV_WIN_REG(mv_dma_dev, 0, MV_DMA_H_WIN_SIZE_MASK));
 
 	win_enable |= 1;
 	win_enable |= 3 << 16;
 
-	mv_dma_write_chan_high(&mv_dma_dev->channels[0], win_enable, MV_DMA_H_CH_WINDOW_CTRL);
-	mv_dma_write_chan_high(&mv_dma_dev->channels[1], win_enable, MV_DMA_H_CH_WINDOW_CTRL);
-	mv_dma_write_chan_high(&mv_dma_dev->channels[0], 0, MV_DMA_H_CH_ADDR_OVERRIDE_CTRL);
-	mv_dma_write_chan_high(&mv_dma_dev->channels[1], 0, MV_DMA_H_CH_ADDR_OVERRIDE_CTRL);
+	for (i = 0; i < mv_dma_dev->nr_channels; i++) {
+		mv_chan = &mv_dma_dev->channels[i];
+		writel(win_enable, MV_CH_HREG(mv_chan, MV_DMA_H_CH_WINDOW_CTRL));
+		writel(0, MV_CH_HREG(mv_chan, MV_DMA_H_CH_ADDR_OVERRIDE_CTRL));
+	}
 }
 
 static const struct of_device_id mv_dma_dt_ids[] = {
