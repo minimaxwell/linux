@@ -13,17 +13,20 @@
  */
 
 #include <linux/init.h>
+#include <linux/slab.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_dma.h>
 #include <linux/platform_device.h>
-#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
 #include <linux/memory.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
 
+#include "dmaengine.h"
+
 /* Descriptor pool config */
-#define MV_DMA_POOL_SIZE		(MV_XOR_SLOT_SIZE * 3072)
+#define MV_DMA_POOL_SIZE		(MV_DMA_SLOT_SIZE * 3072)
 #define MV_DMA_SLOT_SIZE		64
 #define MV_DMA_THRESHOLD		1
 
@@ -139,9 +142,10 @@
 #define MV_DMA_MAX_CHANNELS 2
 
 struct mv_dma_slot {
-	struct list_head	node;
-	struct mv_dma_desc	*hw_desc;
-	int			idx;
+	struct list_head		node;
+	void				*hw_desc;
+	int				idx;
+	struct dma_async_tx_descriptor	async_tx;
 };
 
 /*
@@ -206,8 +210,6 @@ struct mv_dma_chan {
 	dma_addr_t		dma_desc_pool;
 	void			*dma_desc_pool_virt;
 	size_t                  pool_size;
-
-
 };
 
 struct mv_dma_device {
@@ -247,48 +249,54 @@ static void mv_dma_interrupt_enable(struct mv_dma_chan *mv_chan)
 	/* TODO */
 }
 
+static dma_cookie_t mv_dma_tx_submit(struct dma_async_tx_descriptor *tx)
+{
+	dma_cookie_t cookie;
+
+	cookie = dma_cookie_assign(tx);
+
+	return cookie;
+}
+
 static struct mv_dma_slot *mv_dma_alloc_slot(struct mv_dma_chan *mv_chan,
 						int slot_id)
 {
-	struct device *dev = mv_chan->chan->device->dev;
 	struct mv_dma_slot *mv_slot = NULL;
-	
-	kzalloc(sizeof(*mv_slot), GFP_KERNEL);
+	void *virt_desc;
+	dma_addr_t phys_desc;
+
+	mv_slot = kzalloc(sizeof(*mv_slot), GFP_KERNEL);
 	if (!mv_slot)
 		return NULL;
 
-	/* FIXME See where we put the descriptors */
-	/*
 	virt_desc = mv_chan->dma_desc_pool_virt;
-	slot->hw_desc = virt_desc + idx * MV_XOR_SLOT_SIZE;
-	*/
-	/* FIXME  Do we want async_tx ? */
-	dma_async_tx_descriptor_init(&slot->async_tx, chan);
-	slot->async_tx.tx_submit = mv_xor_tx_submit;
+	mv_slot->hw_desc = virt_desc + slot_id * MV_DMA_SLOT_SIZE;
 
-	/* FIXME SG : what about it ? */
-	INIT_LIST_HEAD(&slot->node);
-	INIT_LIST_HEAD(&slot->sg_tx_list);
+	dma_async_tx_descriptor_init(&mv_slot->async_tx, &mv_chan->chan);
+	mv_slot->async_tx.tx_submit = mv_dma_tx_submit;
 
-	dma_desc = mv_chan->dma_desc_pool;
-	slot->async_tx.phys = dma_desc + idx * MV_XOR_SLOT_SIZE;
-	slot->idx = idx++;
+	INIT_LIST_HEAD(&mv_slot->node);
+
+	phys_desc = mv_chan->dma_desc_pool;
+	mv_slot->async_tx.phys = phys_desc + slot_id * MV_DMA_SLOT_SIZE;
+	mv_slot->idx = slot_id;
 
 	spin_lock_bh(&mv_chan->lock);
-	list_add_tail(&slot->node, &mv_chan->free_slots);
+	list_add_tail(&mv_slot->node, &mv_chan->free_slots);
 	spin_unlock_bh(&mv_chan->lock);
 
+	return mv_slot;
 }
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct device *dev = chan->device->dev;
-	dev_info(dev, "%s\n", __func__);
-
 	int idx;
 	struct mv_dma_chan *mv_chan = to_mv_dma_chan(chan);
 	struct mv_dma_slot *mv_slot = NULL;
 	int num_descs_in_pool = MV_DMA_POOL_SIZE/MV_DMA_SLOT_SIZE;
+
+	dev_info(dev, "%s\n", __func__);
 
 	/* Allocate descriptor slots */
 	idx = mv_chan->slots_allocated;
@@ -584,7 +592,8 @@ static int mv_dma_of_parse_channels(struct mv_dma_device *mv_dma_dev)
 static int mv_dma_alloc_channel(struct mv_dma_device *mv_dma_dev, int chan_id)
 {
 	struct mv_dma_chan *mv_chan;
-	struct device *dev = mv_dma_dev->dma_dev->dev;
+	struct device *dev = mv_dma_dev->dma_dev.dev;
+	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
 
 	mv_chan = &mv_dma_dev->channels[chan_id];
 
@@ -603,32 +612,33 @@ static int mv_dma_alloc_channel(struct mv_dma_device *mv_dma_dev, int chan_id)
 	 * note: writecombine gives slightly better performance, but
 	 * requires that we explicitly flush the writes
 	 */
-	mv_chan->dma_desc_pool_virt = dma_alloc_wc(dev, MV_XOR_POOL_SIZE,
+	mv_chan->dma_desc_pool_virt = dma_alloc_wc(dev, MV_DMA_POOL_SIZE,
 					&mv_chan->dma_desc_pool, GFP_KERNEL);
 	if (!mv_chan->dma_desc_pool_virt)
 		return -ENOMEM;
 
 	mv_chan->irq = platform_get_irq(mv_dma_dev->pdev, chan_id);
 	if (!mv_chan->irq) {
-		dev_err(dma_dev->dev, "Error getting IRQ for chan %d\n",
+		dev_err(dev, "Error getting IRQ for chan %d\n",
 							chan_id);
 		goto err_irq;
 	}
 
 	if (request_irq(mv_chan->irq, mv_dma_interrupt_handler,
 				0, "DMA-irq", mv_chan)) {
-		dev_err(dma_dev->dev, "Error requesting IRQ "
-				"for chan %d\n", chan_id);
+		dev_err(dev, "Error requesting IRQ for chan %d\n", chan_id);
 		goto err_irq;
 	}
 
 	list_add_tail(&mv_chan->chan.device_node, &dma_dev->channels);
 
+	dev_info(dev, "Channel %d alloc successfull (%pK)\n", chan_id, mv_chan);
+
 	return 0;
 
 err_irq:
 	/* free allocated coherent mem */
-	dma_free_wc(dev, MV_XOR_POOL_SIZE, mv_chan->dma_desc_pool_virt,
+	dma_free_wc(dev, MV_DMA_POOL_SIZE, mv_chan->dma_desc_pool_virt,
 					mv_chan->dma_desc_pool);
 	return -EINVAL;
 }
@@ -636,8 +646,6 @@ err_irq:
 static int mv_dma_init_channels(struct mv_dma_device *mv_dma_dev)
 {
 	int chan_id, ret;
-	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
-	struct mv_dma_chan *mv_chan;
 
 	/* Get number of declared channels in DT */
 	ret = mv_dma_of_parse_channels(mv_dma_dev);
