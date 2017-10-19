@@ -20,6 +20,7 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/memory.h>
+#include <linux/dmapool.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
 
@@ -81,7 +82,7 @@
 
 #define MV_DMA_DESC_OPERATION_XOR       (0 << 24)
 #define MV_DMA_DESC_OPERATION_CRC32C    (1 << 24)
-#define MV_DMA_DESC_OPERATION_MEMCPY    (2 << 24)
+#define MV_DMA_DESC_OPERATION_DMA    (2 << 24)
 
 #define MV_DMA_DESC_DMA_OWNED		BIT(31)
 #define MV_DMA_DESC_EOD_INT_EN		BIT(31)
@@ -118,6 +119,10 @@
 #define MV_DMA_L_ERROR_CAUSE		0x50
 #define MV_DMA_L_ERROR_ADDR		0x60
 
+/* HW desc status values */
+#define MV_DMA_DESC_STATUS_OK		BIT(30)
+#define MV_DMA_DESC_OWNER_XOR		BIT(31)
+
 #define MV_CH_BASE(chan) (chan->mv_dma_dev->base)
 #define MV_CH_HBASE(chan) (chan->mv_dma_dev->high_base)
 
@@ -141,9 +146,21 @@
 /* All known DMA / XOR controllers have at most 2 channels */
 #define MV_DMA_MAX_CHANNELS 2
 
+enum mv_dma_sw_desc_status {
+	MV_DMA_SW_DESC_COMPLETED,
+	MV_DMA_SW_DESC_PENDING,
+	MV_DMA_SW_DESC_ERROR,
+};
+
+struct mv_dma_sw_desc {
+	struct virt_dma_desc	vdesc;
+	/* list of mv_dma_slot */
+	struct list_head	slots;
+};
+
 /* a mv_dma_slot represent one HW desc */
 struct mv_dma_slot {
-	struct virt_dma_desc 	vdesc;
+	struct list_head 	node;
 	dma_addr_t		desc_phys_addr;
 	void			*desc_virt_addr;
 };
@@ -204,7 +221,6 @@ struct mv_dma_chan {
 	int			slots_allocated;
 	/* When this flag is set, the engine must start the pending chain when
 	 * it finishes processing the current one. */
-	int			pending;
 	struct tasklet_struct	irq_tasklet;
 
 	/* HW descriptors memory space */
@@ -226,24 +242,14 @@ static struct mv_dma_chan *to_mv_dma_chan(struct virt_dma_chan *vchan)
 	return container_of(vchan, struct mv_dma_chan, vchan);
 }
 
-static struct mv_dma_device *to_mv_dma_device(struct dma_device *dma_dev)
+static struct mv_dma_sw_desc *to_mv_dma_sw_desc(struct virt_dma_desc *vdesc)
 {
-	return container_of(dma_dev, struct mv_dma_device, dma_dev);
-}
-
-static struct mv_dma_slot *to_mv_dma_slot(struct virt_dma_desc *vdesc)
-{
-	return container_of(vdesc, struct mv_dma_slot, vdesc);
+	return container_of(vdesc, struct mv_dma_sw_desc, vdesc);
 }
 
 static struct device *mv_chan_to_devp(struct mv_dma_chan *mv_chan)
 {
 	return mv_chan->vchan.chan.device->dev;
-}
-
-static struct virt_dma_desc *to_virt_desc(struct dma_async_tx_descriptor *tx)
-{
-	return container_of(tx, struct virt_dma_desc, tx);
 }
 
 /* Get the interrupt cause for this particular channel. The result is right
@@ -272,24 +278,59 @@ static void mv_dma_chan_set_status(struct mv_dma_chan *mv_chan, u32 status)
 	writel(status, MV_CH_REG(mv_chan, MV_DMA_L_CH_ACTIVATION));
 }
 
+static u32 mv_dma_slot_get_hw_status(struct mv_dma_slot *mv_slot)
+{
+	struct mv_dma_desc *hw_desc =
+			(struct mv_dma_desc *)mv_slot->desc_virt_addr;
+	return hw_desc->status;
+}
 
 static void mv_dma_chan_start(struct mv_dma_chan *mv_chan)
 {
 	mv_dma_chan_set_status(mv_chan, MV_DMA_XESTART);
 }
 
-static struct mv_dma_slot *mv_dma_list_get_slot(struct list_head *lh)
+static struct mv_dma_slot
+*mv_dma_get_first_slot(struct mv_dma_sw_desc *mv_sw_desc)
 {
-	return to_mv_dma_slot(list_entry(lh, struct virt_dma_desc, node));
+	return list_first_entry(&mv_sw_desc->slots, struct mv_dma_slot, node);
+}
+
+/* Check the status of a sw_desc. This will loop through the HW desc to check
+ * the status set by the engine. If one of the hw_desc has an error flag, report
+ * the whole sw_desc as ERROR.*/
+static enum mv_dma_sw_desc_status
+mv_dma_get_sw_desc_status(struct mv_dma_sw_desc *mv_sw_desc)
+{
+	struct mv_dma_slot *mv_slot;
+	u32 status;
+
+	list_for_each_entry(mv_slot, &mv_sw_desc->slots, node) {
+		status = mv_dma_slot_get_hw_status(mv_slot);
+
+		if (status & MV_DMA_DESC_OWNER_XOR)
+			return MV_DMA_SW_DESC_PENDING;
+
+		if (! (status & MV_DMA_DESC_STATUS_OK) )
+			return MV_DMA_SW_DESC_ERROR;
+	}
+
+	return MV_DMA_SW_DESC_COMPLETED;
 }
 
 /* Set the channel's next desc to be the first desc of the 'issued' list*/
 static void mv_dma_set_first_desc(struct mv_dma_chan *mv_chan)
 {
-	struct mv_dma_slot *mv_slot = 
-		to_dma_slot(vchan_next_desc(&mv_chan->vchan));
+	/* Get first descriptor from issued list */
+	struct virt_dma_desc *vdesc = vchan_next_desc(&mv_chan->vchan);
 
-	writel(mv_slot->vdesc.tx.phys,
+	struct mv_dma_sw_desc *mv_sw_desc = to_mv_dma_sw_desc(vdesc);
+
+	/* Get first slot from this descriptor. We all slots inside the
+	 * descriptor to be linked. */
+	struct mv_dma_slot *mv_slot = mv_dma_get_first_slot(mv_sw_desc);
+
+	writel(mv_slot->desc_phys_addr,
 			MV_CH_HREG(mv_chan, MV_DMA_H_CH_NEXT_DESC));
 }
 
@@ -301,7 +342,7 @@ static void mv_dma_set_next_desc(struct mv_dma_slot *mv_slot,
 
 	/* We expect the next descriptor address in the HW desc to be NULL */
 	BUG_ON(hw_desc->phy_next_desc);
-	hw_desc->phy_next_desc = mv_next_slot->vdesc.tx.phys;
+	hw_desc->phy_next_desc = mv_next_slot->desc_phys_addr;
 }
 
 static bool mv_dma_chan_is_busy(struct mv_dma_chan *mv_chan)
@@ -314,12 +355,6 @@ static void mv_dma_start_new_chain(struct mv_dma_chan *mv_chan)
 {
 	/* bug on engine busy */
 	BUG_ON(mv_dma_chan_is_busy(mv_chan));
-
-	/* Clear the pending flag */
-	mv_chan->pending = 0;
-
-	/* Make the pending chain the current one */
-	vchan_issue_pending(&mv_chan->vchan);
 
 	/* Register the first descriptor of the submitted chain to the
 	 * engine*/
@@ -341,14 +376,14 @@ static void mv_dma_issue_pending(struct dma_chan *chan)
 	 * latencies */
 	spin_lock_irqsave(&mv_chan->vchan.lock, flags);
 
-	/* For simplicity, no hotchaning support. If the chan is busy,
-	 * we set a flag so that when the engine is done processing the
-	 * current chain, is starts the pending chain. */
-	if (mv_dma_chan_is_busy(mv_chan)) {
-		mv_chan->pending = 1;
-	} else {
+	/* Make the pending chain the current one */
+	vchan_issue_pending(&mv_chan->vchan);
+
+	/* If the chan is busy, it will automatically process the new
+	 * transactions as it finishes the current chain. If not, we have to
+	 * restart the engine. */
+	if (!mv_dma_chan_is_busy(mv_chan))
 		mv_dma_start_new_chain(mv_chan);
-	}
 	
 	spin_unlock_irqrestore(&mv_chan->vchan.lock, flags);
 	return;
@@ -368,24 +403,31 @@ static struct mv_dma_slot *mv_dma_alloc_slot(struct mv_dma_chan *mv_chan)
 	if (!mv_slot->desc_virt_addr)
 		goto dma_alloc_err;
 
-	
-
-	INIT_LIST_HEAD(&mv_slot->vdesc.node);
-
-	mv_slot->vdesc.tx.phys = mv_slot->desc_phys_addr;
-	mv_slot->idx = slot_id;
-
-	spin_lock_bh(&mv_chan->vchan.lock);
-	list_add_tail(&mv_slot->vdesc.node, &mv_chan->vchan.desc_allocated);
-	spin_unlock_bh(&mv_chan->vchan.lock);
-
 	return mv_slot;
 
 dma_alloc_err:
+
 	kfree(mv_slot);
 	return NULL;
 }
 
+static struct mv_dma_sw_desc *mv_dma_alloc_desc(struct mv_dma_chan *mv_chan)
+{
+	struct mv_dma_sw_desc *mv_sw_desc = NULL;
+
+	mv_sw_desc = kzalloc(sizeof(*mv_sw_desc), GFP_KERNEL);
+	if (!mv_sw_desc)
+		return NULL;
+
+	INIT_LIST_HEAD(&mv_sw_desc->slots);
+
+	return mv_sw_desc;
+}
+
+/* Get an async_tx desc for a scatter-gather operation.
+ * For now, we impose that the direction is the same as requested during the
+ * chan_config operation. If not, we fail.
+ * */
 static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 					struct dma_chan *chan,
 					struct scatterlist *sgl,
@@ -394,30 +436,54 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 					unsigned long flags, void *context)
 {
 	struct device *dev = chan->device->dev;
+	struct mv_dma_sw_desc *mv_sw_desc;
 	struct mv_dma_chan *mv_chan = to_mv_dma_chan(to_virt_chan(chan));
-	struct mv_dma_slot *mv_slot;
-	/* TODO */
-	/* First, check the requested xfer size. If it's too small (i.e it
-	 * won't trigger a burst), fail. The device should either request
-	 * for more data, or fallback to a DMA-less solution.*/
+	dma_addr_t slot_addr;
+	size_t slot_len;
+	struct mv_dma_slot *mv_slot, *mv_prev_slot = NULL;
+	struct mv_dma_desc *hw_desc;
 
-	/* Get a slot */
-	mv_slot = mv_dma_alloc_slot(mv_chan);
-	if (!mv_slot) {
-		dev_warning(dev, "DMA channel %d failed to alloc descriptor\n",
-				mv_chan->chan_id);
-		return NULL;
+	/* Buffer variables to iterate over scatterlist */
+	struct scatterlist *sg;
+	int i;
+
+	/* Create the sw desc, that contains the vdesc and the slot list */
+	mv_sw_desc = mv_dma_alloc_desc(mv_chan);
+
+	/* Init the vdesc */
+	vchan_tx_prep(to_virt_chan(chan), &mv_sw_desc->vdesc, flags);
+
+	/* Create the slots. Assume the SG list has correct size :
+	 * Each block's size is > burst limit, and < 16MB - 1*/
+	for_each_sg(sgl, sg, sg_len, i) {
+		slot_addr = sg_dma_address(sg);
+		slot_len = sg_dma_len(sg);
+
+		/* Alloc the slot */
+		mv_slot = mv_dma_alloc_slot(mv_chan);
+
+		/* Configure the slot */
+		hw_desc = (struct mv_dma_desc *) mv_slot->desc_virt_addr;
+
+		hw_desc->status = MV_DMA_DESC_OWNER_XOR;
+		hw_desc->byte_count = slot_len;
+		hw_desc->phy_dest_addr = slot_addr;
+
+		/* DMA only for now. */
+		hw_desc->desc_command = MV_DMA_DESC_OPERATION_DMA;
+
+		/* Link it to the previous one if needed */
+		if (mv_prev_slot)
+			mv_dma_set_next_desc(mv_prev_slot, mv_slot);
+		else
+			hw_desc->phy_next_desc = 0;
+
+		list_add_tail(&mv_slot->node, &mv_sw_desc->slots);
+		mv_prev_slot = mv_slot;
 	}
 
-	/* Initialize the descriptor */
-	dma_async_tx_descriptor_init(&mv_slot->vdesc.tx, &mv_chan->vchan.chan);
-
-	/* We don't want the default tx_submit from vchan, because we need to
-	 * maintain the HW descriptors along with the vdesc.*/
-	mv_slot->vdesc.tx.tx_submit = mv_dma_tx_submit;
-
 	dev_info(dev, "%s\n", __func__);
-	return &mv_slot->vdesc.tx;
+	return NULL;
 }
 
 static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
@@ -430,69 +496,57 @@ static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
 	return DMA_ERROR;
 }
 
-/* Simple tx submit, no support for hotchaining */
-static dma_cookie_t mv_dma_tx_submit(struct dma_async_tx_descriptor *tx)
-{
-	struct virt_dma_chan *vc = to_virt_chan(tx->chan);
-	struct virt_dma_desc *vd = to_virt_desc(tx);
-	struct mv_dma_slot *mv_slot = to_mv_dma_slot(vd);
-
-	unsigned long flags;
-	dma_cookie_t cookie;
-	
-	/* FIXME re-check locking */
-	spin_lock_irqsave(&vc->lock, flags);
-	cookie = dma_cookie_assign(tx);
-
-	/* If some descriptors are already waiting to be issued, we
-	 * chain the new one to the last pending descriptor. If this
-	 * is the first pending descriptor, we don't need to chain it,
-	 * it will be set as the first descriptor of the chain by the
-	 * issue_pending function.*/
-	if (!list_empty(&vc->desc_submitted)) {
-		struct mv_dma_slot *mv_last_submitted_slot = 
-			mv_dma_list_get_slot(vc->desc_submitted.prev);
-
-		mv_dma_set_next_desc(mv_last_submitted_slot, mv_slot);
-	}
-
-	list_move_tail(&vd->node, &vc->desc_submitted);
-	spin_unlock_irqrestore(&vc->lock, flags);
-
-	dev_dbg(vc->chan.device->dev, "vchan %p: txd %p[%x]: submitted\n",
-		vc, vd, cookie);
-
-	return cookie;
-}
-
-/* This tasklet is called when the chain is done being processed. */
+/* This tasklet is called when the chain is done being processed.
+ * It is responsible for :
+ * 	- Putting every processed sw_desc from the 'issued' list into the
+ * 	  'completed' list
+ * 	- Calling the vchan_complete function to notify the completion of these
+ * 	  descriptors
+ * 	- Scheduling the next descriptors in the 'issued' list to run
+ * */
 static void mv_dma_tasklet(unsigned long data)
 {
 	struct mv_dma_chan *mv_chan = (struct mv_dma_chan *) data;
 	struct virt_dma_desc *vd, *tmp;
+	struct mv_dma_sw_desc *mv_sw_desc;
+	enum mv_dma_sw_desc_status status;
 	unsigned long flags;
-	/* We have a bunch of descriptors that were processed by the dma engine.
+
+	/* The EOC from the engine means that it is done processing the chain
+	 * contained in the current sw_desc.
 	 *
-	 * For each descriptor, we have to invoke its callback, and remove it
-	 * from the issued list. Fortunately, virt-dma takes care of that for us.
-	 *
-	 * When we are done, we check if an issue-pending request was asked during
-	 * processing, and process it if necessary.*/
+	 * Support for hotchaining could be done fairly easily, with a 'hotchained'
+	 * flag in a sw_desc. */
 
 	spin_lock_irqsave(&mv_chan->vchan.lock, flags);
 
-	/* This could be called from inside interrupt context, but this would
-	 * make us hold the lock in the irq handler, which could introduce
-	 * indesired latencies. */
-	list_for_each_entry_safe(vd, tmp, &mv_chan->vc.desc_issued, node) {
-		/* Assume that every desc. is completed. */
+	list_for_each_entry_safe(vd, tmp, &mv_chan->vchan.desc_issued, node) {
+		mv_sw_desc = to_mv_dma_sw_desc(vd);
+
+		status = mv_dma_get_sw_desc_status(mv_sw_desc);
+
+		/* This descriptor was not processed by the engine, it should
+		 * stay at the head of the issued queue. */
+		if (status == MV_DMA_SW_DESC_PENDING)
+			break;
+
+		/* The descriptor must be removed from the issued queue */
+		list_del(&vd->node);
+
+		/* TODO Gracefully deal with errors  */
+		if (status == MV_DMA_SW_DESC_ERROR)
+			dev_warn(mv_chan_to_devp(mv_chan),
+					"Error while processing a descriptor\n");
+
+		dev_info(mv_chan_to_devp(mv_chan), "Vdesc processed successfully\n");
 		vchan_cookie_complete(vd);
 	}
 
-	if (mv_chan->pending)
+	/* If there are still descriptors to be processed, restart the engine */
+	if (!list_empty(&mv_chan->vchan.desc_issued))
 		mv_dma_start_new_chain(mv_chan);
 
-	spin_lock_irqrestore(&mv_chan->vchan.lock, flags);
+	spin_unlock_irqrestore(&mv_chan->vchan.lock, flags);
 }
 
 /* IRQ can be issued on two occasions :
@@ -521,24 +575,28 @@ static irqreturn_t mv_dma_interrupt_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static void mv_dma_free_slot(struct virt_dma_desc *vdesc)
+static void mv_dma_free_sw_desc(struct virt_dma_desc *vdesc)
 {
-	struct mv_dma_slot *mv_slot = to_mv_dma_slot(vdesc);
+	struct mv_dma_slot *mv_slot, *tmp;
+	struct mv_dma_sw_desc *mv_sw_desc = to_mv_dma_sw_desc(vdesc);
 	struct mv_dma_chan *mv_chan = to_mv_dma_chan(
-			to_virtual_chan(vdesc->tx.chan));
+					to_virt_chan(vdesc->tx.chan));
 
-	/* Free memory from the DMA pool */
-	dma_pool_free(mv_chan->pool, mv_slot->virt_desc_addr,
-				mv_slot->phys_desc_addr);
+	/* Free each slot */
+	list_for_each_entry_safe(mv_slot, tmp, &mv_sw_desc->slots, node) {
+		list_del(&mv_slot->node);
 
-	/* Free the slot */
-	kfree(mv_slot);
+		dma_pool_free(mv_chan->pool, mv_slot->desc_virt_addr,
+						mv_slot->desc_phys_addr);
+		kfree(mv_slot);
+	}
+
+	/* Free the descriptor */
+	kfree(mv_sw_desc);
 }
-
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
 {
-	dev_info(dev, "%s\n", __func__);
 	/* Everything is allocated at startup... Maybe we should move things
 	 * here instead.*/
 	return 0;
@@ -769,14 +827,14 @@ static int mv_dma_alloc_channel(struct mv_dma_device *mv_dma_dev, int chan_id)
 
 	mv_chan->mv_dma_dev = mv_dma_dev;
 	mv_chan->mv_chan_id = chan_id;
-	mv_chan->vchan.desc_free = mv_dma_free_slot;
+	mv_chan->vchan.desc_free = mv_dma_free_sw_desc;
 
 	tasklet_init(&mv_chan->irq_tasklet, mv_dma_tasklet, (unsigned long)
 		     mv_chan);
 
 	mv_chan->pool = dma_pool_create("DMA pool", dev, 
 					sizeof(struct mv_dma_desc),
-					MV_DMA_SLOT_SIZE);
+					MV_DMA_SLOT_SIZE, 0);
 	if (!mv_chan->pool)
 		return -ENOMEM;
 
