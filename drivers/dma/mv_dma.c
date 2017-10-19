@@ -488,10 +488,7 @@ static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
 					    dma_cookie_t cookie,
 					    struct dma_tx_state *txstate)
 {
-	struct device *dev = chan->device->dev;
-	/* TODO */
-	dev_info(dev, "%s\n", __func__);
-	return DMA_ERROR;
+	return dma_cookie_status(chan, cookie, txstate);
 }
 
 /* This tasklet is called when the chain is done being processed.
