@@ -372,11 +372,9 @@ static void mv_dma_issue_pending(struct dma_chan *chan)
 
 	dev_info(dev, "%s\n", __func__);
 
-	/* FIXME re-check the locks so that we don't introduce unnecessary
-	 * latencies */
-	spin_lock_irqsave(&mv_chan->vchan.lock, flags);
+	spin_lock_bh(&mv_chan->vchan.lock, flags);
 
-	/* Make the pending chain the current one */
+	/* Put the 'submitted' chain at the end of the 'issued' chain */
 	vchan_issue_pending(&mv_chan->vchan);
 
 	/* If the chan is busy, it will automatically process the new
@@ -385,7 +383,7 @@ static void mv_dma_issue_pending(struct dma_chan *chan)
 	if (!mv_dma_chan_is_busy(mv_chan))
 		mv_dma_start_new_chain(mv_chan);
 	
-	spin_unlock_irqrestore(&mv_chan->vchan.lock, flags);
+	spin_unlock_bh(&mv_chan->vchan.lock, flags);
 	return;
 }
 
@@ -518,7 +516,7 @@ static void mv_dma_tasklet(unsigned long data)
 	 * Support for hotchaining could be done fairly easily, with a 'hotchained'
 	 * flag in a sw_desc. */
 
-	spin_lock_irqsave(&mv_chan->vchan.lock, flags);
+	spin_lock_bh(&mv_chan->vchan.lock, flags);
 
 	list_for_each_entry_safe(vd, tmp, &mv_chan->vchan.desc_issued, node) {
 		mv_sw_desc = to_mv_dma_sw_desc(vd);
@@ -546,7 +544,7 @@ static void mv_dma_tasklet(unsigned long data)
 	if (!list_empty(&mv_chan->vchan.desc_issued))
 		mv_dma_start_new_chain(mv_chan);
 
-	spin_unlock_irqrestore(&mv_chan->vchan.lock, flags);
+	spin_unlock_bh(&mv_chan->vchan.lock, flags);
 }
 
 /* IRQ can be issued on two occasions :
