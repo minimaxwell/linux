@@ -271,7 +271,7 @@ static void mv_dma_interrupt_clear(struct mv_dma_chan *mv_chan, u32 mask)
 	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
 }
 
-static void mv_dma_interrupt_set(struct mv_dma_chan *mv_chan, u32 mask)
+static void mv_dma_interrupt_enable(struct mv_dma_chan *mv_chan, u32 mask)
 {
 	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_MASK));
 	val |= (mask << 16 * mv_chan->mv_chan_id);
@@ -609,7 +609,7 @@ static void mv_dma_free_sw_desc(struct virt_dma_desc *vdesc)
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct mv_dma_chan *mv_chan = to_mv_dma_chan(to_virt_chan(chan));
-	mv_dma_interrupt_set(mv_chan, MV_DMA_INTR_MASK);
+	mv_dma_interrupt_enable(mv_chan, MV_DMA_INTR_MASK);
 	return 0;
 }
 
