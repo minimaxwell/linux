@@ -53,6 +53,10 @@
 				MV_DMA_INTR_PARITY_ERR | \
 				MV_DMA_INTR_BAR_ERR)
 
+#define MV_DMA_INTR_MASK	(MV_DMA_INTR_ERRS | \
+				 MV_DMA_INTR_EOC | \
+				 MV_DMA_INTR_STOPPED)
+
 /* Values for the MV_DMA_CFG_ADDR register */
 #define MV_DMA_CFG_ADDR_CFG_DDR		0
 #define MV_DMA_CFG_ADDR_CFG_PCIE	1
@@ -265,6 +269,20 @@ static void mv_dma_interrupt_clear(struct mv_dma_chan *mv_chan, u32 mask)
 	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
 	val &= ~(mask << 16 * mv_chan->mv_chan_id);
 	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_CAUSE));
+}
+
+static void mv_dma_interrupt_set(struct mv_dma_chan *mv_chan, u32 mask)
+{
+	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_MASK));
+	val |= (mask << 16 * mv_chan->mv_chan_id);
+	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_MASK));
+}
+
+static void mv_dma_interrupt_disable(struct mv_dma_chan *mv_chan, u32 mask)
+{
+	u32 val = readl(MV_CH_REG(mv_chan, MV_DMA_L_INTR_MASK));
+	val &= ~(mask << 16 * mv_chan->mv_chan_id);
+	writel(val, MV_CH_REG(mv_chan, MV_DMA_L_INTR_MASK));
 }
 
 static u32 mv_dma_chan_status(struct mv_dma_chan *mv_chan) {
@@ -590,16 +608,15 @@ static void mv_dma_free_sw_desc(struct virt_dma_desc *vdesc)
 
 static int mv_dma_alloc_chan_resources(struct dma_chan *chan)
 {
-	/* Everything is allocated at startup... Maybe we should move things
-	 * here instead.*/
+	struct mv_dma_chan *mv_chan = to_mv_dma_chan(to_virt_chan(chan));
+	mv_dma_interrupt_set(mv_chan, MV_DMA_INTR_MASK);
 	return 0;
 }
 
 static void mv_dma_free_chan_resources(struct dma_chan *chan)
 {
-	/* TODO */
-	struct device *dev = chan->device->dev;
-	dev_info(dev, "%s\n", __func__);
+	struct mv_dma_chan *mv_chan = to_mv_dma_chan(to_virt_chan(chan));
+	mv_dma_interrupt_disable(mv_chan, MV_DMA_INTR_MASK);
 	return;
 }
 
