@@ -344,7 +344,7 @@ static void mv_dma_set_first_desc(struct mv_dma_chan *mv_chan)
 
 	struct mv_dma_sw_desc *mv_sw_desc = to_mv_dma_sw_desc(vdesc);
 
-	/* Get first slot from this descriptor. We all slots inside the
+	/* Get first slot from this descriptor. We assume all slots inside the
 	 * descriptor to be linked. */
 	struct mv_dma_slot *mv_slot = mv_dma_get_first_slot(mv_sw_desc);
 
@@ -368,7 +368,6 @@ static bool mv_dma_chan_is_busy(struct mv_dma_chan *mv_chan)
 	return (mv_dma_chan_status(mv_chan) == MV_CHAN_ACTIVE);
 }
 
-/* Lock must be held by caller */
 static void mv_dma_start_new_chain(struct mv_dma_chan *mv_chan)
 {
 	/* bug on engine busy */
