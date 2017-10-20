@@ -115,6 +115,8 @@ struct a3700_spi {
 	u8 byte_len;
 	u32 wait_mask;
 	struct completion done;
+	/* Needed for DMA */
+	unsigned long phys_addr;
 };
 
 static u32 spireg_read(struct a3700_spi *a3700_spi, u32 offset)
@@ -418,6 +420,7 @@ static void a3700_spi_transfer_setup(struct spi_device *spi,
 	a3700_spi_clock_set(a3700_spi, xfer->speed_hz);
 
 	byte_len = xfer->bits_per_word >> 3;
+	printk(KERN_INFO "Byte len : %u\n", byte_len);
 
 	a3700_spi_fifo_thres_set(a3700_spi, byte_len);
 }
@@ -596,6 +599,11 @@ static int a3700_spi_transfer_one(struct spi_master *master,
 	a3700_spi->rx_buf  = xfer->rx_buf;
 	a3700_spi->buf_len = xfer->len;
 
+	dev_info(&spi->dev, "New Xfer : tx:%s, rw:%s, nb_bytes:%d\n", 
+			xfer->tx_buf ? "yes" : "no",
+			xfer->rx_buf ? "yes" : "no",
+			xfer->len);
+
 	if (xfer->tx_buf)
 		nbits = xfer->tx_nbits;
 	else if (xfer->rx_buf)
@@ -734,66 +742,174 @@ static int a3700_spi_unprepare_message(struct spi_master *master,
 	return 0;
 }
 
-/* Setup a DMA channel.
- * @param spi the a3700 spi master struct
- * @param chandir the channel direction. Allowed values :
- * 	- DMA_MEM_TO_DEV : Represent the TX channel
- *	- DMA_DEV_TO_MEM : Represent the RX channel
- */
-
-static struct dma_chan *a3700_spi_dma_setup_channel(struct a3700_spi *spi,
-					enum dma_transfer_direction dir)
+static void a3700_spi_dma_xfer_done(void *data)
 {
-	struct dma_chan *chan = NULL;
-	struct spi_master *master = spi->master;
-	struct device *dev = &master->dev;
-	const char *dirstr = (dir == DMA_MEM_TO_DEV ? "tx" : "rx");
+	struct a3700_spi *a3700_spi = data;
+
+	spi_finalize_current_transfer(a3700_spi->master);
+	//complete(&a3700_spi->master->xfer_completion);
+}
+
+static struct dma_async_tx_descriptor * a3700_spi_prepare_dma_xfer(
+						struct a3700_spi *spi,
+						struct spi_transfer *transfer,
+						enum dma_transfer_direction dir)
+{
+	/* We have only one chan for both RX and TX, it is stored in the
+	 * dma_tx field. */
+	struct dma_chan *chan = spi->master->dma_tx;
+	struct sg_table *sgt;
+	struct dma_slave_config cfg;
 	int ret;
 
-	struct dma_slave_config dma_config = {};
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.direction = dir;
 
-	chan = dma_request_chan(dev, dirstr);
+	if (dir == DMA_MEM_TO_DEV) {
+		cfg.dst_addr = spi->phys_addr + A3700_SPI_DATA_OUT_REG;
 
-	if (!chan) {
-		dev_warn(dev, "dma_request_slave_channel_compat failed for "
-				"channel %s\n", dirstr);
+		/* To be adjusted */
+		cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		cfg.dst_maxburst = 16; 
+
+		sgt = &transfer->tx_sg;
+	} else {
+		cfg.src_addr = spi->phys_addr + A3700_SPI_DATA_IN_REG;
+
+		/* To be adjusted */
+		cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		cfg.src_maxburst = 16;
+
+		sgt = &transfer->rx_sg;
+	}
+
+	ret = dmaengine_slave_config(chan, &cfg);
+	if (ret) {
+		dev_warn(&spi->master->dev, "Error configuring %s chan\n",
+				(dir == DMA_MEM_TO_DEV ? "tx" : "rx") );
 		return NULL;
 	}
 
-	dma_config.direction = dir;
-	dma_config.src_maxburst = 16;
-	dma_config.dst_maxburst = 16;
-
-	dev_info(dev, "Configuring chan for %s channel (%pK)\n", dirstr, chan);
-	ret = dmaengine_slave_config(chan, &dma_config);
-	if (ret) {
-		dev_warn(dev, "slave config failed\n");
-	}
-
-	return chan;
+	return dmaengine_prep_slave_sg(chan, sgt->sgl, sgt->nents, dir,
+				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 }
 
+static void a3700_spi_prepare_tx_dma(struct a3700_spi *spi)
+{
+	u32 val;
+	val = spireg_read(spi, A3700_SPI_IF_CFG_REG);
+	val |= A3700_SPI_RW_EN | A3700_SPI_XFER_START;
+	spireg_write(spi, A3700_SPI_IF_CFG_REG, val);
+}
 
-/* Request DMA channels for rx and tx. We expect the channels to be specified
+static void a3700_spi_prepare_rx_dma(struct a3700_spi *spi)
+{
+	u32 val;
+	val = spireg_read(spi, A3700_SPI_IF_CFG_REG);
+	val &= ~A3700_SPI_RW_EN;
+	val |= A3700_SPI_XFER_START;
+	spireg_write(spi, A3700_SPI_IF_CFG_REG, val);
+}
+
+/* Tranfser one xfer using DMA */
+static int a3700_spi_transfer_one_dma(struct spi_master *master,
+				      struct spi_device *spi,
+				      struct spi_transfer *xfer)
+{
+	struct a3700_spi *a3700_spi = spi_master_get_devdata(master);
+	struct device *dev = &master->dev;
+	struct dma_async_tx_descriptor *xfer_desc;
+	enum dma_transfer_direction dir;
+	dma_cookie_t cookie;
+
+	/* Under 128 bytes, it's just not worth it to use DMA.
+	 * If the transfer is not 8 bytes aligned, it won't work either since
+	 * some last bytes will be under the burst limit.
+	 *
+	 * To be confirmed, this might actually not be true,
+	 * this needs testing.*/
+	if (xfer->len < 128 || (xfer->len % 16)) {
+		dev_warn(dev, "Xfer length (%d) incompatible with use of DMA, "
+				"fallbacking to FIFO mode\n", xfer->len);
+		return a3700_spi_transfer_one(master, spi, xfer);
+	}
+
+	/* Clear header */
+	spireg_write(a3700_spi, A3700_SPI_IF_INST_REG, 0);
+	spireg_write(a3700_spi, A3700_SPI_IF_ADDR_REG, 0);
+	spireg_write(a3700_spi, A3700_SPI_IF_RMODE_REG, 0);
+	spireg_write(a3700_spi, A3700_SPI_IF_HDR_CNT_REG, 0);
+
+	a3700_spi_transfer_setup(spi, xfer);
+
+	/* Flush the FIFOs */
+	a3700_spi_fifo_flush(a3700_spi);
+	
+	if (xfer->tx_buf && xfer->rx_buf) {
+		dev_warn(dev, "Full duplex not supported\n");
+		return -EINVAL;
+	}
+
+	if (!xfer->tx_buf && !xfer->rx_buf) {
+		dev_warn(dev, "No tx or rx buff specified\n");
+		return -EINVAL;
+	}
+
+	if (xfer->tx_buf) {
+		dir = DMA_MEM_TO_DEV;
+		a3700_spi_prepare_tx_dma(a3700_spi);
+	} else {
+		dir = DMA_DEV_TO_MEM;
+		a3700_spi_prepare_rx_dma(a3700_spi);
+	}
+	
+	xfer_desc = a3700_spi_prepare_dma_xfer(a3700_spi, xfer, dir);
+	if (!xfer_desc) {
+		dev_err(dev, "Error getting DMA xfer descriptor\n");
+		return -EINVAL;
+	}
+
+	xfer_desc->callback = a3700_spi_dma_xfer_done;
+	xfer_desc->callback_param = master;
+
+	cookie = dmaengine_submit(xfer_desc);
+	if (dma_submit_error(cookie)) {
+		dev_err(dev, "DMA engine submit error\n");
+		return -EINVAL;
+	}
+
+	dma_async_issue_pending(master->dma_tx);
+
+	return 1;
+}
+
+/* Request DMA channel for rx and tx. We expect the channel to be specified
  * in DT. If not, we switch to FIFO mode without DMA.
  * @return 0 if DMA was successfully setup, negative number else */
 static int a3700_spi_dma_setup(struct a3700_spi *spi)
 {
 	struct spi_master *master = spi->master;
 	struct device *dev = &master->dev;
+	int ret;
 	
-	master->dma_tx = a3700_spi_dma_setup_channel(spi, DMA_MEM_TO_DEV);
-	if (master->dma_tx) {
-		dev_info(dev, "TX DMA channel allocation successfull\n");
+	struct dma_slave_config dma_config = {};
+
+	master->dma_tx = dma_request_chan(dev, "rx-tx");
+	if (!master->dma_tx) {
+		dev_warn(dev, "dma_request_chan failed for channel rx-tx\n");
+		return -EBUSY;
 	}
 
-	master->dma_rx = a3700_spi_dma_setup_channel(spi, DMA_DEV_TO_MEM);
-	if (master->dma_rx) {
-		dev_info(dev, "RX DMA channel allocation successfull\n");
+	dma_config.src_maxburst = 16;
+	dma_config.dst_maxburst = 16;
+
+	ret = dmaengine_slave_config(master->dma_tx, &dma_config);
+	if (ret) {
+		dev_warn(dev, "slave config failed\n");
+		dma_release_channel(master->dma_tx);
+		return ret;
 	}
 
-	/*  */
-	/* Request channels to XOR engine */
 	return 0;
 }
 
@@ -805,11 +921,6 @@ static void a3700_spi_dma_release(struct a3700_spi *spi)
 	if (master->dma_tx) {
 		dev_info(dev, "Releasing TX DMA channel\n");
 		dma_release_channel(master->dma_tx);
-	}
-
-	if (master->dma_rx) {
-		dev_info(dev, "Releasing RX DMA channel\n");
-		dma_release_channel(master->dma_rx);
 	}
 
 	return;
@@ -851,7 +962,7 @@ static int a3700_spi_probe(struct platform_device *pdev)
 	master->num_chipselect = num_cs;
 	master->bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(32);
 	master->prepare_message =  a3700_spi_prepare_message;
-	master->transfer_one = a3700_spi_transfer_one;
+	master->transfer_one = a3700_spi_transfer_one_dma;
 	master->unprepare_message = a3700_spi_unprepare_message;
 	master->set_cs = a3700_spi_set_cs;
 	master->flags = SPI_MASTER_HALF_DUPLEX;
@@ -871,6 +982,8 @@ static int a3700_spi_probe(struct platform_device *pdev)
 		ret = PTR_ERR(spi->base);
 		goto error;
 	}
+
+	spi->phys_addr = res->start;
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {

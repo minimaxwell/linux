@@ -536,6 +536,7 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 	size_t slot_len;
 	struct mv_dma_slot *mv_slot, *mv_prev_slot = NULL;
 	struct mv_dma_desc *hw_desc;
+	struct dma_async_tx_descriptor *tx;
 
 	/* Buffer variables to iterate over scatterlist */
 	struct scatterlist *sg;
@@ -549,7 +550,7 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 	mv_sw_desc = mv_dma_alloc_desc(mv_chan);
 
 	/* Init the vdesc */
-	vchan_tx_prep(to_virt_chan(chan), &mv_sw_desc->vdesc, flags);
+	tx = vchan_tx_prep(to_virt_chan(chan), &mv_sw_desc->vdesc, flags);
 
 	/* Create the slots. Assume the SG list has correct size :
 	 * Each block's size is > burst limit, and < 16MB - 1*/
@@ -581,7 +582,7 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 	}
 
 	dev_info(dev, "%s\n", __func__);
-	return NULL;
+	return tx;
 }
 
 static enum dma_status mv_dma_tx_status(struct dma_chan *chan,
