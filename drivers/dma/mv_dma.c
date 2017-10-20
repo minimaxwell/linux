@@ -438,6 +438,86 @@ static struct mv_dma_sw_desc *mv_dma_alloc_desc(struct mv_dma_chan *mv_chan)
 	return mv_sw_desc;
 }
 
+/* Setup the controller to the correct address types, depending on the required
+ * sources and destination peripherals. Supported transfers are :
+ * - DDR to DDR
+ * - DDR to PCIE
+ * - DDR to SPI
+ * - DDR to UART2
+ * - PCIE to DDR
+ * - SPI to DDR
+ * - UART2 to DDR
+ * Each of these configuration requires a dedicated channel, so only two of
+ * them can run concurrently. */
+static int mv_dma_chan_config_addr(struct mv_dma_chan *mv_chan,
+				enum dma_transfer_direction dir)
+{
+	struct device *dev = mv_chan_to_devp(mv_chan);
+
+	u16 dev_addr_cfg = 0;
+	u16 src_addr_cfg = 0;
+	u16 dst_addr_cfg = 0;
+	u32 addr_cfg;
+
+	/* For mem2dev or dev2mem, determine the dev address configuration */
+	switch(mv_chan->addr_cfg) {
+	case MV_DMA_CFG_ADDR_CFG_DDR :
+		if (dir != DMA_MEM_TO_MEM)
+			goto err_config;
+		break;
+	case MV_DMA_CFG_ADDR_CFG_PCIE :
+		/* PCIe to DDR : incremental, 64 bits */
+		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_PCIE;
+		break;
+	case MV_DMA_CFG_ADDR_CFG_SPI :
+		/* SPI to DDR : fixed source, 32 bits */
+		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_SPI |
+				MV_DMA_CFG_ADDR_FIXED_ADDR |
+				MV_DMA_CFG_ADDR_32BIT;
+		break;
+	case MV_DMA_CFG_ADDR_CFG_UART2 :
+		/* UART2 to DDR : fixed source, 32 bits */
+		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_UART2 |
+				MV_DMA_CFG_ADDR_FIXED_ADDR |
+				MV_DMA_CFG_ADDR_32BIT;
+		break;
+	default:
+		goto err_config;
+	}
+
+	/* Determine the correct src_addr and dst_addr configs based on
+	 * transfer direction */
+	switch (dir) {
+	case DMA_DEV_TO_MEM :
+		src_addr_cfg = dev_addr_cfg;
+		dst_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
+		break;
+	case DMA_MEM_TO_DEV :
+		src_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
+		dst_addr_cfg = dev_addr_cfg;
+		break;
+	case DMA_MEM_TO_MEM :
+		/* DDR to DDR */
+		src_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
+		dst_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
+		break;
+	default :
+		dev_err(dev, "Unsupported DMA transfer mode %d\n", dir);
+		return -EINVAL;
+	}
+
+	/* Write address config to the controller */
+	addr_cfg = ((dst_addr_cfg << 16) | src_addr_cfg);
+	writel(addr_cfg, MV_CH_REG(mv_chan, MV_DMA_L_CH_CFG_ADDR));
+
+	return 0;
+err_config:
+	dev_err(dev, "Invalid device config (%d) regarding the chosen "
+			"direction (%d)", mv_chan->addr_cfg, dir);
+
+	return -EINVAL;
+}
+
 /* Get an async_tx desc for a scatter-gather operation.
  * For now, we impose that the direction is the same as requested during the
  * chan_config operation. If not, we fail.
@@ -460,6 +540,10 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 	/* Buffer variables to iterate over scatterlist */
 	struct scatterlist *sg;
 	int i;
+
+	/* Configure the address type to use the correct dev2mem parameters */
+	if (mv_dma_chan_config_addr(mv_chan, dir))
+		return NULL;
 
 	/* Create the sw desc, that contains the vdesc and the slot list */
 	mv_sw_desc = mv_dma_alloc_desc(mv_chan);
@@ -643,7 +727,7 @@ static u32 mv_dma_get_burst_param(struct mv_dma_chan *mv_chan, u32 burst_size)
  * We use descriptor-based transfer types.
  * */
 static void mv_dma_chan_config(struct mv_dma_chan *mv_chan,
-			     struct dma_slave_config *config)
+				struct dma_slave_config *config)
 {
 	u32 chan_config = 0;
 
@@ -660,89 +744,7 @@ static void mv_dma_chan_config(struct mv_dma_chan *mv_chan,
 	chan_config &= ~MV_DMA_DESCRIPTOR_SWAP;
 #endif
 
-
 	writel(chan_config, MV_CH_REG(mv_chan, MV_DMA_L_CH_CFG));
-}
-
-/* Setup the controller to the correct address types, depending on the required
- * sources and destination peripherals. Supported transfers are :
- * - DDR to DDR
- * - DDR to PCIE
- * - DDR to SPI
- * - DDR to UART2
- * - PCIE to DDR
- * - SPI to DDR
- * - UART2 to DDR
- * Each of these configuration requires a dedicated channel, so only two of
- * them can run concurrently. */
-static int mv_dma_chan_config_addr(struct mv_dma_chan *mv_chan,
-			struct dma_slave_config *config)
-{
-	struct device *dev = mv_chan_to_devp(mv_chan);
-
-	u16 dev_addr_cfg = 0;
-	u16 src_addr_cfg = 0;
-	u16 dst_addr_cfg = 0;
-	u32 addr_cfg;
-
-	/* For mem2dev or dev2mem, determine the dev address configuration */
-	switch(mv_chan->addr_cfg) {
-	case MV_DMA_CFG_ADDR_CFG_DDR :
-		if (config->direction != DMA_MEM_TO_MEM)
-			goto err_config;
-		break;
-	case MV_DMA_CFG_ADDR_CFG_PCIE :
-		/* PCIe to DDR : incremental, 64 bits */
-		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_PCIE;
-		break;
-	case MV_DMA_CFG_ADDR_CFG_SPI :
-		/* SPI to DDR : fixed source, 32 bits */
-		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_SPI |
-				MV_DMA_CFG_ADDR_FIXED_ADDR |
-				MV_DMA_CFG_ADDR_32BIT;
-		break;
-	case MV_DMA_CFG_ADDR_CFG_UART2 :
-		/* UART2 to DDR : fixed source, 32 bits */
-		dev_addr_cfg = MV_DMA_CFG_ADDR_CFG_UART2 |
-				MV_DMA_CFG_ADDR_FIXED_ADDR |
-				MV_DMA_CFG_ADDR_32BIT;
-		break;
-	default:
-		goto err_config;
-	}
-
-	/* Determine the correct src_addr and dst_addr configs based on
-	 * transfer direction */
-	switch (config->direction) {
-	case DMA_DEV_TO_MEM :
-		src_addr_cfg = dev_addr_cfg;
-		dst_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
-		break;
-	case DMA_MEM_TO_DEV :
-		src_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
-		dst_addr_cfg = dev_addr_cfg;
-		break;
-	case DMA_MEM_TO_MEM :
-		/* DDR to DDR */
-		src_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
-		dst_addr_cfg = MV_DMA_CFG_ADDR_CFG_DDR;
-		break;
-	default :
-		dev_err(dev, "Unsupported DMA transfer mode %d\n",
-						config->direction);
-		return -EINVAL;
-	}
-
-	/* Write address config to the controller */
-	addr_cfg = ((dst_addr_cfg << 16) | src_addr_cfg);
-	writel(addr_cfg, MV_CH_REG(mv_chan, MV_DMA_L_CH_CFG_ADDR));
-
-	return 0;
-err_config:
-	dev_err(dev, "Invalid device config (%d) regarding the chosen "
-			"direction (%d)", mv_chan->addr_cfg, config->direction);
-
-	return -EINVAL;
 }
 
 static int mv_dma_slave_config(struct dma_chan *chan,
@@ -754,13 +756,9 @@ static int mv_dma_slave_config(struct dma_chan *chan,
 	dev_info(dev, "%s, dir=%d, addr_cfg=%d\n", __func__,
 			config->direction, mv_chan->addr_cfg );
 
-	if (mv_dma_chan_config_addr(mv_chan, config))
-		return -EINVAL;
-
 	mv_dma_chan_config(mv_chan, config);
 
 	return 0;
-
 }
 
 /* Right from mv_xor driver. For now, copy-paste, but might disapear if we
@@ -890,16 +888,16 @@ static int mv_dma_init_channels(struct mv_dma_device *mv_dma_dev)
 }
 
 /* Called to request channels directly from DT.
- * Devices requesting a slave channel are expected to provide 2 parameters
- * in the 'dmas' entry :
- * - 1 : The channel they request (0 or 1)
- * - 2 : Their device type. Possible values are :
+ * Devices requesting a slave channel are expected to provide 1 parameter
+ * in the 'dmas' entry, which is the device type :
  *   	- 0 : DDR device type, for mem2mem slaves
  *   	- 1 : PCIe
  *   	- 2 : SPI
  *   	- 3 : UART2
  * Since the engine does not support dev2dev accesses, we always assume that
  * the other end of the transfer is DDR.
+ *
+ * Also, dev2mem channels are half duplex for SPI and UART2.
  *
  * The transfer direction is set when the device configures the channel.
  * */
@@ -908,31 +906,27 @@ struct dma_chan *mv_dma_of_xlate_chan(struct of_phandle_args *dma_spec,
 {
 	struct mv_dma_device *mv_dma_dev = ofdma->of_dma_data;
 	struct dma_device *dma_dev = &mv_dma_dev->dma_dev;
-	struct mv_dma_chan *mv_chan, *candidate = NULL;
+	struct mv_dma_chan *mv_chan;
 	struct dma_chan *chan;
 
-	if (!mv_dma_dev || dma_spec->args_count != 2)
+	if (!mv_dma_dev || dma_spec->args_count != 1)
 		return NULL;
 
-	list_for_each_entry(chan, &dma_dev->channels, device_node) {
-		mv_chan = to_mv_dma_chan(to_virt_chan(chan));
-		if (mv_chan->mv_chan_id == dma_spec->args[0]) {
-			candidate = mv_chan;
-			break;
-		}
-	}
-
-	if (!candidate)
+	/* It doesn't matter which channel we pick */
+	chan = dma_get_any_slave_channel(dma_dev);
+	if (!chan)
 		return NULL;
 
-	mv_chan->addr_cfg = dma_spec->args[1];
+	mv_chan = to_mv_dma_chan(to_virt_chan(chan));
+
+	mv_chan->addr_cfg = dma_spec->args[0];
 	if (mv_chan->addr_cfg > 3) {
-		dev_err(dma_dev->dev, "Invalid 2nd cell value in DT : %d\n",
+		dev_err(dma_dev->dev, "Invalid cell value in DT : %d\n",
 				mv_chan->addr_cfg);
 		return NULL;
 	}
 
-	return dma_get_slave_channel(&candidate->vchan.chan);
+	return chan;
 }
 
 /* Register a mv_dma_device to the underlying frameworks */

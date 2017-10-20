@@ -302,7 +302,7 @@
 				interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH /* chan 0 */
 					      GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>; /* chan 1 */
 
-				#dma-cells = <2>;
+				#dma-cells = <1>;
 				dma-channels = <2>;
 		     	};
 
