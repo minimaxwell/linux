@@ -66,6 +66,7 @@
 #define A3700_SPI_WFIFO_THRS		BIT(28)
 #define A3700_SPI_RFIFO_THRS		BIT(24)
 #define A3700_SPI_AUTO_CS		BIT(20)
+#define A3700_SPI_DMA_WR_EN		BIT(19)
 #define A3700_SPI_DMA_RD_EN		BIT(18)
 #define A3700_SPI_FIFO_MODE		BIT(17)
 #define A3700_SPI_SRST			BIT(16)
@@ -420,9 +421,8 @@ static void a3700_spi_transfer_setup(struct spi_device *spi,
 	a3700_spi_clock_set(a3700_spi, xfer->speed_hz);
 
 	byte_len = xfer->bits_per_word >> 3;
-	printk(KERN_INFO "Byte len : %u\n", byte_len);
 
-	a3700_spi_fifo_thres_set(a3700_spi, byte_len);
+	a3700_spi_fifo_thres_set(a3700_spi, 8);
 }
 
 static void a3700_spi_set_cs(struct spi_device *spi, bool enable)
@@ -584,12 +584,65 @@ static int a3700_spi_prepare_message(struct spi_master *master,
 	return 0;
 }
 
+static int a3700_spi_transfer_stop(struct a3700_spi *a3700_spi,
+				   struct spi_device *spi)
+{
+	int timeout = A3700_SPI_TIMEOUT;
+	u32 val;
+
+	while (--timeout) {
+		val = spireg_read(a3700_spi, A3700_SPI_IF_CFG_REG);
+		if (!(val & A3700_SPI_XFER_START))
+			break;
+		udelay(1);
+	}
+
+	if (timeout == 0) {
+		dev_err(&spi->dev, "wait transfer start clear timed out\n");
+		return -ETIMEDOUT;
+	}
+
+	val &= ~A3700_SPI_XFER_STOP;
+	spireg_write(a3700_spi, A3700_SPI_IF_CFG_REG, val);
+
+	return 0;
+}
+
+static int a3700_spi_tx_stop(struct a3700_spi *a3700_spi,
+			     struct spi_device *spi)
+{
+	u32 val;
+	if (a3700_spi->xmit_data) {
+		/*
+		 * If there are data written to the SPI device, wait
+		 * until SPI_WFIFO_EMPTY is 1 to wait for all data to
+		 * transfer out of write FIFO.
+		 */
+		if (!a3700_spi_transfer_wait(spi,
+					     A3700_SPI_WFIFO_EMPTY)) {
+			dev_err(&spi->dev, "wait wfifo empty timed out\n");
+			return -ETIMEDOUT;
+		}
+	}
+
+	if (!a3700_spi_transfer_wait(spi, A3700_SPI_XFER_RDY)) {
+		dev_err(&spi->dev, "wait xfer ready timed out\n");
+		return -ETIMEDOUT;
+	}
+
+	val = spireg_read(a3700_spi, A3700_SPI_IF_CFG_REG);
+	val |= A3700_SPI_XFER_STOP;
+	spireg_write(a3700_spi, A3700_SPI_IF_CFG_REG, val);
+
+	return 0;
+}
+
 static int a3700_spi_transfer_one(struct spi_master *master,
 				  struct spi_device *spi,
 				  struct spi_transfer *xfer)
 {
 	struct a3700_spi *a3700_spi = spi_master_get_devdata(master);
-	int ret = 0, timeout = A3700_SPI_TIMEOUT;
+	int ret = 0;
 	unsigned int nbits = 0;
 	u32 val;
 
@@ -684,44 +737,15 @@ static int a3700_spi_transfer_one(struct spi_master *master,
 	 *	- just wait XFER_START bit clear
 	 */
 	if (a3700_spi->tx_buf) {
-		if (a3700_spi->xmit_data) {
-			/*
-			 * If there are data written to the SPI device, wait
-			 * until SPI_WFIFO_EMPTY is 1 to wait for all data to
-			 * transfer out of write FIFO.
-			 */
-			if (!a3700_spi_transfer_wait(spi,
-						     A3700_SPI_WFIFO_EMPTY)) {
-				dev_err(&spi->dev, "wait wfifo empty timed out\n");
-				return -ETIMEDOUT;
-			}
-		}
-
-		if (!a3700_spi_transfer_wait(spi, A3700_SPI_XFER_RDY)) {
-			dev_err(&spi->dev, "wait xfer ready timed out\n");
-			return -ETIMEDOUT;
-		}
-
-		val = spireg_read(a3700_spi, A3700_SPI_IF_CFG_REG);
-		val |= A3700_SPI_XFER_STOP;
-		spireg_write(a3700_spi, A3700_SPI_IF_CFG_REG, val);
+		ret = a3700_spi_tx_stop(a3700_spi, spi);
+		if (ret)
+			return ret;
 	}
 
-	while (--timeout) {
-		val = spireg_read(a3700_spi, A3700_SPI_IF_CFG_REG);
-		if (!(val & A3700_SPI_XFER_START))
-			break;
-		udelay(1);
-	}
-
-	if (timeout == 0) {
-		dev_err(&spi->dev, "wait transfer start clear timed out\n");
-		ret = -ETIMEDOUT;
+	ret = a3700_spi_transfer_stop(a3700_spi, spi);
+	if (ret)
 		goto error;
-	}
 
-	val &= ~A3700_SPI_XFER_STOP;
-	spireg_write(a3700_spi, A3700_SPI_IF_CFG_REG, val);
 	goto out;
 
 error:
@@ -744,10 +768,39 @@ static int a3700_spi_unprepare_message(struct spi_master *master,
 
 static void a3700_spi_dma_xfer_done(void *data)
 {
-	struct a3700_spi *a3700_spi = data;
+	struct spi_device *spi = data;
+	struct a3700_spi *a3700_spi = spi_master_get_devdata(spi->master);
+	int ret;
 
-	spi_finalize_current_transfer(a3700_spi->master);
-	//complete(&a3700_spi->master->xfer_completion);
+	if (a3700_spi->tx_buf) {
+		ret = a3700_spi_tx_stop(a3700_spi, spi);
+		if (ret) {
+			dev_warn(&spi->dev, "Error waiting for FIFO to be empty\n");
+			goto error;
+		}
+	}
+
+	ret = a3700_spi_transfer_stop(a3700_spi, spi);
+	if (ret)
+		goto error;
+
+	goto out;
+
+error:
+	dev_warn(&spi->dev, "Error waiting for FIFO to be empty\n");
+	a3700_spi_transfer_abort_fifo(a3700_spi);
+out:
+
+//	spi_finalize_current_transfer(a3700_spi->master);
+	complete(&a3700_spi->master->xfer_completion);
+}
+
+static bool a3700_spi_can_dma(struct spi_controller *ctlr,
+			      struct spi_device *spi,
+			      struct spi_transfer *xfer)
+{
+	/* TODO : Set max_dma_len */
+	return (xfer->len >= 128);
 }
 
 static struct dma_async_tx_descriptor * a3700_spi_prepare_dma_xfer(
@@ -765,20 +818,23 @@ static struct dma_async_tx_descriptor * a3700_spi_prepare_dma_xfer(
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.direction = dir;
 
+	cfg.src_maxburst = 8;
+	cfg.dst_maxburst = 8; 
+
 	if (dir == DMA_MEM_TO_DEV) {
 		cfg.dst_addr = spi->phys_addr + A3700_SPI_DATA_OUT_REG;
+		dev_info(&spi->master->dev, "Destination addr : 0x%lx\n",
+				spi->phys_addr + A3700_SPI_DATA_OUT_REG);
 
 		/* To be adjusted */
-		cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		cfg.dst_maxburst = 16; 
+		cfg.dst_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 
 		sgt = &transfer->tx_sg;
 	} else {
 		cfg.src_addr = spi->phys_addr + A3700_SPI_DATA_IN_REG;
 
 		/* To be adjusted */
-		cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		cfg.src_maxburst = 16;
+		cfg.src_addr_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 
 		sgt = &transfer->rx_sg;
 	}
@@ -798,7 +854,7 @@ static void a3700_spi_prepare_tx_dma(struct a3700_spi *spi)
 {
 	u32 val;
 	val = spireg_read(spi, A3700_SPI_IF_CFG_REG);
-	val |= A3700_SPI_RW_EN | A3700_SPI_XFER_START;
+	val |= A3700_SPI_DMA_WR_EN | A3700_SPI_RW_EN | A3700_SPI_XFER_START;
 	spireg_write(spi, A3700_SPI_IF_CFG_REG, val);
 }
 
@@ -807,7 +863,7 @@ static void a3700_spi_prepare_rx_dma(struct a3700_spi *spi)
 	u32 val;
 	val = spireg_read(spi, A3700_SPI_IF_CFG_REG);
 	val &= ~A3700_SPI_RW_EN;
-	val |= A3700_SPI_XFER_START;
+	val |= A3700_SPI_DMA_RD_EN | A3700_SPI_XFER_START;
 	spireg_write(spi, A3700_SPI_IF_CFG_REG, val);
 }
 
@@ -870,7 +926,7 @@ static int a3700_spi_transfer_one_dma(struct spi_master *master,
 	}
 
 	xfer_desc->callback = a3700_spi_dma_xfer_done;
-	xfer_desc->callback_param = master;
+	xfer_desc->callback_param = spi;
 
 	cookie = dmaengine_submit(xfer_desc);
 	if (dma_submit_error(cookie)) {
@@ -965,6 +1021,7 @@ static int a3700_spi_probe(struct platform_device *pdev)
 	master->transfer_one = a3700_spi_transfer_one_dma;
 	master->unprepare_message = a3700_spi_unprepare_message;
 	master->set_cs = a3700_spi_set_cs;
+	master->can_dma = a3700_spi_can_dma;
 	master->flags = SPI_MASTER_HALF_DUPLEX;
 	master->mode_bits |= (SPI_RX_DUAL | SPI_TX_DUAL |
 			      SPI_RX_QUAD | SPI_TX_QUAD);

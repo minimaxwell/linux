@@ -88,9 +88,6 @@
 #define MV_DMA_DESC_OPERATION_CRC32C    (1 << 24)
 #define MV_DMA_DESC_OPERATION_DMA    (2 << 24)
 
-#define MV_DMA_DESC_DMA_OWNED		BIT(31)
-#define MV_DMA_DESC_EOD_INT_EN		BIT(31)
-
 /* High range per-channel registers */
 #define MV_DMA_H_CH_NEXT_DESC		0x00
 #define MV_DMA_H_CH_CURR_DES 		0x10
@@ -137,10 +134,6 @@
 #define MV_DEV_HREG(dev, reg) (dev->high_base + reg)
 
 #define MV_WIN_REG(dev, win, reg) (dev->high_base + reg + 4 * win)
-
-#define MV_DMA_INTR_MASK_VALUE	(MV_DMA_INT_END_OF_DESC | MV_DMA_INT_END_OF_CHAIN | \
-				 MV_DMA_INT_STOPPED     | MV_DMA_INTR_ERRORS)
-
 
 /* FIXME : 4bytes only for SPI and UART2 */
 #define MV_DMA_BUSWIDTH	( BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) | \
@@ -219,6 +212,11 @@ enum mv_chan_status {
 struct mv_dma_chan {
 	struct			virt_dma_chan vchan;
 	unsigned int		addr_cfg;
+
+	/* For dev2mem / mem2dev, we need the device address to R/W to. */
+	phys_addr_t		src_dev_addr;
+	phys_addr_t		dst_dev_addr;
+
 	struct			mv_dma_device *mv_dma_dev;
 	int			mv_chan_id;
 	int			irq;
@@ -305,6 +303,9 @@ static u32 mv_dma_slot_get_hw_status(struct mv_dma_slot *mv_slot)
 
 static void mv_dma_chan_start(struct mv_dma_chan *mv_chan)
 {
+	mv_dma_interrupt_clear(mv_chan, MV_DMA_INTR_MASK);
+	mv_dma_interrupt_enable(mv_chan, MV_DMA_INTR_MASK);
+
 	mv_dma_chan_set_status(mv_chan, MV_DMA_XESTART);
 }
 
@@ -400,6 +401,7 @@ static void mv_dma_issue_pending(struct dma_chan *chan)
 		mv_dma_start_new_chain(mv_chan);
 	
 	spin_unlock_bh(&mv_chan->vchan.lock);
+
 	return;
 }
 
@@ -566,7 +568,14 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 
 		hw_desc->status = MV_DMA_DESC_OWNER_XOR;
 		hw_desc->byte_count = slot_len;
-		hw_desc->phy_dest_addr = slot_addr;
+
+		if (dir == DMA_MEM_TO_DEV) {
+			hw_desc->phy_src_addr[0] = slot_addr;
+			hw_desc->phy_dest_addr = mv_chan->dst_dev_addr;
+		} else {
+			hw_desc->phy_src_addr[0] = mv_chan->src_dev_addr;
+			hw_desc->phy_dest_addr = slot_addr;
+		}
 
 		/* DMA only for now. */
 		hw_desc->desc_command = MV_DMA_DESC_OPERATION_DMA;
@@ -581,7 +590,7 @@ static struct dma_async_tx_descriptor *mv_dma_prep_slave_sg(
 		mv_prev_slot = mv_slot;
 	}
 
-	dev_info(dev, "%s\n", __func__);
+	dev_info(dev, "%s : %d SG elements\n", __func__, i);
 	return tx;
 }
 
@@ -759,6 +768,8 @@ static int mv_dma_slave_config(struct dma_chan *chan,
 
 	mv_dma_chan_config(mv_chan, config);
 
+	mv_chan->src_dev_addr = config->src_addr;
+	mv_chan->dst_dev_addr = config->dst_addr;
 	return 0;
 }
 
