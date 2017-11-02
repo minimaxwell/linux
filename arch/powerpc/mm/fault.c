@@ -44,6 +44,8 @@
 #include <asm/siginfo.h>
 #include <asm/debug.h>
 
+#include <saf3000/saf3000.h>
+
 #include "icswx.h"
 
 #ifdef CONFIG_KPROBES
@@ -515,6 +517,8 @@ void bad_page_fault(struct pt_regs *regs, unsigned long address, int sig)
 		regs->nip = entry->fixup;
 		return;
 	}
+
+	saf3000_board_failed();
 
 	/* kernel has accessed a bad area */
 
