@@ -313,7 +313,7 @@ struct cpm_ioport32e {
 static void cpm1_set_pin32(int port, int pin, int flags)
 {
 	struct cpm_ioport32e __iomem *iop;
-	pin = 0x80000000 >> pin;
+	pin = 1 << (31 - pin);
 
 	if (port == CPM_PORTB)
 		iop = (struct cpm_ioport32e __iomem *)
@@ -357,7 +357,7 @@ static void cpm1_set_pin16(int port, int pin, int flags)
 	struct cpm_ioport16 __iomem *iop =
 		(struct cpm_ioport16 __iomem *)&mpc8xx_immr->im_ioport;
 
-	pin = 0x8000 >> pin;
+	pin = 1 << (15 - pin);
 
 	if (port != 0)
 		iop += port - 1;
@@ -549,7 +549,9 @@ static int cpm1_gpio16_get(struct gpio_chip *gc, unsigned int gpio)
 {
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
 	struct cpm_ioport16 __iomem *iop = mm_gc->regs;
-	u16 pin_mask = pin_mask = 0x8000 >> gpio;
+	u16 pin_mask;
+
+	pin_mask = 1 << (15 - gpio);
 
 	return !!(in_be16(&iop->dat) & pin_mask);
 }
@@ -573,7 +575,7 @@ static void cpm1_gpio16_set(struct gpio_chip *gc, unsigned int gpio, int value)
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
 	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	unsigned long flags;
-	u16 pin_mask = 0x8000 >> gpio;
+	u16 pin_mask = 1 << (15 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
@@ -588,7 +590,7 @@ static int cpm1_gpio16_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
 	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	struct cpm_ioport16 __iomem *iop = mm_gc->regs;
 	unsigned long flags;
-	u16 pin_mask = 0x8000 >> gpio;
+	u16 pin_mask = 1 << (15 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
@@ -606,7 +608,7 @@ static int cpm1_gpio16_dir_in(struct gpio_chip *gc, unsigned int gpio)
 	struct cpm1_gpio16_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	struct cpm_ioport16 __iomem *iop = mm_gc->regs;
 	unsigned long flags;
-	u16 pin_mask = 0x8000 >> gpio;
+	u16 pin_mask = 1 << (15 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
@@ -663,7 +665,9 @@ static int cpm1_gpio32_get(struct gpio_chip *gc, unsigned int gpio)
 {
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
 	struct cpm_ioport32b __iomem *iop = mm_gc->regs;
-	u32 pin_mask = 0x80000000 >> gpio;
+	u32 pin_mask;
+
+	pin_mask = 1 << (31 - gpio);
 
 	return !!(in_be32(&iop->dat) & pin_mask);
 }
@@ -687,7 +691,7 @@ static void cpm1_gpio32_set(struct gpio_chip *gc, unsigned int gpio, int value)
 	struct of_mm_gpio_chip *mm_gc = to_of_mm_gpio_chip(gc);
 	struct cpm1_gpio32_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	unsigned long flags;
-	u32 pin_mask = 0x80000000 >> gpio;
+	u32 pin_mask = 1 << (31 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
@@ -702,7 +706,7 @@ static int cpm1_gpio32_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)
 	struct cpm1_gpio32_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	struct cpm_ioport32b __iomem *iop = mm_gc->regs;
 	unsigned long flags;
-	u32 pin_mask = 0x80000000 >> gpio;
+	u32 pin_mask = 1 << (31 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
@@ -720,7 +724,7 @@ static int cpm1_gpio32_dir_in(struct gpio_chip *gc, unsigned int gpio)
 	struct cpm1_gpio32_chip *cpm1_gc = gpiochip_get_data(&mm_gc->gc);
 	struct cpm_ioport32b __iomem *iop = mm_gc->regs;
 	unsigned long flags;
-	u32 pin_mask = 0x80000000 >> gpio;
+	u32 pin_mask = 1 << (31 - gpio);
 
 	spin_lock_irqsave(&cpm1_gc->lock, flags);
 
