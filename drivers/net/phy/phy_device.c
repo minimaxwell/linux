@@ -978,11 +978,21 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	 */
 	err = phy_init_hw(phydev);
 	if (err)
-		phy_detach(phydev);
+		goto error;
+
+	phy_resume(phydev);
+	phy_led_triggers_register(phydev);
 
 	return err;
 
 error:
+	/* phy_detach() does all of the cleanup below */
+	phy_detach(phydev);
+	return err;
+
+error_module_put:
+	module_put(d->driver->owner);
+error_put_device:
 	put_device(d);
 	if (ndev_owner != bus->owner)
 		module_put(bus->owner);
@@ -1042,6 +1052,10 @@ void phy_detach(struct phy_device *phydev)
 
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
+
+	phy_led_triggers_unregister(phydev);
+
+	module_put(phydev->mdio.dev.driver->owner);
 
 	/* If the device had no specific driver before (i.e. - it
 	 * was using the generic driver), we unbind the device

@@ -1,8 +1,8 @@
 VERSION = 4
-PATCHLEVEL = 9
+PATCHLEVEL = 10
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Roaring Lionus
+NAME = Fearless Coyote
 
 ARCH = powerpc
 CROSS_COMPILE = ppc-linux-

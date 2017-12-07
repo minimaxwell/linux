@@ -1024,7 +1024,7 @@ void phy_state_machine(struct work_struct *work)
 		if (err > 0) {
 			phydev->state = PHY_RUNNING;
 			netif_carrier_on(phydev->attached_dev);
-			phydev->adjust_link(phydev->attached_dev);
+			phy_adjust_link(phydev);
 		} else if (0 == phydev->link_timeout--)
 			needs_aneg = true;
 		break;
@@ -1081,6 +1081,15 @@ void phy_state_machine(struct work_struct *work)
 			if (old_link != phydev->link)
 				phydev->state = PHY_CHANGELINK;
 		}
+		/*
+		 * Failsafe: check that nobody set phydev->link=0 between two
+		 * poll cycles, otherwise we won't leave RUNNING state as long
+		 * as link remains down.
+		 */
+		if (!phydev->link && phydev->state == PHY_RUNNING) {
+			phydev->state = PHY_CHANGELINK;
+			phydev_err(phydev, "no link in PHY_RUNNING\n");
+		}
 		break;
 	case PHY_DOUBLE_ATTACHEMENT:
 		break;
@@ -1130,7 +1139,7 @@ void phy_state_machine(struct work_struct *work)
 				} else {
 					phydev->state = PHY_NOLINK;
 				}
-				phydev->adjust_link(phydev->attached_dev);
+				phy_adjust_link(phydev);
 			} else {
 				phydev->state = PHY_AN;
 				phydev->link_timeout = PHY_AN_TIMEOUT;
@@ -1174,6 +1183,15 @@ void phy_state_machine(struct work_struct *work)
 				   HZ * PHY_STATE_TIME);
 }
 
+/**
+ * phy_mac_interrupt - MAC says the link has changed
+ * @phydev: phy_device struct with changed link
+ * @new_link: Link is Up/Down.
+ *
+ * Description: The MAC layer is able indicate there has been a change
+ *   in the PHY link status. Set the new link status, and trigger the
+ *   state machine, work a work queue.
+ */
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)
 {
 	phydev->link = new_link;
