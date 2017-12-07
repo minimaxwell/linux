@@ -208,6 +208,7 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 	int is_write = 0;
 	int trap = TRAP(regs);
  	int is_exec = trap == 0x400;
+	int is_user = user_mode(regs);
 	int fault;
 	int rc = 0, store_update_sp = 0;
 
@@ -218,7 +219,7 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 	 * bits we are interested in.  But there are some bits which
 	 * indicate errors in DSISR but can validly be set in SRR1.
 	 */
-	if (trap == 0x400)
+	if (is_exec)
 		error_code &= 0x48200000;
 	else
 		is_write = error_code & DSISR_ISSTORE;
@@ -249,13 +250,13 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 	 * The kernel should never take an execute fault nor should it
 	 * take a page fault to a kernel address.
 	 */
-	if (!user_mode(regs) && (is_exec || (address >= TASK_SIZE))) {
+	if (!is_user && (is_exec || (address >= TASK_SIZE))) {
 		rc = SIGSEGV;
 		goto bail;
 	}
 
 #if !(defined(CONFIG_4xx) || defined(CONFIG_BOOKE) || \
-			     defined(CONFIG_PPC_BOOK3S_64))
+      defined(CONFIG_PPC_BOOK3S_64) || defined(CONFIG_PPC_8xx))
   	if (error_code & DSISR_DABRMATCH) {
 		/* breakpoint match */
 		do_break(regs, address, error_code);
@@ -268,7 +269,7 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 		local_irq_enable();
 
 	if (faulthandler_disabled() || mm == NULL) {
-		if (!user_mode(regs)) {
+		if (!is_user) {
 			rc = SIGSEGV;
 			goto bail;
 		}
@@ -289,10 +290,10 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 	 * can result in fault, which will cause a deadlock when called with
 	 * mmap_sem held
 	 */
-	if (!is_exec && user_mode(regs))
+	if (is_write && is_user)
 		store_update_sp = store_updates_sp(regs);
 
-	if (user_mode(regs))
+	if (is_user)
 		flags |= FAULT_FLAG_USER;
 
 	/* When running in the kernel we expect faults to occur only to
@@ -311,7 +312,7 @@ int do_page_fault(struct pt_regs *regs, unsigned long address,
 	 * thus avoiding the deadlock.
 	 */
 	if (!down_read_trylock(&mm->mmap_sem)) {
-		if (!user_mode(regs) && !search_exception_tables(regs->nip))
+		if (!is_user && !search_exception_tables(regs->nip))
 			goto bad_area_nosemaphore;
 
 retry:
@@ -511,7 +512,7 @@ bad_area:
 
 bad_area_nosemaphore:
 	/* User mode accesses cause a SIGSEGV */
-	if (user_mode(regs)) {
+	if (is_user) {
 		_exception(SIGSEGV, regs, code, address);
 		goto bail;
 	}
