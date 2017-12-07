@@ -78,12 +78,8 @@ void pgtable_cache_add(unsigned shift, void (*ctor)(void *))
 	align = max_t(unsigned long, align, minalign);
 	name = kasprintf(GFP_KERNEL, "pgtable-2^%d", shift);
 	new = kmem_cache_create(name, table_size, align, 0, ctor);
-	if (!new)
-		panic("Could not allocate pgtable cache for order %d", shift);
-
 	kfree(name);
 	pgtable_cache[shift - 1] = new;
-
 	pr_debug("Allocated pgtable cache for order %d\n", shift);
 }
 
@@ -92,7 +88,7 @@ void pgtable_cache_init(void)
 {
 	pgtable_cache_add(PGD_INDEX_SIZE, pgd_ctor);
 
-	if (PMD_CACHE_INDEX && !PGT_CACHE(PMD_CACHE_INDEX))
+	if (PMD_INDEX_SIZE && !PGT_CACHE(PMD_INDEX_SIZE))
 		pgtable_cache_add(PMD_CACHE_INDEX, pmd_ctor);
 	/*
 	 * In all current configs, when the PUD index exists it's the
@@ -101,4 +97,11 @@ void pgtable_cache_init(void)
 	 */
 	if (PUD_INDEX_SIZE && !PGT_CACHE(PUD_INDEX_SIZE))
 		pgtable_cache_add(PUD_INDEX_SIZE, pud_ctor);
+
+	if (!PGT_CACHE(PGD_INDEX_SIZE))
+		panic("Couldn't allocate pgd cache");
+	if (PMD_INDEX_SIZE && !PGT_CACHE(PMD_INDEX_SIZE))
+		panic("Couldn't allocate pmd pgtable caches");
+	if (PUD_INDEX_SIZE && !PGT_CACHE(PUD_INDEX_SIZE))
+		panic("Couldn't allocate pud pgtable caches");
 }
