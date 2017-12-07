@@ -473,11 +473,13 @@ struct phy_device {
 
 	struct mutex lock;
 
+	struct phylink *phylink;
 	struct net_device *attached_dev;
 
 	u8 mdix;
 	u8 mdix_ctrl;
 
+	void (*phy_link_change)(struct phy_device *, bool up, bool do_carrier);
 	void (*adjust_link)(struct net_device *dev);
 
 	void (*adjust_state)(struct net_device *dev);

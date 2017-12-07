@@ -1101,6 +1101,7 @@ void phy_detach(struct phy_device *phydev)
 	}
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
+	phydev->phylink = NULL;
 
 	phy_led_triggers_unregister(phydev);
 

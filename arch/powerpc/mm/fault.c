@@ -47,43 +47,39 @@
 
 #include <saf3000/saf3000.h>
 
-#include "icswx.h"
+static inline bool notify_page_fault(struct pt_regs *regs)
+{
+	bool ret = false;
 
 #ifdef CONFIG_KPROBES
-static inline int notify_page_fault(struct pt_regs *regs)
-{
-	int ret = 0;
-
 	/* kprobe_running() needs smp_processor_id() */
 	if (!user_mode(regs)) {
 		preempt_disable();
 		if (kprobe_running() && kprobe_fault_handler(regs, 11))
-			ret = 1;
+			ret = true;
 		preempt_enable();
 	}
+#endif /* CONFIG_KPROBES */
+
+	if (unlikely(debugger_fault_handler(regs)))
+		ret = true;
 
 	return ret;
 }
-#else
-static inline int notify_page_fault(struct pt_regs *regs)
-{
-	return 0;
-}
-#endif
 
 /*
  * Check whether the instruction at regs->nip is a store using
  * an update addressing form which will update r1.
  */
-static int store_updates_sp(struct pt_regs *regs)
+static bool store_updates_sp(struct pt_regs *regs)
 {
 	unsigned int inst;
 
 	if (get_user(inst, (unsigned int __user *)regs->nip))
-		return 0;
+		return false;
 	/* check for 1 in the rA field */
 	if (((inst >> 16) & 0x1f) != 1)
-		return 0;
+		return false;
 	/* check major opcode */
 	switch (inst >> 26) {
 	case 37:	/* stwu */

@@ -37,42 +37,6 @@
 #include <linux/atomic.h>
 #include <asm/irq.h>
 
-static const char *phy_speed_to_str(int speed)
-{
-	switch (speed) {
-	case SPEED_10:
-		return "10Mbps";
-	case SPEED_100:
-		return "100Mbps";
-	case SPEED_1000:
-		return "1Gbps";
-	case SPEED_2500:
-		return "2.5Gbps";
-	case SPEED_5000:
-		return "5Gbps";
-	case SPEED_10000:
-		return "10Gbps";
-	case SPEED_14000:
-		return "14Gbps";
-	case SPEED_20000:
-		return "20Gbps";
-	case SPEED_25000:
-		return "25Gbps";
-	case SPEED_40000:
-		return "40Gbps";
-	case SPEED_50000:
-		return "50Gbps";
-	case SPEED_56000:
-		return "56Gbps";
-	case SPEED_100000:
-		return "100Gbps";
-	case SPEED_UNKNOWN:
-		return "Unknown";
-	default:
-		return "Unsupported (update phy.c)";
-	}
-}
-
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
 		return __stringify(_state);	\
@@ -586,8 +550,8 @@ EXPORT_SYMBOL(phy_start_aneg);
  *
  * Description: The PHY infrastructure can run a state machine
  *   which tracks whether the PHY is starting up, negotiating,
- *   etc.  This function starts the timer which tracks the state
- *   of the PHY.  If you want to be notified when the state changes,
+ *   etc.  This function starts the delayed workqueue which tracks
+ *   the state of the PHY. If you want to maintain your own state machine,
  *   pass in the callback @handler, otherwise, pass NULL.  If you
  *   want to maintain your own state machine, do not call this
  *   function.
@@ -599,6 +563,7 @@ void phy_start_machine(struct phy_device *phydev,
 
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
 }
+EXPORT_SYMBOL_GPL(phy_start_machine);
 
 /**
  * phy_trigger_machine - trigger the state machine to run
@@ -976,8 +941,7 @@ void phy_state_machine(struct work_struct *work)
 		/* If AN is done, we're running */
 		if (err > 0) {
 			phydev->state = PHY_RUNNING;
-			netif_carrier_on(phydev->attached_dev);
-			phy_adjust_link(phydev);
+			phy_link_up(phydev);
 		} else if (0 == phydev->link_timeout--)
 			needs_aneg = true;
 		break;
@@ -1083,11 +1047,11 @@ void phy_state_machine(struct work_struct *work)
 
 				if (phydev->link) {
 					phydev->state = PHY_RUNNING;
-					netif_carrier_on(phydev->attached_dev);
+					phy_link_up(phydev);
 				} else {
 					phydev->state = PHY_NOLINK;
+					phy_link_down(phydev, false);
 				}
-				phy_adjust_link(phydev);
 			} else {
 				phydev->state = PHY_AN;
 				phydev->link_timeout = PHY_AN_TIMEOUT;

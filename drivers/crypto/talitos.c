@@ -1765,9 +1765,9 @@ static int common_nonsnoop_hash(struct talitos_edesc *edesc,
 		to_talitos_ptr(&desc->ptr[1], ctx->dma_hw_context,
 			       req_ctx->hw_context_size, is_sec1);
 		req_ctx->swinit = 0;
-		/* Indicate next op is not the first. */
-		req_ctx->first = 0;
 	}
+	/* Indicate next op is not the first. */
+	req_ctx->first = 0;
 
 	/* HMAC key */
 	if (ctx->keylen)
