@@ -329,12 +329,6 @@ InstructionTLBMiss:
 	mtspr	SPRN_SPRG_SCRATCH2, r3
 #endif
 	EXCEPTION_PROLOG_0
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	lis	r10, (itlb_miss_counter - PAGE_OFFSET)@ha
-	lwz	r11, (itlb_miss_counter - PAGE_OFFSET)@l(r10)
-	addi	r11, r11, 1
-	stw	r11, (itlb_miss_counter - PAGE_OFFSET)@l(r10)
-#endif
 
 	/* If we are faulting a kernel address, we have to use the
 	 * kernel page tables.
@@ -435,12 +429,6 @@ InstructionTLBMiss:
 DataStoreTLBMiss:
 	mtspr	SPRN_SPRG_SCRATCH2, r3
 	EXCEPTION_PROLOG_0
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	lis	r10, (dtlb_miss_counter - PAGE_OFFSET)@ha
-	lwz	r11, (dtlb_miss_counter - PAGE_OFFSET)@l(r10)
-	addi	r11, r11, 1
-	stw	r11, (dtlb_miss_counter - PAGE_OFFSET)@l(r10)
-#endif
 	mfcr	r3
 
 	/* If we are faulting a kernel address, we have to use the
@@ -637,22 +625,7 @@ DataBreakpoint:
 	EXCEPTION_EPILOG_0
 	rfi
 
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	. = 0x1d00
-InstructionBreakpoint:
-	EXCEPTION_PROLOG_0
-	lis	r10, (instruction_counter - PAGE_OFFSET)@ha
-	lwz	r11, (instruction_counter - PAGE_OFFSET)@l(r10)
-	addi	r11, r11, -1
-	stw	r11, (instruction_counter - PAGE_OFFSET)@l(r10)
-	lis	r10, 0xffff
-	ori	r10, r10, 0x01
-	mtspr	SPRN_COUNTA, r10
-	EXCEPTION_EPILOG_0
-	rfi
-#else
 	EXCEPTION(0x1d00, Trap_1d, unknown_exception, EXC_XFER_EE)
-#endif
 	EXCEPTION(0x1e00, Trap_1e, unknown_exception, EXC_XFER_EE)
 	EXCEPTION(0x1f00, Trap_1f, unknown_exception, EXC_XFER_EE)
 
@@ -1026,13 +999,9 @@ initial_mmu:
 	lis	r8, IDC_ENABLE@h
 	mtspr	SPRN_DC_CST, r8
 #endif
-	/* Disable debug mode entry on breakpoints */
+	/* Disable debug mode entry on data breakpoints */
 	mfspr	r8, SPRN_DER
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	rlwinm	r8, r8, 0, ~0xc
-#else
 	rlwinm	r8, r8, 0, ~0x8
-#endif
 	mtspr	SPRN_DER, r8
 	blr
 
@@ -1067,16 +1036,3 @@ cpu6_errata_word:
 	.space	16
 #endif
 
-#ifdef CONFIG_PPC_8xx_PERF_EVENT
-	.globl	itlb_miss_counter
-itlb_miss_counter:
-	.space	4
-
-	.globl	dtlb_miss_counter
-dtlb_miss_counter:
-	.space	4
-
-	.globl	instruction_counter
-instruction_counter:
-	.space	4
-#endif
