@@ -819,7 +819,7 @@ static void talitos_unregister_rng(struct device *dev)
  * HMAC_SNOOP_NO_AFEA (HSNA) instead of type IPSEC_ESP
  */
 #define TALITOS_CRA_PRIORITY_AEAD_HSNA	(TALITOS_CRA_PRIORITY - 1)
-#define TALITOS_MAX_KEY_SIZE		(AES_MAX_KEY_SIZE + SHA512_BLOCK_SIZE)
+#define TALITOS_MAX_KEY_SIZE		96
 #define TALITOS_MAX_IV_LENGTH		16 /* max of AES_BLOCK_SIZE, DES3_EDE_BLOCK_SIZE */
 
 struct talitos_ctx {
@@ -1512,11 +1512,6 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *cipher,
 	struct device *dev = ctx->dev;
 	u32 tmp[DES_EXPKEY_WORDS];
 
-	if (keylen > TALITOS_MAX_KEY_SIZE) {
-		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
-		return -EINVAL;
-	}
-
 	if (unlikely(crypto_ablkcipher_get_flags(cipher) &
 		     CRYPTO_TFM_REQ_WEAK_KEY) &&
 	    !des_ekey(tmp, key)) {
@@ -1765,9 +1760,9 @@ static int common_nonsnoop_hash(struct talitos_edesc *edesc,
 		to_talitos_ptr(&desc->ptr[1], ctx->dma_hw_context,
 			       req_ctx->hw_context_size, is_sec1);
 		req_ctx->swinit = 0;
+		/* Indicate next op is not the first. */
+		req_ctx->first = 0;
 	}
-	/* Indicate next op is not the first. */
-	req_ctx->first = 0;
 
 	/* HMAC key */
 	if (ctx->keylen)
@@ -3214,8 +3209,7 @@ static struct talitos_crypto_alg *talitos_alg_alloc(struct device *dev,
 		t_alg->algt.alg.hash.final = ahash_final;
 		t_alg->algt.alg.hash.finup = ahash_finup;
 		t_alg->algt.alg.hash.digest = ahash_digest;
-		if (!strncmp(alg->cra_name, "hmac", 4))
-			t_alg->algt.alg.hash.setkey = ahash_setkey;
+		t_alg->algt.alg.hash.setkey = ahash_setkey;
 		t_alg->algt.alg.hash.import = ahash_import;
 		t_alg->algt.alg.hash.export = ahash_export;
 

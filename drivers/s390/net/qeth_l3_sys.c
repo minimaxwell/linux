@@ -692,15 +692,15 @@ static ssize_t qeth_l3_dev_vipa_add_show(char *buf, struct qeth_card *card,
 			enum qeth_prot_versions proto)
 {
 	struct qeth_ipaddr *ipaddr;
+	struct hlist_node  *tmp;
 	char addr_str[40];
-	int str_len = 0;
 	int entry_len; /* length of 1 entry string, differs between v4 and v6 */
-	int i;
+	int i = 0;
 
 	entry_len = (proto == QETH_PROT_IPV4)? 12 : 40;
 	entry_len += 2; /* \n + terminator */
 	spin_lock_bh(&card->ip_lock);
-	hash_for_each(card->ip_htable, i, ipaddr, hnode) {
+	hash_for_each_safe(card->ip_htable, i, tmp, ipaddr, hnode) {
 		if (ipaddr->proto != proto)
 			continue;
 		if (ipaddr->type != QETH_IP_TYPE_VIPA)
@@ -708,17 +708,16 @@ static ssize_t qeth_l3_dev_vipa_add_show(char *buf, struct qeth_card *card,
 		/* String must not be longer than PAGE_SIZE. So we check if
 		 * string length gets near PAGE_SIZE. Then we can savely display
 		 * the next IPv6 address (worst case, compared to IPv4) */
-		if ((PAGE_SIZE - str_len) <= entry_len)
+		if ((PAGE_SIZE - i) <= entry_len)
 			break;
 		qeth_l3_ipaddr_to_string(proto, (const u8 *)&ipaddr->u,
 			addr_str);
-		str_len += snprintf(buf + str_len, PAGE_SIZE - str_len, "%s\n",
-				    addr_str);
+		i += snprintf(buf + i, PAGE_SIZE - i, "%s\n", addr_str);
 	}
 	spin_unlock_bh(&card->ip_lock);
-	str_len += snprintf(buf + str_len, PAGE_SIZE - str_len, "\n");
+	i += snprintf(buf + i, PAGE_SIZE - i, "\n");
 
-	return str_len;
+	return i;
 }
 
 static ssize_t qeth_l3_dev_vipa_add4_show(struct device *dev,
@@ -855,15 +854,15 @@ static ssize_t qeth_l3_dev_rxip_add_show(char *buf, struct qeth_card *card,
 		       enum qeth_prot_versions proto)
 {
 	struct qeth_ipaddr *ipaddr;
+	struct hlist_node *tmp;
 	char addr_str[40];
-	int str_len = 0;
 	int entry_len; /* length of 1 entry string, differs between v4 and v6 */
-	int i;
+	int i = 0;
 
 	entry_len = (proto == QETH_PROT_IPV4)? 12 : 40;
 	entry_len += 2; /* \n + terminator */
 	spin_lock_bh(&card->ip_lock);
-	hash_for_each(card->ip_htable, i, ipaddr, hnode) {
+	hash_for_each_safe(card->ip_htable, i, tmp, ipaddr, hnode) {
 		if (ipaddr->proto != proto)
 			continue;
 		if (ipaddr->type != QETH_IP_TYPE_RXIP)
@@ -871,17 +870,16 @@ static ssize_t qeth_l3_dev_rxip_add_show(char *buf, struct qeth_card *card,
 		/* String must not be longer than PAGE_SIZE. So we check if
 		 * string length gets near PAGE_SIZE. Then we can savely display
 		 * the next IPv6 address (worst case, compared to IPv4) */
-		if ((PAGE_SIZE - str_len) <= entry_len)
+		if ((PAGE_SIZE - i) <= entry_len)
 			break;
 		qeth_l3_ipaddr_to_string(proto, (const u8 *)&ipaddr->u,
 			addr_str);
-		str_len += snprintf(buf + str_len, PAGE_SIZE - str_len, "%s\n",
-				    addr_str);
+		i += snprintf(buf + i, PAGE_SIZE - i, "%s\n", addr_str);
 	}
 	spin_unlock_bh(&card->ip_lock);
-	str_len += snprintf(buf + str_len, PAGE_SIZE - str_len, "\n");
+	i += snprintf(buf + i, PAGE_SIZE - i, "\n");
 
-	return str_len;
+	return i;
 }
 
 static ssize_t qeth_l3_dev_rxip_add4_show(struct device *dev,

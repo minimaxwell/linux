@@ -2984,11 +2984,8 @@ static int __init amd64_edac_init(void)
 	int err = -ENODEV;
 	int i;
 
-	if (!x86_match_cpu(amd64_cpuids))
-		return -ENODEV;
-
 	if (amd_cache_northbridges() < 0)
-		return -ENODEV;
+		goto err_ret;
 
 	opstate_init();
 
@@ -3001,16 +2998,14 @@ static int __init amd64_edac_init(void)
 	if (!msrs)
 		goto err_free;
 
-	for (i = 0; i < amd_nb_num(); i++) {
-		err = probe_one_instance(i);
-		if (err) {
+	for (i = 0; i < amd_nb_num(); i++)
+		if (probe_one_instance(i)) {
 			/* unwind properly */
 			while (--i >= 0)
 				remove_one_instance(i);
 
 			goto err_pci;
 		}
-	}
 
 	setup_pci_device();
 
@@ -3030,6 +3025,7 @@ err_free:
 	kfree(ecc_stngs);
 	ecc_stngs = NULL;
 
+err_ret:
 	return err;
 }
 
