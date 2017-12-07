@@ -1064,8 +1064,11 @@ void phy_detach(struct phy_device *phydev)
 	struct net_device *dev = phydev->attached_dev;
 	struct module *ndev_owner = dev->dev.parent->driver->owner;
 	struct mii_bus *bus;
-	int i;
 
+	if (phydev->sysfs_links) {
+		sysfs_remove_link(&dev->dev.kobj, "phydev");
+		sysfs_remove_link(&phydev->mdio.dev.kobj, "attached_dev");
+	}
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
 
@@ -1631,10 +1634,22 @@ int genphy_isolate(struct phy_device *phydev)
 }
 EXPORT_SYMBOL(genphy_isolate);
 
-static int gen10g_resume(struct phy_device *phydev)
+int genphy_loopback(struct phy_device *phydev, bool enable)
 {
-	return 0;
+	int value;
+
+	value = phy_read(phydev, MII_BMCR);
+	if (value < 0)
+		return value;
+
+	if (enable)
+		value |= BMCR_LOOPBACK;
+	else
+		value &= ~BMCR_LOOPBACK;
+
+	return phy_write(phydev, MII_BMCR, value);
 }
+EXPORT_SYMBOL(genphy_loopback);
 
 static int __set_phy_supported(struct phy_device *phydev, u32 max_speed)
 {

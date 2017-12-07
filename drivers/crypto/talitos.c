@@ -1512,6 +1512,11 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *cipher,
 	struct device *dev = ctx->dev;
 	u32 tmp[DES_EXPKEY_WORDS];
 
+	if (keylen > TALITOS_MAX_KEY_SIZE) {
+		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
+		return -EINVAL;
+	}
+
 	if (unlikely(crypto_ablkcipher_get_flags(cipher) &
 		     CRYPTO_TFM_REQ_WEAK_KEY) &&
 	    !des_ekey(tmp, key)) {

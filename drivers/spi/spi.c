@@ -1576,12 +1576,30 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
 			spi->mode |= SPI_RX_QUAD;
 			break;
 		default:
-			dev_warn(&master->dev,
+			dev_warn(&ctlr->dev,
 				"spi-rx-bus-width %d not supported\n",
 				value);
 			break;
 		}
 	}
+
+	if (spi_controller_is_slave(ctlr)) {
+		if (strcmp(nc->name, "slave")) {
+			dev_err(&ctlr->dev, "%s is not called 'slave'\n",
+				nc->full_name);
+			return -EINVAL;
+		}
+		return 0;
+	}
+
+	/* Device address */
+	rc = of_property_read_u32(nc, "reg", &value);
+	if (rc) {
+		dev_err(&ctlr->dev, "%s has no valid 'reg' property (%d)\n",
+			nc->full_name, rc);
+		return rc;
+	}
+	spi->chip_select = value;
 
 	/* Bits per word */
 	if (!of_property_read_u32(nc, "spi-bits", &value))
@@ -1589,7 +1607,8 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
 	/* Device speed */
 	rc = of_property_read_u32(nc, "spi-max-frequency", &value);
 	if (rc) {
-		dev_err(&master->dev, "%s has no valid 'spi-max-frequency' property (%d)\n",
+		dev_err(&ctlr->dev,
+			"%s has no valid 'spi-max-frequency' property (%d)\n",
 			nc->full_name, rc);
 		return rc;
 	}

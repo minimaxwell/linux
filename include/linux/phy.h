@@ -857,12 +857,23 @@ int genphy_update_link(struct phy_device *phydev);
 int genphy_read_status(struct phy_device *phydev);
 int genphy_suspend(struct phy_device *phydev);
 int genphy_resume(struct phy_device *phydev);
+int genphy_loopback(struct phy_device *phydev, bool enable);
 int genphy_soft_reset(struct phy_device *phydev);
 static inline int genphy_no_soft_reset(struct phy_device *phydev)
 {
 	return 0;
 }
 int genphy_isolate(struct phy_device *phydev);
+
+/* Clause 45 PHY */
+int genphy_c45_restart_aneg(struct phy_device *phydev);
+int genphy_c45_aneg_done(struct phy_device *phydev);
+int genphy_c45_read_link(struct phy_device *phydev, u32 mmd_mask);
+int genphy_c45_read_lpa(struct phy_device *phydev);
+int genphy_c45_read_pma(struct phy_device *phydev);
+int genphy_c45_pma_setup_forced(struct phy_device *phydev);
+int genphy_c45_an_disable_aneg(struct phy_device *phydev);
+
 void phy_driver_unregister(struct phy_driver *drv);
 void phy_drivers_unregister(struct phy_driver *drv, int n);
 int phy_driver_register(struct phy_driver *new_driver, struct module *owner);
