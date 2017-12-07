@@ -26,8 +26,6 @@
 #ifdef CONFIG_HUGETLB_PAGE
 
 #define PAGE_SHIFT_64K	16
-#define PAGE_SHIFT_512K	19
-#define PAGE_SHIFT_8M	23
 #define PAGE_SHIFT_16M	24
 #define PAGE_SHIFT_16G	34
 
@@ -40,7 +38,7 @@ unsigned int HPAGE_SHIFT;
  * implementations may have more than one gpage size, so we need multiple
  * arrays
  */
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 #define MAX_NUMBER_GPAGES	128
 struct psize_gpages {
 	u64 gpage_list[MAX_NUMBER_GPAGES];
@@ -107,11 +105,6 @@ static int __hugepte_alloc(struct mm_struct *mm, hugepd_t *hpdp,
 #ifdef CONFIG_PPC_BOOK3S_64
 			hpdp->pd = __pa(new) |
 				   (shift_to_mmu_psize(pshift) << 2);
-#elif defined(CONFIG_PPC_8xx)
-			hpdp->pd = __pa(new) |
-				   (pshift == PAGE_SHIFT_8M ? _PMD_PAGE_8M :
-							      _PMD_PAGE_512K) |
-				   _PMD_PRESENT;
 #else
 			/* We use the old format for PPC_FSL_BOOK3E */
 			hpdp->pd = ((unsigned long)new & ~PD_HUGE) | pshift;
@@ -131,7 +124,7 @@ static int __hugepte_alloc(struct mm_struct *mm, hugepd_t *hpdp,
  * These macros define how to determine which level of the page table holds
  * the hpdp.
  */
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 #define HUGEPD_PGD_SHIFT PGDIR_SHIFT
 #define HUGEPD_PUD_SHIFT PUD_SHIFT
 #else
@@ -207,7 +200,7 @@ pte_t *huge_pte_alloc(struct mm_struct *mm, unsigned long addr, unsigned long sz
 	return hugepte_offset(*hpdp, addr, pdshift);
 }
 
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 /* Build list of addresses of gigantic pages.  This function is used in early
  * boot before the buddy allocator is setup.
  */
@@ -373,7 +366,7 @@ int alloc_bootmem_huge_page(struct hstate *hstate)
 }
 #endif
 
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 #define HUGEPD_FREELIST_SIZE \
 	((PAGE_SIZE - sizeof(struct hugepd_freelist)) / sizeof(pte_t))
 
@@ -742,10 +735,10 @@ static int __init add_huge_page_size(unsigned long long size)
 	 * that it fits within pagetable and slice limits. */
 	if (size <= PAGE_SIZE)
 		return -EINVAL;
-#if defined(CONFIG_PPC_FSL_BOOK3E)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 	if (!is_power_of_4(size))
 		return -EINVAL;
-#elif !defined(CONFIG_PPC_8xx)
+#else
 	if (!is_power_of_2(size) || (shift > SLICE_HIGH_SHIFT))
 		return -EINVAL;
 #endif
@@ -784,7 +777,7 @@ static int __init hugetlbpage_init(void)
 {
 	int psize;
 
-#if !defined(CONFIG_PPC_FSL_BOOK3E) && !defined(CONFIG_PPC_8xx)
+#if !defined(CONFIG_PPC_FSL_BOOK3E)
 	if (!radix_enabled() && !mmu_has_feature(MMU_FTR_16M_PAGE))
 		return -ENODEV;
 #endif
@@ -816,7 +809,7 @@ static int __init hugetlbpage_init(void)
 				panic("hugetlbpage_init(): could not create "
 				      "pgtable cache for %d bit pagesize\n", shift);
 		}
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
+#ifdef CONFIG_PPC_FSL_BOOK3E
 		else if (!hugepte_cache) {
 			/*
 			 * Create a kmem cache for hugeptes.  The bottom bits in
@@ -835,12 +828,10 @@ static int __init hugetlbpage_init(void)
 #endif
 	}
 
-#if defined(CONFIG_PPC_FSL_BOOK3E) || defined(CONFIG_PPC_8xx)
-	/* Default hpage size = 4M on FSL_BOOK3E and 512k on 8xx */
+#ifdef CONFIG_PPC_FSL_BOOK3E
+	/* Default hpage size = 4M */
 	if (mmu_psize_defs[MMU_PAGE_4M].shift)
 		HPAGE_SHIFT = mmu_psize_defs[MMU_PAGE_4M].shift;
-	else if (mmu_psize_defs[MMU_PAGE_512K].shift)
-		HPAGE_SHIFT = mmu_psize_defs[MMU_PAGE_512K].shift;
 #else
 	/* Set default large page size. Currently, we pick 16M or 1M
 	 * depending on what is available
