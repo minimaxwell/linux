@@ -885,7 +885,6 @@ static int set_expected_rtp_rtcp(struct sk_buff *skb, unsigned int protoff,
 	tuple.dst.u3		= *daddr;
 	tuple.dst.u.udp.port	= port;
 
-	rcu_read_lock();
 	do {
 		exp = __nf_ct_expect_find(net, nf_ct_zone(ct), &tuple);
 
@@ -919,10 +918,8 @@ static int set_expected_rtp_rtcp(struct sk_buff *skb, unsigned int protoff,
 			goto err1;
 	}
 
-	if (skip_expect) {
-		rcu_read_unlock();
+	if (skip_expect)
 		return NF_ACCEPT;
-	}
 
 	rtp_exp = nf_ct_expect_alloc(ct);
 	if (rtp_exp == NULL)
@@ -953,7 +950,6 @@ static int set_expected_rtp_rtcp(struct sk_buff *skb, unsigned int protoff,
 err2:
 	nf_ct_expect_put(rtp_exp);
 err1:
-	rcu_read_unlock();
 	return ret;
 }
 
