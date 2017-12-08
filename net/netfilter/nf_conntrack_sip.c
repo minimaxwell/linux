@@ -20,7 +20,6 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 #include <linux/netfilter.h>
-#include <saf3000/saf3000.h>
 
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_core.h>
@@ -1621,16 +1620,8 @@ static int __init nf_conntrack_sip_init(void)
 
 	NF_CT_HELPER_BUILD_BUG_ON(sizeof(struct nf_ct_sip_master));
 
-	if (ports_c == 0) {
+	if (ports_c == 0)
 		ports[ports_c++] = SIP_PORT;
-		ports[ports_c++] = SAF3000_SIP1_PORT;
-		ports[ports_c++] = SAF3000_SIP2_PORT;
-		ports[ports_c++] = SAF3000_SIP3_PORT;
-		ports[ports_c++] = SAF3000_SIP4_PORT;
-		ports[ports_c++] = SAF3000_SIP5_PORT;
-		ports[ports_c++] = SAF3000_SIP6_PORT;
-		ports[ports_c++] = SAF3000_SIP7_PORT;
-	}
 
 	for (i = 0; i < ports_c; i++) {
 		nf_ct_helper_init(&sip[4 * i], AF_INET, IPPROTO_UDP, "sip",
