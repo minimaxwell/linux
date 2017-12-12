@@ -1538,13 +1538,13 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
 
 	/* Mode (clock phase/polarity/etc.) */
 	if (of_property_read_bool(nc, "spi-cpha"))
- 		spi->mode |= SPI_CPHA;
+		spi->mode |= SPI_CPHA;
 	if (of_property_read_bool(nc, "spi-cpol"))
- 		spi->mode |= SPI_CPOL;
+		spi->mode |= SPI_CPOL;
 	if (of_property_read_bool(nc, "spi-cs-high"))
- 		spi->mode |= SPI_CS_HIGH;
+		spi->mode |= SPI_CS_HIGH;
 	if (of_property_read_bool(nc, "spi-3wire"))
- 		spi->mode |= SPI_3WIRE;
+		spi->mode |= SPI_3WIRE;
 	if (of_property_read_bool(nc, "spi-lsb-first"))
 		spi->mode |= SPI_LSB_FIRST;
 	if (of_property_read_bool(nc, "spi-troll"))
