@@ -2,9 +2,9 @@
 config PPC_MPC512x
 	bool "512x-based boards"
 	depends on 6xx
+	select COMMON_CLK
 	select FSL_SOC
 	select IPIC
-	select PPC_CLOCK
 	select PPC_PCI_CHOICE
 	select FSL_PCI if PCI
 	select USB_EHCI_BIG_ENDIAN_MMIO if USB_EHCI_HCD
