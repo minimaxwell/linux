@@ -131,6 +131,7 @@ toto*
 /include/saf3000
 /arch/powerpc/configs/saf3000
 /arch/powerpc/boot/dts/saf3000
+/Documentation/devicetree/bindings/saf3000
 /arch/powerpc/boot/uImage.pro
 /initramfs
 /initramfs.txt
