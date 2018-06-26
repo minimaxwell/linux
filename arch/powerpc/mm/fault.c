@@ -45,8 +45,6 @@
 #include <asm/siginfo.h>
 #include <asm/debug.h>
 
-#include <saf3000/saf3000.h>
-
 static inline bool notify_page_fault(struct pt_regs *regs)
 {
 	bool ret = false;
@@ -575,8 +573,6 @@ void bad_page_fault(struct pt_regs *regs, unsigned long address, int sig)
 		regs->nip = extable_fixup(entry);
 		return;
 	}
-
-	saf3000_board_failed();
 
 	/* kernel has accessed a bad area */
 
