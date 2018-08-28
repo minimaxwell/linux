@@ -4283,6 +4283,7 @@ static void mvpp2_phylink_validate(struct net_device *dev,
 		phylink_set(mask, 1000baseT_Full);
 		phylink_set(mask, 1000baseX_Full);
 		phylink_set(mask, 2500baseX_Full);
+		phylink_set(mask, 2500baseT_Full);
 	}
 
 	bitmap_and(supported, supported, mask, __ETHTOOL_LINK_MODE_MASK_NBITS);
