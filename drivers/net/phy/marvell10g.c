@@ -333,6 +333,12 @@ static int mv3310_config_init(struct phy_device *phydev)
 			__set_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT,
 				  supported);
 		}
+
+		/* PMA doesn't report 2.5G/5GBaseT as supported, but we know
+		 * they are.
+		 */
+		__set_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT, supported);
+		__set_bit(ETHTOOL_LINK_MODE_5000baseT_Full_BIT, supported);
 	}
 
 	linkmode_copy(phydev->supported, supported);
@@ -344,7 +350,7 @@ static int mv3310_config_init(struct phy_device *phydev)
 static int mv3310_config_aneg(struct phy_device *phydev)
 {
 	bool changed = false;
-	u16 reg;
+	u16 reg = 0;
 	int ret;
 
 	/* We don't support manual MDI control */
@@ -381,12 +387,18 @@ static int mv3310_config_aneg(struct phy_device *phydev)
 	/* 10G control register */
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_10000baseT_Full_BIT,
 			      phydev->advertising))
-	    reg = MDIO_AN_10GBT_CTRL_ADV10G;
-	else
-		reg = 0;
+		reg |= MDIO_AN_10GBT_CTRL_ADV10G;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
+			      phydev->advertising))
+		reg |= MDIO_AN_10GBT_CTRL_ADV5G;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+			      phydev->advertising))
+		reg |= MDIO_AN_10GBT_CTRL_ADV2_5G;
 
 	ret = mv3310_modify(phydev, MDIO_MMD_AN, MDIO_AN_10GBT_CTRL,
-			    MDIO_AN_10GBT_CTRL_ADV10G, reg);
+			    MDIO_AN_10GBT_CTRL_ADV10G |
+			    MDIO_AN_10GBT_CTRL_ADV5G |
+			    MDIO_AN_10GBT_CTRL_ADV2_5G, reg);
 	if (ret < 0)
 		return ret;
 	if (ret > 0)
