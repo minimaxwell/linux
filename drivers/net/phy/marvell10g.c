@@ -336,8 +336,7 @@ static int mv3310_config_init(struct phy_device *phydev)
 	}
 
 	linkmode_copy(phydev->supported, supported);
-	linkmode_and(phydev->advertising, phydev->advertising,
-		     phydev->supported);
+	linkmode_copy(phydev->advertising, supported);
 
 	return 0;
 }
