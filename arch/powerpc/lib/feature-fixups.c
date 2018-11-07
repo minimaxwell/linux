@@ -63,7 +63,7 @@ static int patch_alt_instruction(unsigned int *src, unsigned int *dest,
 		}
 	}
 
-	raw_patch_instruction(dest, instr);
+	patch_instruction(dest, instr);
 
 	return 0;
 }
@@ -92,7 +92,7 @@ static int patch_feature_section(unsigned long value, struct fixup_entry *fcur)
 	}
 
 	for (; dest < end; dest++)
-		raw_patch_instruction(dest, PPC_INST_NOP);
+		patch_instruction(dest, PPC_INST_NOP);
 
 	return 0;
 }
@@ -292,7 +292,7 @@ void do_lwsync_fixups(unsigned long value, void *fixup_start, void *fixup_end)
 
 	for (; start < end; start++) {
 		dest = (void *)start + *start;
-		raw_patch_instruction(dest, PPC_INST_LWSYNC);
+		patch_instruction(dest, PPC_INST_LWSYNC);
 	}
 }
 
@@ -310,7 +310,7 @@ static void do_final_fixups(void)
 	length = (__end_interrupts - _stext) / sizeof(int);
 
 	while (length--) {
-		raw_patch_instruction(dest, *src);
+		patch_instruction(dest, *src);
 		src++;
 		dest++;
 	}
