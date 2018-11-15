@@ -79,6 +79,17 @@ enum mvpp2_cls_flow_seq {
 	MVPP2_CLS_FLOW_SEQ_MIDDLE
 };
 
+enum mvpp22_cls_flow_tag {
+	MVPP22_CLS_FLOW_VLAN_ALWAYS_EXEC = 0,	/* Always execute the lookup */
+	MVPP22_CLS_FLOW_VLAN_TAGGED1,		/* Exec if 1 tag */
+	MVPP22_CLS_FLOW_VLAN_TAGGED2,		/* Exec if 2 tags */
+	MVPP22_CLS_FLOW_VLAN_TAGGED3,		/* Exec if 3 tags */
+	MVPP22_CLS_FLOW_VLAN_UNTAGGED,		/* Exec if no tag */
+	MVPP22_CLS_FLOW_VLAN_TAGGED,		/* Exec if at least 1 tag */
+	MVPP22_CLS_FLOW_VLAN_TAGGED01,		/* Exec if 0 or 1 tag */
+	MVPP22_CLS_FLOW_VLAN_TAGGED23		/* Exec if 2 or 3 tags */
+};
+
 /* Classifier C2 engine constants */
 #define MVPP22_CLS_C2_TCAM_EN(data)		((data) << 16)
 
@@ -105,34 +116,28 @@ enum mvpp22_cls_c2_fwd_action {
 
 struct mvpp2_cls_c2_entry {
 	u32 index;
+	/* TCAM lookup key */
 	u32 tcam[MVPP2_CLS_C2_TCAM_WORDS];
+	/* QoS table lookup configuration */
+	u32 act_table;
+	/* Actions to perform upon TCAM match */
 	u32 act;
+	/* Attributes relative to the actions to perform */
 	u32 attr[MVPP2_CLS_C2_ATTR_WORDS];
 };
 
 /* Classifier C2 engine entries */
-#define MVPP22_CLS_C2_RSS_ENTRY(port)	(port)
-#define MVPP22_CLS_C2_N_ENTRIES		MVPP2_MAX_PORTS
+#define MVPP22_CLS_C2_N_ENTRIES		256
 
-/* RSS flow entries in the flow table. We have 2 entries per port for RSS.
- *
- * The first performs a lookup using the C2 TCAM engine, to tag the
- * packet for software forwarding (needed for RSS), enable or disable RSS, and
- * assign the default rx queue.
- *
- * The second configures the hash generation, by specifying which fields of the
- * packet header are used to generate the hash, and specifies the relevant hash
- * engine to use.
- */
-#define MVPP22_RSS_FLOW_C2_OFFS		0
-#define MVPP22_RSS_FLOW_HASH_OFFS	1
-#define MVPP22_RSS_FLOW_SIZE		(MVPP22_RSS_FLOW_HASH_OFFS + 1)
+/* Number of per-port dedicated entries in the C2 TCAM */
+#define MVPP22_CLS_C2_PORT_RANGE	8
+#define MVPP22_CLS_C2_PORT_N_RFS	6
 
-#define MVPP22_RSS_FLOW_C2(port)	((port) * MVPP22_RSS_FLOW_SIZE + \
-					 MVPP22_RSS_FLOW_C2_OFFS)
-#define MVPP22_RSS_FLOW_HASH(port)	((port) * MVPP22_RSS_FLOW_SIZE + \
-					 MVPP22_RSS_FLOW_HASH_OFFS)
-#define MVPP22_RSS_FLOW_FIRST(port)	MVPP22_RSS_FLOW_C2(port)
+#define MVPP22_CLS_C2_PORT_FIRST(p)	(MVPP22_CLS_C2_N_ENTRIES - \
+					((p) * MVPP22_CLS_C2_PORT_RANGE))
+#define MVPP22_CLS_C2_RSS_ENTRY(p)	(MVPP22_CLS_C2_PORT_FIRST(p) - 1)
+#define MVPP22_CLS_C2_QOS_ENTRY(p)	(MVPP22_CLS_C2_RSS_ENTRY(p) - 1)
+#define MVPP22_CLS_C2_RFS_LOC(p, loc)	(MVPP22_CLS_C2_QOS_ENTRY(p) - (loc))
 
 /* Packet flow ID */
 enum mvpp2_prs_flow {
@@ -163,13 +168,13 @@ enum mvpp2_prs_flow {
 };
 
 enum mvpp2_cls_lu_type {
-	MVPP2_CLS_LU_RSS = 0,
+	MVPP2_CLS_LU_ALL = 0,
+	MVPP2_CLS_LU_TAGGED_ONLY,
 };
 
 /* LU Type defined for all engines, and specified in the flow table */
 #define MVPP2_CLS_LU_TYPE_MASK			0x3f
 
-#define MVPP2_N_PRS_FLOWS	52
 #define MVPP2_N_FLOWS		(MVPP2_FL_LAST - MVPP2_FL_START)
 
 struct mvpp2_cls_flow {
@@ -186,12 +191,13 @@ struct mvpp2_cls_flow {
 	struct mvpp2_prs_result_info prs_ri;
 };
 
-
-#define MVPP2_ENTRIES_PER_FLOW			(MVPP2_MAX_PORTS + 1)
-#define MVPP2_FLOW_C2_ENTRY(id)			((((id) - MVPP2_FL_START) * \
-						 MVPP2_ENTRIES_PER_FLOW) + 1)
-#define MVPP2_PORT_FLOW_HASH_ENTRY(port, id)	(MVPP2_FLOW_C2_ENTRY(id) + \
-						 1 + (port))
+#define MVPP2_ENTRIES_PER_FLOW			(MVPP2_MAX_PORTS + 8)
+#define MVPP2_FLOW_FIRST(id)			(((id) - MVPP2_FL_START) * MVPP2_ENTRIES_PER_FLOW)
+#define MVPP2_FLOW_C2_QOS_ENTRY(id)		(MVPP2_FLOW_FIRST(id))
+#define MVPP2_FLOW_C2_RSS_ENTRY(id)		(MVPP2_FLOW_C2_QOS_ENTRY(id) + 1)
+#define MVPP2_PORT_FLOW_HASH_ENTRY(port, id)	(MVPP2_FLOW_C2_RSS_ENTRY(id) + \
+						(port) + MVPP2_FLOW_C2_RSS_ENTRY(id))
+#define MVPP2_FLOW_C2_RFS(id, rfs_n)		(MVPP2_PORT_FLOW_HASH_ENTRY((MVPP2_MAX_PORTS - 1), (id)) + (rfs_n) + 1)
 
 struct mvpp2_cls_flow_entry {
 	u32 index;
@@ -246,5 +252,11 @@ u32 mvpp2_cls_c2_hit_count(struct mvpp2 *priv, int c2_index);
 
 void mvpp2_cls_c2_read(struct mvpp2 *priv, int index,
 		       struct mvpp2_cls_c2_entry *c2);
+
+int mvpp2_ethtool_cls_rule_ins(struct mvpp2_port *port,
+			       struct ethtool_rxnfc *info);
+
+int mvpp2_ethtool_cls_rule_del(struct mvpp2_port *port,
+			       struct ethtool_rxnfc *info);
 
 #endif
