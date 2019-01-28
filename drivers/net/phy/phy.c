@@ -37,6 +37,8 @@
 #include <linux/atomic.h>
 #include <asm/irq.h>
 
+#include <linux/micrel_phy.h>
+
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
 		return __stringify(_state);	\
@@ -521,6 +523,9 @@ static int phy_start_aneg_priv(struct phy_device *phydev, bool sync)
 
 out_unlock:
 	mutex_unlock(&phydev->lock);
+
+	if (phydev->dev_flags & MICREL_PHY_FXEN)
+                       trigger = true;
 
 	if (trigger)
 		phy_trigger_machine(phydev, sync);
