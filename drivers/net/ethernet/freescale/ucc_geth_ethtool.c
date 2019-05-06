@@ -252,13 +252,14 @@ uec_set_ringparam(struct net_device *netdev,
 		return -EINVAL;
 	}
 
+	if (netif_running(netdev)) {
+		pr_err("ZZZZZZ BUSY\n");
+		return -EBUSY;
+	}
+	pr_err("ZZZZZZ NOT BUSY ???\n");
+
 	ug_info->bdRingLenRx[queue] = ring->rx_pending;
 	ug_info->bdRingLenTx[queue] = ring->tx_pending;
-
-	if (netif_running(netdev)) {
-		/* FIXME: restart automatically */
-		netdev_info(netdev, "Please re-open the interface\n");
-	}
 
 	return ret;
 }
