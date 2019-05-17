@@ -252,11 +252,8 @@ uec_set_ringparam(struct net_device *netdev,
 		return -EINVAL;
 	}
 
-	if (netif_running(netdev)) {
-		pr_err("ZZZZZZ BUSY\n");
+	if (netif_running(netdev))
 		return -EBUSY;
-	}
-	pr_err("ZZZZZZ NOT BUSY ???\n");
 
 	ug_info->bdRingLenRx[queue] = ring->rx_pending;
 	ug_info->bdRingLenTx[queue] = ring->tx_pending;
