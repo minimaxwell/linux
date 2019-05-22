@@ -5,9 +5,6 @@ SUBLEVEL = 117
 EXTRAVERSION =
 NAME = Petit Gorille
 
-ARCH = powerpc
-CROSS_COMPILE = ppc-linux-
-
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
 # More info can be located in ./README

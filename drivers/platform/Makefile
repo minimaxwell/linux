@@ -8,5 +8,3 @@ obj-$(CONFIG_MIPS)		+= mips/
 obj-$(CONFIG_OLPC)		+= olpc/
 obj-$(CONFIG_GOLDFISH)		+= goldfish/
 obj-$(CONFIG_CHROME_PLATFORMS)	+= chrome/
-obj-$(CONFIG_SAF3000)		+= saf3000/
-obj-$(CONFIG_SAF3000MPCPRO)	+= saf3000/
