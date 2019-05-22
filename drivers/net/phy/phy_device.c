@@ -734,7 +734,7 @@ int phy_connect_direct(struct net_device *dev, struct phy_device *phydev,
 		return rc;
 
 	phy_prepare_link(phydev, handler);
-	phy_start_machine(phydev, NULL);
+	phy_start_machine(phydev);
 	if (phydev->irq > 0)
 		phy_start_interrupts(phydev);
 
@@ -1105,6 +1105,7 @@ void phy_detach(struct phy_device *phydev)
 	}
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
+	phy_suspend(phydev);
 	phydev->phylink = NULL;
 
 	phy_led_triggers_unregister(phydev);
@@ -1342,7 +1343,6 @@ int genphy_setup_forced(struct phy_device *phydev)
 	int ctl = phy_read(phydev, MII_BMCR);
 
 	ctl &= BMCR_LOOPBACK | BMCR_ISOLATE | BMCR_PDOWN;
-	
 	phydev->pause = 0;
 	phydev->asym_pause = 0;
 
@@ -1662,7 +1662,7 @@ int genphy_suspend(struct phy_device *phydev)
 	mutex_lock(&phydev->lock);
 
 	value = phy_read(phydev, MII_BMCR);
-	phy_write(phydev, MII_BMCR, (value | BMCR_PDOWN) &~ BMCR_ISOLATE);
+	phy_write(phydev, MII_BMCR, value | BMCR_PDOWN);
 
 	mutex_unlock(&phydev->lock);
 
@@ -1675,26 +1675,11 @@ int genphy_resume(struct phy_device *phydev)
 	int value;
 
 	value = phy_read(phydev, MII_BMCR);
-	phy_write(phydev, MII_BMCR, value & ~BMCR_PDOWN & ~BMCR_ISOLATE);
+	phy_write(phydev, MII_BMCR, value & ~BMCR_PDOWN);
 
 	return 0;
 }
 EXPORT_SYMBOL(genphy_resume);
-
-int genphy_isolate(struct phy_device *phydev)
-{
-	int value;
-
-	mutex_lock(&phydev->lock);
-
-	value = phy_read(phydev, MII_BMCR);
-	phy_write(phydev, MII_BMCR, ((value & ~BMCR_PDOWN) | BMCR_ISOLATE));
-
-	mutex_unlock(&phydev->lock);
-
-	return 0;
-}
-EXPORT_SYMBOL(genphy_isolate);
 
 int genphy_loopback(struct phy_device *phydev, bool enable)
 {

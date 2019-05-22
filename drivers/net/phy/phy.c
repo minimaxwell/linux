@@ -35,9 +35,8 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <linux/atomic.h>
-#include <asm/irq.h>
 
-#include <linux/micrel_phy.h>
+#include <asm/irq.h>
 
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
@@ -58,7 +57,6 @@ static const char *phy_state_to_str(enum phy_state st)
 	PHY_STATE_STR(CHANGELINK)
 	PHY_STATE_STR(HALTED)
 	PHY_STATE_STR(RESUMING)
-	PHY_STATE_STR(DOUBLE_ATTACHEMENT)
 	}
 
 	return NULL;
@@ -524,9 +522,6 @@ static int phy_start_aneg_priv(struct phy_device *phydev, bool sync)
 out_unlock:
 	mutex_unlock(&phydev->lock);
 
-	if (phydev->dev_flags & MICREL_PHY_FXEN)
-                       trigger = true;
-
 	if (trigger)
 		phy_trigger_machine(phydev, sync);
 
@@ -551,21 +546,15 @@ EXPORT_SYMBOL(phy_start_aneg);
 /**
  * phy_start_machine - start PHY state machine tracking
  * @phydev: the phy_device struct
- * @handler: callback function for state change notifications
  *
  * Description: The PHY infrastructure can run a state machine
  *   which tracks whether the PHY is starting up, negotiating,
  *   etc.  This function starts the delayed workqueue which tracks
  *   the state of the PHY. If you want to maintain your own state machine,
- *   pass in the callback @handler, otherwise, pass NULL.  If you
- *   want to maintain your own state machine, do not call this
- *   function.
+ *   do not call this function.
  */
-void phy_start_machine(struct phy_device *phydev,
-			void (*handler)(struct net_device *))
+void phy_start_machine(struct phy_device *phydev)
 {
-	phydev->adjust_state = handler;
-
 	queue_delayed_work(system_power_efficient_wq, &phydev->state_queue, HZ);
 }
 EXPORT_SYMBOL_GPL(phy_start_machine);
@@ -605,8 +594,6 @@ void phy_stop_machine(struct phy_device *phydev)
 	if (phydev->state > PHY_UP && phydev->state != PHY_HALTED)
 		phydev->state = PHY_UP;
 	mutex_unlock(&phydev->lock);
-
-	phydev->adjust_state = NULL;
 }
 
 /**
@@ -718,7 +705,7 @@ void phy_change_work(struct work_struct *work)
  * @phy_dat: phy_device pointer
  *
  * Description: When a PHY interrupt occurs, the handler disables
- * interrupts, and schedules a work task to clear the interrupt.
+ * interrupts, and uses phy_change to handle the interrupt.
  */
 static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 {
@@ -727,17 +714,10 @@ static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 	if (PHY_HALTED == phydev->state)
 		return IRQ_NONE;		/* It can't be ours.  */
 
-	/* The MDIO bus is not allowed to be written in interrupt
-	 * context, so we need to disable the irq here.  A work
-	 * queue will write the PHY to disable and clear the
-	 * interrupt, and then reenable the irq line.
-	 */
 	disable_irq_nosync(irq);
 	atomic_inc(&phydev->irq_disable);
 
-	queue_work(system_power_efficient_wq, &phydev->phy_queue);
-
-	return IRQ_HANDLED;
+	return phy_change(phydev);
 }
 
 /**
@@ -793,12 +773,6 @@ int phy_stop_interrupts(struct phy_device *phydev)
 
 	free_irq(phydev->irq, phydev);
 
-	/* Cannot call flush_scheduled_work() here as desired because
-	 * of rtnl_lock(), but we do not really care about what would
-	 * be done, except from enable_irq(), so cancel any work
-	 * possibly pending and take care of the matter below.
-	 */
-	cancel_work_sync(&phydev->phy_queue);
 	/* If work indeed has been cancelled, disable_irq() will have
 	 * been left unbalanced from phy_interrupt() and enable_irq()
 	 * has to be called so that other devices on the line work.
@@ -909,7 +883,6 @@ void phy_state_machine(struct work_struct *work)
 			container_of(dwork, struct phy_device, state_queue);
 	bool needs_aneg = false, do_suspend = false;
 	enum phy_state old_state;
-	enum phy_state int_state;
 	int err = 0;
 	int old_link;
 
@@ -920,11 +893,7 @@ void phy_state_machine(struct work_struct *work)
 	if (phydev->drv && phydev->drv->link_change_notify)
 		phydev->drv->link_change_notify(phydev);
 
-	if (phydev->adjust_state)
-		phydev->adjust_state(phydev->attached_dev);
-	int_state = phydev->state;
-
-	switch(phydev->state) {
+	switch (phydev->state) {
 	case PHY_DOWN:
 	case PHY_STARTING:
 	case PHY_READY:
@@ -934,6 +903,7 @@ void phy_state_machine(struct work_struct *work)
 		needs_aneg = true;
 
 		phydev->link_timeout = PHY_AN_TIMEOUT;
+
 		break;
 	case PHY_AN:
 		err = phy_read_status(phydev);
@@ -1020,8 +990,6 @@ void phy_state_machine(struct work_struct *work)
 			phydev_err(phydev, "no link in PHY_RUNNING\n");
 		}
 		break;
-	case PHY_DOUBLE_ATTACHEMENT:
-		break;
 	case PHY_CHANGELINK:
 		err = phy_read_status(phydev);
 		if (err)
@@ -1053,7 +1021,8 @@ void phy_state_machine(struct work_struct *work)
 				break;
 
 			/* err > 0 if AN is done.
-			 * Otherwise, it's 0, and we're still waiting for AN */
+			 * Otherwise, it's 0, and we're  still waiting for AN
+			 */
 			if (err > 0) {
 				err = phy_read_status(phydev);
 				if (err)
@@ -1062,7 +1031,7 @@ void phy_state_machine(struct work_struct *work)
 				if (phydev->link) {
 					phydev->state = PHY_RUNNING;
 					phy_link_up(phydev);
-				} else {
+				} else	{
 					phydev->state = PHY_NOLINK;
 					phy_link_down(phydev, false);
 				}
@@ -1107,9 +1076,18 @@ void phy_state_machine(struct work_struct *work)
 	 */
 	if (phydev->irq == PHY_POLL)
 		queue_delayed_work(system_power_efficient_wq, &phydev->state_queue,
-				   HZ * PHY_STATE_TIME);
+				   PHY_STATE_TIME * HZ);
 }
 
+/**
+ * phy_mac_interrupt - MAC says the link has changed
+ * @phydev: phy_device struct with changed link
+ * @new_link: Link is Up/Down.
+ *
+ * Description: The MAC layer is able indicate there has been a change
+ *   in the PHY link status. Set the new link status, and trigger the
+ *   state machine, work a work queue.
+ */
 void phy_mac_interrupt(struct phy_device *phydev, int new_link)
 {
 	phydev->link = new_link;

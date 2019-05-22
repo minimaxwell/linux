@@ -134,7 +134,6 @@ struct fs_platform_info {
 	u32 device_flags;
 
 	struct device_node *phy_node;
-	struct device_node *phy_node2;
 	const struct fs_mii_bus_info *bus_info;
 
 	int rx_ring, tx_ring;	/* number of buffers on rx     */

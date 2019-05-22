@@ -166,7 +166,7 @@ static inline const char *phy_modes(phy_interface_t interface)
 
 
 #define PHY_INIT_TIMEOUT	100000
-#define PHY_STATE_TIME		1/5
+#define PHY_STATE_TIME		1
 #define PHY_FORCE_TIMEOUT	10
 #define PHY_AN_TIMEOUT		10
 
@@ -349,8 +349,7 @@ enum phy_state {
 	PHY_FORCING,
 	PHY_CHANGELINK,
 	PHY_HALTED,
-	PHY_RESUMING,
-	PHY_DOUBLE_ATTACHEMENT
+	PHY_RESUMING
 };
 
 /**
@@ -381,12 +380,10 @@ struct phy_c45_device_ids {
  * giving up on the current attempt at acquiring a link
  * irq: IRQ number of the PHY's interrupt (-1 if none)
  * phy_timer: The timer for handling the state machine
- * phy_queue: A work_queue for the interrupt
+ * phy_queue: A work_queue for the phy_mac_interrupt
  * attached_dev: The attached enet driver's device instance ptr
  * adjust_link: Callback for the enet controller to respond to
  * changes in the link state.
- * adjust_state: Callback for the enet driver to respond to
- * changes in the state machine.
  *
  * speed, duplex, pause, supported, advertising, lp_advertising,
  * and autoneg are used like in mii_if_info
@@ -481,8 +478,6 @@ struct phy_device {
 
 	void (*phy_link_change)(struct phy_device *, bool up, bool do_carrier);
 	void (*adjust_link)(struct net_device *dev);
-
-	void (*adjust_state)(struct net_device *dev);
 };
 #define to_phy_device(d) container_of(to_mdio_device(d), \
 				      struct phy_device, mdio)
@@ -537,7 +532,6 @@ struct phy_driver {
 	/* PHY Power Management */
 	int (*suspend)(struct phy_device *phydev);
 	int (*resume)(struct phy_device *phydev);
-	int (*isolate)(struct phy_device *phydev);
 
 	/*
 	 * Configures the advertisement and resets
@@ -889,7 +883,6 @@ int genphy_read_mmd_unsupported(struct phy_device *phdev, int devad,
 				u16 regnum);
 int genphy_write_mmd_unsupported(struct phy_device *phdev, int devnum,
 				 u16 regnum, u16 val);
-int genphy_isolate(struct phy_device *phydev);
 
 /* Clause 45 PHY */
 int genphy_c45_restart_aneg(struct phy_device *phydev);
@@ -908,8 +901,7 @@ int phy_drivers_register(struct phy_driver *new_driver, int n,
 void phy_state_machine(struct work_struct *work);
 void phy_change_work(struct work_struct *work);
 void phy_mac_interrupt(struct phy_device *phydev, int new_link);
-void phy_start_machine(struct phy_device *phydev,
-		       void (*handler)(struct net_device *));
+void phy_start_machine(struct phy_device *phydev);
 void phy_stop_machine(struct phy_device *phydev);
 void phy_trigger_machine(struct phy_device *phydev, bool sync);
 int phy_ethtool_sset(struct phy_device *phydev, struct ethtool_cmd *cmd);
