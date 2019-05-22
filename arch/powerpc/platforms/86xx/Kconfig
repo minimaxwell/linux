@@ -5,7 +5,6 @@ menuconfig PPC_86xx
 	depends on 6xx
 	select FSL_SOC
 	select ALTIVEC
-	select PPC_HAVE_PMU_SUPPORT
 	help
 	  The Freescale E600 SoCs have 74xx cores.
 

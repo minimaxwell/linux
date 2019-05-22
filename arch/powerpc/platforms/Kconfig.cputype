@@ -146,6 +146,7 @@ config PPC_BOOK3E
 config 6xx
 	def_bool y
 	depends on PPC32 && PPC_BOOK3S
+	select PPC_HAVE_PMU_SUPPORT
 
 config E500
 	select FSL_EMB_PERFMON
