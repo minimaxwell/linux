@@ -378,7 +378,6 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 	list_for_each_entry(t, &m->transfers, transfer_list) {
 		if ((first->bits_per_word != t->bits_per_word) ||
 			(first->speed_hz != t->speed_hz)) {
-			/* Don't allow changes if CS is active */
 			dev_err(&spi->dev,
 				"bits_per_word/speed_hz should be same for the same SPI transfer\n");
 			return -EINVAL;
