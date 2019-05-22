@@ -231,7 +231,7 @@ KBUILD_CFLAGS	+= $(call cc-option,-fno-dwarf2-cfi-asm)
 KBUILD_CFLAGS		+= $(call cc-option,-mno-string)
 
 ifeq ($(CONFIG_6xx),y)
-KBUILD_CFLAGS		+= -mcpu=e300c2
+KBUILD_CFLAGS		+= -mcpu=powerpc
 endif
 
 # Work around a gcc code-gen bug with -fno-omit-frame-pointer.
