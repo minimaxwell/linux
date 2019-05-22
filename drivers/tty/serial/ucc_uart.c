@@ -717,9 +717,9 @@ static void qe_uart_init_ucc(struct uart_qe_port *qe_port)
 	if (soft_uart) {
 		out_be16(&uccup->supsmr, 0x30);
 		out_be16(&uccup->res92, 0);
-		out_be32(&uccup->rx_state, 0x4);
+		out_be32(&uccup->rx_state, 0);
 		out_be32(&uccup->rx_cnt, 0);
-		out_8(&uccup->rx_bitmark, 0x7);
+		out_8(&uccup->rx_bitmark, 0);
 		out_8(&uccup->rx_length, 10);
 		out_be32(&uccup->dump_ptr, 0x4000);
 		out_8(&uccup->rx_temp_dlst_qe, 0);
