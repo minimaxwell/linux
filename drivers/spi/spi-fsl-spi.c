@@ -419,9 +419,9 @@ static int fsl_spi_do_one_msg(struct spi_master *master,
 		status = fsl_spi_setup_transfer(spi, &t);
 		status = fsl_spi_bufs(spi, &t, 0);
 	}
-	fsl_spi_setup_transfer(spi, NULL);
-
 	spi_finalize_current_message(master);
+
+	fsl_spi_setup_transfer(spi, NULL);
 	return 0;
 }
 
