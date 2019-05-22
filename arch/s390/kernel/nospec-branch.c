@@ -66,7 +66,6 @@ void __init nospec_auto_detect(void)
 		if (IS_ENABLED(CC_USING_EXPOLINE))
 			nospec_disable = 1;
 		__clear_facility(82, S390_lowcore.alt_stfle_fac_list);
-	}
 	if (IS_ENABLED(CC_USING_EXPOLINE)) {
 		/*
 		 * The kernel has been compiled with expolines.
