@@ -282,8 +282,6 @@ static struct phy_driver lxt97x_driver[] = {
 	.probe		= lxt973_probe,
 	.config_aneg	= lxt973_config_aneg,
 	.read_status	= lxt973a2_read_status,
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
 }, {
 	.phy_id		= 0x00137a10,
 	.name		= "LXT973",
@@ -293,8 +291,6 @@ static struct phy_driver lxt97x_driver[] = {
 	.probe		= lxt973_probe,
 	.config_aneg	= lxt973_config_aneg,
 	.read_status	= genphy_read_status,
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
 } };
 
 module_phy_driver(lxt97x_driver);
