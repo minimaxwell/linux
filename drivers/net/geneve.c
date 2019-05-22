@@ -474,7 +474,7 @@ static struct sk_buff **geneve_gro_receive(struct sock *sk,
 out_unlock:
 	rcu_read_unlock();
 out:
-	skb_gro_flush_final(skb, pp, flush);
+	NAPI_GRO_CB(skb)->flush |= flush;
 
 	return pp;
 }
@@ -632,20 +632,15 @@ out:
 static int geneve_open(struct net_device *dev)
 {
 	struct geneve_dev *geneve = netdev_priv(dev);
+	bool ipv6 = !!(geneve->info.mode & IP_TUNNEL_INFO_IPV6);
 	bool metadata = geneve->collect_md;
-	bool ipv4, ipv6;
 	int ret = 0;
 
-	ipv6 = geneve->info.mode & IP_TUNNEL_INFO_IPV6 || metadata;
-	ipv4 = !ipv6 || metadata;
 #if IS_ENABLED(CONFIG_IPV6)
-	if (ipv6) {
+	if (ipv6 || metadata)
 		ret = geneve_sock_add(geneve, true);
-		if (ret < 0 && ret != -EAFNOSUPPORT)
-			ipv4 = false;
-	}
 #endif
-	if (ipv4)
+	if (!ret && (!ipv6 || metadata))
 		ret = geneve_sock_add(geneve, false);
 	if (ret < 0)
 		geneve_sock_release(geneve);
@@ -830,13 +825,6 @@ static int geneve_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 	if (IS_ERR(rt))
 		return PTR_ERR(rt);
 
-	if (skb_dst(skb)) {
-		int mtu = dst_mtu(&rt->dst) - sizeof(struct iphdr) -
-			  GENEVE_BASE_HLEN - info->options_len - 14;
-
-		skb_dst_update_pmtu(skb, mtu);
-	}
-
 	sport = udp_flow_src_port(geneve->net, skb, 1, USHRT_MAX, true);
 	if (geneve->collect_md) {
 		tos = ip_tunnel_ecn_encap(key->tos, ip_hdr(skb), skb);
@@ -875,13 +863,6 @@ static int geneve6_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 	dst = geneve_get_v6_dst(skb, dev, gs6, &fl6, info);
 	if (IS_ERR(dst))
 		return PTR_ERR(dst);
-
-	if (skb_dst(skb)) {
-		int mtu = dst_mtu(dst) - sizeof(struct ipv6hdr) -
-			  GENEVE_BASE_HLEN - info->options_len - 14;
-
-		skb_dst_update_pmtu(skb, mtu);
-	}
 
 	sport = udp_flow_src_port(geneve->net, skb, 1, USHRT_MAX, true);
 	if (geneve->collect_md) {
@@ -1522,7 +1503,6 @@ static int geneve_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
 	struct geneve_dev *geneve = netdev_priv(dev);
 	struct ip_tunnel_info *info = &geneve->info;
-	bool metadata = geneve->collect_md;
 	__u8 tmp_vni[3];
 	__u32 vni;
 
@@ -1531,24 +1511,32 @@ static int geneve_fill_info(struct sk_buff *skb, const struct net_device *dev)
 	if (nla_put_u32(skb, IFLA_GENEVE_ID, vni))
 		goto nla_put_failure;
 
-	if (!metadata && ip_tunnel_info_af(info) == AF_INET) {
+	if (rtnl_dereference(geneve->sock4)) {
 		if (nla_put_in_addr(skb, IFLA_GENEVE_REMOTE,
 				    info->key.u.ipv4.dst))
 			goto nla_put_failure;
+
 		if (nla_put_u8(skb, IFLA_GENEVE_UDP_CSUM,
 			       !!(info->key.tun_flags & TUNNEL_CSUM)))
 			goto nla_put_failure;
 
+	}
+
 #if IS_ENABLED(CONFIG_IPV6)
-	} else if (!metadata) {
+	if (rtnl_dereference(geneve->sock6)) {
 		if (nla_put_in6_addr(skb, IFLA_GENEVE_REMOTE6,
 				     &info->key.u.ipv6.dst))
 			goto nla_put_failure;
+
 		if (nla_put_u8(skb, IFLA_GENEVE_UDP_ZERO_CSUM6_TX,
 			       !(info->key.tun_flags & TUNNEL_CSUM)))
 			goto nla_put_failure;
-#endif
+
+		if (nla_put_u8(skb, IFLA_GENEVE_UDP_ZERO_CSUM6_RX,
+			       !geneve->use_udp6_rx_checksums))
+			goto nla_put_failure;
 	}
+#endif
 
 	if (nla_put_u8(skb, IFLA_GENEVE_TTL, info->key.ttl) ||
 	    nla_put_u8(skb, IFLA_GENEVE_TOS, info->key.tos) ||
@@ -1558,13 +1546,10 @@ static int geneve_fill_info(struct sk_buff *skb, const struct net_device *dev)
 	if (nla_put_be16(skb, IFLA_GENEVE_PORT, info->key.tp_dst))
 		goto nla_put_failure;
 
-	if (metadata && nla_put_flag(skb, IFLA_GENEVE_COLLECT_METADATA))
+	if (geneve->collect_md) {
+		if (nla_put_flag(skb, IFLA_GENEVE_COLLECT_METADATA))
 			goto nla_put_failure;
-
-	if (nla_put_u8(skb, IFLA_GENEVE_UDP_ZERO_CSUM6_RX,
-		       !geneve->use_udp6_rx_checksums))
-		goto nla_put_failure;
-
+	}
 	return 0;
 
 nla_put_failure:

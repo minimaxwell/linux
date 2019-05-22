@@ -1396,11 +1396,9 @@ int iproc_pcie_setup(struct iproc_pcie *pcie, struct list_head *res)
 		}
 	}
 
-	if (pcie->need_ib_cfg) {
-		ret = iproc_pcie_map_dma_ranges(pcie);
-		if (ret && ret != -ENOENT)
-			goto err_power_off_phy;
-	}
+	ret = iproc_pcie_map_dma_ranges(pcie);
+	if (ret && ret != -ENOENT)
+		goto err_power_off_phy;
 
 #ifdef CONFIG_ARM
 	pcie->sysdata.private_data = pcie;

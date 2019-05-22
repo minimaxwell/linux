@@ -48,7 +48,6 @@
 #include <linux/nodemask.h>
 #include <linux/moduleparam.h>
 #include <linux/uaccess.h>
-#include <linux/nmi.h>
 
 #include "workqueue_internal.h"
 
@@ -4185,22 +4184,6 @@ void workqueue_set_max_active(struct workqueue_struct *wq, int max_active)
 EXPORT_SYMBOL_GPL(workqueue_set_max_active);
 
 /**
- * current_work - retrieve %current task's work struct
- *
- * Determine if %current task is a workqueue worker and what it's working on.
- * Useful to find out the context that the %current task is running in.
- *
- * Return: work struct if %current task is a workqueue worker, %NULL otherwise.
- */
-struct work_struct *current_work(void)
-{
-	struct worker *worker = current_wq_worker();
-
-	return worker ? worker->current_work : NULL;
-}
-EXPORT_SYMBOL(current_work);
-
-/**
  * current_is_workqueue_rescuer - is %current workqueue rescuer?
  *
  * Determine whether %current is a workqueue rescuer.  Can be used from
@@ -4496,12 +4479,6 @@ void show_workqueue_state(void)
 			if (pwq->nr_active || !list_empty(&pwq->delayed_works))
 				show_pwq(pwq);
 			spin_unlock_irqrestore(&pwq->pool->lock, flags);
-			/*
-			 * We could be printing a lot from atomic context, e.g.
-			 * sysrq-t -> show_workqueue_state(). Avoid triggering
-			 * hard lockup.
-			 */
-			touch_nmi_watchdog();
 		}
 	}
 
@@ -4529,12 +4506,6 @@ void show_workqueue_state(void)
 		pr_cont("\n");
 	next_pool:
 		spin_unlock_irqrestore(&pool->lock, flags);
-		/*
-		 * We could be printing a lot from atomic context, e.g.
-		 * sysrq-t -> show_workqueue_state(). Avoid triggering
-		 * hard lockup.
-		 */
-		touch_nmi_watchdog();
 	}
 
 	rcu_read_unlock_sched();
@@ -5350,7 +5321,7 @@ int workqueue_sysfs_register(struct workqueue_struct *wq)
 
 	ret = device_register(&wq_dev->dev);
 	if (ret) {
-		put_device(&wq_dev->dev);
+		kfree(wq_dev);
 		wq->wq_dev = NULL;
 		return ret;
 	}
@@ -5484,7 +5455,7 @@ static void wq_watchdog_timer_fn(unsigned long data)
 	mod_timer(&wq_watchdog_timer, jiffies + thresh);
 }
 
-notrace void wq_watchdog_touch(int cpu)
+void wq_watchdog_touch(int cpu)
 {
 	if (cpu >= 0)
 		per_cpu(wq_watchdog_touched_cpu, cpu) = jiffies;

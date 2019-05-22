@@ -754,6 +754,15 @@ static int ethtool_set_link_ksettings(struct net_device *dev,
 	return dev->ethtool_ops->set_link_ksettings(dev, &link_ksettings);
 }
 
+static void
+warn_incomplete_ethtool_legacy_settings_conversion(const char *details)
+{
+	char name[sizeof(current->comm)];
+
+	pr_info_once("warning: `%s' uses legacy ethtool link settings API, %s\n",
+		     get_task_comm(name, current), details);
+}
+
 /* Query device for its ethtool_cmd settings.
  *
  * Backward compatibility note: for compatibility with legacy ethtool,
@@ -780,8 +789,10 @@ static int ethtool_get_settings(struct net_device *dev, void __user *useraddr)
 							   &link_ksettings);
 		if (err < 0)
 			return err;
-		convert_link_ksettings_to_legacy_settings(&cmd,
-							  &link_ksettings);
+		if (!convert_link_ksettings_to_legacy_settings(&cmd,
+							       &link_ksettings))
+			warn_incomplete_ethtool_legacy_settings_conversion(
+				"link modes are only partially reported");
 
 		/* send a sensible cmd tag back to user */
 		cmd.cmd = ETHTOOL_GSET;
@@ -1815,15 +1826,11 @@ static int ethtool_get_strings(struct net_device *dev, void __user *useraddr)
 	WARN_ON_ONCE(!ret);
 
 	gstrings.len = ret;
-	if (gstrings.len) {
-		data = vzalloc(gstrings.len * ETH_GSTRING_LEN);
-		if (!data)
-			return -ENOMEM;
+	data = vzalloc(gstrings.len * ETH_GSTRING_LEN);
+	if (gstrings.len && !data)
+		return -ENOMEM;
 
-		__ethtool_get_strings(dev, gstrings.string_set, data);
-	} else {
-		data = NULL;
-	}
+	__ethtool_get_strings(dev, gstrings.string_set, data);
 
 	ret = -EFAULT;
 	if (copy_to_user(useraddr, &gstrings, sizeof(gstrings)))
@@ -1919,14 +1926,11 @@ static int ethtool_get_stats(struct net_device *dev, void __user *useraddr)
 		return -EFAULT;
 
 	stats.n_stats = n_stats;
-	if (n_stats) {
-		data = vzalloc(n_stats * sizeof(u64));
-		if (!data)
-			return -ENOMEM;
-		ops->get_ethtool_stats(dev, &stats, data);
-	} else {
-		data = NULL;
-	}
+	data = vzalloc(n_stats * sizeof(u64));
+	if (n_stats && !data)
+		return -ENOMEM;
+
+	ops->get_ethtool_stats(dev, &stats, data);
 
 	ret = -EFAULT;
 	if (copy_to_user(useraddr, &stats, sizeof(stats)))
@@ -1962,17 +1966,13 @@ static int ethtool_get_phy_stats(struct net_device *dev, void __user *useraddr)
 		return -EFAULT;
 
 	stats.n_stats = n_stats;
-	if (n_stats) {
-		data = vzalloc(n_stats * sizeof(u64));
-		if (!data)
-			return -ENOMEM;
+	data = vzalloc(n_stats * sizeof(u64));
+	if (n_stats && !data)
+		return -ENOMEM;
 
-		mutex_lock(&phydev->lock);
-		phydev->drv->get_stats(phydev, &stats, data);
-		mutex_unlock(&phydev->lock);
-	} else {
-		data = NULL;
-	}
+	mutex_lock(&phydev->lock);
+	phydev->drv->get_stats(phydev, &stats, data);
+	mutex_unlock(&phydev->lock);
 
 	ret = -EFAULT;
 	if (copy_to_user(useraddr, &stats, sizeof(stats)))
@@ -2421,16 +2421,12 @@ roll_back:
 	return ret;
 }
 
-static int ethtool_set_per_queue(struct net_device *dev,
-				 void __user *useraddr, u32 sub_cmd)
+static int ethtool_set_per_queue(struct net_device *dev, void __user *useraddr)
 {
 	struct ethtool_per_queue_op per_queue_opt;
 
 	if (copy_from_user(&per_queue_opt, useraddr, sizeof(per_queue_opt)))
 		return -EFAULT;
-
-	if (per_queue_opt.sub_command != sub_cmd)
-		return -EINVAL;
 
 	switch (per_queue_opt.sub_command) {
 	case ETHTOOL_GCOALESCE:
@@ -2520,14 +2516,11 @@ static int set_phy_tunable(struct net_device *dev, void __user *useraddr)
 static int ethtool_get_fecparam(struct net_device *dev, void __user *useraddr)
 {
 	struct ethtool_fecparam fecparam = { ETHTOOL_GFECPARAM };
-	int rc;
 
 	if (!dev->ethtool_ops->get_fecparam)
 		return -EOPNOTSUPP;
 
-	rc = dev->ethtool_ops->get_fecparam(dev, &fecparam);
-	if (rc)
-		return rc;
+	dev->ethtool_ops->get_fecparam(dev, &fecparam);
 
 	if (copy_to_user(useraddr, &fecparam, sizeof(fecparam)))
 		return -EFAULT;
@@ -2587,7 +2580,6 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 	case ETHTOOL_GPHYSTATS:
 	case ETHTOOL_GTSO:
 	case ETHTOOL_GPERMADDR:
-	case ETHTOOL_GUFO:
 	case ETHTOOL_GGSO:
 	case ETHTOOL_GGRO:
 	case ETHTOOL_GFLAGS:
@@ -2802,7 +2794,7 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 		rc = ethtool_get_phy_stats(dev, useraddr);
 		break;
 	case ETHTOOL_PERQUEUE:
-		rc = ethtool_set_per_queue(dev, useraddr, sub_cmd);
+		rc = ethtool_set_per_queue(dev, useraddr);
 		break;
 	case ETHTOOL_GLINKSETTINGS:
 		rc = ethtool_get_link_ksettings(dev, useraddr);

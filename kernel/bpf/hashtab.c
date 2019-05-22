@@ -655,7 +655,7 @@ static void free_htab_elem(struct bpf_htab *htab, struct htab_elem *l)
 	}
 
 	if (htab_is_prealloc(htab)) {
-		__pcpu_freelist_push(&htab->freelist, &l->fnode);
+		pcpu_freelist_push(&htab->freelist, &l->fnode);
 	} else {
 		atomic_dec(&htab->count);
 		l->htab = htab;
@@ -717,7 +717,7 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 		} else {
 			struct pcpu_freelist_node *l;
 
-			l = __pcpu_freelist_pop(&htab->freelist);
+			l = pcpu_freelist_pop(&htab->freelist);
 			if (!l)
 				return ERR_PTR(-E2BIG);
 			l_new = container_of(l, struct htab_elem, fnode);
@@ -730,15 +730,13 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 				 * old element will be freed immediately.
 				 * Otherwise return an error
 				 */
-				l_new = ERR_PTR(-E2BIG);
-				goto dec_count;
+				atomic_dec(&htab->count);
+				return ERR_PTR(-E2BIG);
 			}
 		l_new = kmalloc_node(htab->elem_size, GFP_ATOMIC | __GFP_NOWARN,
 				     htab->map.numa_node);
-		if (!l_new) {
-			l_new = ERR_PTR(-ENOMEM);
-			goto dec_count;
-		}
+		if (!l_new)
+			return ERR_PTR(-ENOMEM);
 	}
 
 	memcpy(l_new->key, key, key_size);
@@ -751,8 +749,7 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 						  GFP_ATOMIC | __GFP_NOWARN);
 			if (!pptr) {
 				kfree(l_new);
-				l_new = ERR_PTR(-ENOMEM);
-				goto dec_count;
+				return ERR_PTR(-ENOMEM);
 			}
 		}
 
@@ -765,9 +762,6 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 	}
 
 	l_new->hash = hash;
-	return l_new;
-dec_count:
-	atomic_dec(&htab->count);
 	return l_new;
 }
 

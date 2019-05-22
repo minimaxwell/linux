@@ -78,9 +78,6 @@ static int xmon_gate;
 #define xmon_owner 0
 #endif /* CONFIG_SMP */
 
-#ifdef CONFIG_PPC_PSERIES
-static int set_indicator_token = RTAS_UNKNOWN_SERVICE;
-#endif
 static unsigned long in_xmon __read_mostly = 0;
 static int xmon_on = IS_ENABLED(CONFIG_XMON_DEFAULT);
 
@@ -360,6 +357,7 @@ static inline void disable_surveillance(void)
 #ifdef CONFIG_PPC_PSERIES
 	/* Since this can't be a module, args should end up below 4GB. */
 	static struct rtas_args args;
+	int token;
 
 	/*
 	 * At this point we have got all the cpus we can into
@@ -368,11 +366,11 @@ static inline void disable_surveillance(void)
 	 * If we did try to take rtas.lock there would be a
 	 * real possibility of deadlock.
 	 */
-	if (set_indicator_token == RTAS_UNKNOWN_SERVICE)
+	token = rtas_token("set-indicator");
+	if (token == RTAS_UNKNOWN_SERVICE)
 		return;
 
-	rtas_call_unlocked(&args, set_indicator_token, 3, 1, NULL,
-			   SURVEILLANCE_TOKEN, 0, 0);
+	rtas_call_unlocked(&args, token, 3, 1, NULL, SURVEILLANCE_TOKEN, 0, 0);
 
 #endif /* CONFIG_PPC_PSERIES */
 }
@@ -532,19 +530,14 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 
  waiting:
 	secondary = 1;
-	spin_begin();
 	while (secondary && !xmon_gate) {
 		if (in_xmon == 0) {
-			if (fromipi) {
-				spin_end();
+			if (fromipi)
 				goto leave;
-			}
 			secondary = test_and_set_bit(0, &in_xmon);
 		}
-		spin_cpu_relax();
-		touch_nmi_watchdog();
+		barrier();
 	}
-	spin_end();
 
 	if (!secondary && !xmon_gate) {
 		/* we are the first cpu to come in */
@@ -575,25 +568,21 @@ static int xmon_core(struct pt_regs *regs, int fromipi)
 		mb();
 		xmon_gate = 1;
 		barrier();
-		touch_nmi_watchdog();
 	}
 
  cmdloop:
 	while (in_xmon) {
 		if (secondary) {
-			spin_begin();
 			if (cpu == xmon_owner) {
 				if (!test_and_set_bit(0, &xmon_taken)) {
 					secondary = 0;
-					spin_end();
 					continue;
 				}
 				/* missed it */
 				while (cpu == xmon_owner)
-					spin_cpu_relax();
+					barrier();
 			}
-			spin_cpu_relax();
-			touch_nmi_watchdog();
+			barrier();
 		} else {
 			cmd = cmds(regs);
 			if (cmd != 0) {
@@ -2350,8 +2339,6 @@ static void dump_one_paca(int cpu)
 	DUMP(p, slb_cache_ptr, "x");
 	for (i = 0; i < SLB_CACHE_ENTRIES; i++)
 		printf(" slb_cache[%d]:        = 0x%016lx\n", i, p->slb_cache[i]);
-
-	DUMP(p, rfi_flush_fallback_area, "px");
 #endif
 	DUMP(p, dscr_default, "llx");
 #ifdef CONFIG_PPC_BOOK3E
@@ -2487,11 +2474,6 @@ static void dump_xives(void)
 {
 	unsigned long num;
 	int c;
-
-	if (!xive_enabled()) {
-		printf("Xive disabled on this system\n");
-		return;
-	}
 
 	c = inchar();
 	if (c == 'a') {
@@ -3474,14 +3456,6 @@ static void xmon_init(int enable)
 		__debugger_iabr_match = xmon_iabr_match;
 		__debugger_break_match = xmon_break_match;
 		__debugger_fault_handler = xmon_fault_handler;
-
-#ifdef CONFIG_PPC_PSERIES
-		/*
-		 * Get the token here to avoid trying to get a lock
-		 * during the crash, causing a deadlock.
-		 */
-		set_indicator_token = rtas_token("set-indicator");
-#endif
 	} else {
 		__debugger = NULL;
 		__debugger_ipi = NULL;

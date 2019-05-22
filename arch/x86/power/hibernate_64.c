@@ -174,7 +174,7 @@ out:
 	return 0;
 }
 
-asmlinkage int swsusp_arch_resume(void)
+int swsusp_arch_resume(void)
 {
 	int error;
 

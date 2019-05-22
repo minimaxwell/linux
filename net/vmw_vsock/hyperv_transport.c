@@ -488,7 +488,7 @@ static void hvs_release(struct vsock_sock *vsk)
 
 	lock_sock(sk);
 
-	sk->sk_state = TCP_CLOSING;
+	sk->sk_state = SS_DISCONNECTING;
 	vsock_remove_sock(vsk);
 
 	release_sock(sk);

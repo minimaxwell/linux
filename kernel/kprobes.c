@@ -573,15 +573,13 @@ static void kprobe_optimizer(struct work_struct *work)
 	do_unoptimize_kprobes();
 
 	/*
-	 * Step 2: Wait for quiesence period to ensure all potentially
-	 * preempted tasks to have normally scheduled. Because optprobe
-	 * may modify multiple instructions, there is a chance that Nth
-	 * instruction is preempted. In that case, such tasks can return
-	 * to 2nd-Nth byte of jump instruction. This wait is for avoiding it.
-	 * Note that on non-preemptive kernel, this is transparently converted
-	 * to synchronoze_sched() to wait for all interrupts to have completed.
+	 * Step 2: Wait for quiesence period to ensure all running interrupts
+	 * are done. Because optprobe may modify multiple instructions
+	 * there is a chance that Nth instruction is interrupted. In that
+	 * case, running interrupt can return to 2nd-Nth byte of jump
+	 * instruction. This wait is for avoiding it.
 	 */
-	synchronize_rcu_tasks();
+	synchronize_sched();
 
 	/* Step 3: Optimize kprobes after quiesence period */
 	do_optimize_kprobes();
@@ -700,7 +698,7 @@ static void unoptimize_kprobe(struct kprobe *p, bool force)
 }
 
 /* Cancel unoptimizing for reusing */
-static int reuse_unused_kprobe(struct kprobe *ap)
+static void reuse_unused_kprobe(struct kprobe *ap)
 {
 	struct optimized_kprobe *op;
 
@@ -716,11 +714,8 @@ static int reuse_unused_kprobe(struct kprobe *ap)
 	/* Enable the probe again */
 	ap->flags &= ~KPROBE_FLAG_DISABLED;
 	/* Optimize it again (remove from op->list) */
-	if (!kprobe_optready(ap))
-		return -EINVAL;
-
+	BUG_ON(!kprobe_optready(ap));
 	optimize_kprobe(ap);
-	return 0;
 }
 
 /* Remove optimized instructions */
@@ -945,16 +940,11 @@ static void __disarm_kprobe(struct kprobe *p, bool reopt)
 #define kprobe_disarmed(p)			kprobe_disabled(p)
 #define wait_for_kprobe_optimizer()		do {} while (0)
 
-static int reuse_unused_kprobe(struct kprobe *ap)
+/* There should be no unused kprobes can be reused without optimization */
+static void reuse_unused_kprobe(struct kprobe *ap)
 {
-	/*
-	 * If the optimized kprobe is NOT supported, the aggr kprobe is
-	 * released at the same time that the last aggregated kprobe is
-	 * unregistered.
-	 * Thus there should be no chance to reuse unused kprobe.
-	 */
 	printk(KERN_ERR "Error: There should be no unused kprobe here.\n");
-	return -EINVAL;
+	BUG_ON(kprobe_unused(ap));
 }
 
 static void free_aggr_kprobe(struct kprobe *p)
@@ -1328,12 +1318,9 @@ static int register_aggr_kprobe(struct kprobe *orig_p, struct kprobe *p)
 			goto out;
 		}
 		init_aggr_kprobe(ap, orig_p);
-	} else if (kprobe_unused(ap)) {
+	} else if (kprobe_unused(ap))
 		/* This probe is going to die. Rescue it */
-		ret = reuse_unused_kprobe(ap);
-		if (ret)
-			goto out;
-	}
+		reuse_unused_kprobe(ap);
 
 	if (kprobe_gone(ap)) {
 		/*
@@ -2542,7 +2529,7 @@ static int __init debugfs_kprobe_init(void)
 	if (!dir)
 		return -ENOMEM;
 
-	file = debugfs_create_file("list", 0400, dir, NULL,
+	file = debugfs_create_file("list", 0444, dir, NULL,
 				&debugfs_kprobes_operations);
 	if (!file)
 		goto error;
@@ -2552,7 +2539,7 @@ static int __init debugfs_kprobe_init(void)
 	if (!file)
 		goto error;
 
-	file = debugfs_create_file("blacklist", 0400, dir, NULL,
+	file = debugfs_create_file("blacklist", 0444, dir, NULL,
 				&debugfs_kprobe_blacklist_ops);
 	if (!file)
 		goto error;

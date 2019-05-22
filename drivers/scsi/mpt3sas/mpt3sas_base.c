@@ -1921,11 +1921,8 @@ _base_assign_reply_queues(struct MPT3SAS_ADAPTER *ioc)
 				continue;
 			}
 
-			for_each_cpu_and(cpu, mask, cpu_online_mask) {
-				if (cpu >= ioc->cpu_msix_table_sz)
-					break;
+			for_each_cpu(cpu, mask)
 				ioc->cpu_msix_table[cpu] = reply_q->msix_index;
-			}
 		}
 		return;
 	}
@@ -5662,14 +5659,14 @@ _base_reset_handler(struct MPT3SAS_ADAPTER *ioc, int reset_phase)
 }
 
 /**
- * mpt3sas_wait_for_commands_to_complete - reset controller
+ * _wait_for_commands_to_complete - reset controller
  * @ioc: Pointer to MPT_ADAPTER structure
  *
  * This function waiting(3s) for all pending commands to complete
  * prior to putting controller in reset.
  */
-void
-mpt3sas_wait_for_commands_to_complete(struct MPT3SAS_ADAPTER *ioc)
+static void
+_wait_for_commands_to_complete(struct MPT3SAS_ADAPTER *ioc)
 {
 	u32 ioc_state;
 	unsigned long flags;
@@ -5748,7 +5745,7 @@ mpt3sas_base_hard_reset_handler(struct MPT3SAS_ADAPTER *ioc,
 			is_fault = 1;
 	}
 	_base_reset_handler(ioc, MPT3_IOC_PRE_RESET);
-	mpt3sas_wait_for_commands_to_complete(ioc);
+	_wait_for_commands_to_complete(ioc);
 	_base_mask_interrupts(ioc);
 	r = _base_make_ioc_ready(ioc, type);
 	if (r)

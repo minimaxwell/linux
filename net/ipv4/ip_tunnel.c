@@ -253,16 +253,15 @@ static struct net_device *__ip_tunnel_create(struct net *net,
 	struct net_device *dev;
 	char name[IFNAMSIZ];
 
-	err = -E2BIG;
-	if (parms->name[0]) {
-		if (!dev_valid_name(parms->name))
-			goto failed;
+	if (parms->name[0])
 		strlcpy(name, parms->name, IFNAMSIZ);
-	} else {
-		if (strlen(ops->kind) > (IFNAMSIZ - 3))
+	else {
+		if (strlen(ops->kind) > (IFNAMSIZ - 3)) {
+			err = -E2BIG;
 			goto failed;
-		strcpy(name, ops->kind);
-		strcat(name, "%d");
+		}
+		strlcpy(name, ops->kind, IFNAMSIZ);
+		strncat(name, "%d", 2);
 	}
 
 	ASSERT_RTNL();
@@ -350,8 +349,8 @@ static int ip_tunnel_bind_dev(struct net_device *dev)
 	dev->needed_headroom = t_hlen + hlen;
 	mtu -= (dev->hard_header_len + t_hlen);
 
-	if (mtu < IPV4_MIN_MTU)
-		mtu = IPV4_MIN_MTU;
+	if (mtu < 68)
+		mtu = 68;
 
 	return mtu;
 }
@@ -521,7 +520,8 @@ static int tnl_update_pmtu(struct net_device *dev, struct sk_buff *skb,
 	else
 		mtu = skb_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu;
 
-	skb_dst_update_pmtu(skb, mtu);
+	if (skb_dst(skb))
+		skb_dst(skb)->ops->update_pmtu(skb_dst(skb), NULL, skb, mtu);
 
 	if (skb->protocol == htons(ETH_P_IP)) {
 		if (!skb_is_gso(skb) &&
@@ -635,7 +635,6 @@ void ip_tunnel_xmit(struct sk_buff *skb, struct net_device *dev,
 		    const struct iphdr *tnl_params, u8 protocol)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
-	unsigned int inner_nhdr_len = 0;
 	const struct iphdr *inner_iph;
 	struct flowi4 fl4;
 	u8     tos, ttl;
@@ -644,14 +643,6 @@ void ip_tunnel_xmit(struct sk_buff *skb, struct net_device *dev,
 	unsigned int max_headroom;	/* The extra header space needed */
 	__be32 dst;
 	bool connected;
-
-	/* ensure we can access the inner net header, for several users below */
-	if (skb->protocol == htons(ETH_P_IP))
-		inner_nhdr_len = sizeof(struct iphdr);
-	else if (skb->protocol == htons(ETH_P_IPV6))
-		inner_nhdr_len = sizeof(struct ipv6hdr);
-	if (unlikely(!pskb_may_pull(skb, inner_nhdr_len)))
-		goto tx_error;
 
 	inner_iph = (const struct iphdr *)skb_inner_network_header(skb);
 	connected = (tunnel->parms.iph.daddr != 0);
@@ -1112,14 +1103,8 @@ int ip_tunnel_newlink(struct net_device *dev, struct nlattr *tb[],
 		eth_hw_addr_random(dev);
 
 	mtu = ip_tunnel_bind_dev(dev);
-	if (tb[IFLA_MTU]) {
-		unsigned int max = 0xfff8 - dev->hard_header_len - nt->hlen;
-
-		dev->mtu = clamp(dev->mtu, (unsigned int)ETH_MIN_MTU,
-				 (unsigned int)(max - sizeof(struct iphdr)));
-	} else {
+	if (!tb[IFLA_MTU])
 		dev->mtu = mtu;
-	}
 
 	ip_tunnel_add(itn, nt);
 out:

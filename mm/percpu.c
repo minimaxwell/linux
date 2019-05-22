@@ -80,7 +80,6 @@
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 #include <linux/kmemleak.h>
-#include <linux/sched.h>
 
 #include <asm/cacheflush.h>
 #include <asm/sections.h>
@@ -448,12 +447,10 @@ static void pcpu_next_fit_region(struct pcpu_chunk *chunk, int alloc_bits,
 /**
  * pcpu_mem_zalloc - allocate memory
  * @size: bytes to allocate
- * @gfp: allocation flags
  *
  * Allocate @size bytes.  If @size is smaller than PAGE_SIZE,
- * kzalloc() is used; otherwise, the equivalent of vzalloc() is used.
- * This is to facilitate passing through whitelisted flags.  The
- * returned memory is always zeroed.
+ * kzalloc() is used; otherwise, vzalloc() is used.  The returned
+ * memory is always zeroed.
  *
  * CONTEXT:
  * Does GFP_KERNEL allocation.
@@ -461,16 +458,15 @@ static void pcpu_next_fit_region(struct pcpu_chunk *chunk, int alloc_bits,
  * RETURNS:
  * Pointer to the allocated area on success, NULL on failure.
  */
-static void *pcpu_mem_zalloc(size_t size, gfp_t gfp)
+static void *pcpu_mem_zalloc(size_t size)
 {
 	if (WARN_ON_ONCE(!slab_is_available()))
 		return NULL;
 
 	if (size <= PAGE_SIZE)
-		return kzalloc(size, gfp | GFP_KERNEL);
+		return kzalloc(size, GFP_KERNEL);
 	else
-		return __vmalloc(size, gfp | GFP_KERNEL | __GFP_ZERO,
-				 PAGE_KERNEL);
+		return vzalloc(size);
 }
 
 /**
@@ -1158,12 +1154,12 @@ static struct pcpu_chunk * __init pcpu_alloc_first_chunk(unsigned long tmp_addr,
 	return chunk;
 }
 
-static struct pcpu_chunk *pcpu_alloc_chunk(gfp_t gfp)
+static struct pcpu_chunk *pcpu_alloc_chunk(void)
 {
 	struct pcpu_chunk *chunk;
 	int region_bits;
 
-	chunk = pcpu_mem_zalloc(pcpu_chunk_struct_size, gfp);
+	chunk = pcpu_mem_zalloc(pcpu_chunk_struct_size);
 	if (!chunk)
 		return NULL;
 
@@ -1172,17 +1168,17 @@ static struct pcpu_chunk *pcpu_alloc_chunk(gfp_t gfp)
 	region_bits = pcpu_chunk_map_bits(chunk);
 
 	chunk->alloc_map = pcpu_mem_zalloc(BITS_TO_LONGS(region_bits) *
-					   sizeof(chunk->alloc_map[0]), gfp);
+					   sizeof(chunk->alloc_map[0]));
 	if (!chunk->alloc_map)
 		goto alloc_map_fail;
 
 	chunk->bound_map = pcpu_mem_zalloc(BITS_TO_LONGS(region_bits + 1) *
-					   sizeof(chunk->bound_map[0]), gfp);
+					   sizeof(chunk->bound_map[0]));
 	if (!chunk->bound_map)
 		goto bound_map_fail;
 
 	chunk->md_blocks = pcpu_mem_zalloc(pcpu_chunk_nr_blocks(chunk) *
-					   sizeof(chunk->md_blocks[0]), gfp);
+					   sizeof(chunk->md_blocks[0]));
 	if (!chunk->md_blocks)
 		goto md_blocks_fail;
 
@@ -1208,7 +1204,6 @@ static void pcpu_free_chunk(struct pcpu_chunk *chunk)
 {
 	if (!chunk)
 		return;
-	pcpu_mem_free(chunk->md_blocks);
 	pcpu_mem_free(chunk->bound_map);
 	pcpu_mem_free(chunk->alloc_map);
 	pcpu_mem_free(chunk);
@@ -1282,10 +1277,9 @@ static void pcpu_chunk_depopulated(struct pcpu_chunk *chunk,
  * pcpu_addr_to_page		- translate address to physical address
  * pcpu_verify_alloc_info	- check alloc_info is acceptable during init
  */
-static int pcpu_populate_chunk(struct pcpu_chunk *chunk, int off, int size,
-			       gfp_t gfp);
+static int pcpu_populate_chunk(struct pcpu_chunk *chunk, int off, int size);
 static void pcpu_depopulate_chunk(struct pcpu_chunk *chunk, int off, int size);
-static struct pcpu_chunk *pcpu_create_chunk(gfp_t gfp);
+static struct pcpu_chunk *pcpu_create_chunk(void);
 static void pcpu_destroy_chunk(struct pcpu_chunk *chunk);
 static struct page *pcpu_addr_to_page(void *addr);
 static int __init pcpu_verify_alloc_info(const struct pcpu_alloc_info *ai);
@@ -1427,7 +1421,7 @@ restart:
 	}
 
 	if (list_empty(&pcpu_slot[pcpu_nr_slots - 1])) {
-		chunk = pcpu_create_chunk(0);
+		chunk = pcpu_create_chunk();
 		if (!chunk) {
 			err = "failed to allocate new chunk";
 			goto fail;
@@ -1456,7 +1450,7 @@ area_found:
 					   page_start, page_end) {
 			WARN_ON(chunk->immutable);
 
-			ret = pcpu_populate_chunk(chunk, rs, re, 0);
+			ret = pcpu_populate_chunk(chunk, rs, re);
 
 			spin_lock_irqsave(&pcpu_lock, flags);
 			if (ret) {
@@ -1567,17 +1561,10 @@ void __percpu *__alloc_reserved_percpu(size_t size, size_t align)
  * pcpu_balance_workfn - manage the amount of free chunks and populated pages
  * @work: unused
  *
- * Reclaim all fully free chunks except for the first one.  This is also
- * responsible for maintaining the pool of empty populated pages.  However,
- * it is possible that this is called when physical memory is scarce causing
- * OOM killer to be triggered.  We should avoid doing so until an actual
- * allocation causes the failure as it is possible that requests can be
- * serviced from already backed regions.
+ * Reclaim all fully free chunks except for the first one.
  */
 static void pcpu_balance_workfn(struct work_struct *work)
 {
-	/* gfp flags passed to underlying allocators */
-	const gfp_t gfp = __GFP_NORETRY | __GFP_NOWARN;
 	LIST_HEAD(to_free);
 	struct list_head *free_head = &pcpu_slot[pcpu_nr_slots - 1];
 	struct pcpu_chunk *chunk, *next;
@@ -1658,7 +1645,7 @@ retry_pop:
 					   chunk->nr_pages) {
 			int nr = min(re - rs, nr_to_pop);
 
-			ret = pcpu_populate_chunk(chunk, rs, rs + nr, gfp);
+			ret = pcpu_populate_chunk(chunk, rs, rs + nr);
 			if (!ret) {
 				nr_to_pop -= nr;
 				spin_lock_irq(&pcpu_lock);
@@ -1675,7 +1662,7 @@ retry_pop:
 
 	if (nr_to_pop) {
 		/* ran out of chunks to populate, create a new one and retry */
-		chunk = pcpu_create_chunk(gfp);
+		chunk = pcpu_create_chunk();
 		if (chunk) {
 			spin_lock_irq(&pcpu_lock);
 			pcpu_chunk_relocate(chunk, -1);
@@ -2507,8 +2494,8 @@ int __init pcpu_embed_first_chunk(size_t reserved_size, size_t dyn_size,
 		ai->groups[group].base_offset = areas[group] - base;
 	}
 
-	pr_info("Embedded %zu pages/cpu s%zu r%zu d%zu u%zu\n",
-		PFN_DOWN(size_sum), ai->static_size, ai->reserved_size,
+	pr_info("Embedded %zu pages/cpu @%p s%zu r%zu d%zu u%zu\n",
+		PFN_DOWN(size_sum), base, ai->static_size, ai->reserved_size,
 		ai->dyn_size, ai->unit_size);
 
 	rc = pcpu_setup_first_chunk(ai, base);
@@ -2629,8 +2616,8 @@ int __init pcpu_page_first_chunk(size_t reserved_size,
 	}
 
 	/* we're ready, commit */
-	pr_info("%d %s pages/cpu s%zu r%zu d%zu\n",
-		unit_pages, psize_str, ai->static_size,
+	pr_info("%d %s pages/cpu @%p s%zu r%zu d%zu\n",
+		unit_pages, psize_str, vm.addr, ai->static_size,
 		ai->reserved_size, ai->dyn_size);
 
 	rc = pcpu_setup_first_chunk(ai, vm.addr);

@@ -1038,7 +1038,9 @@ void format_all_counters(struct thread_data *t, struct core_data *c, struct pkg_
 	if (!printed || !summary_only)
 		print_header("\t");
 
-	format_counters(&average.threads, &average.cores, &average.packages);
+	if (topo.num_cpus > 1)
+		format_counters(&average.threads, &average.cores,
+			&average.packages);
 
 	printed = 1;
 
@@ -1485,7 +1487,7 @@ int get_mp(int cpu, struct msr_counter *mp, unsigned long long *counterp)
 		if (get_msr(cpu, mp->msr_num, counterp))
 			return -1;
 	} else {
-		char path[128 + PATH_BYTES];
+		char path[128];
 
 		if (mp->flags & SYSFS_PERCPU) {
 			sprintf(path, "/sys/devices/system/cpu/cpu%d/%s",
@@ -4029,9 +4031,7 @@ void process_cpuid()
 	family = (fms >> 8) & 0xf;
 	model = (fms >> 4) & 0xf;
 	stepping = fms & 0xf;
-	if (family == 0xf)
-		family += (fms >> 20) & 0xff;
-	if (family >= 6)
+	if (family == 6 || family == 0xf)
 		model += ((fms >> 16) & 0xf) << 4;
 
 	if (!quiet) {
@@ -4588,9 +4588,6 @@ int fork_it(char **argv)
 		signal(SIGQUIT, SIG_IGN);
 		if (waitpid(child_pid, &status, 0) == -1)
 			err(status, "waitpid");
-
-		if (WIFEXITED(status))
-			status = WEXITSTATUS(status);
 	}
 	/*
 	 * n.b. fork_it() does not check for errors from for_all_cpus()

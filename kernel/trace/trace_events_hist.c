@@ -450,7 +450,7 @@ static int create_val_field(struct hist_trigger_data *hist_data,
 	}
 
 	field = trace_find_event_field(file->event_call, field_name);
-	if (!field || !field->size) {
+	if (!field) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -548,7 +548,7 @@ static int create_key_field(struct hist_trigger_data *hist_data,
 		}
 
 		field = trace_find_event_field(file->event_call, field_name);
-		if (!field || !field->size) {
+		if (!field) {
 			ret = -EINVAL;
 			goto out;
 		}
@@ -872,10 +872,9 @@ static inline void add_to_key(char *compound_key, void *key,
 		/* ensure NULL-termination */
 		if (size > key_field->size - 1)
 			size = key_field->size - 1;
+	}
 
-		strncpy(compound_key + key_field->offset, (char *)key, size);
-	} else
-		memcpy(compound_key + key_field->offset, key, size);
+	memcpy(compound_key + key_field->offset, key, size);
 }
 
 static void event_hist_trigger(struct event_trigger_data *data, void *rec)

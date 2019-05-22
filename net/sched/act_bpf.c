@@ -248,14 +248,10 @@ static int tcf_bpf_init_from_efd(struct nlattr **tb, struct tcf_bpf_cfg *cfg)
 
 static void tcf_bpf_cfg_cleanup(const struct tcf_bpf_cfg *cfg)
 {
-	struct bpf_prog *filter = cfg->filter;
-
-	if (filter) {
-		if (cfg->is_ebpf)
-			bpf_prog_put(filter);
-		else
-			bpf_prog_destroy(filter);
-	}
+	if (cfg->is_ebpf)
+		bpf_prog_put(cfg->filter);
+	else
+		bpf_prog_destroy(cfg->filter);
 
 	kfree(cfg->bpf_ops);
 	kfree(cfg->bpf_name);
@@ -356,7 +352,7 @@ static int tcf_bpf_init(struct net *net, struct nlattr *nla,
 	return res;
 out:
 	if (res == ACT_P_CREATED)
-		tcf_idr_release(*act, bind);
+		tcf_idr_cleanup(*act, est);
 
 	return ret;
 }

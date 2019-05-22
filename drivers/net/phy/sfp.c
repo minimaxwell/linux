@@ -114,7 +114,6 @@ struct sfp {
 
 	struct gpio_desc *gpio[GPIO_MAX];
 
-	bool attached;
 	unsigned int state;
 	struct delayed_work poll;
 	struct delayed_work timeout;
@@ -319,12 +318,12 @@ static void sfp_sm_probe_phy(struct sfp *sfp)
 	msleep(T_PHY_RESET_MS);
 
 	phy = mdiobus_scan(sfp->i2c_mii, SFP_PHY_ADDR);
-	if (phy == ERR_PTR(-ENODEV)) {
-		dev_info(sfp->dev, "no PHY detected\n");
-		return;
-	}
 	if (IS_ERR(phy)) {
 		dev_err(sfp->dev, "mdiobus scan returned %ld\n", PTR_ERR(phy));
+		return;
+	}
+	if (!phy) {
+		dev_info(sfp->dev, "no PHY detected\n");
 		return;
 	}
 
@@ -359,7 +358,7 @@ static void sfp_sm_link_check_los(struct sfp *sfp)
 	 * SFP_OPTIONS_LOS_NORMAL are set?  For now, we assume
 	 * the same as SFP_OPTIONS_LOS_NORMAL set.
 	 */
-	if (sfp->id.ext.options & cpu_to_be16(SFP_OPTIONS_LOS_INVERTED))
+	if (sfp->id.ext.options & SFP_OPTIONS_LOS_INVERTED)
 		los ^= SFP_F_LOS;
 
 	if (los)
@@ -501,7 +500,7 @@ static void sfp_sm_event(struct sfp *sfp, unsigned int event)
 	 */
 	switch (sfp->sm_mod_state) {
 	default:
-		if (event == SFP_E_INSERT && sfp->attached) {
+		if (event == SFP_E_INSERT) {
 			sfp_module_tx_disable(sfp);
 			sfp_sm_ins_next(sfp, SFP_MOD_PROBE, T_PROBE_INIT);
 		}
@@ -584,8 +583,7 @@ static void sfp_sm_event(struct sfp *sfp, unsigned int event)
 		if (event == SFP_E_TX_FAULT)
 			sfp_sm_fault(sfp, true);
 		else if (event ==
-			 (sfp->id.ext.options &
-			  cpu_to_be16(SFP_OPTIONS_LOS_INVERTED) ?
+			 (sfp->id.ext.options & SFP_OPTIONS_LOS_INVERTED ?
 			  SFP_E_LOS_HIGH : SFP_E_LOS_LOW))
 			sfp_sm_link_up(sfp);
 		break;
@@ -595,8 +593,7 @@ static void sfp_sm_event(struct sfp *sfp, unsigned int event)
 			sfp_sm_link_down(sfp);
 			sfp_sm_fault(sfp, true);
 		} else if (event ==
-			   (sfp->id.ext.options &
-			    cpu_to_be16(SFP_OPTIONS_LOS_INVERTED) ?
+			   (sfp->id.ext.options & SFP_OPTIONS_LOS_INVERTED ?
 			    SFP_E_LOS_LOW : SFP_E_LOS_HIGH)) {
 			sfp_sm_link_down(sfp);
 			sfp_sm_next(sfp, SFP_S_WAIT_LOS, 0);
@@ -627,19 +624,6 @@ static void sfp_sm_event(struct sfp *sfp, unsigned int event)
 		sfp->sm_mod_state, sfp->sm_dev_state, sfp->sm_state);
 
 	mutex_unlock(&sfp->sm_mutex);
-}
-
-static void sfp_attach(struct sfp *sfp)
-{
-	sfp->attached = true;
-	if (sfp->state & SFP_F_PRESENT)
-		sfp_sm_event(sfp, SFP_E_INSERT);
-}
-
-static void sfp_detach(struct sfp *sfp)
-{
-	sfp->attached = false;
-	sfp_sm_event(sfp, SFP_E_REMOVE);
 }
 
 static void sfp_start(struct sfp *sfp)
@@ -681,19 +665,20 @@ static int sfp_module_eeprom(struct sfp *sfp, struct ethtool_eeprom *ee,
 		len = min_t(unsigned int, last, ETH_MODULE_SFF_8079_LEN);
 		len -= first;
 
-		ret = sfp_read(sfp, false, first, data, len);
+		ret = sfp->read(sfp, false, first, data, len);
 		if (ret < 0)
 			return ret;
 
 		first += len;
 		data += len;
 	}
-	if (first < ETH_MODULE_SFF_8472_LEN && last > ETH_MODULE_SFF_8079_LEN) {
+	if (first >= ETH_MODULE_SFF_8079_LEN &&
+	    first < ETH_MODULE_SFF_8472_LEN) {
 		len = min_t(unsigned int, last, ETH_MODULE_SFF_8472_LEN);
 		len -= first;
 		first -= ETH_MODULE_SFF_8079_LEN;
 
-		ret = sfp_read(sfp, true, first, data, len);
+		ret = sfp->read(sfp, true, first, data, len);
 		if (ret < 0)
 			return ret;
 	}
@@ -701,8 +686,6 @@ static int sfp_module_eeprom(struct sfp *sfp, struct ethtool_eeprom *ee,
 }
 
 static const struct sfp_socket_ops sfp_module_ops = {
-	.attach = sfp_attach,
-	.detach = sfp_detach,
 	.start = sfp_start,
 	.stop = sfp_stop,
 	.module_info = sfp_module_info,
@@ -845,6 +828,10 @@ static int sfp_probe(struct platform_device *pdev)
 		sfp->set_state = sfp_gpio_set_state;
 	}
 
+	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
+	if (!sfp->sfp_bus)
+		return -ENOMEM;
+
 	/* Get the initial state, and always signal TX disable,
 	 * since the network interface will not be up.
 	 */
@@ -855,6 +842,10 @@ static int sfp_probe(struct platform_device *pdev)
 		sfp->state |= SFP_F_RATE_SELECT;
 	sfp_set_state(sfp, sfp->state);
 	sfp_module_tx_disable(sfp);
+	rtnl_lock();
+	if (sfp->state & SFP_F_PRESENT)
+		sfp_sm_event(sfp, SFP_E_INSERT);
+	rtnl_unlock();
 
 	for (i = 0; i < GPIO_MAX; i++) {
 		if (gpio_flags[i] != GPIOD_IN || !sfp->gpio[i])
@@ -877,10 +868,6 @@ static int sfp_probe(struct platform_device *pdev)
 
 	if (poll)
 		mod_delayed_work(system_wq, &sfp->poll, poll_jiffies);
-
-	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
-	if (!sfp->sfp_bus)
-		return -ENOMEM;
 
 	return 0;
 }

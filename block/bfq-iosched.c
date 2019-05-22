@@ -108,7 +108,6 @@
 #include "blk-mq-tag.h"
 #include "blk-mq-sched.h"
 #include "bfq-iosched.h"
-#include "blk-wbt.h"
 
 #define BFQ_BFQQ_FNS(name)						\
 void bfq_mark_bfqq_##name(struct bfq_queue *bfqq)			\
@@ -1203,24 +1202,6 @@ static unsigned int bfq_wr_duration(struct bfq_data *bfqd)
 	return dur;
 }
 
-/*
- * Return the farthest future time instant according to jiffies
- * macros.
- */
-static unsigned long bfq_greatest_from_now(void)
-{
-	return jiffies + MAX_JIFFY_OFFSET;
-}
-
-/*
- * Return the farthest past time instant according to jiffies
- * macros.
- */
-static unsigned long bfq_smallest_from_now(void)
-{
-	return jiffies - MAX_JIFFY_OFFSET;
-}
-
 static void bfq_update_bfqq_wr_on_rq_arrival(struct bfq_data *bfqd,
 					     struct bfq_queue *bfqq,
 					     unsigned int old_wr_coeff,
@@ -1235,19 +1216,7 @@ static void bfq_update_bfqq_wr_on_rq_arrival(struct bfq_data *bfqd,
 			bfqq->wr_coeff = bfqd->bfq_wr_coeff;
 			bfqq->wr_cur_max_time = bfq_wr_duration(bfqd);
 		} else {
-			/*
-			 * No interactive weight raising in progress
-			 * here: assign minus infinity to
-			 * wr_start_at_switch_to_srt, to make sure
-			 * that, at the end of the soft-real-time
-			 * weight raising periods that is starting
-			 * now, no interactive weight-raising period
-			 * may be wrongly considered as still in
-			 * progress (and thus actually started by
-			 * mistake).
-			 */
-			bfqq->wr_start_at_switch_to_srt =
-				bfq_smallest_from_now();
+			bfqq->wr_start_at_switch_to_srt = jiffies;
 			bfqq->wr_coeff = bfqd->bfq_wr_coeff *
 				BFQ_SOFTRT_WEIGHT_FACTOR;
 			bfqq->wr_cur_max_time =
@@ -1708,6 +1677,7 @@ static void bfq_requests_merged(struct request_queue *q, struct request *rq,
 
 	if (!RB_EMPTY_NODE(&rq->rb_node))
 		goto end;
+	spin_lock_irq(&bfqq->bfqd->lock);
 
 	/*
 	 * If next and rq belong to the same bfq_queue and next is older
@@ -1731,6 +1701,7 @@ static void bfq_requests_merged(struct request_queue *q, struct request *rq,
 
 	bfq_remove_request(q, next);
 
+	spin_unlock_irq(&bfqq->bfqd->lock);
 end:
 	bfqg_stats_update_io_merged(bfqq_group(bfqq), next->cmd_flags);
 }
@@ -2924,6 +2895,24 @@ static unsigned long bfq_bfqq_softrt_next_start(struct bfq_data *bfqd,
 		   HZ * bfqq->service_from_backlogged /
 		   bfqd->bfq_wr_max_softrt_rate,
 		   jiffies + nsecs_to_jiffies(bfqq->bfqd->bfq_slice_idle) + 4);
+}
+
+/*
+ * Return the farthest future time instant according to jiffies
+ * macros.
+ */
+static unsigned long bfq_greatest_from_now(void)
+{
+	return jiffies + MAX_JIFFY_OFFSET;
+}
+
+/*
+ * Return the farthest past time instant according to jiffies
+ * macros.
+ */
+static unsigned long bfq_smallest_from_now(void)
+{
+	return jiffies - MAX_JIFFY_OFFSET;
 }
 
 /**
@@ -4457,16 +4446,8 @@ static void bfq_prepare_request(struct request *rq, struct bio *bio)
 	bool new_queue = false;
 	bool bfqq_already_existing = false, split = false;
 
-	/*
-	 * Even if we don't have an icq attached, we should still clear
-	 * the scheduler pointers, as they might point to previously
-	 * allocated bic/bfqq structs.
-	 */
-	if (!rq->elv.icq) {
-		rq->elv.priv[0] = rq->elv.priv[1] = NULL;
+	if (!rq->elv.icq)
 		return;
-	}
-
 	bic = icq_to_bic(rq->elv.icq);
 
 	spin_lock_irq(&bfqd->lock);
@@ -4794,7 +4775,7 @@ static int bfq_init_queue(struct request_queue *q, struct elevator_type *e)
 	bfq_init_root_group(bfqd->root_group, bfqd);
 	bfq_init_entity(&bfqd->oom_bfqq.entity, bfqd->root_group);
 
-	wbt_disable_default(q);
+
 	return 0;
 
 out_free:

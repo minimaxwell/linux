@@ -138,7 +138,7 @@ static int set_evtchn_to_irq(unsigned evtchn, unsigned irq)
 		clear_evtchn_to_irq_row(row);
 	}
 
-	evtchn_to_irq[row][col] = irq;
+	evtchn_to_irq[EVTCHN_ROW(evtchn)][EVTCHN_COL(evtchn)] = irq;
 	return 0;
 }
 
@@ -628,6 +628,8 @@ static void __unbind_from_irq(unsigned int irq)
 		xen_irq_info_cleanup(info);
 	}
 
+	BUG_ON(info_for_irq(irq)->type == IRQT_UNBOUND);
+
 	xen_free_irq(irq);
 }
 
@@ -753,8 +755,8 @@ out:
 	mutex_unlock(&irq_mapping_update_lock);
 	return irq;
 error_irq:
-	while (nvec--)
-		__unbind_from_irq(irq + nvec);
+	for (; i >= 0; i--)
+		__unbind_from_irq(irq + i);
 	mutex_unlock(&irq_mapping_update_lock);
 	return ret;
 }
@@ -1650,7 +1652,7 @@ void xen_callback_vector(void)
 			xen_have_vector_callback = 0;
 			return;
 		}
-		pr_info_once("Xen HVM callback vector for event delivery is enabled\n");
+		pr_info("Xen HVM callback vector for event delivery is enabled\n");
 		alloc_intr_gate(HYPERVISOR_CALLBACK_VECTOR,
 				xen_hvm_callback_vector);
 	}

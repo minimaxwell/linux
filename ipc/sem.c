@@ -2041,7 +2041,7 @@ static long do_semtimedop(int semid, struct sembuf __user *tsops,
 	}
 
 	do {
-		WRITE_ONCE(queue.status, -EINTR);
+		queue.status = -EINTR;
 		queue.sleeper = current;
 
 		__set_current_state(TASK_INTERRUPTIBLE);

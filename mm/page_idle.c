@@ -65,15 +65,11 @@ static bool page_idle_clear_pte_refs_one(struct page *page,
 	while (page_vma_mapped_walk(&pvmw)) {
 		addr = pvmw.address;
 		if (pvmw.pte) {
-			/*
-			 * For PTE-mapped THP, one sub page is referenced,
-			 * the whole THP is referenced.
-			 */
-			if (ptep_clear_young_notify(vma, addr, pvmw.pte))
-				referenced = true;
+			referenced = ptep_clear_young_notify(vma, addr,
+					pvmw.pte);
 		} else if (IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE)) {
-			if (pmdp_clear_young_notify(vma, addr, pvmw.pmd))
-				referenced = true;
+			referenced = pmdp_clear_young_notify(vma, addr,
+					pvmw.pmd);
 		} else {
 			/* unexpected pmd-mapped page? */
 			WARN_ON_ONCE(1);

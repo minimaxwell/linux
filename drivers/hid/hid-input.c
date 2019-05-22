@@ -325,9 +325,6 @@ static const struct hid_device_id hid_battery_quirks[] = {
 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_ELECOM,
 		USB_DEVICE_ID_ELECOM_BM084),
 	  HID_BATTERY_QUIRK_IGNORE },
-	{ HID_USB_DEVICE(USB_VENDOR_ID_SYMBOL,
-		USB_DEVICE_ID_SYMBOL_SCANNER_3),
-	  HID_BATTERY_QUIRK_IGNORE },
 	{}
 };
 
@@ -390,8 +387,7 @@ static int hidinput_get_battery_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CAPACITY:
-		if (dev->battery_status != HID_BATTERY_REPORTED &&
-		    !dev->battery_avoid_query) {
+		if (dev->battery_report_type == HID_FEATURE_REPORT) {
 			value = hidinput_query_battery_capacity(dev);
 			if (value < 0)
 				return value;
@@ -407,17 +403,17 @@ static int hidinput_get_battery_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_STATUS:
-		if (dev->battery_status != HID_BATTERY_REPORTED &&
-		    !dev->battery_avoid_query) {
+		if (!dev->battery_reported &&
+		    dev->battery_report_type == HID_FEATURE_REPORT) {
 			value = hidinput_query_battery_capacity(dev);
 			if (value < 0)
 				return value;
 
 			dev->battery_capacity = value;
-			dev->battery_status = HID_BATTERY_QUERIED;
+			dev->battery_reported = true;
 		}
 
-		if (dev->battery_status == HID_BATTERY_UNKNOWN)
+		if (!dev->battery_reported)
 			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
 		else if (dev->battery_capacity == 100)
 			val->intval = POWER_SUPPLY_STATUS_FULL;
@@ -490,14 +486,6 @@ static int hidinput_setup_battery(struct hid_device *dev, unsigned report_type, 
 	dev->battery_report_type = report_type;
 	dev->battery_report_id = field->report->id;
 
-	/*
-	 * Stylus is normally not connected to the device and thus we
-	 * can't query the device and get meaningful battery strength.
-	 * We have to wait for the device to report it on its own.
-	 */
-	dev->battery_avoid_query = report_type == HID_INPUT_REPORT &&
-				   field->physical == HID_DG_STYLUS;
-
 	dev->battery = power_supply_register(&dev->dev, psy_desc, &psy_cfg);
 	if (IS_ERR(dev->battery)) {
 		error = PTR_ERR(dev->battery);
@@ -542,10 +530,9 @@ static void hidinput_update_battery(struct hid_device *dev, int value)
 
 	capacity = hidinput_scale_battery_capacity(dev, value);
 
-	if (dev->battery_status != HID_BATTERY_REPORTED ||
-	    capacity != dev->battery_capacity) {
+	if (!dev->battery_reported || capacity != dev->battery_capacity) {
 		dev->battery_capacity = capacity;
-		dev->battery_status = HID_BATTERY_REPORTED;
+		dev->battery_reported = true;
 		power_supply_changed(dev->battery);
 	}
 }
@@ -973,7 +960,6 @@ static void hidinput_configure_usage(struct hid_input *hidinput, struct hid_fiel
 		case 0x1b8: map_key_clear(KEY_VIDEO);		break;
 		case 0x1bc: map_key_clear(KEY_MESSENGER);	break;
 		case 0x1bd: map_key_clear(KEY_INFO);		break;
-		case 0x1cb: map_key_clear(KEY_ASSISTANT);	break;
 		case 0x201: map_key_clear(KEY_NEW);		break;
 		case 0x202: map_key_clear(KEY_OPEN);		break;
 		case 0x203: map_key_clear(KEY_CLOSE);		break;
@@ -1373,8 +1359,7 @@ static void hidinput_led_worker(struct work_struct *work)
 					      led_work);
 	struct hid_field *field;
 	struct hid_report *report;
-	int ret;
-	u32 len;
+	int len, ret;
 	__u8 *buf;
 
 	field = hidinput_get_led_field(hid);

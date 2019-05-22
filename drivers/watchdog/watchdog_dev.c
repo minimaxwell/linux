@@ -768,7 +768,6 @@ static int watchdog_open(struct inode *inode, struct file *file)
 {
 	struct watchdog_core_data *wd_data;
 	struct watchdog_device *wdd;
-	bool hw_running;
 	int err;
 
 	/* Get the corresponding watchdog device */
@@ -788,8 +787,7 @@ static int watchdog_open(struct inode *inode, struct file *file)
 	 * If the /dev/watchdog device is open, we don't want the module
 	 * to be unloaded.
 	 */
-	hw_running = watchdog_hw_running(wdd);
-	if (!hw_running && !try_module_get(wdd->ops->owner)) {
+	if (!watchdog_hw_running(wdd) && !try_module_get(wdd->ops->owner)) {
 		err = -EBUSY;
 		goto out_clear;
 	}
@@ -800,7 +798,7 @@ static int watchdog_open(struct inode *inode, struct file *file)
 
 	file->private_data = wd_data;
 
-	if (!hw_running)
+	if (!watchdog_hw_running(wdd))
 		kref_get(&wd_data->kref);
 
 	/* dev/watchdog is a virtual (and thus non-seekable) filesystem */
@@ -966,13 +964,14 @@ static int watchdog_cdev_register(struct watchdog_device *wdd, dev_t devno)
 	 * and schedule an immediate ping.
 	 */
 	if (watchdog_hw_running(wdd)) {
-		__module_get(wdd->ops->owner);
-		kref_get(&wd_data->kref);
-		if (handle_boot_enabled)
+		if (handle_boot_enabled) {
+			__module_get(wdd->ops->owner);
+			kref_get(&wd_data->kref);
 			queue_delayed_work(watchdog_wq, &wd_data->work, 0);
-		else
+		} else {
 			pr_info("watchdog%d running and kernel based pre-userspace handler disabled\n",
-				wdd->id);
+					wdd->id);
+		}
 	}
 
 	return 0;

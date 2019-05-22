@@ -79,16 +79,12 @@ static void wakeup_softirqd(void)
 
 /*
  * If ksoftirqd is scheduled, we do not want to process pending softirqs
- * right now. Let ksoftirqd handle this at its own rate, to get fairness,
- * unless we're doing some of the synchronous softirqs.
+ * right now. Let ksoftirqd handle this at its own rate, to get fairness.
  */
-#define SOFTIRQ_NOW_MASK ((1 << HI_SOFTIRQ) | (1 << TASKLET_SOFTIRQ))
-static bool ksoftirqd_running(unsigned long pending)
+static bool ksoftirqd_running(void)
 {
 	struct task_struct *tsk = __this_cpu_read(ksoftirqd);
 
-	if (pending & SOFTIRQ_NOW_MASK)
-		return false;
 	return tsk && (tsk->state == TASK_RUNNING);
 }
 
@@ -328,7 +324,7 @@ asmlinkage __visible void do_softirq(void)
 
 	pending = local_softirq_pending();
 
-	if (pending && !ksoftirqd_running(pending))
+	if (pending && !ksoftirqd_running())
 		do_softirq_own_stack();
 
 	local_irq_restore(flags);
@@ -355,7 +351,7 @@ void irq_enter(void)
 
 static inline void invoke_softirq(void)
 {
-	if (ksoftirqd_running(local_softirq_pending()))
+	if (ksoftirqd_running())
 		return;
 
 	if (!force_irqthreads) {
@@ -386,7 +382,7 @@ static inline void tick_irq_exit(void)
 
 	/* Make sure that timer wheel updates are propagated */
 	if ((idle_cpu(cpu) && !need_resched()) || tick_nohz_full_cpu(cpu)) {
-		if (!in_irq())
+		if (!in_interrupt())
 			tick_nohz_irq_exit();
 	}
 #endif
@@ -489,6 +485,16 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 	local_irq_restore(flags);
 }
 EXPORT_SYMBOL(__tasklet_hi_schedule);
+
+void __tasklet_hi_schedule_first(struct tasklet_struct *t)
+{
+	BUG_ON(!irqs_disabled());
+
+	t->next = __this_cpu_read(tasklet_hi_vec.head);
+	__this_cpu_write(tasklet_hi_vec.head, t);
+	__raise_softirq_irqoff(HI_SOFTIRQ);
+}
+EXPORT_SYMBOL(__tasklet_hi_schedule_first);
 
 static __latent_entropy void tasklet_action(struct softirq_action *a)
 {

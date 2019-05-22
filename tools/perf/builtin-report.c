@@ -162,28 +162,12 @@ static int hist_iter__branch_callback(struct hist_entry_iter *iter,
 	struct hist_entry *he = iter->he;
 	struct report *rep = arg;
 	struct branch_info *bi;
-	struct perf_sample *sample = iter->sample;
-	struct perf_evsel *evsel = iter->evsel;
-	int err;
-
-	if (!ui__has_annotation())
-		return 0;
-
-	hist__account_cycles(sample->branch_stack, al, sample,
-			     rep->nonany_branch_mode);
 
 	bi = he->branch_info;
-	err = addr_map_symbol__inc_samples(&bi->from, sample, evsel->idx);
-	if (err)
-		goto out;
-
-	err = addr_map_symbol__inc_samples(&bi->to, sample, evsel->idx);
-
 	branch_type_count(&rep->brtype_stat, &bi->flags,
 			  bi->from.addr, bi->to.addr);
 
-out:
-	return err;
+	return 0;
 }
 
 static int process_sample_event(struct perf_tool *tool,
@@ -328,10 +312,9 @@ static int report__setup_sample_type(struct report *rep)
 
 	if (symbol_conf.use_callchain || symbol_conf.cumulate_callchain) {
 		if ((sample_type & PERF_SAMPLE_REGS_USER) &&
-		    (sample_type & PERF_SAMPLE_STACK_USER)) {
+		    (sample_type & PERF_SAMPLE_STACK_USER))
 			callchain_param.record_mode = CALLCHAIN_DWARF;
-			dwarf_callchain_users = true;
-		} else if (sample_type & PERF_SAMPLE_BRANCH_STACK)
+		else if (sample_type & PERF_SAMPLE_BRANCH_STACK)
 			callchain_param.record_mode = CALLCHAIN_LBR;
 		else
 			callchain_param.record_mode = CALLCHAIN_FP;

@@ -1568,14 +1568,7 @@ int rtl_pci_reset_trx_ring(struct ieee80211_hw *hw)
 				dev_kfree_skb_irq(skb);
 				ring->idx = (ring->idx + 1) % ring->entries;
 			}
-
-			if (rtlpriv->use_new_trx_flow) {
-				rtlpci->tx_ring[i].cur_tx_rp = 0;
-				rtlpci->tx_ring[i].cur_tx_wp = 0;
-			}
-
 			ring->idx = 0;
-			ring->entries = rtlpci->txringcount[i];
 		}
 	}
 	spin_unlock_irqrestore(&rtlpriv->locks.irq_th_lock, flags);
@@ -2359,7 +2352,7 @@ void rtl_pci_disconnect(struct pci_dev *pdev)
 		ieee80211_unregister_hw(hw);
 		rtlmac->mac80211_registered = 0;
 	} else {
-		rtl_deinit_deferred_work(hw, false);
+		rtl_deinit_deferred_work(hw);
 		rtlpriv->intf_ops->adapter_stop(hw);
 	}
 	rtlpriv->cfg->ops->disable_interrupt(hw);

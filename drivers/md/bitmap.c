@@ -625,7 +625,7 @@ re_read:
 		err = read_sb_page(bitmap->mddev,
 				   offset,
 				   sb_page,
-				   0, sizeof(bitmap_super_t));
+				   0, PAGE_SIZE);
 	}
 	if (err)
 		return err;
@@ -1816,12 +1816,6 @@ struct bitmap *bitmap_create(struct mddev *mddev, int slot)
 
 	BUG_ON(file && mddev->bitmap_info.offset);
 
-	if (test_bit(MD_HAS_JOURNAL, &mddev->flags)) {
-		pr_notice("md/raid:%s: array with journal cannot have bitmap\n",
-			  mdname(mddev));
-		return ERR_PTR(-EBUSY);
-	}
-
 	bitmap = kzalloc(sizeof(*bitmap), GFP_KERNEL);
 	if (!bitmap)
 		return ERR_PTR(-ENOMEM);
@@ -2129,7 +2123,7 @@ int bitmap_resize(struct bitmap *bitmap, sector_t blocks,
 	if (store.sb_page && bitmap->storage.sb_page)
 		memcpy(page_address(store.sb_page),
 		       page_address(bitmap->storage.sb_page),
-		       sizeof(bitmap_super_t));
+		       PAGE_SIZE);
 	bitmap_file_unmap(&bitmap->storage);
 	bitmap->storage = store;
 
@@ -2158,7 +2152,6 @@ int bitmap_resize(struct bitmap *bitmap, sector_t blocks,
 				for (k = 0; k < page; k++) {
 					kfree(new_bp[k].map);
 				}
-				kfree(new_bp);
 
 				/* restore some fields from old_counts */
 				bitmap->counts.bp = old_counts.bp;
@@ -2207,14 +2200,6 @@ int bitmap_resize(struct bitmap *bitmap, sector_t blocks,
 				old_blocks = new_blocks;
 		}
 		block += old_blocks;
-	}
-
-	if (bitmap->counts.bp != old_counts.bp) {
-		unsigned long k;
-		for (k = 0; k < old_counts.pages; k++)
-			if (!old_counts.bp[k].hijacked)
-				kfree(old_counts.bp[k].map);
-		kfree(old_counts.bp);
 	}
 
 	if (!init) {

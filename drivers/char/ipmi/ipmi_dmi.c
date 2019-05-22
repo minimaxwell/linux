@@ -81,10 +81,7 @@ static void __init dmi_add_platform_ipmi(unsigned long base_addr,
 		pr_err("ipmi:dmi: Error allocation IPMI platform device");
 		return;
 	}
-	pdev->driver_override = kasprintf(GFP_KERNEL, "%s",
-					  override);
-	if (!pdev->driver_override)
-		goto err;
+	pdev->driver_override = override;
 
 	if (type == IPMI_DMI_TYPE_SSIF)
 		goto add_properties;

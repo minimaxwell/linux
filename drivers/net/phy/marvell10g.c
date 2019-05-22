@@ -16,7 +16,6 @@
  * link takes priority and the other port is completely locked out.
  */
 #include <linux/phy.h>
-#include <linux/marvell_phy.h>
 
 enum {
 	MV_PCS_BASE_T		= 0x0000,
@@ -339,7 +338,7 @@ static int mv3310_read_status(struct phy_device *phydev)
 static struct phy_driver mv3310_drivers[] = {
 	{
 		.phy_id		= 0x002b09aa,
-		.phy_id_mask	= MARVELL_PHY_ID_MASK,
+		.phy_id_mask	= 0xffffffff,
 		.name		= "mv88x3310",
 		.features	= SUPPORTED_10baseT_Full |
 				  SUPPORTED_100baseT_Full |
@@ -361,7 +360,7 @@ static struct phy_driver mv3310_drivers[] = {
 module_phy_driver(mv3310_drivers);
 
 static struct mdio_device_id __maybe_unused mv3310_tbl[] = {
-	{ 0x002b09aa, MARVELL_PHY_ID_MASK },
+	{ 0x002b09aa, 0xffffffff },
 	{ },
 };
 MODULE_DEVICE_TABLE(mdio, mv3310_tbl);

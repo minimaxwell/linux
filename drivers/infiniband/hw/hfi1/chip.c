@@ -5945,7 +5945,6 @@ static void is_sendctxt_err_int(struct hfi1_devdata *dd,
 	u64 status;
 	u32 sw_index;
 	int i = 0;
-	unsigned long irq_flags;
 
 	sw_index = dd->hw_to_sw[hw_context];
 	if (sw_index >= dd->num_send_contexts) {
@@ -5955,12 +5954,10 @@ static void is_sendctxt_err_int(struct hfi1_devdata *dd,
 		return;
 	}
 	sci = &dd->send_contexts[sw_index];
-	spin_lock_irqsave(&dd->sc_lock, irq_flags);
 	sc = sci->sc;
 	if (!sc) {
 		dd_dev_err(dd, "%s: context %u(%u): no sc?\n", __func__,
 			   sw_index, hw_context);
-		spin_unlock_irqrestore(&dd->sc_lock, irq_flags);
 		return;
 	}
 
@@ -5982,7 +5979,6 @@ static void is_sendctxt_err_int(struct hfi1_devdata *dd,
 	 */
 	if (sc->type != SC_USER)
 		queue_work(dd->pport->hfi1_wq, &sc->halt_work);
-	spin_unlock_irqrestore(&dd->sc_lock, irq_flags);
 
 	/*
 	 * Update the counters for the corresponding status bits.
@@ -6722,7 +6718,6 @@ void start_freeze_handling(struct hfi1_pportdata *ppd, int flags)
 	struct hfi1_devdata *dd = ppd->dd;
 	struct send_context *sc;
 	int i;
-	int sc_flags;
 
 	if (flags & FREEZE_SELF)
 		write_csr(dd, CCE_CTRL, CCE_CTRL_SPC_FREEZE_SMASK);
@@ -6733,13 +6728,11 @@ void start_freeze_handling(struct hfi1_pportdata *ppd, int flags)
 	/* notify all SDMA engines that they are going into a freeze */
 	sdma_freeze_notify(dd, !!(flags & FREEZE_LINK_DOWN));
 
-	sc_flags = SCF_FROZEN | SCF_HALTED | (flags & FREEZE_LINK_DOWN ?
-					      SCF_LINK_DOWN : 0);
 	/* do halt pre-handling on all enabled send contexts */
 	for (i = 0; i < dd->num_send_contexts; i++) {
 		sc = dd->send_contexts[i].sc;
 		if (sc && (sc->flags & SCF_ENABLED))
-			sc_stop(sc, sc_flags);
+			sc_stop(sc, SCF_FROZEN | SCF_HALTED);
 	}
 
 	/* Send context are frozen. Notify user space */
@@ -6832,7 +6825,7 @@ static void rxe_kernel_unfreeze(struct hfi1_devdata *dd)
 		}
 		rcvmask = HFI1_RCVCTRL_CTXT_ENB;
 		/* HFI1_RCVCTRL_TAILUPD_[ENB|DIS] needs to be set explicitly */
-		rcvmask |= rcd->rcvhdrtail_kvaddr ?
+		rcvmask |= HFI1_CAP_KGET_MASK(rcd->flags, DMA_RTAIL) ?
 			HFI1_RCVCTRL_TAILUPD_ENB : HFI1_RCVCTRL_TAILUPD_DIS;
 		hfi1_rcvctrl(dd, rcvmask, rcd);
 		hfi1_rcd_put(rcd);
@@ -8301,8 +8294,8 @@ static irqreturn_t sdma_interrupt(int irq, void *data)
 		/* handle the interrupt(s) */
 		sdma_engine_interrupt(sde, status);
 	} else {
-		dd_dev_info_ratelimited(dd, "SDMA engine %u interrupt, but no status bits set\n",
-					sde->this_idx);
+		dd_dev_err_ratelimited(dd, "SDMA engine %u interrupt, but no status bits set\n",
+				       sde->this_idx);
 	}
 	return IRQ_HANDLED;
 }
@@ -8344,7 +8337,7 @@ static inline int check_packet_present(struct hfi1_ctxtdata *rcd)
 	u32 tail;
 	int present;
 
-	if (!rcd->rcvhdrtail_kvaddr)
+	if (!HFI1_CAP_IS_KSET(DMA_RTAIL))
 		present = (rcd->seq_cnt ==
 				rhf_rcv_seq(rhf_to_cpu(get_rhf_addr(rcd))));
 	else /* is RDMA rtail */
@@ -9959,7 +9952,7 @@ int hfi1_get_ib_cfg(struct hfi1_pportdata *ppd, int which)
 		goto unimplemented;
 
 	case HFI1_IB_CFG_OP_VLS:
-		val = ppd->actual_vls_operational;
+		val = ppd->vls_operational;
 		break;
 	case HFI1_IB_CFG_VL_HIGH_CAP: /* VL arb high priority table size */
 		val = VL_ARB_HIGH_PRIO_TABLE_SIZE;
@@ -10649,8 +10642,6 @@ int set_link_state(struct hfi1_pportdata *ppd, u32 state)
 		add_rcvctrl(dd, RCV_CTRL_RCV_PORT_ENABLE_SMASK);
 
 		handle_linkup_change(dd, 1);
-		pio_kernel_linkup(dd);
-
 		ppd->host_link_state = HLS_UP_INIT;
 		break;
 	case HLS_UP_ARMED:
@@ -11818,7 +11809,7 @@ void hfi1_rcvctrl(struct hfi1_devdata *dd, unsigned int op,
 		/* reset the tail and hdr addresses, and sequence count */
 		write_kctxt_csr(dd, ctxt, RCV_HDR_ADDR,
 				rcd->rcvhdrq_dma);
-		if (rcd->rcvhdrtail_kvaddr)
+		if (HFI1_CAP_KGET_MASK(rcd->flags, DMA_RTAIL))
 			write_kctxt_csr(dd, ctxt, RCV_HDR_TAIL_ADDR,
 					rcd->rcvhdrqtailaddr_dma);
 		rcd->seq_cnt = 1;
@@ -11898,7 +11889,7 @@ void hfi1_rcvctrl(struct hfi1_devdata *dd, unsigned int op,
 		rcvctrl |= RCV_CTXT_CTRL_INTR_AVAIL_SMASK;
 	if (op & HFI1_RCVCTRL_INTRAVAIL_DIS)
 		rcvctrl &= ~RCV_CTXT_CTRL_INTR_AVAIL_SMASK;
-	if ((op & HFI1_RCVCTRL_TAILUPD_ENB) && rcd->rcvhdrtail_kvaddr)
+	if (op & HFI1_RCVCTRL_TAILUPD_ENB && rcd->rcvhdrqtailaddr_dma)
 		rcvctrl |= RCV_CTXT_CTRL_TAIL_UPD_SMASK;
 	if (op & HFI1_RCVCTRL_TAILUPD_DIS) {
 		/* See comment on RcvCtxtCtrl.TailUpd above */
@@ -12449,8 +12440,7 @@ static int init_cntrs(struct hfi1_devdata *dd)
 	}
 
 	/* allocate space for the counter values */
-	dd->cntrs = kcalloc(dd->ndevcntrs + num_driver_cntrs, sizeof(u64),
-			    GFP_KERNEL);
+	dd->cntrs = kcalloc(dd->ndevcntrs, sizeof(u64), GFP_KERNEL);
 	if (!dd->cntrs)
 		goto bail;
 
@@ -12977,14 +12967,7 @@ static void disable_intx(struct pci_dev *pdev)
 	pci_intx(pdev, 0);
 }
 
-/**
- * hfi1_clean_up_interrupts() - Free all IRQ resources
- * @dd: valid device data data structure
- *
- * Free the MSI or INTx IRQs and assoicated PCI resources,
- * if they have been allocated.
- */
-void hfi1_clean_up_interrupts(struct hfi1_devdata *dd)
+static void clean_up_interrupts(struct hfi1_devdata *dd)
 {
 	int i;
 
@@ -13091,7 +13074,7 @@ static int request_msix_irqs(struct hfi1_devdata *dd)
 	first_sdma = last_general;
 	last_sdma = first_sdma + dd->num_sdma;
 	first_rx = last_sdma;
-	last_rx = first_rx + dd->n_krcv_queues + dd->num_vnic_contexts;
+	last_rx = first_rx + dd->n_krcv_queues + HFI1_NUM_VNIC_CTXT;
 
 	/* VNIC MSIx interrupts get mapped when VNIC contexts are created */
 	dd->first_dyn_msix_idx = first_rx + dd->n_krcv_queues;
@@ -13311,9 +13294,8 @@ static int set_up_interrupts(struct hfi1_devdata *dd)
 	 *		slow source, SDMACleanupDone)
 	 *	N interrupts - one per used SDMA engine
 	 *	M interrupt - one per kernel receive context
-	 *	V interrupt - one for each VNIC context
 	 */
-	total = 1 + dd->num_sdma + dd->n_krcv_queues + dd->num_vnic_contexts;
+	total = 1 + dd->num_sdma + dd->n_krcv_queues + HFI1_NUM_VNIC_CTXT;
 
 	/* ask for MSI-X interrupts */
 	request = request_msix(dd, total);
@@ -13361,7 +13343,7 @@ static int set_up_interrupts(struct hfi1_devdata *dd)
 	return 0;
 
 fail:
-	hfi1_clean_up_interrupts(dd);
+	clean_up_interrupts(dd);
 	return ret;
 }
 
@@ -13374,12 +13356,10 @@ fail:
  *                             in array of contexts
  *	freectxts  - number of free user contexts
  *	num_send_contexts - number of PIO send contexts being used
- *	num_vnic_contexts - number of contexts reserved for VNIC
  */
 static int set_up_context_variables(struct hfi1_devdata *dd)
 {
 	unsigned long num_kernel_contexts;
-	u16 num_vnic_contexts = HFI1_NUM_VNIC_CTXT;
 	int total_contexts;
 	int ret;
 	unsigned ngroups;
@@ -13413,14 +13393,6 @@ static int set_up_context_variables(struct hfi1_devdata *dd)
 			   num_kernel_contexts);
 		num_kernel_contexts = dd->chip_send_contexts - num_vls - 1;
 	}
-
-	/* Accommodate VNIC contexts if possible */
-	if ((num_kernel_contexts + num_vnic_contexts) > dd->chip_rcv_contexts) {
-		dd_dev_err(dd, "No receive contexts available for VNIC\n");
-		num_vnic_contexts = 0;
-	}
-	total_contexts = num_kernel_contexts + num_vnic_contexts;
-
 	/*
 	 * User contexts:
 	 *	- default to 1 user context per real (non-HT) CPU core if
@@ -13430,16 +13402,19 @@ static int set_up_context_variables(struct hfi1_devdata *dd)
 		num_user_contexts =
 			cpumask_weight(&node_affinity.real_cpu_mask);
 
+	total_contexts = num_kernel_contexts + num_user_contexts;
+
 	/*
 	 * Adjust the counts given a global max.
 	 */
-	if (total_contexts + num_user_contexts > dd->chip_rcv_contexts) {
+	if (total_contexts > dd->chip_rcv_contexts) {
 		dd_dev_err(dd,
 			   "Reducing # user receive contexts to: %d, from %d\n",
-			   (int)(dd->chip_rcv_contexts - total_contexts),
+			   (int)(dd->chip_rcv_contexts - num_kernel_contexts),
 			   (int)num_user_contexts);
+		num_user_contexts = dd->chip_rcv_contexts - num_kernel_contexts;
 		/* recalculate */
-		num_user_contexts = dd->chip_rcv_contexts - total_contexts;
+		total_contexts = num_kernel_contexts + num_user_contexts;
 	}
 
 	/* each user context requires an entry in the RMT */
@@ -13452,24 +13427,25 @@ static int set_up_context_variables(struct hfi1_devdata *dd)
 			   user_rmt_reduced);
 		/* recalculate */
 		num_user_contexts = user_rmt_reduced;
+		total_contexts = num_kernel_contexts + num_user_contexts;
 	}
 
-	total_contexts += num_user_contexts;
+	/* Accommodate VNIC contexts */
+	if ((total_contexts + HFI1_NUM_VNIC_CTXT) <= dd->chip_rcv_contexts)
+		total_contexts += HFI1_NUM_VNIC_CTXT;
 
 	/* the first N are kernel contexts, the rest are user/vnic contexts */
 	dd->num_rcv_contexts = total_contexts;
 	dd->n_krcv_queues = num_kernel_contexts;
 	dd->first_dyn_alloc_ctxt = num_kernel_contexts;
-	dd->num_vnic_contexts = num_vnic_contexts;
 	dd->num_user_contexts = num_user_contexts;
 	dd->freectxts = num_user_contexts;
 	dd_dev_info(dd,
-		    "rcv contexts: chip %d, used %d (kernel %d, vnic %u, user %u)\n",
+		    "rcv contexts: chip %d, used %d (kernel %d, user %d)\n",
 		    (int)dd->chip_rcv_contexts,
 		    (int)dd->num_rcv_contexts,
 		    (int)dd->n_krcv_queues,
-		    dd->num_vnic_contexts,
-		    dd->num_user_contexts);
+		    (int)dd->num_rcv_contexts - dd->n_krcv_queues);
 
 	/*
 	 * Receive array allocation:
@@ -14787,6 +14763,7 @@ void hfi1_start_cleanup(struct hfi1_devdata *dd)
 	aspm_exit(dd);
 	free_cntrs(dd);
 	free_rcverr(dd);
+	clean_up_interrupts(dd);
 	finish_chip_resources(dd);
 }
 
@@ -15245,7 +15222,7 @@ bail_free_rcverr:
 bail_free_cntrs:
 	free_cntrs(dd);
 bail_clear_intr:
-	hfi1_clean_up_interrupts(dd);
+	clean_up_interrupts(dd);
 bail_cleanup:
 	hfi1_pcie_ddcleanup(dd);
 bail_free:

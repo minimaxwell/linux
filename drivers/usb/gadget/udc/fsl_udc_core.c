@@ -1309,7 +1309,7 @@ static void udc_reset_ep_queue(struct fsl_udc *udc, u8 pipe)
 {
 	struct fsl_ep *ep = get_ep_by_pipe(udc, pipe);
 
-	if (ep->ep.name)
+	if (ep->name)
 		nuke(ep, -ESHUTDOWN);
 }
 
@@ -1697,7 +1697,7 @@ static void dtd_complete_irq(struct fsl_udc *udc)
 		curr_ep = get_ep_by_pipe(udc, i);
 
 		/* If the ep is configured */
-		if (!curr_ep->ep.name) {
+		if (curr_ep->name == NULL) {
 			WARNING("Invalid EP?");
 			continue;
 		}

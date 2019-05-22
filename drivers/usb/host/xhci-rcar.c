@@ -86,10 +86,6 @@ static const struct soc_device_attribute rcar_quirks_match[]  = {
 		.soc_id = "r8a7796",
 		.data = (void *)RCAR_XHCI_FIRMWARE_V3,
 	},
-	{
-		.soc_id = "r8a77965",
-		.data = (void *)RCAR_XHCI_FIRMWARE_V3,
-	},
 	{ /* sentinel */ },
 };
 
@@ -236,7 +232,6 @@ int xhci_rcar_init_quirk(struct usb_hcd *hcd)
 			xhci_rcar_is_gen3(hcd->self.controller))
 		xhci->quirks |= XHCI_NO_64BIT_SUPPORT;
 
-	xhci->quirks |= XHCI_TRUST_TX_LENGTH;
 	return xhci_rcar_download_firmware(hcd);
 }
 
