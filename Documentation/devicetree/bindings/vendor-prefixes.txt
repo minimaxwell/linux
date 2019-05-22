@@ -75,7 +75,6 @@ cortina	Cortina Systems, Inc.
 cosmic	Cosmic Circuits
 creative	Creative Technology Ltd
 crystalfontz	Crystalfontz America, Inc.
-cs	CS Systemes d'Information
 cubietech	Cubietech, Ltd.
 cypress	Cypress Semiconductor Corporation
 cznic	CZ.NIC, z.s.p.o.
@@ -287,7 +286,6 @@ riscv	RISC-V Foundation
 rockchip	Fuzhou Rockchip Electronics Co., Ltd
 rohm	ROHM Semiconductor Co., Ltd
 roofull	Shenzhen Roofull Technology Co, Ltd
-s3k	SAF3000 CSSI
 samsung	Samsung Semiconductor
 samtec	Samtec/Softing company
 sandisk	Sandisk Corporation
