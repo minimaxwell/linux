@@ -1,0 +1,47 @@
+/dts-v1/;
+
+/ {
+	description = "MCR3000 image";
+	#address-cells = <1>;
+
+	images {
+		kernel1 {
+			description = "MCR3000 kernel";
+			data = /incbin/("vmlinux.bin.lzma");
+			type = "kernel";
+			arch = "ppc";
+			os = "linux";
+			compression = "lzma";
+			load = <00000000>;
+			entry = <00000000>;
+			hash1 {
+				algo = "crc32";
+			};
+			hash2 {
+				algo = "sha1";
+			};
+		};
+		fdt1 {
+			description = "MCR3000 DTB";
+			data = /incbin/("arch/powerpc/boot/dts/saf3000/mcr3000.dtb");
+			type = "flat_dt";
+			arch = "ppc";
+			compression = "none";
+			hash1 {
+				algo = "crc32";
+			};
+			hash2 {
+				algo = "sha1";
+			};
+		};
+	};
+
+	configurations {
+		default = "mcr3000";
+		mcr3000 {
+			description = "MCR3000 configuration";
+			kernel = "kernel1";
+			fdt = "fdt1";
+		};
+	};
+};
