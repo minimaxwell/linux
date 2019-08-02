@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 
 /*
  * drm_sysfs.c - Modifications to drm_sysfs_class.c to support
@@ -7,9 +8,6 @@
  * Copyright (c) 2004 Jon Smirl <jonsmirl@gmail.com>
  * Copyright (c) 2003-2004 Greg Kroah-Hartman <greg@kroah.com>
  * Copyright (c) 2003-2004 IBM Corp.
- *
- * This file is released under the GPLv2
- *
  */
 
 #include <linux/device.h>
@@ -299,6 +297,16 @@ void drm_sysfs_connector_remove(struct drm_connector *connector)
 
 	device_unregister(connector->kdev);
 	connector->kdev = NULL;
+}
+
+void drm_sysfs_lease_event(struct drm_device *dev)
+{
+	char *event_string = "LEASE=1";
+	char *envp[] = { event_string, NULL };
+
+	DRM_DEBUG("generating lease event\n");
+
+	kobject_uevent_env(&dev->primary->kdev->kobj, KOBJ_CHANGE, envp);
 }
 
 /**

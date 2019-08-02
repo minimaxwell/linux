@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * An I2C and SPI driver for the NXP PCF2127/29 RTC
  * Copyright 2013 Til-Technologies
@@ -7,10 +8,6 @@
  * based on the other drivers in this same directory.
  *
  * Datasheet: http://cache.nxp.com/documents/data_sheet/PCF2127.pdf
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #include <linux/i2c.h>
@@ -303,6 +300,9 @@ static int pcf2127_i2c_gather_write(void *context,
 	memcpy(buf + 1, val, val_size);
 
 	ret = i2c_master_send(client, buf, val_size + 1);
+
+	kfree(buf);
+
 	if (ret != val_size + 1)
 		return ret < 0 ? ret : -EIO;
 
