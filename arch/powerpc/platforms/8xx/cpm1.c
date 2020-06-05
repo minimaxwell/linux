@@ -55,6 +55,11 @@ immap_t __iomem *mpc8xx_immr = (void __iomem *)VIRT_IMMR_BASE;
 
 void __init cpm_reset(void)
 {
+#ifdef CONFIG_UCODE_PATCH
+	struct device_node *np;
+	int len;
+#endif
+
 	cpmp = &mpc8xx_immr->im_cpm;
 
 #ifndef CONFIG_PPC_EARLY_DEBUG_CPM
@@ -66,7 +71,9 @@ void __init cpm_reset(void)
 #endif
 
 #ifdef CONFIG_UCODE_PATCH
-	cpm_load_patch(cpmp);
+	np = of_find_compatible_node(NULL, NULL, "fsl,cpm1");
+	if (of_find_property(np, "micropatch", &len))
+		cpm_load_patch(cpmp);
 #endif
 
 	/*
