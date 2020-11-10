@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2018 Fuzhou Rockchip Electronics Co., Ltd
+ * (C) Copyright 2019 Vimar
+ */
+
+/dts-v1/;
+#include "px30-vimar-p451.dts"
+
+/ {
+	chosen {
+		stdout-path = "serial3:115200n8";
+	};
+};
+
+&vcc13v0 {
+
+};
+
+&uart2 {
+	status = "disabled";
+};
+
+/* Console (available on the SoM) */
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart3m0_xfer>;
+	status = "okay";
+};
+
+&sdmmc {
+	bus-width = <4>;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	card-detect-delay = <800>;
+	sd-uhs-sdr12;
+	sd-uhs-sdr25;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	vmmc-supply = <&vcc_sd>;
+	vqmmc-supply = <&vccio_sd>;
+	status = "okay";
+};

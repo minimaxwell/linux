@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2018 Fuzhou Rockchip Electronics Co., Ltd
+ * (C) Copyright 2019 Vimar
+ */
+
+/dts-v1/;
+#include "px30-vimar-p451.dts"
+
+/ {
+	chosen {
+		stdout-path = "serial2:115200n8";
+	};
+
+	vcc13v0: vcc13v0 {
+		/delete-property/ regulator-always-on;
+		/delete-property/ regulator-boot-on;
+		enable-active-high;
+		gpio = <&gpio3 RK_PD1 GPIO_ACTIVE_HIGH>;
+		startup-delay-us = <1000>;
+	};
+
+	lcd_supply: lcd-fixedregulator {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-fixed-supply";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio3 RK_PA7 GPIO_ACTIVE_HIGH>;
+		startup-delay-us = <1000>;
+		enable-active-high;
+	};
+
+	panel: panel {
+		power-supply = <&lcd_supply>;
+	};
+};
+
+&uart2 {
+	status = "okay";
+};
+
+&uart3 {
+	status = "disabled";
+};
+
+&sdmmc {
+	status = "disabled";
+};
