@@ -4948,15 +4948,24 @@ static int mvneta_setup_mqprio(struct net_device *dev,
 	}
 
 	if (mqprio->qopt.prio_tc_map) {
-		memcpy(pp->prio_tc_map, mqprio->qopt.prio_tc_map,
-		       sizeof(pp->prio_tc_map));
+
+		netdev_set_num_tc(dev, mqprio->qopt.num_tc);
+		for (tc = 0; tc < mqprio->qopt.num_tc; tc++) {
+			netdev_set_tc_queue(dev, tc, mqprio->qopt.count[tc],
+					    mqprio->qopt.offset[tc]);
+
+			for (rxq = mqprio->qopt.offset[tc];
+			     rxq < mqprio->qopt.count[tc] + mqprio->qopt.offset[tc];
+			     rxq++) {
+				if (rxq >= rxq_number)
+					return -EINVAL;
+
+				pp->prio_tc_map[rxq] = mqprio->qopt.prio_tc_map[tc];
+			}
+		}
 
 		mvneta_setup_rx_prio_map(pp);
 
-		netdev_set_num_tc(dev, mqprio->qopt.num_tc);
-		for (i = 0; i < mqprio->qopt.num_tc; i++)
-			netdev_set_tc_queue(dev, i, mqprio->qopt.count[i],
-					    mqprio->qopt.offset[i]);
 
 	}
 
