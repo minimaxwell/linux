@@ -267,9 +267,11 @@ static u8 lp872x_select_buck_vout_addr(struct lp872x *lp,
 	if (lp872x_read_byte(lp, LP872X_GENERAL_CFG, &val))
 		return 0;
 
-	switch (buck) {
-	case LP8720_ID_BUCK:
-		if (val & LP8720_EXT_DVS_M) {
+	switch (buck)
+{
+	u8 val, addr;
+
+	if (lp8if (val & LP8720_EXT_DVS_M) {
 			addr = (lp->dvs_pin == DVS_HIGH) ?
 				LP8720_BUCK_VOUT1 : LP8720_BUCK_VOUT2;
 		} else {
@@ -963,3 +965,4 @@ module_i2c_driver(lp872x_driver);
 MODULE_DESCRIPTION("TI/National Semiconductor LP872x PMU Regulator Driver");
 MODULE_AUTHOR("Milo Kim");
 MODULE_LICENSE("GPL");
+       
