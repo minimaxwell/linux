@@ -593,7 +593,7 @@ static int __init ipqess_init(struct net_device *netdev)
 
 	ret = of_get_mac_address(of_node, netdev->dev_addr);
 	if (ret) {
-		random_ether_addr(netdev->dev_addr);
+		eth_random_addr(netdev->dev_addr);
 		dev_info(&ess->pdev->dev, "generated random MAC address %pM\n",
 			netdev->dev_addr);
 		netdev->addr_assign_type = NET_ADDR_RANDOM;

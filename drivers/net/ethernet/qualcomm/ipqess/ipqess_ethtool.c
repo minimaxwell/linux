@@ -152,7 +152,9 @@ static int ipqess_set_settings(struct net_device *netdev,
 }
 
 static void ipqess_get_ringparam(struct net_device *netdev,
-			       struct ethtool_ringparam *ring)
+			       struct ethtool_ringparam *ring,
+			       struct kernel_ethtool_ringparam *kernel_ering,
+			       struct netlink_ext_ack *extack)
 {
 	ring->tx_max_pending = IPQESS_TX_RING_SIZE;
 	ring->rx_max_pending = IPQESS_RX_RING_SIZE;
