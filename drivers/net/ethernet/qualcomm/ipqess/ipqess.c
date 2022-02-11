@@ -1115,6 +1115,11 @@ static void ipqess_validate(struct phylink_config *config,
 static void ipqess_mac_config(struct phylink_config *config, unsigned int mode,
 			      const struct phylink_link_state *state)
 {
+	if (state->interface == PHY_INTERFACE_MODE_QSGMII)
+		ipqess_m32(ess, );
+	else if (state->interface == PHY_INTERFACE_MODE_PSGMII)
+	else
+		return;
 	/* TODO */
 }
 
@@ -1135,7 +1140,7 @@ static void ipqess_mac_link_up(struct phylink_config *config,
 }
 
 static struct phylink_mac_ops ipqess_phylink_mac_ops = {
-	.validate		= ipqess_validate,
+	.validate		= phylink_generic_validate,
 	.mac_config		= ipqess_mac_config,
 	.mac_link_up		= ipqess_mac_link_up,
 	.mac_link_down		= ipqess_mac_link_down,
@@ -1156,9 +1161,10 @@ static void ipqess_cleanup(struct ipqess *ess)
 static int ipqess_axi_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
-	struct ipqess *ess;
 	struct net_device *netdev;
+	phy_interface_t phy_mode;
 	struct resource *res;
+	struct ipqess *ess;
 	int i, err = 0;
 
 	netdev = devm_alloc_etherdev_mqs(&pdev->dev, sizeof(struct ipqess),
@@ -1181,13 +1187,26 @@ static int ipqess_axi_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
+	err = of_get_phy_mode(np, &phy_mode);
+	if (err) {
+		dev_err(&pdev->dev, "incorrect phy-mode\n");
+		goto err_out;
+	}
+
 	ess->phylink_config.dev = &netdev->dev;
 	ess->phylink_config.type = PHYLINK_NETDEV;
 	ess->phylink_config.pcs_poll = true;
 
+	/* Supported modes from datasheet, only PSGMII was tested. */
+
+	__set_bit(PHY_INTERFACE_MODE_QSGMII,
+		  ess->phylink_config.supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_PSGMII,
+		  ess->phylink_config.supported_interfaces);
+
 	ess->phylink = phylink_create(&ess->phylink_config,
 				      of_fwnode_handle(np),
-				      PHY_INTERFACE_MODE_INTERNAL,
+				      phy_mode,
 				      &ipqess_phylink_mac_ops);
 	if (IS_ERR(ess->phylink)) {
 		err = PTR_ERR(ess->phylink);

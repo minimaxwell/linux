@@ -482,6 +482,8 @@ void ipqess_update_hw_stats(struct ipqess *ess);
 #define IPQESS_REG_MAC_CTRL0 0xC20
 #define IPQESS_REG_MAC_CTRL1 0xC24
 
+/* PQSGMII PHY Control register*/
+
 /* WoL Pattern Register */
 #define IPQESS_REG_WOL_PATTERN_START 0x5000
 #define IPQESS_PATTERN_PART_REG_OFFSET 0x40
