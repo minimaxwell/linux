@@ -105,7 +105,7 @@ static int vip_subdev_notifier(struct rk_vip_device *vip_dev)
 	struct fwnode_handle *ep;
 	int ret;
 
-	v4l2_async_notifier_init(ntf);
+	v4l2_async_nf_init(ntf);
 
 	ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), 0, 0,
 					     FWNODE_GRAPH_ENDPOINT_NEXT);
@@ -116,8 +116,7 @@ static int vip_subdev_notifier(struct rk_vip_device *vip_dev)
 	if (ret)
 		return ret;
 
-	ret = v4l2_async_notifier_add_fwnode_remote_subdev(ntf, ep,
-							   &vip_dev->asd);
+	ret = v4l2_async_nf_add_fwnode_remote(ntf, ep, struct v4l2_async_subdev);
 	if (ret)
 		return ret;
 
@@ -125,7 +124,7 @@ static int vip_subdev_notifier(struct rk_vip_device *vip_dev)
 
 	fwnode_handle_put(ep);
 
-	ret = v4l2_async_notifier_register(&vip_dev->v4l2_dev, ntf);
+	ret = v4l2_async_nf_register(&vip_dev->v4l2_dev, ntf);
 	return ret;
 }
 
