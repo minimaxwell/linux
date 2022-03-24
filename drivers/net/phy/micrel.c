@@ -138,6 +138,10 @@
 #define LTC_HARD_RESET				0x023F
 #define LTC_HARD_RESET_				BIT(0)
 
+#define TSU_GENERAL_CONFIG			0x2C0
+#define TSU_GENERAL_CONFIG_TSU_ENABLE_		BIT(0)
+#define TSU_GENERAL_CONFIG_TSU_ENABLE_PCH_	BIT(1)
+
 #define TSU_HARD_RESET				0x02C1
 #define TSU_HARD_RESET_				BIT(0)
 
@@ -161,6 +165,7 @@
 
 #define PTP_OPERATING_MODE			0x0241
 #define PTP_OPERATING_MODE_STANDALONE_		BIT(0)
+#define PTP_OPERATING_MODE_PCH_			BIT(1)
 
 #define PTP_TX_MOD				0x028F
 #define PTP_TX_MOD_TX_PTP_SYNC_TS_INSERT_	BIT(12)
@@ -2347,6 +2352,16 @@ static void lan8814_ptp_rx_ts_get(struct phy_device *phydev,
 	*seq_id = lanphy_read_page_reg(phydev, 5, PTP_RX_MSG_HEADER2);
 }
 
+static void lan8814_ptp_rx_ts_get_partial(struct phy_device *phydev,
+					  u32 *seconds, u16 *seq_id)
+{
+	*seconds = lanphy_read_page_reg(phydev, 5, PTP_RX_INGRESS_SEC_HI);
+	*seconds = (*seconds << 16) |
+		   lanphy_read_page_reg(phydev, 5, PTP_RX_INGRESS_SEC_LO);
+
+	*seq_id = lanphy_read_page_reg(phydev, 5, PTP_RX_MSG_HEADER2);
+}
+
 static void lan8814_ptp_tx_ts_get(struct phy_device *phydev,
 				  u32 *seconds, u32 *nano_seconds, u16 *seq_id)
 {
@@ -2490,6 +2505,12 @@ static int lan8814_hwtstamp(struct mii_timestamper *mii_ts,
 
 	lan8814_flush_fifo(ptp_priv->phydev, false);
 	lan8814_flush_fifo(ptp_priv->phydev, true);
+
+	if (phydev->interface == PHY_INTERFACE_MODE_QUSGMII &&
+	    ptp_priv->hwts_tx_type == HWTSTAMP_TX_ON)
+		phy_inband_ext_set_available(phydev, PHY_INBAND_EXT_PCH_TIMESTAMP);
+	else
+		phy_inband_ext_set_unavailable(phydev, PHY_INBAND_EXT_PCH_TIMESTAMP);
 
 	return 0;
 }
@@ -2909,8 +2930,20 @@ static bool lan8814_match_skb(struct kszphy_ptp_priv *ptp_priv,
 
 	if (ret) {
 		shhwtstamps = skb_hwtstamps(skb);
-		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
-		shhwtstamps->hwtstamp = ktime_set(rx_ts->seconds, rx_ts->nsec);
+
+		if (phy_inband_ext_enabled(ptp_priv->phydev, PHY_INBAND_EXT_PCH_TIMESTAMP)) {
+			/* When using the PCH extension, we get the seconds part
+			 * from MDIO accesses, but the seconds part gets
+			 * set by the MAC driver according to the PCH data in the
+			 * preamble
+			 */
+			struct timespec64 ts = ktime_to_timespec64(shhwtstamps->hwtstamp);
+
+			shhwtstamps->hwtstamp = ktime_set(rx_ts->seconds, ts.tv_nsec);
+		} else {
+			memset(shhwtstamps, 0, sizeof(*shhwtstamps));
+			shhwtstamps->hwtstamp = ktime_set(rx_ts->seconds, rx_ts->nsec);
+		}
 		netif_rx(skb);
 	}
 
@@ -2945,8 +2978,18 @@ static void lan8814_get_rx_ts(struct kszphy_ptp_priv *ptp_priv)
 		if (!rx_ts)
 			return;
 
-		lan8814_ptp_rx_ts_get(phydev, &rx_ts->seconds, &rx_ts->nsec,
-				      &rx_ts->seq_id);
+		/* When using PCH mode, the nanoseconds part of the timestamp is
+		 * transmitted inband through the ethernet preamble. We only need
+		 * to retrieve the seconds part along with the seq_id, the MAC
+		 * driver will fill-in the nanoseconds part itself
+		 */
+		if (phy_inband_ext_enabled(ptp_priv->phydev, PHY_INBAND_EXT_PCH_TIMESTAMP))
+			lan8814_ptp_rx_ts_get_partial(phydev, &rx_ts->seconds,
+						      &rx_ts->seq_id);
+		else
+			lan8814_ptp_rx_ts_get(phydev, &rx_ts->seconds,
+					      &rx_ts->nsec, &rx_ts->seq_id);
+
 		lan8814_match_rx_ts(ptp_priv, rx_ts);
 
 		/* If other timestamps are available in the FIFO,
@@ -3224,6 +3267,37 @@ static void lan8814_setup_led(struct phy_device *phydev, int val)
 		temp &= ~LAN8814_LED_CTRL_1_KSZ9031_LED_MODE_;
 
 	lanphy_write_page_reg(phydev, 5, LAN8814_LED_CTRL_1, temp);
+}
+
+static int lan8814_set_inband_ext(struct phy_device *phydev,
+				  enum phy_inband_ext ext, bool enable)
+{
+	u32 tsu_cfg;
+
+	if (ext != PHY_INBAND_EXT_PCH_TIMESTAMP)
+		return -EOPNOTSUPP;
+
+	tsu_cfg = ~TSU_GENERAL_CONFIG_TSU_ENABLE_;
+
+	lanphy_write_page_reg(phydev, 5, TSU_GENERAL_CONFIG, tsu_cfg);
+
+	if (enable) {
+		lanphy_write_page_reg(phydev, 4, PTP_OPERATING_MODE,
+				      PTP_OPERATING_MODE_PCH_);
+
+		tsu_cfg |= TSU_GENERAL_CONFIG_TSU_ENABLE_PCH_;
+	} else {
+		lanphy_write_page_reg(phydev, 4, PTP_OPERATING_MODE,
+				      PTP_OPERATING_MODE_STANDALONE_);
+
+		tsu_cfg &= ~TSU_GENERAL_CONFIG_TSU_ENABLE_PCH_;
+	}
+
+	tsu_cfg |= TSU_GENERAL_CONFIG_TSU_ENABLE_;
+
+	lanphy_write_page_reg(phydev, 5, TSU_GENERAL_CONFIG, tsu_cfg);
+
+	return 0;
 }
 
 static int lan8814_config_init(struct phy_device *phydev)
@@ -4783,6 +4857,7 @@ static struct phy_driver ksphy_driver[] = {
 	.phy_id_mask	= MICREL_PHY_ID_MASK,
 	.name		= "Microchip INDY Gigabit Quad PHY",
 	.flags          = PHY_POLL_CABLE_TEST,
+	.inband_ext	= PHY_INBAND_EXT_PCH_TIMESTAMP,
 	.config_init	= lan8814_config_init,
 	.driver_data	= &lan8814_type,
 	.probe		= lan8814_probe,
@@ -4797,6 +4872,7 @@ static struct phy_driver ksphy_driver[] = {
 	.handle_interrupt = lan8814_handle_interrupt,
 	.cable_test_start	= lan8814_cable_test_start,
 	.cable_test_get_status	= ksz886x_cable_test_get_status,
+	.set_inband_ext = lan8814_set_inband_ext,
 }, {
 	.phy_id		= PHY_ID_LAN8804,
 	.phy_id_mask	= MICREL_PHY_ID_MASK,
