@@ -1760,3 +1760,89 @@ int phy_ethtool_nway_reset(struct net_device *ndev)
 	return ret;
 }
 EXPORT_SYMBOL(phy_ethtool_nway_reset);
+
+/**
+ * PHY modes in the USXGMII family can have extensions, with data transmitted
+ * in the frame preamble.
+ * For now, only QUSGMII is supported, but other variants like USGMII and
+ * OUSGMII can be added in the future.
+ */
+static inline bool phy_interface_has_inband_ext(phy_interface_t interface)
+{
+	return interface == PHY_INTERFACE_MODE_QUSGMII;
+}
+
+bool phy_inband_ext_available(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	return !!(phydev->inband_ext.available & ext);
+}
+EXPORT_SYMBOL(phy_inband_ext_available);
+
+bool phy_inband_ext_enabled(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	return !!(phydev->inband_ext.enabled & ext);
+}
+EXPORT_SYMBOL(phy_inband_ext_enabled);
+
+static int phy_set_inband_ext(struct phy_device *phydev,
+			      enum phy_inband_ext ext,
+			      bool enable)
+{
+	int ret;
+
+	if (!phy_interface_has_inband_ext(phydev->interface))
+		return -EOPNOTSUPP;
+
+	if (!phydev->drv->set_inband_ext)
+		return -EOPNOTSUPP;
+
+	mutex_lock(&phydev->lock);
+	ret = phydev->drv->set_inband_ext(phydev, ext, enable);
+	mutex_unlock(&phydev->lock);
+	if (ret)
+		return ret;
+
+	if (enable)
+		phydev->inband_ext.enabled |= BIT(ext);
+	else
+		phydev->inband_ext.enabled &= ~BIT(ext);
+
+	return 0;
+}
+
+int phy_inband_ext_enable(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	if (!phy_inband_ext_available(phydev, ext))
+		return -EOPNOTSUPP;
+
+	return phy_set_inband_ext(phydev, ext, true);
+}
+EXPORT_SYMBOL(phy_inband_ext_enable);
+
+int phy_inband_ext_disable(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	return phy_set_inband_ext(phydev, ext, false);
+}
+EXPORT_SYMBOL(phy_inband_ext_disable);
+
+int phy_inband_ext_set_available(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	if (!(BIT(ext) & phydev->drv->inband_ext))
+		return -EOPNOTSUPP;
+
+	phydev->inband_ext.available |= BIT(ext);
+
+	return 0;
+}
+EXPORT_SYMBOL(phy_inband_ext_set_available);
+
+int phy_inband_ext_set_unavailable(struct phy_device *phydev, enum phy_inband_ext ext)
+{
+	if (!(BIT(ext) & phydev->drv->inband_ext))
+		return -EOPNOTSUPP;
+
+	phydev->inband_ext.available &= ~BIT(ext);
+
+	return 0;
+}
+EXPORT_SYMBOL(phy_inband_ext_set_unavailable);
