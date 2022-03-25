@@ -302,6 +302,7 @@ struct lan966x_phc {
 	struct kernel_hwtstamp_config hwtstamp_config;
 	struct lan966x *lan966x;
 	u8 index;
+	bool pch;
 };
 
 struct lan966x_skb_cb {
