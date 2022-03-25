@@ -202,6 +202,25 @@ static inline void phy_interface_set_rgmii(unsigned long *intf)
 	__set_bit(PHY_INTERFACE_MODE_RGMII_TXID, intf);
 }
 
+/**
+ * enum phy_inband_ext - Inband extensions
+ *
+ * @PHY_INBAND_EXT_PCH_TIMESTAMP: Transmit the nanoseconds part of a timestamp,
+ *				  Using the PCH format.
+ *
+ * Describes the inband extensions that can be conveyed in the ethernet preamble
+ */
+enum phy_inband_ext {
+	PHY_INBAND_EXT_PCH_TIMESTAMP = 0,
+};
+
+int phy_inband_ext_enable(struct phy_device *phydev, enum phy_inband_ext ext);
+int phy_inband_ext_disable(struct phy_device *phydev, enum phy_inband_ext ext);
+int phy_inband_ext_set_available(struct phy_device *phydev, enum phy_inband_ext ext);
+int phy_inband_ext_set_unavailable(struct phy_device *phydev, enum phy_inband_ext ext);
+bool phy_inband_ext_available(struct phy_device *phydev, enum phy_inband_ext ext);
+bool phy_inband_ext_enabled(struct phy_device *phydev, enum phy_inband_ext ext);
+
 /*
  * phy_supported_speeds - return all speeds currently supported by a PHY device
  */
@@ -678,6 +697,11 @@ struct phy_device {
 	phy_interface_t interface;
 	DECLARE_PHY_INTERFACE_MASK(possible_interfaces);
 
+	struct {
+		u32 available;
+		u32 enabled;
+	} inband_ext;
+
 	/*
 	 * forced speed & duplex (no autoneg)
 	 * partner speed & duplex & pause (autoneg)
@@ -899,6 +923,7 @@ struct phy_driver {
 	u32 phy_id_mask;
 	const unsigned long * const features;
 	u32 flags;
+	u32 inband_ext;
 	const void *driver_data;
 
 	/**
@@ -1145,6 +1170,11 @@ struct phy_driver {
 	int (*led_hw_control_get)(struct phy_device *dev, u8 index,
 				  unsigned long *rules);
 
+	/** @get_inband_ext: Return a bitmask of enabled inband extensions*/
+	int (*get_inband_ext)(struct phy_device *dev, u32 *enabled_ext);
+	/** @set_inband_ext: Enable or disable a given extension*/
+	int (*set_inband_ext)(struct phy_device *dev, enum phy_inband_ext ext,
+			      bool enable);
 };
 #define to_phy_driver(d) container_of(to_mdio_common_driver(d),		\
 				      struct phy_driver, mdiodrv)

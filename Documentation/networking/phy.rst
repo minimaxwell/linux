@@ -538,6 +538,76 @@ Call one of following function before unloading module::
  int phy_unregister_fixup_for_uid(u32 phy_uid, u32 phy_uid_mask);
  int phy_register_fixup_for_id(const char *phy_id);
 
+Inband Extensions
+=================
+
+The USXGMII Standard allows the possibility to re-use the full-length 7-bytes
+frame preamble to convey meaningful data. This is already partly used by modes
+like QSGMII, which passes the port number in the preamble.
+
+In USXGMII, we have a standardized approach to allow the MAC and PHY to pass
+such data in the preamble, which looks like this :
+
+|  0   |  1   |  2  |  3  |  4  |  5  |  6  |  7  |  Frame data
+| SoP  |      |      Extension              | CRC |
+|     /        \_______________             |     |
+|    /                         \            |     |
+|   | type | subport | ext type |           |     |
+
+The preamble in that case uses the Packet Control Header (PCH) format, where
+the byte 1 is used as a control field with :
+
+type - 2 bits :
+        - 00 : Packet with PCH
+        - 01 : Packet without PCH
+        - 10 : Idle Packet, without data
+        - 11 : Reserved
+
+subport - 4 bits : The subport identifier. For QUSGMII, this field ranges from
+                   0 to 3, and for OUSGMII, it ranges from 0 to 7.
+
+ext type - 2 bits : Indicated the type of data conveyed in the extension
+        - 00 : Ignore extension
+        - 01 : 8 bits reserved + 32 timestamp
+        - 10 : Reserved
+        - 11 : Reserved
+
+It is possible for vendors to use the extensions mechanism without relying on
+the PCH formatting.
+
+In order to leverage such extensions, both the MAC and the PHY have to agree on
+which extension to use. The current model has the PHY expose the possible
+available extensions with ::
+
+  bool phy_inband_ext_available(struct phy_device *phydev, enum phy_inband_ext ext);
+
+The PHY driver decides which extensions are available to use at any given time,
+as they can only be used if ::
+  - A compatible PHY mode is used, such as USXGMII or QUSGMII
+  - The PHY can use the required mode at that moment
+
+A PHY driver can register available modes with::
+
+  int phy_inband_ext_set_available(struct phy_device *phydev, enum phy_inband_ext ext);
+  int phy_inband_ext_set_unavailable(struct phy_device *phydev, enum phy_inband_ext ext);
+
+It's then up to the MAC driver to enable/disable the extension in the PHY as
+needed. This was designed to fit the timestamping configuration model, as it
+is the only mode supported so far.
+
+Enabling/Disabling an extension is done from the MAC driver through::
+
+  int phy_inband_ext_enable(struct phy_device *phydev, enum phy_inband_ext ext);
+  int phy_inband_ext_disable(struct phy_device *phydev, enum phy_inband_ext ext);
+
+These functions will cause the relevant callback to be called in the PHY driver::
+
+  int (*set_inband_ext)(struct phy_device *dev, enum phy_inband_ext ext, bool enable);
+
+The state of currently enabled extensions can be queried with::
+
+  bool phy_inband_ext_enabled(struct phy_device *phydev, enum phy_inband_ext ext);
+
 Standards
 =========
 
