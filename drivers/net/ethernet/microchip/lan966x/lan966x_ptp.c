@@ -257,11 +257,47 @@ int lan966x_ptp_setup_traps(struct lan966x_port *port,
 		return lan966x_ptp_add_traps(port);
 }
 
+/* Enable or disable PCH timestamp transmission. This uses the USGMII PCH
+ * extensions to transmit the timestamps in the frame preamble.
+ */
+static void lan966x_ptp_pch_configure(struct lan966x_port *port, bool *enable)
+{
+	struct phy_device *phydev = port->dev->phydev;
+	int ret;
+
+	if (!phydev)
+		*enable = false;
+
+	if (*enable) {
+		/* If we cannot enable inband PCH mode, we fallback to classic
+		 * timestamping
+		 */
+		if (phy_inband_ext_available(phydev, PHY_INBAND_EXT_PCH_TIMESTAMP)) {
+			ret = phy_inband_ext_enable(phydev, PHY_INBAND_EXT_PCH_TIMESTAMP);
+			if (ret)
+				*enable = false;
+		} else {
+			*enable = false;
+		}
+	} else {
+		phy_inband_ext_disable(phydev, PHY_INBAND_EXT_PCH_TIMESTAMP);
+	}
+
+	lan_rmw(SYS_PCH_CFG_PCH_SUB_PORT_ID_SET(port->chip_port % 4) |
+		SYS_PCH_CFG_PCH_TX_MODE_SET(*enable) |
+		SYS_PCH_CFG_PCH_RX_MODE_SET(*enable),
+		SYS_PCH_CFG_PCH_SUB_PORT_ID |
+		SYS_PCH_CFG_PCH_TX_MODE |
+		SYS_PCH_CFG_PCH_RX_MODE,
+		port->lan966x, SYS_PCH_CFG(port->chip_port));
+}
+
 int lan966x_ptp_hwtstamp_set(struct lan966x_port *port,
 			     struct kernel_hwtstamp_config *cfg,
 			     struct netlink_ext_ack *extack)
 {
 	struct lan966x *lan966x = port->lan966x;
+	bool timestamp_in_pch = false;
 	struct lan966x_phc *phc;
 
 	switch (cfg->tx_type) {
@@ -303,10 +339,18 @@ int lan966x_ptp_hwtstamp_set(struct lan966x_port *port,
 		return -ERANGE;
 	}
 
+	if (cfg->source == HWTSTAMP_SOURCE_PHYLIB &&
+	    cfg->tx_type == HWTSTAMP_TX_ON &&
+	    port->config.portmode == PHY_INTERFACE_MODE_QUSGMII)
+		timestamp_in_pch = true;
+
+	lan966x_ptp_pch_configure(port, &timestamp_in_pch);
+
 	/* Commit back the result & save it */
 	mutex_lock(&lan966x->ptp_lock);
 	phc = &lan966x->phc[LAN966X_PHC_PORT];
 	phc->hwtstamp_config = *cfg;
+	phc->pch = timestamp_in_pch;
 	mutex_unlock(&lan966x->ptp_lock);
 
 	return 0;
@@ -397,8 +441,16 @@ int lan966x_ptp_txtstamp_request(struct lan966x_port *port,
 	LAN966X_SKB_CB(skb)->jiffies = jiffies;
 
 	lan966x->ptp_skbs++;
-	port->ts_id++;
-	if (port->ts_id == LAN966X_MAX_PTP_ID)
+
+	/* If PHC is enabled, the subns part of the ID is not passed in the PCH
+	 * header. So shift it by 2 to skip the subns part
+	 */
+	if (phy_inband_ext_enabled(port->dev->phydev, PHY_INBAND_EXT_PCH_TIMESTAMP))
+		port->ts_id = (((port->ts_id >> 2) + 1) << 2);
+	else
+		port->ts_id++;
+
+	if (port->ts_id >= LAN966X_MAX_PTP_ID)
 		port->ts_id = 0;
 
 	spin_unlock_irqrestore(&lan966x->ptp_ts_id_lock, flags);
@@ -499,6 +551,27 @@ irqreturn_t lan966x_ptp_irq_handler(int irq, void *args)
 
 		/* Read RX timestamping to get the ID */
 		id = lan_rd(lan966x, PTP_TWOSTEP_STAMP);
+
+		/* If PCH is enabled, there is a "feature" that also the MAC
+		 * will generate an interrupt for transmitted frames. This
+		 * interrupt should be ignored, so clear the allocated resources
+		 * and try to get the next timestamp. Maybe should clean the
+		 * resources on the TX side?
+		 */
+		if (phy_inband_ext_enabled(port->dev->phydev,
+					   PHY_INBAND_EXT_PCH_TIMESTAMP)) {
+			spin_lock(&lan966x->ptp_ts_id_lock);
+			lan966x->ptp_skbs--;
+			spin_unlock(&lan966x->ptp_ts_id_lock);
+
+			dev_kfree_skb_any(skb_match);
+
+			lan_rmw(PTP_TWOSTEP_CTRL_NXT_SET(1),
+				PTP_TWOSTEP_CTRL_NXT,
+				lan966x, PTP_TWOSTEP_CTRL);
+
+			continue;
+		}
 
 		spin_lock_irqsave(&port->tx_skbs.lock, flags);
 		skb_queue_walk_safe(&port->tx_skbs, skb, skb_tmp) {
@@ -1088,19 +1161,25 @@ void lan966x_ptp_rxtstamp(struct lan966x *lan966x, struct sk_buff *skb,
 	struct timespec64 ts;
 	u64 full_ts_in_ns;
 
+	phc = &lan966x->phc[LAN966X_PHC_PORT];
+
 	if (!lan966x->ptp ||
-	    !lan966x->ports[src_port]->ptp_rx_cmd)
+	    !lan966x->ports[src_port]->ptp_rx_cmd ||
+	    !phc->pch)
 		return;
 
-	phc = &lan966x->phc[LAN966X_PHC_PORT];
-	lan966x_ptp_gettime64(&phc->info, &ts);
+	if (phc->pch) {
+		full_ts_in_ns = lower_32_bits(timestamp);
+	} else {
+		lan966x_ptp_gettime64(&phc->info, &ts);
 
-	/* Drop the sub-ns precision */
-	timestamp = timestamp >> 2;
-	if (ts.tv_nsec < timestamp)
-		ts.tv_sec--;
-	ts.tv_nsec = timestamp;
-	full_ts_in_ns = ktime_set(ts.tv_sec, ts.tv_nsec);
+		/* Drop the sub-ns precision */
+		timestamp = timestamp >> 2;
+		if (ts.tv_nsec < timestamp)
+			ts.tv_sec--;
+		ts.tv_nsec = timestamp;
+		full_ts_in_ns = ktime_set(ts.tv_sec, ts.tv_nsec);
+	}
 
 	shhwtstamps = skb_hwtstamps(skb);
 	shhwtstamps->hwtstamp = full_ts_in_ns;

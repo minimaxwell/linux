@@ -362,6 +362,17 @@ int lan966x_port_pcs_set(struct lan966x_port *port,
 		DEV_PCS1G_MODE_CFG_SAVE_PREAMBLE_ENA,
 		lan966x, DEV_PCS1G_MODE_CFG(port->chip_port));
 
+	if (full_preamble)
+		lan_rmw(DEV_ENABLE_CONFIG_MM_TX_ENA_SET(1) |
+			DEV_ENABLE_CONFIG_MM_RX_ENA_SET(1),
+			DEV_ENABLE_CONFIG_MM_TX_ENA |
+			DEV_ENABLE_CONFIG_MM_RX_ENA,
+			lan966x, DEV_ENABLE_CONFIG(port->chip_port));
+
+	lan_rmw(SYS_PTP_MODE_CFG_PTP_MODE_VAL_SET(1),
+		SYS_PTP_MODE_CFG_PTP_MODE_VAL,
+		lan966x, SYS_PTP_MODE_CFG(port->chip_port, 0));
+
 	/* Enable PCS */
 	lan_wr(DEV_PCS1G_CFG_PCS_ENA_SET(1),
 	       lan966x, DEV_PCS1G_CFG(port->chip_port));
