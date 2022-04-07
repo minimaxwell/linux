@@ -68,6 +68,8 @@ static void gpio_nand_dosync(struct gpiomtd *gpiomtd)
 		asm volatile("mov %1, %0\n" : "=r" (tmp) : "r" (tmp));
 	}
 }
+#elif defined(CONFIG_PPC_MPC832x)
+static inline void gpio_nand_dosync(struct gpiomtd *gpiomtd) {mb();}
 #else
 static inline void gpio_nand_dosync(struct gpiomtd *gpiomtd) {}
 #endif
