@@ -7,3 +7,19 @@ config NET_DSA_AR9331
 	help
 	  This enables support for the Qualcomm Atheros AR9331 built-in Ethernet
 	  switch.
+
+config NET_DSA_QCA8K
+	tristate "Qualcomm Atheros QCA8K Ethernet switch family support"
+	select NET_DSA_TAG_QCA
+	select REGMAP
+	help
+	  This enables support for the Qualcomm Atheros QCA8K Ethernet
+	  switch chips.
+
+config NET_DSA_QCA8K_IPQ4019
+	tristate "Qualcomm Atheros IPQ4019 built-in Ethernet switch support"
+	select NET_DSA_TAG_IPQ4019
+	select REGMAP
+	help
+	  This enables support for the Qualcomm Atheros IPQ4019 SoC built-in
+	  Ethernet switch.
