@@ -809,18 +809,6 @@ qca8k_ipq4019_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	priv->ess_clk = of_clk_get_by_name(np, "ess_clk");
-	if (IS_ERR(priv->ess_clk)) {
-		dev_err(&pdev->dev, "Failed to get ess_clk\n");
-		return PTR_ERR(priv->ess_clk);
-	}
-
-	priv->ess_rst = devm_reset_control_get(&pdev->dev, "ess_rst");
-	if (IS_ERR(priv->ess_rst)) {
-		dev_err(&pdev->dev, "Failed to get ess_rst control!\n");
-		return PTR_ERR(priv->ess_rst);
-	}
-
 	ret = of_property_read_u32(np, "mac-mode", &priv->mac_mode);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "unable to get 'mac-mode' property\n");

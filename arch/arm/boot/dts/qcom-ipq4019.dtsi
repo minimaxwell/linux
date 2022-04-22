@@ -594,11 +594,9 @@
 		switch: switch@c000000 {
 			compatible = "qca,ipq4019-qca8337n";
 			reg = <0xc000000 0x80000>;
-			resets = <&gcc ESS_RESET>;
-			reset-names = "ess_rst";
-			clocks = <&gcc GCC_ESS_CLK>;
-			clock-names = "ess_clk";
 			psgmii-phy = <&psgmii_phy>;
+			resets = <&gcc ESS_PSGMII_ARES>;
+			reset-names = "psgmii_rst";
 			mdio = <&mdio>;
 			mac-mode = <0>; /* 0 = PSGMII, 1 = RGMII5 */
 
@@ -709,9 +707,15 @@
 				     <GIC_SPI 254 IRQ_TYPE_EDGE_RISING>,
 				     <GIC_SPI 255 IRQ_TYPE_EDGE_RISING>;
 
-			status = "disabled";
+			status = "okay";
 
 			phy-mode = "internal";
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+				pause;
+				asym-pause;
+			};
 		};
 
 		mdio: mdio@90000 {
