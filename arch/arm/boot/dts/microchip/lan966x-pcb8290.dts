@@ -19,6 +19,12 @@
 		gpios = <&gpio 56 GPIO_ACTIVE_LOW>;
 		priority = <200>;
 	};
+
+	phy_external_reset: phy_external_reset {
+		compatible = "microchip,lan966x-phy-reset-external";
+		#reset-cells = <1>;
+		phy-external-reset-gpios = <&gpio 53 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &aes {
@@ -69,9 +75,13 @@
 };
 
 &mdio0 {
+	compatible = "microchip,lan9668-miim";
 	pinctrl-0 = <&miim_a_pins>;
 	pinctrl-names = "default";
 	status = "okay";
+
+	resets = <&phy_external_reset 0>;
+	reset-names = "phy";
 
 	ext_phy0: ethernet-phy@7 {
 		reg = <7>;

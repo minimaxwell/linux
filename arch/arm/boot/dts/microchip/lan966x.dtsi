@@ -60,6 +60,12 @@
 		};
 	};
 
+	lan966x_uio0: mscc_switch@e0000000 {
+		compatible = "generic-uio";
+		reg = <0xe0000000 0x4000000>;
+		status = "okay";
+	};
+
 	clks: clock-controller@e00c00a8 {
 		compatible = "microchip,lan966x-gck";
 		#clock-cells = <1>;
