@@ -447,16 +447,13 @@ static int ipqess_tx_complete(struct ipqess_tx_ring *tx_ring, int budget)
 	tail >>= IPQESS_TPD_CONS_IDX_SHIFT;
 	tail &= IPQESS_TPD_CONS_IDX_MASK;
 
-	while ((tx_ring->tail != tail) && (done < budget)) {
+	do {
 		ret = ipqess_tx_unmap_and_free(&tx_ring->ess->pdev->dev,
 					       &tx_ring->buf[tx_ring->tail]);
 		tx_ring->tail = IPQESS_NEXT_IDX(tx_ring->tail, tx_ring->count);
 
-		if (ret) {
-			total += ret;
-			done++;
-		}
-	}
+		total += ret;
+	} while ((++done < budget) && (tx_ring->tail != tail));
 
 	ipqess_w32(tx_ring->ess, IPQESS_REG_TX_SW_CONS_IDX_Q(tx_ring->idx),
 		   tx_ring->tail);
@@ -505,16 +502,17 @@ static int ipqess_rx_napi(struct napi_struct *napi, int budget)
 	int rx_done;
 	u32 status;
 
-	while (remain_budget > 0) {
-		ipqess_w32(ess, IPQESS_REG_RX_ISR, rx_mask);
-		rx_done = ipqess_rx_poll(rx_ring, remain_budget);
-		remain_budget -= rx_done;
+	ipqess_w32(ess, IPQESS_REG_RX_ISR, rx_mask);
+	rx_done = ipqess_rx_poll(rx_ring, remain_budget);
+	remain_budget -= rx_done;
 
-		status = ipqess_r32(ess, IPQESS_REG_RX_ISR);
-		if (!(status & rx_mask))
-			goto done;
-	}
+	status = ipqess_r32(ess, IPQESS_REG_RX_ISR);
+	if (!(status & rx_mask))
+		goto done;
 done:
+
+	if (rx_done >= budget)
+		return budget;
 
 	if (napi_complete_done(napi, budget - remain_budget))
 		ipqess_w32(ess, IPQESS_REG_RX_INT_MASK_Q(rx_ring->idx), 0x1);
