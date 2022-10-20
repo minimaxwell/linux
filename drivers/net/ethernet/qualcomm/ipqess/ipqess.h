@@ -173,7 +173,7 @@ struct ipqess {
 	struct phylink_config phylink_config;
 
 	struct notifier_block netdev_notifier;
-	bool uses_dsa;
+	int dsa_ports;
 
 	struct ipqess_tx_ring tx_ring[IPQESS_NETDEV_QUEUES];
 

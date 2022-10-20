@@ -412,7 +412,7 @@ static int ipqess_rx_poll(struct ipqess_rx_ring *rx_ring, int budget)
 			__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021AD),
 					       rd->rrd4);
 
-		if (rx_ring->ess->uses_dsa) {
+		if (rx_ring->ess->dsa_ports) {
 			tag_info.dp = FIELD_GET(IPQESS_RRD_PORT_ID_MASK, rd->rrd1);
 			tag_info.proto = DSA_TAG_PROTO_OOB;
 			dsa_oob_tag_push(skb, &tag_info);
@@ -724,7 +724,7 @@ static void ipqess_process_dsa_tag_sh(struct ipqess *ess, struct sk_buff *skb,
 {
 	struct dsa_oob_tag_info tag_info;
 
-	if (!ess->uses_dsa)
+	if (!ess->dsa_ports)
 		return;
 
 	if (dsa_oob_tag_pop(skb, &tag_info))
@@ -953,16 +953,23 @@ static int ipqess_netdevice_event(struct notifier_block *nb,
 {
 	struct ipqess *ess = container_of(nb, struct ipqess, netdev_notifier);
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
-
-	if (ess->netdev != dev)
-		return NOTIFY_DONE;
+	struct netdev_notifier_changeupper_info *info;
 
 	switch (event) {
 	case NETDEV_CHANGEUPPER:
-		if (netdev_uses_dsa(ess->netdev))
-			ess->uses_dsa = true;
+		info = ptr;
+
+		if (dev->netdev_ops != &ipqess_axi_netdev_ops)
+			return NOTIFY_DONE;
+
+		if (!dsa_slave_dev_check(info->upper_dev))
+			return NOTIFY_DONE;
+
+		if (info->linking)
+			ess->dsa_ports++;
 		else
-			ess->uses_dsa = false;
+			ess->dsa_ports--;
+
 		return NOTIFY_DONE;
 	}
 	return NOTIFY_OK;
