@@ -70,7 +70,6 @@ const struct dsa_device_ops oob_tag_dsa_ops = {
 	.proto	= DSA_TAG_PROTO_OOB,
 	.xmit	= oob_tag_xmit,
 	.rcv	= oob_tag_rcv,
-	.needed_headroom = DSA_OOB_TAG_LEN,
 };
 
 MODULE_LICENSE("GPL");
