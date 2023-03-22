@@ -477,6 +477,7 @@ struct altera_tse_private {
 	struct phylink *phylink;
 	struct phylink_config phylink_config;
 	struct phylink_pcs *pcs;
+	struct mdio_device *pcs_mdiodev;
 };
 
 /* Function prototypes
