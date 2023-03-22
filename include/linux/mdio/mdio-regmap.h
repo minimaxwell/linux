@@ -7,6 +7,8 @@
 #ifndef MDIO_REGMAP_H
 #define MDIO_REGMAP_H
 
+#include <linux/phy.h>
+
 struct device;
 struct regmap;
 
