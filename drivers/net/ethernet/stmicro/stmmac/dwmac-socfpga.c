@@ -58,6 +58,7 @@ struct socfpga_dwmac {
 	void __iomem *sgmii_adapter_base;
 	bool f2h_ptp_ref_clk;
 	const struct socfpga_dwmac_ops *ops;
+	struct mdio_device *pcs_mdiodev;
 };
 
 static void socfpga_dwmac_fix_mac_speed(void *priv, unsigned int speed)
@@ -210,6 +211,7 @@ static int socfpga_dwmac_parse_data(struct socfpga_dwmac *dwmac, struct device *
 
 			dwmac->tse_pcs_base =
 			    devm_ioremap_resource(dev, &res_tse_pcs);
+
 
 			if (IS_ERR(dwmac->tse_pcs_base)) {
 				ret = PTR_ERR(dwmac->tse_pcs_base);
@@ -389,13 +391,12 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 	struct stmmac_priv	*stpriv;
 	const struct socfpga_dwmac_ops *ops;
 	struct regmap_config pcs_regmap_cfg;
-	struct mdio_device *mdiodev;
 	struct regmap *pcs_regmap;
 	struct mii_bus *pcs_bus;
 
 	struct mdio_regmap_config mrc = {
 		.parent = &pdev->dev,
-		.valid_addr = 0x1,
+		.valid_addr = 0x0,
 	};
 
 	ops = device_get_match_data(&pdev->dev);
@@ -454,24 +455,35 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_dvr_remove;
 
+	memset(&pcs_regmap_cfg, 0, sizeof(pcs_regmap_cfg));
 	pcs_regmap_cfg.reg_bits = 16;
 	pcs_regmap_cfg.val_bits = 16;
 	pcs_regmap_cfg.reg_stride = 2;
 	pcs_regmap_cfg.reg_shift = REGMAP_UPSHIFT(1);
 
-	/* Create a regmap for the PCS so that it can be used by the PCS driver */
-	pcs_regmap = devm_regmap_init_mmio(&pdev->dev, dwmac->tse_pcs_base,
+	/* Create a regmap for the PCS so that it can be used by the PCS driver,
+	 * if we have such a PCS
+	 */
+	if (dwmac->tse_pcs_base) {
+		pcs_regmap = devm_regmap_init_mmio(&pdev->dev, dwmac->tse_pcs_base,
 					   &pcs_regmap_cfg);
-	if (IS_ERR(pcs_regmap)) {
-		ret = PTR_ERR(pcs_regmap);
-		goto err_dvr_remove;
-	}
-	mrc.regmap = pcs_regmap;
+		if (IS_ERR(pcs_regmap)) {
+			ret = PTR_ERR(pcs_regmap);
+			goto err_dvr_remove;
+		}
+		mrc.regmap = pcs_regmap;
 
-	pcs_bus = devm_mdio_regmap_register(&pdev->dev, &mrc);
-	mdiodev = mdio_device_create(pcs_bus, 0);
-	stpriv->hw->phylink_pcs = lynx_pcs_create(mdiodev);
-	/* TODO err handling */
+		snprintf(mrc.name, MII_BUS_ID_SIZE, "%s-pcs-mii", ndev->name);
+		pcs_bus = devm_mdio_regmap_register(&pdev->dev, &mrc);
+		if (!pcs_bus) {
+			ret = -EINVAL;
+			goto err_dvr_remove;
+		}
+
+		dwmac->pcs_mdiodev = mdio_device_create(pcs_bus, 0);
+		stpriv->hw->phylink_pcs = lynx_pcs_create(dwmac->pcs_mdiodev);
+
+	}
 
 	return 0;
 
