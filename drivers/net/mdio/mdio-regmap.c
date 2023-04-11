@@ -80,3 +80,7 @@ struct mii_bus *devm_mdio_regmap_register(struct device *dev,
 }
 EXPORT_SYMBOL_GPL(devm_mdio_regmap_register);
 
+
+MODULE_DESCRIPTION("MDIO API over regmap");
+MODULE_AUTHOR("Maxime Chevallier <maxime.chevallier@bootlin.com>");
+MODULE_LICENSE("GPL v2");
