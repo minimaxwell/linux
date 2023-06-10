@@ -944,14 +944,11 @@ static struct phylink_pcs *stmmac_mac_select_pcs(struct phylink_config *config,
 	if (priv->hw->xpcs)
 		return &priv->hw->xpcs->pcs;
 
-	if (priv->hw->lynx_pcs)
-		return priv->hw->lynx_pcs;
-
 	return NULL;
 }
 
-static void stmmac_mac_config(struct phylink_config *config, unsigned int mode,
-			      const struct phylink_link_state *state)
+void stmmac_mac_config(struct phylink_config *config, unsigned int mode,
+		       const struct phylink_link_state *state)
 {
 	/* Nothing to do, xpcs_config() handles everything */
 }
@@ -971,8 +968,8 @@ static void stmmac_fpe_link_state_handle(struct stmmac_priv *priv, bool is_up)
 	}
 }
 
-static void stmmac_mac_link_down(struct phylink_config *config,
-				 unsigned int mode, phy_interface_t interface)
+void stmmac_mac_link_down(struct phylink_config *config, unsigned int mode,
+			  phy_interface_t interface)
 {
 	struct stmmac_priv *priv = netdev_priv(to_net_dev(config->dev));
 
@@ -986,11 +983,9 @@ static void stmmac_mac_link_down(struct phylink_config *config,
 		stmmac_fpe_link_state_handle(priv, false);
 }
 
-static void stmmac_mac_link_up(struct phylink_config *config,
-			       struct phy_device *phy,
-			       unsigned int mode, phy_interface_t interface,
-			       int speed, int duplex,
-			       bool tx_pause, bool rx_pause)
+void stmmac_mac_link_up(struct phylink_config *config, struct phy_device *phy,
+			unsigned int mode, phy_interface_t interface, int speed,
+			int duplex, bool tx_pause, bool rx_pause)
 {
 	struct stmmac_priv *priv = netdev_priv(to_net_dev(config->dev));
 	u32 old_ctrl, ctrl;

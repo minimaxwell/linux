@@ -386,6 +386,14 @@ struct timespec64 stmmac_calc_tas_basetime(ktime_t old_base_time,
 					   ktime_t current_time,
 					   u64 cycle_time);
 
+void stmmac_mac_config(struct phylink_config *config, unsigned int mode,
+		       const struct phylink_link_state *state);
+void stmmac_mac_link_down(struct phylink_config *config, unsigned int mode,
+			  phy_interface_t interface);
+void stmmac_mac_link_up(struct phylink_config *config, struct phy_device *phy,
+			unsigned int mode, phy_interface_t interface, int speed,
+			int duplex, bool tx_pause, bool rx_pause);
+
 #if IS_ENABLED(CONFIG_STMMAC_SELFTESTS)
 void stmmac_selftest_run(struct net_device *dev,
 			 struct ethtool_test *etest, u64 *buf);

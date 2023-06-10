@@ -58,6 +58,7 @@ struct socfpga_dwmac {
 	void __iomem *sgmii_adapter_base;
 	bool f2h_ptp_ref_clk;
 	const struct socfpga_dwmac_ops *ops;
+	struct phylink_pcs *lynx_pcs;
 };
 
 static void socfpga_dwmac_fix_mac_speed(void *priv, unsigned int speed, unsigned int mode)
@@ -378,6 +379,23 @@ static int socfpga_gen10_set_phy_mode(struct socfpga_dwmac *dwmac)
 	return 0;
 }
 
+static struct phylink_pcs *socfpga_mac_select_pcs(struct phylink_config *config,
+						  phy_interface_t interface)
+{
+	struct stmmac_priv *priv = netdev_priv(to_net_dev(config->dev));
+	struct plat_stmmacenet_data *plat = priv->plat;
+	struct socfpga_dwmac *dwmac = plat->bsp_priv;
+
+	return dwmac->lynx_pcs;
+}
+
+static const struct phylink_mac_ops dwmac_socfpga_phylink_mac_ops = {
+	.mac_select_pcs = socfpga_mac_select_pcs,
+	.mac_config = stmmac_mac_config,
+	.mac_link_down = stmmac_mac_link_down,
+	.mac_link_up = stmmac_mac_link_up,
+};
+
 static int socfpga_dwmac_probe(struct platform_device *pdev)
 {
 	struct plat_stmmacenet_data *plat_dat;
@@ -425,6 +443,7 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 	dwmac->ops = ops;
 	plat_dat->bsp_priv = dwmac;
 	plat_dat->fix_mac_speed = socfpga_dwmac_fix_mac_speed;
+	plat_dat->pl_mac_ops = &dwmac_socfpga_phylink_mac_ops;
 
 	ret = stmmac_dvr_probe(&pdev->dev, plat_dat, &stmmac_res);
 	if (ret)
@@ -478,9 +497,9 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 			goto err_dvr_remove;
 		}
 
-		stpriv->hw->lynx_pcs = lynx_pcs_create_mdiodev(pcs_bus, 0);
-		if (IS_ERR(stpriv->hw->lynx_pcs)) {
-			ret = PTR_ERR(stpriv->hw->lynx_pcs);
+		dwmac->lynx_pcs = lynx_pcs_create_mdiodev(pcs_bus, 0);
+		if (IS_ERR(dwmac->lynx_pcs)) {
+			ret = PTR_ERR(dwmac->lynx_pcs);
 			goto err_dvr_remove;
 		}
 	}
@@ -497,7 +516,9 @@ static void socfpga_dwmac_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct stmmac_priv *priv = netdev_priv(ndev);
-	struct phylink_pcs *pcs = priv->hw->lynx_pcs;
+	struct plat_stmmacenet_data *plat = priv->plat;
+	struct socfpga_dwmac *dwmac = plat->bsp_priv;
+	struct phylink_pcs *pcs = dwmac->lynx_pcs;
 
 	stmmac_pltfr_remove(pdev);
 
