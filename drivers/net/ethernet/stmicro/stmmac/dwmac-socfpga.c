@@ -445,23 +445,6 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 	plat_dat->fix_mac_speed = socfpga_dwmac_fix_mac_speed;
 	plat_dat->pl_mac_ops = &dwmac_socfpga_phylink_mac_ops;
 
-	ret = stmmac_dvr_probe(&pdev->dev, plat_dat, &stmmac_res);
-	if (ret)
-		return ret;
-
-	ndev = platform_get_drvdata(pdev);
-	stpriv = netdev_priv(ndev);
-
-	/* The socfpga driver needs to control the stmmac reset to set the phy
-	 * mode. Create a copy of the core reset handle so it can be used by
-	 * the driver later.
-	 */
-	dwmac->stmmac_rst = stpriv->plat->stmmac_rst;
-
-	ret = ops->set_phy_mode(dwmac);
-	if (ret)
-		goto err_dvr_remove;
-
 	/* Create a regmap for the PCS so that it can be used by the PCS driver,
 	 * if we have such a PCS
 	 */
@@ -482,7 +465,7 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 						   &pcs_regmap_cfg);
 		if (IS_ERR(pcs_regmap)) {
 			ret = PTR_ERR(pcs_regmap);
-			goto err_dvr_remove;
+			goto err_remove_config_dt;
 		}
 
 		mrc.regmap = pcs_regmap;
@@ -504,10 +487,31 @@ static int socfpga_dwmac_probe(struct platform_device *pdev)
 		}
 	}
 
+	ret = stmmac_dvr_probe(&pdev->dev, plat_dat, &stmmac_res);
+	if (ret)
+		goto err_pcs_destroy;
+
+	ndev = platform_get_drvdata(pdev);
+	stpriv = netdev_priv(ndev);
+
+	/* The socfpga driver needs to control the stmmac reset to set the phy
+	 * mode. Create a copy of the core reset handle so it can be used by
+	 * the driver later.
+	 */
+	dwmac->stmmac_rst = stpriv->plat->stmmac_rst;
+
+	ret = ops->set_phy_mode(dwmac);
+	if (ret)
+		goto err_dvr_remove;
+
 	return 0;
 
 err_dvr_remove:
 	stmmac_dvr_remove(&pdev->dev);
+err_pcs_destroy:
+	lynx_pcs_destroy(dwmac->lynx_pcs);
+err_remove_config_dt:
+	stmmac_remove_config_dt(pdev, plat_dat);
 
 	return ret;
 }
