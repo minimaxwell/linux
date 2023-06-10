@@ -1252,8 +1252,12 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 	if (!fwnode)
 		fwnode = dev_fwnode(priv->device);
 
-	phylink = phylink_create(&priv->phylink_config, fwnode,
-				 mode, &stmmac_phylink_mac_ops);
+	if (priv->plat->pl_mac_ops)
+		phylink = phylink_create(&priv->phylink_config, fwnode, mode,
+					 priv->plat->pl_mac_ops);
+	else
+		phylink = phylink_create(&priv->phylink_config, fwnode,
+					 mode, &stmmac_phylink_mac_ops);
 	if (IS_ERR(phylink))
 		return PTR_ERR(phylink);
 
