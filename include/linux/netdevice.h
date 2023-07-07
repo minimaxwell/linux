@@ -44,6 +44,7 @@
 
 #include <linux/netdev_features.h>
 #include <linux/neighbour.h>
+#include <linux/phy_ns.h>
 #include <uapi/linux/netdevice.h>
 #include <uapi/linux/if_bonding.h>
 #include <uapi/linux/pkt_cls.h>
@@ -2389,6 +2390,9 @@ struct net_device {
 	struct netprio_map __rcu *priomap;
 #endif
 	struct phy_device	*phydev;
+#if IS_ENABLED(CONFIG_PHYLIB)
+	struct phy_device_namespace phy_ns;
+#endif
 	struct sfp_bus		*sfp_bus;
 	struct lock_class_key	*qdisc_tx_busylock;
 	bool			proto_down;
