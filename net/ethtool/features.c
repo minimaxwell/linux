@@ -228,7 +228,7 @@ int ethnl_set_features(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info,
 					 tb[ETHTOOL_A_FEATURES_HEADER],
 					 genl_info_net(info), info->extack,
-					 true);
+					 true, false);
 	if (ret < 0)
 		return ret;
 	dev = req_info.dev;

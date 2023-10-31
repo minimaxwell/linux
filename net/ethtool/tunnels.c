@@ -174,7 +174,7 @@ int ethnl_tunnel_info_doit(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info,
 					 tb[ETHTOOL_A_TUNNEL_INFO_HEADER],
 					 genl_info_net(info), info->extack,
-					 true);
+					 true, false);
 	if (ret < 0)
 		return ret;
 
@@ -229,7 +229,7 @@ int ethnl_tunnel_info_start(struct netlink_callback *cb)
 	ret = ethnl_parse_header_dev_get(&ctx->req_info,
 					 tb[ETHTOOL_A_TUNNEL_INFO_HEADER],
 					 sock_net(cb->skb->sk), cb->extack,
-					 false);
+					 false, false);
 	if (ctx->req_info.dev) {
 		ethnl_parse_header_dev_put(&ctx->req_info);
 		ctx->req_info.dev = NULL;

@@ -64,7 +64,7 @@ int ethnl_act_cable_test(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info,
 					 tb[ETHTOOL_A_CABLE_TEST_HEADER],
 					 genl_info_net(info), info->extack,
-					 true);
+					 true, true);
 	if (ret < 0)
 		return ret;
 
@@ -316,7 +316,7 @@ int ethnl_act_cable_test_tdr(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info,
 					 tb[ETHTOOL_A_CABLE_TEST_TDR_HEADER],
 					 genl_info_net(info), info->extack,
-					 true);
+					 true, true);
 	if (ret < 0)
 		return ret;
 
