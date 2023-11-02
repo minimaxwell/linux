@@ -28,6 +28,7 @@
 #include <linux/of.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/phylib_stubs.h>
 #include <linux/phy_led_triggers.h>
 #include <linux/pse-pd/pse.h>
@@ -1460,6 +1461,31 @@ int phy_sfp_probe(struct phy_device *phydev,
 }
 EXPORT_SYMBOL(phy_sfp_probe);
 
+static int phy_register_sfp_port(struct phy_device *phydev)
+{
+	struct phy_port_config cfg = {};
+	struct phy_port *port;
+	int ret = 0;
+
+	if (!phydev->attached_dev)
+		return 0;
+
+	linkmode_copy(cfg.supported, phydev->supported);
+	cfg.upstream_type = PHY_UPSTREAM_PHY;
+	cfg.phydev = phydev;
+	cfg.lt = &phydev->attached_dev->link_topo;
+
+	port = phy_port_create(&cfg);
+	if (IS_ERR(port))
+		return PTR_ERR(port);
+
+	ret = sfp_bus_set_port(phydev->sfp_bus, port);
+	if (ret)
+		phy_port_destroy(port);
+
+	return ret;
+}
+
 /**
  * phy_attach_direct - attach a network device to a given PHY device pointer
  * @dev: network device to attach
@@ -1481,6 +1507,7 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	struct mii_bus *bus = phydev->mdio.bus;
 	struct device *d = &phydev->mdio.dev;
 	struct module *ndev_owner = NULL;
+	struct phy_port_config cfg = {};
 	bool using_genphy = false;
 	int err;
 
@@ -1528,7 +1555,7 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	if (phydev->attached_dev) {
 		dev_err(&dev->dev, "PHY already attached\n");
 		err = -EBUSY;
-		goto error;
+		goto error_detach;
 	}
 
 	phydev->phy_link_change = phy_link_change;
@@ -1541,7 +1568,31 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 
 		err = link_topo_add_phy(&dev->link_topo, phydev, PHY_UPSTREAM_MAC, dev);
 		if (err)
-			goto error;
+			goto error_detach;
+
+		/* MDI port does what the whole PHY is capable of. It's up to
+		 * the driver to filter out what the mdi port can do
+		 */
+		linkmode_copy(cfg.supported, phydev->supported);
+		cfg.upstream_type = PHY_UPSTREAM_MAC;
+		cfg.netdev = dev;
+		cfg.lt = &dev->link_topo;
+
+		phydev->mdi_port = phy_port_create(&cfg);
+		if (IS_ERR(phydev->mdi_port)) {
+			err = PTR_ERR(phydev->mdi_port);
+			goto error_topo_del_phy;
+		}
+
+		err = link_topo_add_port(&dev->link_topo, phydev->mdi_port);
+		if (err)
+			goto error_topo_destroy_port;
+
+		if (phydev->sfp_bus) {
+			err = phy_register_sfp_port(phydev);
+			if (err)
+				goto error;
+		}
 	}
 
 	/* Some Ethernet drivers try to connect to a PHY device before
@@ -1615,6 +1666,15 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	return err;
 
 error:
+	if (dev)
+		link_topo_del_port(phydev->mdi_port);
+error_topo_destroy_port:
+	if (dev)
+		phy_port_destroy(phydev->mdi_port);
+error_topo_del_phy:
+	if (dev)
+		link_topo_del_phy(&dev->link_topo, phydev);
+error_detach:
 	/* phy_detach() does all of the cleanup below */
 	phy_detach(phydev);
 	return err;
@@ -1868,6 +1928,8 @@ void phy_detach(struct phy_device *phydev)
 		phydev->attached_dev->phydev = NULL;
 		phydev->attached_dev = NULL;
 		link_topo_del_phy(&dev->link_topo, phydev);
+		link_topo_del_port(phydev->mdi_port);
+		phy_port_destroy(phydev->mdi_port);
 	}
 	phydev->phylink = NULL;
 

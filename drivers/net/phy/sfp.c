@@ -11,6 +11,7 @@
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/platform_device.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -1776,6 +1777,8 @@ static void sfp_sm_phy_detach(struct sfp *sfp)
 
 static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 {
+	struct phy_port_config cfg = {};
+	struct phy_port *bus_port;
 	struct phy_device *phy;
 	int err;
 
@@ -1792,23 +1795,49 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 
 	err = phy_device_register(phy);
 	if (err) {
-		phy_device_free(phy);
 		dev_err(sfp->dev, "phy_device_register failed: %pe\n",
 			ERR_PTR(err));
-		return err;
+		goto err_phy_device_free;
 	}
+
+	bus_port = sfp_bus_get_port(sfp->sfp_bus);
+
+	linkmode_copy(cfg.supported, phy->supported);
+	cfg.upstream_type = PHY_UPSTREAM_SFP;
+	cfg.sfp_bus = sfp->sfp_bus;
+	if (bus_port)
+		cfg.lt = bus_port->cfg.lt;
+
+	phy->mdi_port = phy_port_create(&cfg);
+	if (IS_ERR(phy->mdi_port)) {
+		err = PTR_ERR(phy->mdi_port);
+		goto err_phy_device_remove;
+	}
+
+	err = link_topo_add_port(bus_port->cfg.lt, phy->mdi_port);
+	if (err)
+		goto err_phy_device_port_destroy;
+
 
 	err = sfp_add_phy(sfp->sfp_bus, phy);
 	if (err) {
-		phy_device_remove(phy);
-		phy_device_free(phy);
 		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
-		return err;
+		goto err_phy_device_port_del;
 	}
 
 	sfp->mod_phy = phy;
 
 	return 0;
+err_phy_device_port_del:
+	link_topo_del_port(phy->mdi_port);
+err_phy_device_port_destroy:
+	phy_port_destroy(phy->mdi_port);
+err_phy_device_remove:
+	phy_device_remove(phy);
+err_phy_device_free:
+	phy_device_free(phy);
+
+	return err;
 }
 
 static void sfp_sm_link_up(struct sfp *sfp)

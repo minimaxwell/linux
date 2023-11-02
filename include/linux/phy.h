@@ -764,6 +764,7 @@ struct phy_device {
 	/* MACsec management functions */
 	const struct macsec_ops *macsec_ops;
 #endif
+	struct phy_port *mdi_port;
 };
 
 /* Generic phy_device::dev_flags */

@@ -4,6 +4,7 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/phylink.h>
+#include <linux/phy_port.h>
 #include <linux/property.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -27,6 +28,8 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+	struct phy_port *port;
+	struct link_topology *lt;
 
 	bool registered;
 	bool started;
@@ -714,6 +717,8 @@ void sfp_bus_del_upstream(struct sfp_bus *bus)
 		if (bus->sfp)
 			sfp_unregister_bus(bus);
 		sfp_upstream_clear(bus);
+		link_topo_del_port(bus->port);
+		phy_port_destroy(bus->port);
 		rtnl_unlock();
 
 		sfp_bus_put(bus);
@@ -726,6 +731,11 @@ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
 {
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
 	int ret = 0;
+
+	/* Having a PHY toggles the SFP port to internal, as the mod PHY has
+	 * it's own external port
+	 */
+	phy_port_set_internal(bus->port, true);
 
 	if (ops && ops->connect_phy)
 		ret = ops->connect_phy(bus->upstream, phydev);
@@ -740,6 +750,8 @@ EXPORT_SYMBOL_GPL(sfp_add_phy);
 void sfp_remove_phy(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
+
+	phy_port_set_internal(bus->port, false);
 
 	if (ops && ops->disconnect_phy)
 		ops->disconnect_phy(bus->upstream, bus->phydev);
@@ -772,6 +784,8 @@ int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 	int ret = 0;
 
 	bus->sfp_quirk = quirk;
+
+	bus->port->cfg.port = sfp_parse_port(bus, id, bus->port->cfg.supported);
 
 	if (ops && ops->module_insert)
 		ret = ops->module_insert(bus->upstream, id);
@@ -868,3 +882,23 @@ const char *sfp_get_name(struct sfp_bus *bus)
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(sfp_get_name);
+
+struct phy_port *sfp_bus_get_port(struct sfp_bus *bus)
+{
+	return bus->port;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_get_port);
+
+int sfp_bus_set_port(struct sfp_bus *bus, struct phy_port *port)
+{
+	if (!bus)
+		return 0;
+
+	if (bus->port)
+		return -EBUSY;
+
+	bus->port = port;
+
+	return link_topo_add_port(port->cfg.lt, port);
+}
+EXPORT_SYMBOL_GPL(sfp_bus_set_port);

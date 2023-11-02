@@ -17,6 +17,7 @@ struct xarray;
 struct phy_device;
 struct net_device;
 struct sfp_bus;
+struct phy_port;
 
 struct phy_device_node {
 	enum phy_upstream upstream_type;
@@ -33,8 +34,10 @@ struct phy_device_node {
 
 struct link_topology {
 	struct xarray phys;
+	struct xarray ports;
 
 	u32 next_phy_index;
+	u32 next_port_index;
 };
 
 struct phy_device *link_topo_get_phy(struct link_topology *lt, int phyindex);
@@ -45,5 +48,7 @@ void link_topo_del_phy(struct link_topology *lt, struct phy_device *phy);
 
 void link_topo_init(struct link_topology *lt);
 
+int link_topo_add_port(struct link_topology *lt, struct phy_port *port);
+void link_topo_del_port(struct phy_port *port);
 
 #endif /* __LINK_TOPOLOGY_H */
