@@ -6,11 +6,13 @@
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/jiffies.h>
+#include <linux/phy_link_topology.h>
 #include <linux/mdio/mdio-i2c.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/platform_device.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -1797,17 +1799,17 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 
 	err = phy_device_register(phy);
 	if (err) {
-		phy_device_free(phy);
 		dev_err(sfp->dev, "phy_device_register failed: %pe\n",
 			ERR_PTR(err));
+		phy_device_free(phy);
 		return err;
 	}
 
 	err = sfp_add_phy(sfp->sfp_bus, phy);
 	if (err) {
+		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
 		phy_device_remove(phy);
 		phy_device_free(phy);
-		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
 		return err;
 	}
 
