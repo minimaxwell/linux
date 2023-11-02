@@ -9,6 +9,7 @@
 #include <linux/phy_link_topology.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/rtnetlink.h>
 #include <linux/xarray.h>
 
@@ -22,6 +23,9 @@ struct phy_link_topology *phy_link_topo_create(struct net_device *dev)
 
 	xa_init_flags(&topo->phys, XA_FLAGS_ALLOC1);
 	topo->next_phy_index = 1;
+
+	xa_init_flags(&topo->ports, XA_FLAGS_ALLOC1);
+	topo->next_port_index = 1;
 
 	return topo;
 }
@@ -100,3 +104,90 @@ void phy_link_topo_del_phy(struct phy_link_topology *topo,
 	kfree(pdn);
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_del_phy);
+
+struct phy_port *phy_port_create(const struct phy_port_config *cfg)
+{
+       switch (cfg->upstream_type) {
+       case PHY_PORT_MAC:
+               if (!cfg->netdev)
+                       return ERR_PTR(-EINVAL);
+               break;
+       case PHY_PORT_PHY:
+               if (!cfg->phydev)
+                       return ERR_PTR(-EINVAL);
+               break;
+       case PHY_PORT_SFP:
+               if (!cfg->sfp_bus)
+                       return ERR_PTR(-EINVAL);
+               break;
+       default:
+               return ERR_PTR(-EINVAL);
+       }
+
+       struct phy_port *port = kzalloc(sizeof(*port), GFP_KERNEL);
+       if (!port)
+               return ERR_PTR(-ENOMEM);
+
+       memcpy(&port->cfg, cfg, sizeof(*cfg));
+
+       port->state = PHY_PORT_UNREGISTERED;
+
+       return port;
+}
+EXPORT_SYMBOL_GPL(phy_port_create);
+
+void phy_port_destroy(struct phy_port *port)
+{
+       kfree(port);
+}
+EXPORT_SYMBOL_GPL(phy_port_destroy);
+
+struct phy_port *phy_link_topo_get_port(struct phy_link_topology *topo,
+					unsigned int port_index)
+{
+       return xa_load(&topo->ports, port_index);
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_get_port);
+
+void phy_link_topo_del_port(struct phy_port *port)
+{
+       struct phy_link_topology *topo = port->cfg.lt;
+
+       pr_info("%s : Removed port %d\n", __func__, port->index);
+
+       xa_erase(&topo->ports, port->index);
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_del_port);
+
+int phy_link_topo_add_port(struct phy_link_topology *topo, struct phy_port *port)
+{
+       int ret;
+
+       ret = xa_alloc_cyclic(&topo->ports, &port->index, port, xa_limit_32b,
+                             &topo->next_port_index, GFP_KERNEL);
+       if (ret)
+               return ret;
+
+       pr_info("%s : Inserted port %d\n", __func__, port->index);
+
+       port->state = PHY_PORT_STANDBY;
+
+       return 0;
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_add_port);
+
+void phy_port_set_internal(struct phy_port *port, bool internal)
+{
+       port->cfg.internal = internal;
+}
+
+int phy_port_set_state(struct phy_port *port, enum phy_port_state state)
+{
+       if ((port->state == PHY_PORT_DISABLED ||
+           port->state == PHY_PORT_UNREGISTERED) && state == PHY_PORT_LINK_UP)
+               return -EINVAL;
+
+       port->state = state;
+
+       return 0;
+}

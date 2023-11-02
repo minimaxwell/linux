@@ -3260,13 +3260,18 @@ static const struct sfp_upstream_ops m88e1510_sfp_ops = {
 
 static int m88e1510_probe(struct phy_device *phydev)
 {
+	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
 	int err;
 
 	err = marvell_probe(phydev);
 	if (err)
 		return err;
 
-	return phy_sfp_probe(phydev, &m88e1510_sfp_ops);
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_100BASEX, supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII, supported_interfaces);
+
+	return phy_sfp_probe(phydev, &m88e1510_sfp_ops, supported_interfaces);
 }
 
 static struct phy_driver marvell_drivers[] = {

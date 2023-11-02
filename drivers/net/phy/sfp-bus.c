@@ -2,8 +2,10 @@
 #include <linux/export.h>
 #include <linux/kref.h>
 #include <linux/list.h>
+#include <linux/phy_link_topology.h>
 #include <linux/mutex.h>
 #include <linux/phylink.h>
+#include <linux/phy_port.h>
 #include <linux/property.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -27,6 +29,10 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+
+	DECLARE_BITMAP(interfaces, PHY_INTERFACE_MODE_MAX);
+	struct phy_port *port;
+	struct phy_link_topology *lt;
 
 	bool registered;
 	bool started;
@@ -454,6 +460,15 @@ void sfp_bus_put(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_bus_put);
 
+static int sfp_add_phy_port(struct sfp_bus *bus, struct phy_device *phydev)
+{
+	if (!bus->lt)
+		return 0;
+
+	pr_info("%s : bus %px, lt: %px\n", __func__, bus, bus->lt);
+	return phy_create_mdi_port(phydev, bus->lt);
+}
+
 static int sfp_register_bus(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = bus->upstream_ops;
@@ -463,6 +478,10 @@ static int sfp_register_bus(struct sfp_bus *bus)
 		if (ops->link_down)
 			ops->link_down(bus->upstream);
 		if (ops->connect_phy && bus->phydev) {
+			ret = sfp_add_phy_port(bus, bus->phydev);
+			if (ret)
+				return ret;
+
 			ret = ops->connect_phy(bus->upstream, bus->phydev);
 			if (ret)
 				return ret;
@@ -650,11 +669,67 @@ struct sfp_bus *sfp_bus_find_fwnode(const struct fwnode_handle *fwnode)
 }
 EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
 
+int sfp_bus_set_topology(struct sfp_bus *bus, struct phy_link_topology *lt)
+{
+	struct phy_port_config cfg = {};
+	int ret;
+
+	if (bus->lt)
+		return 0;
+
+	bus->lt = lt;
+
+	cfg.upstream_type = PHY_PORT_SFP;
+	cfg.ptype = PHY_PORT_MII;
+	cfg.sfp_bus = bus;
+	cfg.lt = lt;
+
+	bitmap_copy(cfg.supported_interfaces, bus->interfaces, PHY_INTERFACE_MODE_MAX);
+
+	bus->port = phy_port_create(&cfg);
+	if (IS_ERR(bus->port)) {
+		bus->port = NULL;
+		return PTR_ERR(bus->port);
+	}
+
+	ret = phy_link_topo_add_port(bus->lt, bus->port);
+	if (ret) {
+		phy_port_destroy(bus->port);
+		bus->port = NULL;
+		return ret;
+	}
+
+	if (bus->phydev)
+		return sfp_add_phy_port(bus, bus->phydev);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_set_topology);
+
+void sfp_bus_clear_topology(struct sfp_bus *bus)
+{
+	if (!bus || !bus->lt)
+		return;
+
+	if (bus->port) {
+		phy_link_topo_del_port(bus->port);
+		phy_port_destroy(bus->port);
+		bus->port = NULL;
+	}
+
+	if (bus->phydev && bus->phydev->mdi_port)
+		phy_destroy_mdi_port(bus->phydev);
+
+	bus->lt = NULL;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_clear_topology);
+
 /**
  * sfp_bus_add_upstream() - parse and register the neighbouring device
  * @bus: the &struct sfp_bus found via sfp_bus_find_fwnode()
  * @upstream: the upstream private data
  * @ops: the upstream's &struct sfp_upstream_ops
+ * @interfaces: The serialized interface modes upstream is capable of providing
  *
  * Add upstream driver for the SFP bus, and if the bus is complete, register
  * the SFP bus using sfp_register_upstream().  This takes a reference on the
@@ -671,7 +746,8 @@ EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
  *	- an error from the upstream's connect_phy() method.
  */
 int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
-			 const struct sfp_upstream_ops *ops)
+			 const struct sfp_upstream_ops *ops,
+			 const unsigned long *interfaces)
 {
 	int ret;
 
@@ -683,6 +759,8 @@ int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
 	kref_get(&bus->kref);
 	bus->upstream_ops = ops;
 	bus->upstream = upstream;
+
+	linkmode_copy(bus->interfaces, interfaces);
 
 	if (bus->sfp) {
 		ret = sfp_register_bus(bus);
@@ -714,6 +792,7 @@ void sfp_bus_del_upstream(struct sfp_bus *bus)
 		if (bus->sfp)
 			sfp_unregister_bus(bus);
 		sfp_upstream_clear(bus);
+		sfp_bus_clear_topology(bus);
 		rtnl_unlock();
 
 		sfp_bus_put(bus);
@@ -727,8 +806,13 @@ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
 	int ret = 0;
 
-	if (ops && ops->connect_phy)
+	if (ops && ops->connect_phy) {
+		ret = sfp_add_phy_port(bus, phydev);
+		if (ret)
+			return ret;
+
 		ret = ops->connect_phy(bus->upstream, phydev);
+	}
 
 	if (ret == 0)
 		bus->phydev = phydev;
@@ -743,6 +827,12 @@ void sfp_remove_phy(struct sfp_bus *bus)
 
 	if (ops && ops->disconnect_phy)
 		ops->disconnect_phy(bus->upstream, bus->phydev);
+
+	if (bus->phydev->mdi_port) {
+		phy_link_topo_del_port(bus->phydev->mdi_port);
+		phy_port_destroy(bus->phydev->mdi_port);
+		bus->phydev->mdi_port = NULL;
+	}
 	bus->phydev = NULL;
 }
 EXPORT_SYMBOL_GPL(sfp_remove_phy);
@@ -772,6 +862,8 @@ int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 	int ret = 0;
 
 	bus->sfp_quirk = quirk;
+
+	//bus->port->cfg.port = sfp_parse_port(bus, id, bus->port->cfg.supported);
 
 	if (ops && ops->module_insert)
 		ret = ops->module_insert(bus->upstream, id);
@@ -870,3 +962,9 @@ const char *sfp_get_name(struct sfp_bus *bus)
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(sfp_get_name);
+
+struct phy_port *sfp_bus_get_port(struct sfp_bus *bus)
+{
+	return bus->port;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_get_port);

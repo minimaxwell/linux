@@ -122,6 +122,10 @@ enum {
 	MV_V2_33X0_PORT_CTRL_MACTYPE_10GBASER_NO_SGMII_AN	= 0x5,
 	MV_V2_33X0_PORT_CTRL_MACTYPE_10GBASER_RATE_MATCH	= 0x6,
 	MV_V2_33X0_PORT_CTRL_MACTYPE_USXGMII			= 0x7,
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK			= GENMASK(4,3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_1000BASEX		= (0x0 << 3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_SGMII			= (0x1 << 3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_10GBASER			= (0x3 << 3),
 	MV_V2_PORT_INTR_STS		= 0xf040,
 	MV_V2_PORT_INTR_MASK		= 0xf043,
 	MV_V2_PORT_INTR_STS_WOL_EN	= BIT(8),
@@ -483,6 +487,37 @@ static int mv3310_set_edpd(struct phy_device *phydev, u16 edpd)
 	return err;
 }
 
+static int mv3310_set_fibertype(struct phy_device *phydev,
+				phy_interface_t interface)
+{
+	u16 fibertype;
+	int ret;
+
+	switch (interface) {
+	case PHY_INTERFACE_MODE_10GBASER:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_10GBASER;
+		break;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_1000BASEX;
+		break;
+	case PHY_INTERFACE_MODE_SGMII:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_SGMII;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	fibertype &= MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK;
+	ret = phy_modify_mmd_changed(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+				     MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK,
+				     fibertype);
+	if (ret <= 0)
+		return ret;
+
+	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+				MV_V2_33X0_PORT_CTRL_SWRST);
+}
+
 static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 {
 	struct phy_device *phydev = upstream;
@@ -493,10 +528,11 @@ static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 	sfp_parse_support(phydev->sfp_bus, id, support, interfaces);
 	iface = sfp_select_interface(phydev->sfp_bus, support);
 
-	if (iface != PHY_INTERFACE_MODE_10GBASER) {
+	if (mv3310_set_fibertype(phydev, iface) < 0) {
 		dev_err(&phydev->mdio.dev, "incompatible SFP module inserted\n");
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -511,6 +547,7 @@ static const struct sfp_upstream_ops mv3310_sfp_ops = {
 static int mv3310_probe(struct phy_device *phydev)
 {
 	const struct mv3310_chip *chip = to_mv3310_chip(phydev);
+	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces) = { 0, };
 	struct mv3310_priv *priv;
 	u32 mmd_mask = MDIO_DEVS_PMAPMD | MDIO_DEVS_AN;
 	int ret;
@@ -565,7 +602,14 @@ static int mv3310_probe(struct phy_device *phydev)
 
 	chip->init_supported_interfaces(priv->supported_interfaces);
 
-	return phy_sfp_probe(phydev, &mv3310_sfp_ops);
+	/* Maybe */
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, sfp_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII, sfp_interfaces);
+
+	/* For sure */
+	__set_bit(PHY_INTERFACE_MODE_10GBASER, sfp_interfaces);
+
+	return phy_sfp_probe(phydev, &mv3310_sfp_ops, sfp_interfaces);
 }
 
 static void mv3310_remove(struct phy_device *phydev)
@@ -1033,6 +1077,16 @@ static int mv3310_read_status_10gbaser(struct phy_device *phydev)
 	return 0;
 }
 
+static int mv3310_read_status_basex(struct phy_device *phydev)
+{
+	phydev->link = 1;
+	phydev->speed = SPEED_1000;
+	phydev->duplex = DUPLEX_FULL;
+	phydev->port = PORT_FIBRE;
+
+	return 0;
+}
+
 static int mv3310_read_status_copper(struct phy_device *phydev)
 {
 	int cssr1, speed, val;
@@ -1113,7 +1167,7 @@ static int mv3310_read_status_copper(struct phy_device *phydev)
 
 static int mv3310_read_status(struct phy_device *phydev)
 {
-	int err, val;
+	int err, val_baser, val_basex;
 
 	phydev->speed = SPEED_UNKNOWN;
 	phydev->duplex = DUPLEX_UNKNOWN;
@@ -1123,14 +1177,21 @@ static int mv3310_read_status(struct phy_device *phydev)
 	phydev->asym_pause = 0;
 	phydev->mdix = ETH_TP_MDI_INVALID;
 
-	val = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_BASE_R + MDIO_STAT1);
-	if (val < 0)
-		return val;
+	val_baser = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_BASE_R + MDIO_STAT1);
+	if (val_baser < 0)
+		return val_baser;
 
-	if (val & MDIO_STAT1_LSTATUS)
+	val_basex = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_1000BASEX + MDIO_STAT1);
+	if (val_basex < 0)
+		return val_basex;
+
+	if (val_baser & MDIO_STAT1_LSTATUS) {
 		err = mv3310_read_status_10gbaser(phydev);
-	else
+	} else if (val_basex & MDIO_STAT1_LSTATUS) {
+		err = mv3310_read_status_basex(phydev);
+	} else {
 		err = mv3310_read_status_copper(phydev);
+	}
 	if (err < 0)
 		return err;
 

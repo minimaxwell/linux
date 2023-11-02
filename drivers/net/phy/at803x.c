@@ -1482,6 +1482,7 @@ static const struct sfp_upstream_ops at8031_sfp_ops = {
 static int at8031_parse_dt(struct phy_device *phydev)
 {
 	struct device_node *node = phydev->mdio.dev.of_node;
+	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
 	struct at803x_priv *priv = phydev->priv;
 	int ret;
 
@@ -1499,8 +1500,9 @@ static int at8031_parse_dt(struct phy_device *phydev)
 		return ret;
 	}
 
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported_interfaces);
 	/* Only AR8031/8033 support 1000Base-X for SFP modules */
-	return phy_sfp_probe(phydev, &at8031_sfp_ops);
+	return phy_sfp_probe(phydev, &at8031_sfp_ops, supported_interfaces);
 }
 
 static int at8031_probe(struct phy_device *phydev)

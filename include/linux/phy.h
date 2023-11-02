@@ -307,6 +307,8 @@ struct phylink;
 struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
+struct phy_port;
+struct phy_link_topology;
 
 /**
  * struct mdio_bus_stats - Statistics counters for MDIO busses
@@ -768,6 +770,7 @@ struct phy_device {
 	/* MACsec management functions */
 	const struct macsec_ops *macsec_ops;
 #endif
+	struct phy_port *mdi_port;
 };
 
 /* Generic phy_device::dev_flags */
@@ -1725,12 +1728,15 @@ int phy_suspend(struct phy_device *phydev);
 int phy_resume(struct phy_device *phydev);
 int __phy_resume(struct phy_device *phydev);
 int phy_loopback(struct phy_device *phydev, bool enable);
+int phy_create_mdi_port(struct phy_device *phydev, struct phy_link_topology *lt);
+void phy_destroy_mdi_port(struct phy_device *phydev);
 int phy_sfp_connect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
 void phy_sfp_detach(void *upstream, struct sfp_bus *bus);
 int phy_sfp_probe(struct phy_device *phydev,
-	          const struct sfp_upstream_ops *ops);
+	          const struct sfp_upstream_ops *ops,
+		  const unsigned long *supported_interfaces);
 struct phy_device *phy_attach(struct net_device *dev, const char *bus_id,
 			      phy_interface_t interface);
 struct phy_device *phy_find_first(struct mii_bus *bus);
@@ -2007,6 +2013,14 @@ int __phy_hwtstamp_get(struct phy_device *phydev,
 int __phy_hwtstamp_set(struct phy_device *phydev,
 		       struct kernel_hwtstamp_config *config,
 		       struct netlink_ext_ack *extack);
+
+/* Generic port operations for single-port PHYs */
+int genphy_port_set_active_single(struct phy_port *port);
+int genphy_port_set_inactive_single(struct phy_port *port);
+int genphy_port_get_link_ksettings_single(struct phy_port *port,
+					  struct ethtool_link_ksettings *ksettings);
+int genphy_port_set_link_ksettings_single(struct phy_port *port,
+					  struct ethtool_link_ksettings *ksettings);
 
 static inline int phy_package_address(struct phy_device *phydev,
 				      unsigned int addr_offset)
