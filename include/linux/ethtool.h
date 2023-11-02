@@ -1120,4 +1120,5 @@ struct ethtool_forced_speed_map {
 
 void
 ethtool_forced_speed_maps_init(struct ethtool_forced_speed_map *maps, u32 size);
+
 #endif /* _LINUX_ETHTOOL_H */

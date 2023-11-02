@@ -14,6 +14,7 @@
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
+#include <linux/phy_port.h>
 #include <linux/phylink.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
@@ -1583,11 +1584,15 @@ static void phylink_fixed_poll(struct timer_list *t)
 	phylink_run_resolve(pl);
 }
 
+static DECLARE_PHY_INTERFACE_MASK(phylink_sfp_interfaces);
+
 static const struct sfp_upstream_ops sfp_phylink_ops;
 
 static int phylink_register_sfp(struct phylink *pl,
 				const struct fwnode_handle *fwnode)
 {
+	struct phy_link_topology *lt = NULL;
+	DECLARE_PHY_INTERFACE_MASK(interfaces);
 	struct sfp_bus *bus;
 	int ret;
 
@@ -1602,7 +1607,21 @@ static int phylink_register_sfp(struct phylink *pl,
 
 	pl->sfp_bus = bus;
 
-	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops);
+	if (!bus)
+		goto out;
+
+	if (pl->netdev)
+		lt = pl->netdev->link_topo;
+
+
+	phy_interface_and(interfaces, phylink_sfp_interfaces,
+			  pl->config->supported_interfaces);
+
+	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops, interfaces);
+	if (!ret && lt)
+		ret = sfp_bus_set_topology(bus, lt);
+
+out:
 	sfp_bus_put(bus);
 
 	return ret;
@@ -1720,6 +1739,8 @@ EXPORT_SYMBOL_GPL(phylink_create);
  */
 void phylink_destroy(struct phylink *pl)
 {
+
+	sfp_bus_clear_topology(pl->sfp_bus);
 	sfp_bus_del_upstream(pl->sfp_bus);
 	if (pl->link_gpio)
 		gpiod_put(pl->link_gpio);
@@ -3279,6 +3300,7 @@ static int phylink_sfp_module_insert(void *upstream,
 	phy_interface_zero(pl->sfp_interfaces);
 	sfp_parse_support(pl->sfp_bus, id, pl->sfp_support, pl->sfp_interfaces);
 	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, pl->sfp_support);
+	/* TODO: Sync these supported modes with the port supported modes */
 
 	/* If this module may have a PHY connecting later, defer until later */
 	pl->sfp_may_have_phy = sfp_may_have_phy(pl->sfp_bus, id);

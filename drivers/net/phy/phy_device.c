@@ -27,6 +27,7 @@
 #include <linux/of.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/phylib_stubs.h>
 #include <linux/phy_led_triggers.h>
 #include <linux/phy_link_topology.h>
@@ -235,6 +236,13 @@ static void features_init(void)
 			       phy_eee_cap1_features);
 
 }
+
+static const struct phy_port_ops genphy_single_port_ops = {
+	.phy_port_set_active		= genphy_port_set_active_single,
+	.phy_port_set_inactive		= genphy_port_set_inactive_single,
+	.phy_port_get_link_ksettings	= genphy_port_get_link_ksettings_single,
+	.phy_port_set_link_ksettings	= genphy_port_set_link_ksettings_single,
+};
 
 void phy_device_free(struct phy_device *phydev)
 {
@@ -1441,12 +1449,18 @@ EXPORT_SYMBOL(phy_sfp_detach);
  * phy_sfp_probe - probe for a SFP cage attached to this PHY device
  * @phydev: Pointer to phy_device
  * @ops: SFP's upstream operations
+ * @supported_interfaces: The interface modes this bus can handle
  */
 int phy_sfp_probe(struct phy_device *phydev,
-		  const struct sfp_upstream_ops *ops)
+		  const struct sfp_upstream_ops *ops,
+		  const unsigned long *supported_interfaces)
 {
+	struct phy_link_topology *lt = NULL;
 	struct sfp_bus *bus;
 	int ret = 0;
+
+	if (phydev->attached_dev)
+		lt = phydev->attached_dev->link_topo;
 
 	if (phydev->mdio.dev.fwnode) {
 		bus = sfp_bus_find_fwnode(phydev->mdio.dev.fwnode);
@@ -1455,12 +1469,60 @@ int phy_sfp_probe(struct phy_device *phydev,
 
 		phydev->sfp_bus = bus;
 
-		ret = sfp_bus_add_upstream(bus, phydev, ops);
+		/* Fuck we aren't attached */
+		ret = sfp_bus_add_upstream(bus, phydev, ops, supported_interfaces);
+
+		if (!ret && lt)
+			ret = sfp_bus_set_topology(bus, lt);
 		sfp_bus_put(bus);
 	}
 	return ret;
 }
 EXPORT_SYMBOL(phy_sfp_probe);
+
+int phy_create_mdi_port(struct phy_device *phydev, struct phy_link_topology *lt)
+{
+	struct phy_port_config cfg = { };
+	struct phy_port *port;
+	int err;
+
+	if (phydev->mdi_port)
+		return 0;
+
+	/* MDI port does what the whole PHY is capable of. It's up to
+	 * the driver to filter out what the mdi port can do
+	 */
+	linkmode_copy(cfg.supported_modes, phydev->supported);
+	cfg.upstream_type = PHY_PORT_PHY;
+	cfg.ptype = PHY_PORT_MDI;
+	cfg.phydev = phydev;
+	cfg.lt = lt;
+	cfg.ops = &genphy_single_port_ops;
+
+	port = phy_port_create(&cfg);
+	if (IS_ERR(port))
+		return PTR_ERR(port);
+
+	err = phy_link_topo_add_port(lt, port);
+	if (err) {
+		phy_port_destroy(port);
+		return err;
+	}
+
+	phydev->mdi_port = port;
+
+	return 0;
+}
+
+void phy_destroy_mdi_port(struct phy_device *phydev)
+{
+	if (!phydev->mdi_port)
+		return;
+
+	phy_link_topo_del_port(phydev->mdi_port);
+	phy_port_destroy(phydev->mdi_port);
+	phydev->mdi_port = NULL;
+}
 
 /**
  * phy_attach_direct - attach a network device to a given PHY device pointer
@@ -1530,7 +1592,7 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	if (phydev->attached_dev) {
 		dev_err(&dev->dev, "PHY already attached\n");
 		err = -EBUSY;
-		goto error;
+		goto error_detach;
 	}
 
 	phydev->phy_link_change = phy_link_change;
@@ -1541,8 +1603,19 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		if (phydev->sfp_bus_attached)
 			dev->sfp_bus = phydev->sfp_bus;
 
+		err = phy_create_mdi_port(phydev, dev->link_topo);
+		if (err)
+			goto error_detach;
+
 		err = phy_link_topo_add_phy(dev->link_topo, phydev,
 					    PHY_UPSTREAM_MAC, dev);
+
+		if (err)
+			goto error_destroy_mdi_port;
+
+		if (phydev->sfp_bus)
+			err = sfp_bus_set_topology(phydev->sfp_bus, dev->link_topo);
+
 		if (err)
 			goto error;
 	}
@@ -1619,6 +1692,12 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	return err;
 
 error:
+	if (dev)
+		phy_link_topo_del_phy(dev->link_topo, phydev);
+error_destroy_mdi_port:
+	if (dev)
+		phy_destroy_mdi_port(phydev);
+error_detach:
 	/* phy_detach() does all of the cleanup below */
 	phy_detach(phydev);
 	return err;
@@ -1875,6 +1954,9 @@ void phy_detach(struct phy_device *phydev)
 		phydev->attached_dev->phydev = NULL;
 		phydev->attached_dev = NULL;
 		phy_link_topo_del_phy(dev->link_topo, phydev);
+		phy_destroy_mdi_port(phydev);
+
+		sfp_bus_clear_topology(phydev->sfp_bus);
 	}
 	phydev->phylink = NULL;
 
@@ -2948,6 +3030,52 @@ void phy_get_pause(struct phy_device *phydev, bool *tx_pause, bool *rx_pause)
 				      tx_pause, rx_pause);
 }
 EXPORT_SYMBOL(phy_get_pause);
+
+int genphy_port_set_active_single(struct phy_port *port)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return genphy_resume(phydev);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_active_single);
+
+int genphy_port_set_inactive_single(struct phy_port *port)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return genphy_suspend(phydev);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_inactive_single);
+
+int genphy_port_get_link_ksettings_single(struct phy_port *port, struct ethtool_link_ksettings *ksettings)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	phy_ethtool_ksettings_get(phydev, ksettings);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(genphy_port_get_link_ksettings_single);
+
+int genphy_port_set_link_ksettings_single(struct phy_port *port, struct ethtool_link_ksettings *ksettings)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return phy_ethtool_ksettings_set(phydev, ksettings);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_link_ksettings_single);
 
 #if IS_ENABLED(CONFIG_OF_MDIO)
 static int phy_get_int_delay_property(struct device *dev, const char *name)

@@ -564,6 +564,7 @@ static int mv2222_probe(struct phy_device *phydev)
 	struct device *dev = &phydev->mdio.dev;
 	struct mv2222_data *priv = NULL;
 
+	DECLARE_PHY_INTERFACE_MASK(supported_interfaces) = { 0, };
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported) = { 0, };
 
 	linkmode_set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, supported);
@@ -587,6 +588,10 @@ static int mv2222_probe(struct phy_device *phydev)
 
 	linkmode_copy(phydev->supported, supported);
 
+	__set_bit(PHY_INTERFACE_MODE_10GBASER, supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII, supported_interfaces);
+
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
@@ -594,7 +599,7 @@ static int mv2222_probe(struct phy_device *phydev)
 	priv->line_interface = PHY_INTERFACE_MODE_NA;
 	phydev->priv = priv;
 
-	return phy_sfp_probe(phydev, &sfp_phy_ops);
+	return phy_sfp_probe(phydev, &sfp_phy_ops, supported_interfaces);
 }
 
 static struct phy_driver mv2222_drivers[] = {
