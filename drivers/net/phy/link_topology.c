@@ -6,11 +6,11 @@
  * Copyright (c) 2023 Maxime Chevallier<maxime.chevallier@bootlin.com>
  */
 
-#include <linux/link_topology.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
 #include <linux/phy_port.h>
 #include <linux/xarray.h>
+#include <linux/link_topology.h>
 
 struct phy_device *link_topo_get_phy(struct link_topology *lt, int phyindex)
 {
@@ -113,6 +113,11 @@ struct phy_port *phy_port_create(const struct phy_port_config *cfg)
 void phy_port_destroy(struct phy_port *port)
 {
 	kfree(port);
+}
+
+struct phy_port *link_topo_get_port(struct link_topology *lt, int port_index)
+{
+	return xa_load(&lt->ports, port_index);
 }
 
 void link_topo_del_port(struct phy_port *port)

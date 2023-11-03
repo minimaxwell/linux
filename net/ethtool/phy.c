@@ -6,6 +6,7 @@
 #include "common.h"
 #include "netlink.h"
 
+#include <linux/link_topology.h>
 #include <linux/phy.h>
 #include <linux/sfp.h>
 
@@ -42,17 +43,14 @@ ethnl_phy_reply_size(const struct ethnl_req_info *req_base,
 		size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_INDEX */
 		size += ethnl_strz_size(phydev->drv->name);	/* ETHTOOL_A_DRVNAME */
 		size += ethnl_strz_size(dev_name(&phydev->mdio.dev));	/* ETHTOOL_A_NAME */
-		size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_CLAUSE */
-		size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_PARENT_TYPE */
-		size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_PARENT */
-		size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_UPSTREAM_INDEX */
+		size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_UPSTREAM_TYPE */
 		size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_ID */
 
 		if (phy_on_sfp(phydev)) {
-			size += ethnl_strz_size(sfp_get_name(phydev->sfp_bus));
-			size += nla_total_size(sizeof(u32)); /* ETHTOOL_A_PHY_SFP_UPSTREAM_TYPE */
+			if (sfp_get_name(phydev->sfp_bus))
+				size += ethnl_strz_size(sfp_get_name(phydev->sfp_bus)); /* ETHTOOL_A_PHY_UPSTREAM_SFP_NAME */
+			size += nla_total_size(sizeof(u32)); /* ETHTOOL_A_PHY_UPSTREAM_INDEX */
 		}
-
 	}
 
 	return size;
@@ -74,13 +72,10 @@ ethnl_phy_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff *skb)
 	else
 		ptype = PHY_UPSTREAM_PHY;
 
-	pr_info("%s : drvname %s\n", __func__, phydev->drv->name);
-	pr_info("%s : name %s\n", __func__, dev_name(&phydev->mdio.dev));
-	pr_info("%s : starting netlink stuff\n", __func__);
 	if (nla_put_u32(skb, ETHTOOL_A_PHY_INDEX, phydev->phyindex) ||
 	    ethnl_put_strz(skb, ETHTOOL_A_PHY_DRVNAME, phydev->drv->name) ||
 	    ethnl_put_strz(skb, ETHTOOL_A_PHY_NAME, dev_name(&phydev->mdio.dev) ? dev_name(&phydev->mdio.dev) : "noname") ||
-	    nla_put_u32(skb, ETHTOOL_A_PHY_UPSTREAM_TYPE, ptype) ||
+	    nla_put_u8(skb, ETHTOOL_A_PHY_UPSTREAM_TYPE, ptype) ||
 	    nla_put_u32(skb, ETHTOOL_A_PHY_ID, phydev->phy_id))
 		return -EMSGSIZE;
 
@@ -94,7 +89,7 @@ ethnl_phy_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff *skb)
 			return -EMSGSIZE;
 
 
-		if (pdn->parent_sfp_bus &&
+		if (pdn->parent_sfp_bus && sfp_get_name(pdn->parent_sfp_bus) &&
 		    ethnl_put_strz(skb, ETHTOOL_A_PHY_UPSTREAM_SFP_NAME,
 				   sfp_get_name(pdn->parent_sfp_bus)))
 			return -EMSGSIZE;

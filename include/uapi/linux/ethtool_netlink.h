@@ -58,6 +58,7 @@ enum {
 	ETHTOOL_MSG_MM_GET,
 	ETHTOOL_MSG_MM_SET,
 	ETHTOOL_MSG_PHY_GET,
+	ETHTOOL_MSG_PHY_PORT_GET,
 
 	/* add new constants above here */
 	__ETHTOOL_MSG_USER_CNT,
@@ -112,6 +113,8 @@ enum {
 	ETHTOOL_MSG_MM_NTF,
 	ETHTOOL_MSG_PHY_GET_REPLY,
 	ETHTOOL_MSG_PHY_NTF,
+	ETHTOOL_MSG_PHY_PORT_GET_REPLY,
+	ETHTOOL_MSG_PHY_PORT_NTF,
 
 	/* add new constants above here */
 	__ETHTOOL_MSG_KERNEL_CNT,
@@ -1004,6 +1007,17 @@ enum {
 	/* add new constants above here */
 	__ETHTOOL_A_PHY_CNT,
 	ETHTOOL_A_PHY_MAX = (__ETHTOOL_A_PHY_CNT - 1)
+};
+
+enum {
+	ETHTOOL_A_PHY_PORT_UNSPEC,
+	ETHTOOL_A_PHY_PORT_HEADER,		/* nest - _A_HEADER_* */
+	ETHTOOL_A_PHY_PORT_INDEX,		/* u32 */
+	ETHTOOL_A_PHY_PORT_STATE,		/* u8 */
+	ETHTOOL_A_PHY_PORT_PORT,		/* u32 */
+	ETHTOOL_A_PHY_PORT_UPSTREAM_TYPE,	/* u8 */
+	ETHTOOL_A_PHY_PORT_UPSTREAM_NAME,	/* string */
+	ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX,	/* u32 */
 };
 
 /* generic netlink info */

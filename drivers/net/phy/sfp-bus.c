@@ -2,6 +2,7 @@
 #include <linux/export.h>
 #include <linux/kref.h>
 #include <linux/list.h>
+#include <linux/link_topology.h>
 #include <linux/mutex.h>
 #include <linux/phylink.h>
 #include <linux/phy_port.h>

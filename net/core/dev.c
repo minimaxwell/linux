@@ -153,6 +153,7 @@
 #include <linux/prandom.h>
 #include <linux/once_lite.h>
 #include <net/netdev_rx_queue.h>
+#include <linux/link_topology_core.h>
 
 #include "dev.h"
 #include "net-sysfs.h"

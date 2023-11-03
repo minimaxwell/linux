@@ -11,7 +11,8 @@
 #ifndef __LINK_TOPOLOGY_H
 #define __LINK_TOPOLOGY_H
 
-#include <uapi/linux/ethtool.h>
+#include <linux/ethtool.h>
+#include <linux/link_topology_core.h>
 
 struct xarray;
 struct phy_device;
@@ -32,23 +33,45 @@ struct phy_device_node {
 	struct phy_device *phy;
 };
 
-struct link_topology {
-	struct xarray phys;
-	struct xarray ports;
-
-	u32 next_phy_index;
-	u32 next_port_index;
-};
-
+#if IS_ENABLED(CONFIG_PHYLIB)
 struct phy_device *link_topo_get_phy(struct link_topology *lt, int phyindex);
 int link_topo_add_phy(struct link_topology *lt, struct phy_device *phy,
 		      enum phy_upstream upt, void *upstream);
 
 void link_topo_del_phy(struct link_topology *lt, struct phy_device *phy);
 
-void link_topo_init(struct link_topology *lt);
-
+struct phy_port *link_topo_get_port(struct link_topology *lt, int port_index);
 int link_topo_add_port(struct link_topology *lt, struct phy_port *port);
 void link_topo_del_port(struct phy_port *port);
+#else
+static struct phy_device *link_topo_get_phy(struct link_topology *lt, int phyindex)
+{
+	return NULL;
+}
+
+static int link_topo_add_phy(struct link_topology *lt, struct phy_device *phy,
+			     enum phy_upstream upt, void *upstream)
+{
+	return 0;
+}
+
+static void link_topo_del_phy(struct link_topology *lt, struct phy_device *phy)
+{
+}
+
+static struct phy_port *link_topo_get_port(struct link_topology *lt, int port_index)
+{
+	return NULL;
+}
+
+static int link_topo_add_port(struct link_topology *lt, struct phy_port *port)
+{
+	return 0;
+}
+
+static void link_topo_del_port(struct phy_port *port)
+{
+}
+#endif
 
 #endif /* __LINK_TOPOLOGY_H */

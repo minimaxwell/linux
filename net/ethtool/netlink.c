@@ -4,6 +4,7 @@
 #include <linux/ethtool_netlink.h>
 #include <linux/pm_runtime.h>
 #include "netlink.h"
+#include <linux/link_topology.h>
 
 static struct genl_family ethtool_genl_family;
 

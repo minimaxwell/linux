@@ -973,7 +973,7 @@ attribute-sets:
         type: string
       -
         name: upstream-type
-        type: u32
+        type: u8
         enum: phy-upstream-type
       -
         name: upstream
@@ -984,6 +984,32 @@ attribute-sets:
         type: string
       -
         name: id
+        type: u32
+  -
+    name: phy-port
+    attributes:
+      -
+        name: header
+        type: nest
+        nested-attributes: header
+      -
+        name: index
+        type: u32
+      -
+        name: state
+        type: u8
+      -
+        name: port
+        type: u32
+      -
+        name: upstream-type
+        type: enum
+        enum: phy-upstream-type
+      -
+        name: upstream-name
+        type: string
+      -
+        name: upstream-index
         type: u32
 
 operations:
@@ -1756,3 +1782,24 @@ operations:
             - phy-downstream-sfp-name
             - phy-id
       dump: *phy-get-op
+  -
+      name: phy-port
+      doc: Get all ports for an interface
+
+      attribute-set: phy-port
+
+      do: &phy-port-get-op
+        request:
+          attributes:
+            - header
+            - index
+        reply:
+          attributes:
+            - header
+            - index
+            - state
+            - port
+            - upstream-type
+            - upstream-name
+            - upstream-index
+      dump: *phy-port-get-op
