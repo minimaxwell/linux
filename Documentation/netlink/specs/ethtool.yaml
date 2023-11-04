@@ -1008,6 +1008,12 @@ attribute-sets:
       -
         name: upstream-index
         type: u32
+      -
+        name: supported
+        type: bitset
+      -
+        name: lanes
+        type: u8
 
 operations:
   enum-model: directional
@@ -1798,4 +1804,6 @@ operations:
             - upstream-type
             - upstream-name
             - upstream-index
+            - supported
+            - lanes
       dump: *phy-port-get-op

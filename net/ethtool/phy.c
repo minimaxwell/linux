@@ -18,7 +18,7 @@ struct phy_req_info {
 #define PHY_REQINFO(__req_base) \
 	container_of(__req_base, struct phy_req_info, base)
 
-const struct nla_policy ethnl_phy_get_policy[ETHTOOL_A_PHY_INDEX + 1] = {
+const struct nla_policy ethnl_phy_get_policy[ETHTOOL_A_PHY_HEADER + 1] = {
 	[ETHTOOL_A_PHY_HEADER] = NLA_POLICY_NESTED(ethnl_header_policy),
 };
 

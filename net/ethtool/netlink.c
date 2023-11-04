@@ -1170,6 +1170,14 @@ static const struct genl_ops ethtool_genl_ops[] = {
 		.policy = ethnl_phy_get_policy,
 		.maxattr = ARRAY_SIZE(ethnl_phy_get_policy) - 1,
 	},
+	{
+		.cmd	= ETHTOOL_MSG_PHY_PORT_GET,
+		.doit	= ethnl_phy_port_doit,
+		.start	= ethnl_phy_port_start,
+		.dumpit	= ethnl_phy_port_dumpit,
+		.policy = ethnl_phy_port_get_policy,
+		.maxattr = ARRAY_SIZE(ethnl_phy_port_get_policy) - 1,
+	},
 };
 
 static const struct genl_multicast_group ethtool_nl_mcgrps[] = {

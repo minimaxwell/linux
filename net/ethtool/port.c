@@ -5,6 +5,7 @@
  */
 #include "common.h"
 #include "netlink.h"
+#include "bitset.h"
 
 #include <linux/link_topology.h>
 #include <linux/phy.h>
@@ -24,6 +25,10 @@ const struct nla_policy ethnl_phy_port_get_policy[ETHTOOL_A_PHY_PORT_INDEX + 1] 
 	[ETHTOOL_A_PHY_PORT_INDEX] = NLA_POLICY_MIN(NLA_U32, 1),
 };
 
+const struct nla_policy ethnl_phy_port_set_policy[ETHTOOL_A_PHY_PORT_MAX + 1] = {
+	[ETHTOOL_A_PHY_PORT_HEADER] = NLA_POLICY_NESTED(ethnl_header_policy),
+};
+
 /* Caller holds rtnl */
 static ssize_t
 ethnl_phy_port_reply_size(const struct ethnl_req_info *req_base,
@@ -32,8 +37,10 @@ ethnl_phy_port_reply_size(const struct ethnl_req_info *req_base,
 	struct phy_port_req_info *req_info = PHY_PORT_REQINFO(req_base);
 	struct phy_port *port = link_topo_get_port(&req_base->dev->link_topo,
 						   req_info->port_index);
+	bool compact = req_base->flags & ETHTOOL_FLAG_COMPACT_BITSETS;
 	const char *upstream_name = NULL;
 	size_t size = 0;
+	int ret;
 
 	if (!port)
 		return 0;
@@ -62,6 +69,13 @@ ethnl_phy_port_reply_size(const struct ethnl_req_info *req_base,
 	if (upstream_name)
 		size += ethnl_strz_size(upstream_name);	/* ETHTOOL_A_PHY_PORT_UPSTREAM_NAME */
 	size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX */
+	ret = ethnl_bitset_size(port->cfg.supported, NULL, __ETHTOOL_LINK_MODE_MASK_NBITS,
+				link_mode_names, compact);
+	if (ret < 0)
+		return ret;
+
+	size += ret;
+	size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_PORT_LANES */
 
 	return size;
 }
@@ -72,8 +86,10 @@ ethnl_phy_port_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff 
 	struct phy_port_req_info *req_info = PHY_PORT_REQINFO(req_base);
 	struct phy_port *port = link_topo_get_port(&req_base->dev->link_topo,
 						   req_info->port_index);
+	bool compact = req_base->flags & ETHTOOL_FLAG_COMPACT_BITSETS;
 	const char *upstream_name = NULL;
 	u32 upstream_index = 0;
+	int ret;
 
 	if (!port)
 		return -ENODEV;
@@ -105,6 +121,16 @@ ethnl_phy_port_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff 
 		return -EMSGSIZE;
 
 	if (nla_put_u32(skb, ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX, upstream_index))
+		return -EMSGSIZE;
+
+	ret = ethnl_put_bitset(skb, ETHTOOL_A_PHY_PORT_SUPPORTED,
+			       port->cfg.supported, NULL,
+			       __ETHTOOL_LINK_MODE_MASK_NBITS, link_mode_names,
+			       compact);
+	if (ret < 0)
+		return -EMSGSIZE;
+
+	if (nla_put_u8(skb, ETHTOOL_A_PHY_PORT_LANES, port->cfg.lanes))
 		return -EMSGSIZE;
 
 	return 0;

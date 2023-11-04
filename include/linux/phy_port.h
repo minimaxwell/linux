@@ -24,6 +24,7 @@ struct phy_port_ops {
 
 struct phy_port_config {
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
+	int lanes;
 	int port;
 	bool internal;
 
