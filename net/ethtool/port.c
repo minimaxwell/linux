@@ -40,7 +40,6 @@ ethnl_phy_port_reply_size(const struct ethnl_req_info *req_base,
 
 	size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_PORT_INDEX */
 	size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_PORT_STATE */
-	size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_PORT_PORT */
 	size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_PORT_UPSTREAM_TYPE */
 
 	switch(port->cfg.upstream_type)
@@ -81,7 +80,6 @@ ethnl_phy_port_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff 
 
 	if (nla_put_u32(skb, ETHTOOL_A_PHY_PORT_INDEX, port->index) ||
 	    nla_put_u8(skb, ETHTOOL_A_PHY_PORT_STATE, port->state) ||
-	    nla_put_u32(skb, ETHTOOL_A_PHY_PORT_PORT, port->cfg.port) ||
 	    nla_put_u8(skb, ETHTOOL_A_PHY_PORT_UPSTREAM_TYPE, port->cfg.upstream_type))
 		return -EMSGSIZE;
 

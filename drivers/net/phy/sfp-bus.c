@@ -786,7 +786,7 @@ int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 
 	bus->sfp_quirk = quirk;
 
-	bus->port->cfg.port = sfp_parse_port(bus, id, bus->port->cfg.supported);
+	//bus->port->cfg.port = sfp_parse_port(bus, id, bus->port->cfg.supported);
 
 	if (ops && ops->module_insert)
 		ret = ops->module_insert(bus->upstream, id);

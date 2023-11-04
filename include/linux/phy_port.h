@@ -11,6 +11,17 @@ enum phy_port_state {
 	PHY_PORT_LINK_UP,
 };
 
+struct phy_port;
+
+struct phy_port_ops {
+	int (* phy_port_set_active)(struct phy_port *port);
+	int (* phy_port_set_inactive)(struct phy_port *port);
+	int (* phy_port_get_link_ksettings)(struct phy_port *port,
+					     struct ethtool_link_ksettings *ksettings);
+	int (* phy_port_set_link_ksettings)(struct phy_port *port,
+					     struct ethtool_link_ksettings *ksettings);
+};
+
 struct phy_port_config {
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
 	int port;
@@ -24,6 +35,7 @@ struct phy_port_config {
 	};
 
 	struct link_topology *lt;
+	const struct phy_port_ops *ops;
 };
 
 struct phy_port {

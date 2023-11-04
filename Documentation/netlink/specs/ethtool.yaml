@@ -999,9 +999,6 @@ attribute-sets:
         name: state
         type: u8
       -
-        name: port
-        type: u32
-      -
         name: upstream-type
         type: enum
         enum: phy-upstream-type
@@ -1798,7 +1795,6 @@ operations:
             - header
             - index
             - state
-            - port
             - upstream-type
             - upstream-name
             - upstream-index

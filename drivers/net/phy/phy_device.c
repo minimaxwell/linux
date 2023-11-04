@@ -237,6 +237,13 @@ static void features_init(void)
 
 }
 
+static const struct phy_port_ops genphy_single_port_ops = {
+	.phy_port_set_active		= genphy_port_set_active_single,
+	.phy_port_set_inactive		= genphy_port_set_inactive_single,
+	.phy_port_get_link_ksettings	= genphy_port_get_link_ksettings_single,
+	.phy_port_set_link_ksettings	= genphy_port_set_link_ksettings_single,
+};
+
 void phy_device_free(struct phy_device *phydev)
 {
 	put_device(&phydev->mdio.dev);
@@ -1470,9 +1477,8 @@ static int phy_register_sfp_port(struct phy_device *phydev)
 	if (!phydev->attached_dev)
 		return 0;
 
-	linkmode_copy(cfg.supported, phydev->supported);
-	cfg.upstream_type = PHY_UPSTREAM_PHY;
-	cfg.phydev = phydev;
+	cfg.upstream_type = PHY_UPSTREAM_SFP;
+	cfg.sfp_bus = phydev->sfp_bus;
 	cfg.lt = &phydev->attached_dev->link_topo;
 
 	port = phy_port_create(&cfg);
@@ -1574,9 +1580,10 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		 * the driver to filter out what the mdi port can do
 		 */
 		linkmode_copy(cfg.supported, phydev->supported);
-		cfg.upstream_type = PHY_UPSTREAM_MAC;
-		cfg.netdev = dev;
+		cfg.upstream_type = PHY_UPSTREAM_PHY;
+		cfg.phydev = phydev;
 		cfg.lt = &dev->link_topo;
+		cfg.ops = &genphy_single_port_ops;
 
 		phydev->mdi_port = phy_port_create(&cfg);
 		if (IS_ERR(phydev->mdi_port)) {
@@ -3002,6 +3009,52 @@ void phy_get_pause(struct phy_device *phydev, bool *tx_pause, bool *rx_pause)
 				      tx_pause, rx_pause);
 }
 EXPORT_SYMBOL(phy_get_pause);
+
+int genphy_port_set_active_single(struct phy_port *port)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return genphy_resume(phydev);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_active_single);
+
+int genphy_port_set_inactive_single(struct phy_port *port)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return genphy_suspend(phydev);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_inactive_single);
+
+int genphy_port_get_link_ksettings_single(struct phy_port *port, struct ethtool_link_ksettings *ksettings)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	phy_ethtool_ksettings_get(phydev, ksettings);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(genphy_port_get_link_ksettings_single);
+
+int genphy_port_set_link_ksettings_single(struct phy_port *port, struct ethtool_link_ksettings *ksettings)
+{
+	struct phy_device *phydev = port->cfg.phydev;
+
+	if (!phydev)
+		return -EINVAL;
+
+	return phy_ethtool_ksettings_set(phydev, ksettings);
+}
+EXPORT_SYMBOL_GPL(genphy_port_set_link_ksettings_single);
 
 #if IS_ENABLED(CONFIG_OF_MDIO)
 static int phy_get_int_delay_property(struct device *dev, const char *name)

@@ -27,6 +27,7 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/irqreturn.h>
 #include <linux/iopoll.h>
+#include <linux/phy_port.h>
 #include <linux/refcount.h>
 
 #include <linux/atomic.h>
@@ -2001,6 +2002,14 @@ int __phy_hwtstamp_get(struct phy_device *phydev,
 int __phy_hwtstamp_set(struct phy_device *phydev,
 		       struct kernel_hwtstamp_config *config,
 		       struct netlink_ext_ack *extack);
+
+/* Generic port operations for single-port PHYs */
+int genphy_port_set_active_single(struct phy_port *port);
+int genphy_port_set_inactive_single(struct phy_port *port);
+int genphy_port_get_link_ksettings_single(struct phy_port *port,
+					  struct ethtool_link_ksettings *ksettings);
+int genphy_port_set_link_ksettings_single(struct phy_port *port,
+					  struct ethtool_link_ksettings *ksettings);
 
 static inline int phy_package_read(struct phy_device *phydev, u32 regnum)
 {
