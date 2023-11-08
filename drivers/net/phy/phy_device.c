@@ -1468,12 +1468,59 @@ int phy_sfp_probe(struct phy_device *phydev,
 		phydev->sfp_bus = bus;
 
 		/* Fuck we aren't attached */
-		ret = sfp_bus_add_upstream(bus, phydev, ops, supported_interfaces, lt);
+		ret = sfp_bus_add_upstream(bus, phydev, ops, supported_interfaces);
+
+		if (!ret && lt)
+			ret = sfp_bus_set_topology(bus, lt);
 		sfp_bus_put(bus);
 	}
 	return ret;
 }
 EXPORT_SYMBOL(phy_sfp_probe);
+
+int phy_create_mdi_port(struct phy_device *phydev, struct link_topology *lt)
+{
+	struct phy_port_config cfg = { };
+	struct phy_port *port;
+	int err;
+
+	if (phydev->mdi_port)
+		return 0;
+
+	/* MDI port does what the whole PHY is capable of. It's up to
+	 * the driver to filter out what the mdi port can do
+	 */
+	linkmode_copy(cfg.supported_modes, phydev->supported);
+	cfg.upstream_type = PHY_UPSTREAM_PHY;
+	cfg.ptype = PHY_PORT_MDI;
+	cfg.phydev = phydev;
+	cfg.lt = lt;
+	cfg.ops = &genphy_single_port_ops;
+
+	port = phy_port_create(&cfg);
+	if (IS_ERR(port))
+		return PTR_ERR(port);
+
+	err = link_topo_add_port(lt, port);
+	if (err) {
+		phy_port_destroy(port);
+		return err;
+	}
+
+	phydev->mdi_port = port;
+
+	return 0;
+}
+
+void phy_destroy_mdi_port(struct phy_device *phydev)
+{
+	if (!phydev->mdi_port)
+		return;
+
+	link_topo_del_port(phydev->mdi_port);
+	phy_port_destroy(phydev->mdi_port);
+	phydev->mdi_port = NULL;
+}
 
 /**
  * phy_attach_direct - attach a network device to a given PHY device pointer
@@ -1496,7 +1543,6 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	struct mii_bus *bus = phydev->mdio.bus;
 	struct device *d = &phydev->mdio.dev;
 	struct module *ndev_owner = NULL;
-	struct phy_port_config cfg = {};
 	bool using_genphy = false;
 	int err;
 
@@ -1555,29 +1601,19 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		if (phydev->sfp_bus_attached)
 			dev->sfp_bus = phydev->sfp_bus;
 
-		err = link_topo_add_phy(&dev->link_topo, phydev, PHY_UPSTREAM_MAC, dev);
+		err = phy_create_mdi_port(phydev, &dev->link_topo);
 		if (err)
 			goto error_detach;
 
-		/* MDI port does what the whole PHY is capable of. It's up to
-		 * the driver to filter out what the mdi port can do
-		 */
-		linkmode_copy(cfg.supported_modes, phydev->supported);
-		cfg.upstream_type = PHY_UPSTREAM_PHY;
-		cfg.ptype = PHY_PORT_MDI;
-		cfg.phydev = phydev;
-		cfg.lt = &dev->link_topo;
-		cfg.ops = &genphy_single_port_ops;
-
-		phydev->mdi_port = phy_port_create(&cfg);
-		if (IS_ERR(phydev->mdi_port)) {
-			err = PTR_ERR(phydev->mdi_port);
-			goto error_topo_del_phy;
-		}
-
-		err = link_topo_add_port(&dev->link_topo, phydev->mdi_port);
+		err = link_topo_add_phy(&dev->link_topo, phydev, PHY_UPSTREAM_MAC, dev);
 		if (err)
-			goto error_topo_destroy_port;
+			goto error_destroy_mdi_port;
+
+		if (phydev->sfp_bus)
+			err = sfp_bus_set_topology(phydev->sfp_bus, &dev->link_topo);
+
+		if (err)
+			goto error;
 	}
 
 	/* Some Ethernet drivers try to connect to a PHY device before
@@ -1652,13 +1688,10 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 
 error:
 	if (dev)
-		link_topo_del_port(phydev->mdi_port);
-error_topo_destroy_port:
-	if (dev)
-		phy_port_destroy(phydev->mdi_port);
-error_topo_del_phy:
-	if (dev)
 		link_topo_del_phy(&dev->link_topo, phydev);
+error_destroy_mdi_port:
+	if (dev)
+		phy_destroy_mdi_port(phydev);
 error_detach:
 	/* phy_detach() does all of the cleanup below */
 	phy_detach(phydev);
@@ -1913,8 +1946,9 @@ void phy_detach(struct phy_device *phydev)
 		phydev->attached_dev->phydev = NULL;
 		phydev->attached_dev = NULL;
 		link_topo_del_phy(&dev->link_topo, phydev);
-		link_topo_del_port(phydev->mdi_port);
-		phy_port_destroy(phydev->mdi_port);
+		phy_destroy_mdi_port(phydev);
+
+		sfp_bus_clear_topology(phydev->sfp_bus);
 	}
 	phydev->phylink = NULL;
 

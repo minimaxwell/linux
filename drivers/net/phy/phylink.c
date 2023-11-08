@@ -1545,12 +1545,15 @@ static void phylink_fixed_poll(struct timer_list *t)
 	phylink_run_resolve(pl);
 }
 
+static DECLARE_PHY_INTERFACE_MASK(phylink_sfp_interfaces);
+
 static const struct sfp_upstream_ops sfp_phylink_ops;
 
 static int phylink_register_sfp(struct phylink *pl,
 				const struct fwnode_handle *fwnode)
 {
 	struct link_topology *lt = NULL;
+	DECLARE_PHY_INTERFACE_MASK(interfaces);
 	struct sfp_bus *bus;
 	int ret;
 
@@ -1564,12 +1567,22 @@ static int phylink_register_sfp(struct phylink *pl,
 	}
 
 	pl->sfp_bus = bus;
+
+	if (!bus)
+		goto out;
+
 	if (pl->netdev)
 		lt = &pl->netdev->link_topo;
 
-	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops,
-				   pl->config->supported_interfaces, lt);
 
+	phy_interface_and(interfaces, phylink_sfp_interfaces,
+			  pl->config->supported_interfaces);
+
+	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops, interfaces);
+	if (!ret && lt)
+		ret = sfp_bus_set_topology(bus, lt);
+
+out:
 	sfp_bus_put(bus);
 
 	return ret;
@@ -1686,6 +1699,8 @@ EXPORT_SYMBOL_GPL(phylink_create);
  */
 void phylink_destroy(struct phylink *pl)
 {
+
+	sfp_bus_clear_topology(pl->sfp_bus);
 	sfp_bus_del_upstream(pl->sfp_bus);
 	if (pl->link_gpio)
 		gpiod_put(pl->link_gpio);
@@ -3020,8 +3035,6 @@ static const phy_interface_t phylink_sfp_interface_preference[] = {
 	PHY_INTERFACE_MODE_1000BASEX,
 	PHY_INTERFACE_MODE_100BASEX,
 };
-
-static DECLARE_PHY_INTERFACE_MASK(phylink_sfp_interfaces);
 
 static phy_interface_t phylink_choose_sfp_interface(struct phylink *pl,
 						    const unsigned long *intf)

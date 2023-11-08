@@ -127,6 +127,8 @@ void link_topo_del_port(struct phy_port *port)
 {
 	struct link_topology *lt = port->cfg.lt;
 
+	pr_info("%s : Removed port %d\n", __func__, port->index);
+
 	xa_erase(&lt->ports, port->index);
 }
 EXPORT_SYMBOL_GPL(link_topo_del_port);

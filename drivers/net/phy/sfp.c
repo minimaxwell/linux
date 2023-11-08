@@ -1796,28 +1796,21 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 	if (err) {
 		dev_err(sfp->dev, "phy_device_register failed: %pe\n",
 			ERR_PTR(err));
-		goto err_phy_device_free;
+		phy_device_free(phy);
+		return err;
 	}
 
 	err = sfp_add_phy(sfp->sfp_bus, phy);
 	if (err) {
 		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
-		goto err_phy_device_port_del;
+		phy_device_remove(phy);
+		phy_device_free(phy);
+		return err;
 	}
 
 	sfp->mod_phy = phy;
 
 	return 0;
-err_phy_device_port_del:
-	link_topo_del_port(phy->mdi_port);
-err_phy_device_port_destroy:
-	phy_port_destroy(phy->mdi_port);
-err_phy_device_remove:
-	phy_device_remove(phy);
-err_phy_device_free:
-	phy_device_free(phy);
-
-	return err;
 }
 
 static void sfp_sm_link_up(struct sfp *sfp)

@@ -260,6 +260,7 @@ int ethnl_phy_port_dump_one_dev(struct sk_buff *skb, struct net_device *dev,
 	ctx->req_info.dev = dev;
 
 	xa_for_each(&dev->link_topo.ports, index, port) {
+		pr_info("%s (%s)\n", __func__, dev->name);
 		ehdr = ethnl_dump_put(skb, cb,
 				      ETHTOOL_MSG_PHY_PORT_GET_REPLY);
 		if (!ehdr) {

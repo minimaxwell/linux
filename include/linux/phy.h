@@ -308,6 +308,7 @@ struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
 struct phy_port;
+struct link_topology;
 
 /**
  * struct mdio_bus_stats - Statistics counters for MDIO busses
@@ -1721,6 +1722,8 @@ int phy_suspend(struct phy_device *phydev);
 int phy_resume(struct phy_device *phydev);
 int __phy_resume(struct phy_device *phydev);
 int phy_loopback(struct phy_device *phydev, bool enable);
+int phy_create_mdi_port(struct phy_device *phydev, struct link_topology *lt);
+void phy_destroy_mdi_port(struct phy_device *phydev);
 int phy_sfp_connect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
