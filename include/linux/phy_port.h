@@ -2,6 +2,8 @@
 #define __PHY_PORT_H
 
 #include <linux/ethtool.h>
+#include <linux/phy.h>
+
 struct phy_port;
 
 enum phy_port_state {
@@ -9,6 +11,11 @@ enum phy_port_state {
 	PHY_PORT_DISABLED,
 	PHY_PORT_STANDBY,
 	PHY_PORT_LINK_UP,
+};
+
+enum phy_port_type {
+	PHY_PORT_MII,
+	PHY_PORT_MDI,
 };
 
 struct phy_port;
@@ -23,10 +30,15 @@ struct phy_port_ops {
 };
 
 struct phy_port_config {
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
 	int lanes;
 	int port;
 	bool internal;
+
+	enum phy_port_type ptype;
+	union {
+		__ETHTOOL_DECLARE_LINK_MODE_MASK(supported_modes);
+		DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
+	};
 
 	enum phy_upstream upstream_type;
 	union {

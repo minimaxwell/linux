@@ -135,7 +135,7 @@ int ethnl_phy_doit(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info.base,
 					 tb[ETHTOOL_A_PHY_HEADER],
 					 genl_info_net(info), info->extack,
-					 true, true);
+					 true);
 	if (ret < 0) {
 		pr_info("%s : Error parsing header\n", __func__);
 		return ret;
@@ -210,7 +210,7 @@ int ethnl_phy_start(struct netlink_callback *cb)
 	ret = ethnl_parse_header_dev_get(&ctx->req_info,
 					 tb[ETHTOOL_A_PHY_HEADER],
 					 sock_net(cb->skb->sk), cb->extack,
-					 false, false);
+					 false);
 	return ret;
 }
 

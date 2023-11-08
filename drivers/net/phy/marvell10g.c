@@ -122,6 +122,10 @@ enum {
 	MV_V2_33X0_PORT_CTRL_MACTYPE_10GBASER_NO_SGMII_AN	= 0x5,
 	MV_V2_33X0_PORT_CTRL_MACTYPE_10GBASER_RATE_MATCH	= 0x6,
 	MV_V2_33X0_PORT_CTRL_MACTYPE_USXGMII			= 0x7,
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK			= GENMASK(4,3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_1000BASEX		= (0x0 << 3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_SGMII			= (0x1 << 3),
+	MV_V2_33x0_PORT_CTRL_FIBERTYPE_10GBASER			= (0x3 << 3),
 	MV_V2_PORT_INTR_STS		= 0xf040,
 	MV_V2_PORT_INTR_MASK		= 0xf043,
 	MV_V2_PORT_INTR_STS_WOL_EN	= BIT(8),
@@ -476,6 +480,37 @@ static int mv3310_set_edpd(struct phy_device *phydev, u16 edpd)
 	return err;
 }
 
+static int mv3310_set_fibertype(struct phy_device *phydev,
+				phy_interface_t interface)
+{
+	u16 fibertype;
+	int ret;
+
+	switch (interface) {
+	case PHY_INTERFACE_MODE_10GBASER:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_10GBASER;
+		break;
+	case PHY_INTERFACE_MODE_1000BASEX:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_1000BASEX;
+		break;
+	case PHY_INTERFACE_MODE_SGMII:
+		fibertype = MV_V2_33x0_PORT_CTRL_FIBERTYPE_SGMII;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	fibertype &= MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK;
+	ret = phy_modify_mmd_changed(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+				     MV_V2_33x0_PORT_CTRL_FIBERTYPE_MASK,
+				     fibertype);
+	if (ret <= 0)
+		return ret;
+
+	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+				MV_V2_33X0_PORT_CTRL_SWRST);
+}
+
 static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 {
 	struct phy_device *phydev = upstream;
@@ -486,10 +521,11 @@ static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 	sfp_parse_support(phydev->sfp_bus, id, support, interfaces);
 	iface = sfp_select_interface(phydev->sfp_bus, support);
 
-	if (iface != PHY_INTERFACE_MODE_10GBASER) {
+	if (mv3310_set_fibertype(phydev, iface) < 0) {
 		dev_err(&phydev->mdio.dev, "incompatible SFP module inserted\n");
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -558,7 +594,7 @@ static int mv3310_probe(struct phy_device *phydev)
 
 	chip->init_supported_interfaces(priv->supported_interfaces);
 
-	return phy_sfp_probe(phydev, &mv3310_sfp_ops);
+	return phy_sfp_probe(phydev, &mv3310_sfp_ops, priv->supported_interfaces);
 }
 
 static void mv3310_remove(struct phy_device *phydev)

@@ -1778,8 +1778,6 @@ static void sfp_sm_phy_detach(struct sfp *sfp)
 
 static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 {
-	struct phy_port_config cfg = {};
-	struct phy_port *bus_port;
 	struct phy_device *phy;
 	int err;
 
@@ -1800,25 +1798,6 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 			ERR_PTR(err));
 		goto err_phy_device_free;
 	}
-
-	bus_port = sfp_bus_get_port(sfp->sfp_bus);
-
-	linkmode_copy(cfg.supported, phy->supported);
-	cfg.upstream_type = PHY_UPSTREAM_SFP;
-	cfg.sfp_bus = sfp->sfp_bus;
-	if (bus_port)
-		cfg.lt = bus_port->cfg.lt;
-
-	phy->mdi_port = phy_port_create(&cfg);
-	if (IS_ERR(phy->mdi_port)) {
-		err = PTR_ERR(phy->mdi_port);
-		goto err_phy_device_remove;
-	}
-
-	err = link_topo_add_port(bus_port->cfg.lt, phy->mdi_port);
-	if (err)
-		goto err_phy_device_port_destroy;
-
 
 	err = sfp_add_phy(sfp->sfp_bus, phy);
 	if (err) {

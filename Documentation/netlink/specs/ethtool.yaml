@@ -21,6 +21,11 @@ definitions:
     enum-name:
     type: enum
     entries: [ mac, sfp, phy ]
+  -
+    name: port-type
+    enum-name:
+    type: enum
+    entries: [mii, mdi]
 
 attribute-sets:
   -
@@ -1000,7 +1005,7 @@ attribute-sets:
         type: u8
       -
         name: upstream-type
-        type: enum
+        type: u8
         enum: phy-upstream-type
       -
         name: upstream-name
@@ -1009,8 +1014,17 @@ attribute-sets:
         name: upstream-index
         type: u32
       -
+        name: type
+        type: u8
+        enum: port-type
+      -
         name: supported
-        type: bitset
+        type: nest
+        nested-attributes: bitset
+      -
+        name: interfaces
+        type: nest
+        nested-attributes: bitset
       -
         name: lanes
         type: u8
@@ -1777,16 +1791,16 @@ operations:
         reply:
           attributes:
             - header
-            - phy-index
-            - phy-drvname
-            - phy-name
-            - phy-upstream-type
-            - phy-upstream
-            - phy-downstream-sfp-name
-            - phy-id
+            - index
+            - drvname
+            - name
+            - upstream-type
+            - upstream
+            - downstream-sfp-name
+            - id
       dump: *phy-get-op
-  -
-      name: phy-port
+    -
+      name: phy-port-get
       doc: Get all ports for an interface
 
       attribute-set: phy-port
@@ -1804,6 +1818,8 @@ operations:
             - upstream-type
             - upstream-name
             - upstream-index
+            - type
             - supported
+            - interfaces
             - lanes
       dump: *phy-port-get-op

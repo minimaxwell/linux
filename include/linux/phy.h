@@ -27,7 +27,6 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/irqreturn.h>
 #include <linux/iopoll.h>
-#include <linux/phy_port.h>
 #include <linux/refcount.h>
 
 #include <linux/atomic.h>
@@ -308,6 +307,7 @@ struct phylink;
 struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
+struct phy_port;
 
 /**
  * struct mdio_bus_stats - Statistics counters for MDIO busses
@@ -1726,7 +1726,8 @@ void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
 void phy_sfp_detach(void *upstream, struct sfp_bus *bus);
 int phy_sfp_probe(struct phy_device *phydev,
-	          const struct sfp_upstream_ops *ops);
+	          const struct sfp_upstream_ops *ops,
+		  const unsigned long *supported_interfaces);
 struct phy_device *phy_attach(struct net_device *dev, const char *bus_id,
 			      phy_interface_t interface);
 struct phy_device *phy_find_first(struct mii_bus *bus);

@@ -29,6 +29,8 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+
+	DECLARE_BITMAP(interfaces, PHY_INTERFACE_MODE_MAX);
 	struct phy_port *port;
 	struct link_topology *lt;
 
@@ -458,6 +460,42 @@ void sfp_bus_put(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_bus_put);
 
+static int sfp_add_phy_port(struct sfp_bus *bus, struct phy_device *phydev)
+{
+	struct phy_port_config cfg = {};
+	struct phy_port *port;
+	int ret;
+
+	if (phydev->mdi_port)
+		return 0;
+
+	if (!bus->lt)
+		return 0;
+
+	cfg.upstream_type = PHY_UPSTREAM_PHY;
+	cfg.ptype = PHY_PORT_MDI;
+	cfg.phydev = phydev;
+	cfg.lt = bus->lt;
+
+	port = phy_port_create(&cfg);
+	if (IS_ERR(port))
+		return PTR_ERR(port);
+
+	ret = link_topo_add_port(bus->lt, port);
+	if (ret)
+		goto destroy_port;
+
+	phydev->mdi_port = port;
+
+	return 0;
+
+destroy_port:
+
+	phy_port_destroy(port);
+
+	return ret;
+}
+
 static int sfp_register_bus(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = bus->upstream_ops;
@@ -467,6 +505,10 @@ static int sfp_register_bus(struct sfp_bus *bus)
 		if (ops->link_down)
 			ops->link_down(bus->upstream);
 		if (ops->connect_phy && bus->phydev) {
+			ret = sfp_add_phy_port(bus, bus->phydev);
+			if (ret)
+				return ret;
+
 			ret = ops->connect_phy(bus->upstream, bus->phydev);
 			if (ret)
 				return ret;
@@ -654,11 +696,39 @@ struct sfp_bus *sfp_bus_find_fwnode(const struct fwnode_handle *fwnode)
 }
 EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
 
+int sfp_bus_set_topology(struct sfp_bus *bus, struct link_topology *lt)
+{
+	if (bus->lt)
+		return 0;
+
+	bus->lt = lt;
+
+	port_cfg.upstream_type = PHY_UPSTREAM_SFP;
+	port_cfg.ptype = PHY_PORT_MII;
+	port_cfg.sfp_bus = bus;
+	port_cfg.lt = lt;
+	bitmap_copy(port_cfg.supported_interfaces, interfaces, PHY_INTERFACE_MODE_MAX);
+
+	bus->port = phy_port_create(&port_cfg);
+	if (IS_ERR(bus->port)) {
+		bus->port = NULL;
+		return PTR_ERR(bus->port);
+	}
+
+	if (bus->phydev)
+		return sfp_add_phy_port(bus, bus->phydev);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_set_topology);
+
 /**
  * sfp_bus_add_upstream() - parse and register the neighbouring device
  * @bus: the &struct sfp_bus found via sfp_bus_find_fwnode()
  * @upstream: the upstream private data
  * @ops: the upstream's &struct sfp_upstream_ops
+ * @interfaces: The serialized interface modes upstream is capable of providing
+ * @lt: The link topology this bus is part of
  *
  * Add upstream driver for the SFP bus, and if the bus is complete, register
  * the SFP bus using sfp_register_upstream().  This takes a reference on the
@@ -675,8 +745,11 @@ EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
  *	- an error from the upstream's connect_phy() method.
  */
 int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
-			 const struct sfp_upstream_ops *ops)
+			 const struct sfp_upstream_ops *ops,
+			 const unsigned long *interfaces,
+			 struct link_topology *lt)
 {
+	struct phy_port_config port_cfg = {};
 	int ret;
 
 	/* If no bus, return success */
@@ -687,6 +760,8 @@ int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
 	kref_get(&bus->kref);
 	bus->upstream_ops = ops;
 	bus->upstream = upstream;
+
+	linkmode_copy(bus->interfaces, interfaces);
 
 	if (bus->sfp) {
 		ret = sfp_register_bus(bus);
@@ -736,10 +811,14 @@ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
 	/* Having a PHY toggles the SFP port to internal, as the mod PHY has
 	 * it's own external port
 	 */
-	phy_port_set_internal(bus->port, true);
 
-	if (ops && ops->connect_phy)
+	if (ops && ops->connect_phy) {
+		ret = sfp_add_phy_port(bus, phydev);
+		if (ret)
+			return ret;
+
 		ret = ops->connect_phy(bus->upstream, phydev);
+	}
 
 	if (ret == 0)
 		bus->phydev = phydev;
@@ -889,17 +968,3 @@ struct phy_port *sfp_bus_get_port(struct sfp_bus *bus)
 	return bus->port;
 }
 EXPORT_SYMBOL_GPL(sfp_bus_get_port);
-
-int sfp_bus_set_port(struct sfp_bus *bus, struct phy_port *port)
-{
-	if (!bus)
-		return 0;
-
-	if (bus->port)
-		return -EBUSY;
-
-	bus->port = port;
-
-	return link_topo_add_port(port->cfg.lt, port);
-}
-EXPORT_SYMBOL_GPL(sfp_bus_set_port);

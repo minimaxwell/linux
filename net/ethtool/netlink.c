@@ -21,7 +21,7 @@ const struct nla_policy ethnl_header_policy[] = {
 					    .len = ALTIFNAMSIZ - 1 },
 	[ETHTOOL_A_HEADER_FLAGS]	= NLA_POLICY_MASK(NLA_U32,
 							  ETHTOOL_FLAGS_BASIC),
-	[ETHTOOL_A_PHY_INDEX]		= NLA_POLICY_MIN(NLA_U32, 1),
+	[ETHTOOL_A_HEADER_PHY_INDEX]		= NLA_POLICY_MIN(NLA_U32, 1),
 };
 
 const struct nla_policy ethnl_header_policy_stats[] = {
@@ -30,6 +30,7 @@ const struct nla_policy ethnl_header_policy_stats[] = {
 					    .len = ALTIFNAMSIZ - 1 },
 	[ETHTOOL_A_HEADER_FLAGS]	= NLA_POLICY_MASK(NLA_U32,
 							  ETHTOOL_FLAGS_STATS),
+	[ETHTOOL_A_HEADER_PHY_INDEX]		= NLA_POLICY_MIN(NLA_U32, 1),
 };
 
 int ethnl_ops_begin(struct net_device *dev)
@@ -89,8 +90,7 @@ void ethnl_ops_complete(struct net_device *dev)
  */
 int ethnl_parse_header_dev_get(struct ethnl_req_info *req_info,
 			       const struct nlattr *header, struct net *net,
-			       struct netlink_ext_ack *extack, bool require_dev,
-			       bool targets_phy)
+			       struct netlink_ext_ack *extack, bool require_dev)
 {
 	struct nlattr *tb[ARRAY_SIZE(ethnl_header_policy)];
 	const struct nlattr *devname_attr;
@@ -149,12 +149,6 @@ int ethnl_parse_header_dev_get(struct ethnl_req_info *req_info,
 		return -EINVAL;
 	}
 
-	if (targets_phy && !dev) {
-		NL_SET_ERR_MSG_ATTR(extack, header,
-				    "no device specified for phy-specific command");
-		return -EINVAL;
-	}
-
 	if (dev) {
 		if (tb[ETHTOOL_A_HEADER_PHY_INDEX]) {
 			u32 phy_index = nla_get_u32(tb[ETHTOOL_A_HEADER_PHY_INDEX]);
@@ -170,12 +164,6 @@ int ethnl_parse_header_dev_get(struct ethnl_req_info *req_info,
 			 */
 			phydev = dev->phydev;
 		}
-	}
-
-	if (targets_phy && !phydev) {
-		NL_SET_ERR_MSG_ATTR(extack, header,
-				    "no PHY found but command targets a PHY");
-		return -EINVAL;
 	}
 
 	req_info->phydev = phydev;
@@ -369,7 +357,7 @@ static int ethnl_default_parse(struct ethnl_req_info *req_info,
 
 	ret = ethnl_parse_header_dev_get(req_info, tb[request_ops->hdr_attr],
 					 genl_info_net(info), info->extack,
-					 require_dev, request_ops->targets_phy);
+					 require_dev);
 	if (ret < 0)
 		return ret;
 
@@ -624,7 +612,7 @@ static int ethnl_default_set_doit(struct sk_buff *skb, struct genl_info *info)
 
 	ret = ethnl_parse_header_dev_get(&req_info, info->attrs[ops->hdr_attr],
 					 genl_info_net(info), info->extack,
-					 true, ops->targets_phy);
+					 true);
 	if (ret < 0)
 		return ret;
 

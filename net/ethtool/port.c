@@ -69,8 +69,17 @@ ethnl_phy_port_reply_size(const struct ethnl_req_info *req_base,
 	if (upstream_name)
 		size += ethnl_strz_size(upstream_name);	/* ETHTOOL_A_PHY_PORT_UPSTREAM_NAME */
 	size += nla_total_size(sizeof(u32));	/* ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX */
-	ret = ethnl_bitset_size(port->cfg.supported, NULL, __ETHTOOL_LINK_MODE_MASK_NBITS,
-				link_mode_names, compact);
+	size += nla_total_size(sizeof(u8));	/* ETHTOOL_A_PHY_PORT_TYPE */
+
+	if (port->cfg.ptype == PHY_PORT_MDI)
+		ret = ethnl_bitset_size(port->cfg.supported_modes, NULL,
+					__ETHTOOL_LINK_MODE_MASK_NBITS,
+					link_mode_names, compact);
+	else
+		ret = ethnl_bitset_size(port->cfg.supported_interfaces, NULL,
+					PHY_INTERFACE_MODE_MAX,
+					interface_mode_names, compact);
+
 	if (ret < 0)
 		return ret;
 
@@ -120,13 +129,21 @@ ethnl_phy_port_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff 
 	if (upstream_name && ethnl_put_strz(skb, ETHTOOL_A_PHY_PORT_UPSTREAM_NAME, upstream_name))
 		return -EMSGSIZE;
 
-	if (nla_put_u32(skb, ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX, upstream_index))
+	if (nla_put_u32(skb, ETHTOOL_A_PHY_PORT_UPSTREAM_INDEX, upstream_index) ||
+	    nla_put_u8(skb, ETHTOOL_A_PHY_PORT_TYPE, port->cfg.ptype))
 		return -EMSGSIZE;
 
-	ret = ethnl_put_bitset(skb, ETHTOOL_A_PHY_PORT_SUPPORTED,
-			       port->cfg.supported, NULL,
-			       __ETHTOOL_LINK_MODE_MASK_NBITS, link_mode_names,
-			       compact);
+	if (port->cfg.ptype == PHY_PORT_MDI)
+		ret = ethnl_put_bitset(skb, ETHTOOL_A_PHY_PORT_SUPPORTED,
+				       port->cfg.supported_modes, NULL,
+				       __ETHTOOL_LINK_MODE_MASK_NBITS,
+				       link_mode_names, compact);
+	else
+		ret = ethnl_put_bitset(skb, ETHTOOL_A_PHY_PORT_INTERFACES,
+				       port->cfg.supported_interfaces, NULL,
+				       PHY_INTERFACE_MODE_MAX,
+				       interface_mode_names, compact);
+
 	if (ret < 0)
 		return -EMSGSIZE;
 
@@ -159,7 +176,7 @@ int ethnl_phy_port_doit(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_parse_header_dev_get(&req_info.base,
 					 tb[ETHTOOL_A_PHY_PORT_HEADER],
 					 genl_info_net(info), info->extack,
-					 true, false);
+					 true);
 	if (ret < 0)
 		return ret;
 
@@ -226,7 +243,7 @@ int ethnl_phy_port_start(struct netlink_callback *cb)
 	ret = ethnl_parse_header_dev_get(&ctx->req_info,
 					 tb[ETHTOOL_A_PHY_PORT_HEADER],
 					 sock_net(cb->skb->sk), cb->extack,
-					 false, false);
+					 false);
 	return ret;
 }
 
@@ -265,7 +282,6 @@ int ethnl_phy_port_dump_one_dev(struct sk_buff *skb, struct net_device *dev,
 
 	return ret;
 }
-
 
 int ethnl_phy_port_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {

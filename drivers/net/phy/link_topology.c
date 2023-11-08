@@ -109,16 +109,19 @@ struct phy_port *phy_port_create(const struct phy_port_config *cfg)
 
 	return port;
 }
+EXPORT_SYMBOL_GPL(phy_port_create);
 
 void phy_port_destroy(struct phy_port *port)
 {
 	kfree(port);
 }
+EXPORT_SYMBOL_GPL(phy_port_destroy);
 
 struct phy_port *link_topo_get_port(struct link_topology *lt, int port_index)
 {
 	return xa_load(&lt->ports, port_index);
 }
+EXPORT_SYMBOL_GPL(link_topo_get_port);
 
 void link_topo_del_port(struct phy_port *port)
 {
@@ -126,6 +129,7 @@ void link_topo_del_port(struct phy_port *port)
 
 	xa_erase(&lt->ports, port->index);
 }
+EXPORT_SYMBOL_GPL(link_topo_del_port);
 
 int link_topo_add_port(struct link_topology *lt, struct phy_port *port)
 {
@@ -142,6 +146,7 @@ int link_topo_add_port(struct link_topology *lt, struct phy_port *port)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(link_topo_add_port);
 
 void phy_port_set_internal(struct phy_port *port, bool internal)
 {

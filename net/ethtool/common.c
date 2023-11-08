@@ -465,6 +465,43 @@ const char udp_tunnel_type_names[][ETH_GSTRING_LEN] = {
 static_assert(ARRAY_SIZE(udp_tunnel_type_names) ==
 	      __ETHTOOL_UDP_TUNNEL_TYPE_CNT);
 
+/* Strings here should match what phy_modes() returns */
+const char interface_mode_names[][ETH_GSTRING_LEN] = {
+	[PHY_INTERFACE_MODE_NA] = "",
+	[PHY_INTERFACE_MODE_INTERNAL] = "internal",
+	[PHY_INTERFACE_MODE_MII] = "mii",
+	[PHY_INTERFACE_MODE_GMII] = "gmii",
+	[PHY_INTERFACE_MODE_SGMII] = "sgmii",
+	[PHY_INTERFACE_MODE_TBI] = "tbi",
+	[PHY_INTERFACE_MODE_REVMII] = "rev-mii",
+	[PHY_INTERFACE_MODE_RMII] = "rmii",
+	[PHY_INTERFACE_MODE_REVRMII] = "rev-rmii",
+	[PHY_INTERFACE_MODE_RGMII] = "rgmii",
+	[PHY_INTERFACE_MODE_RGMII_ID] = "rgmii-id",
+	[PHY_INTERFACE_MODE_RGMII_RXID] = "rgmii-rxid",
+	[PHY_INTERFACE_MODE_RGMII_TXID] = "rgmii-txid",
+	[PHY_INTERFACE_MODE_RTBI] = "rtbi",
+	[PHY_INTERFACE_MODE_SMII] = "smii",
+	[PHY_INTERFACE_MODE_XGMII] = "xgmii",
+	[PHY_INTERFACE_MODE_XLGMII] = "xlgmii",
+	[PHY_INTERFACE_MODE_MOCA] = "moca",
+	[PHY_INTERFACE_MODE_PSGMII] = "psgmii",
+	[PHY_INTERFACE_MODE_QSGMII] = "qsgmii",
+	[PHY_INTERFACE_MODE_TRGMII] = "trgmii",
+	[PHY_INTERFACE_MODE_100BASEX] = "100base-x",
+	[PHY_INTERFACE_MODE_1000BASEX] = "1000base-x",
+	[PHY_INTERFACE_MODE_2500BASEX] = "2500base-x",
+	[PHY_INTERFACE_MODE_5GBASER] = "5gbase-r",
+	[PHY_INTERFACE_MODE_RXAUI] = "rxaui",
+	[PHY_INTERFACE_MODE_XAUI] = "xaui",
+	[PHY_INTERFACE_MODE_10GBASER] = "10gbase-r",
+	[PHY_INTERFACE_MODE_25GBASER] = "25gbase-r",
+	[PHY_INTERFACE_MODE_USXGMII] = "usxgmii",
+	[PHY_INTERFACE_MODE_10GKR] = "10gbase-kr",
+	[PHY_INTERFACE_MODE_QUSGMII] = "qusgmii",
+	[PHY_INTERFACE_MODE_1000BASEKX] = "1000base-kx",
+};
+static_assert(ARRAY_SIZE(interface_mode_names) == PHY_INTERFACE_MODE_MAX);
 /* return false if legacy contained non-0 deprecated fields
  * maxtxpkt/maxrxpkt. rest of ksettings always updated
  */

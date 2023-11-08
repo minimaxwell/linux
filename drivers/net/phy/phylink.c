@@ -1550,8 +1550,7 @@ static const struct sfp_upstream_ops sfp_phylink_ops;
 static int phylink_register_sfp(struct phylink *pl,
 				const struct fwnode_handle *fwnode)
 {
-	struct phy_port_config cfg = {};
-	struct phy_port *port;
+	struct link_topology *lt = NULL;
 	struct sfp_bus *bus;
 	int ret;
 
@@ -1565,26 +1564,12 @@ static int phylink_register_sfp(struct phylink *pl,
 	}
 
 	pl->sfp_bus = bus;
+	if (pl->netdev)
+		lt = &pl->netdev->link_topo;
 
-	if (pl->netdev && bus) {
-		linkmode_copy(cfg.supported, pl->sfp_support);
-		cfg.upstream_type = PHY_UPSTREAM_MAC;
-		cfg.netdev = pl->netdev;
-		cfg.lt = &pl->netdev->link_topo;
+	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops,
+				   pl->config->supported_interfaces, lt);
 
-		port = phy_port_create(&cfg);
-		if (IS_ERR(port)) {
-			ret = PTR_ERR(port);
-			goto out;
-		}
-
-		ret = sfp_bus_set_port(bus, port);
-		if (ret)
-			goto out;
-	}
-
-	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops);
-out:
 	sfp_bus_put(bus);
 
 	return ret;

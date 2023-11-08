@@ -1447,12 +1447,18 @@ EXPORT_SYMBOL(phy_sfp_detach);
  * phy_sfp_probe - probe for a SFP cage attached to this PHY device
  * @phydev: Pointer to phy_device
  * @ops: SFP's upstream operations
+ * @supported_interfaces: The interface modes this bus can handle
  */
 int phy_sfp_probe(struct phy_device *phydev,
-		  const struct sfp_upstream_ops *ops)
+		  const struct sfp_upstream_ops *ops,
+		  const unsigned long *supported_interfaces)
 {
+	struct link_topology *lt = NULL;
 	struct sfp_bus *bus;
 	int ret = 0;
+
+	if (phydev->attached_dev)
+		lt = &phydev->attached_dev->link_topo;
 
 	if (phydev->mdio.dev.fwnode) {
 		bus = sfp_bus_find_fwnode(phydev->mdio.dev.fwnode);
@@ -1461,36 +1467,13 @@ int phy_sfp_probe(struct phy_device *phydev,
 
 		phydev->sfp_bus = bus;
 
-		ret = sfp_bus_add_upstream(bus, phydev, ops);
+		/* Fuck we aren't attached */
+		ret = sfp_bus_add_upstream(bus, phydev, ops, supported_interfaces, lt);
 		sfp_bus_put(bus);
 	}
 	return ret;
 }
 EXPORT_SYMBOL(phy_sfp_probe);
-
-static int phy_register_sfp_port(struct phy_device *phydev)
-{
-	struct phy_port_config cfg = {};
-	struct phy_port *port;
-	int ret = 0;
-
-	if (!phydev->attached_dev)
-		return 0;
-
-	cfg.upstream_type = PHY_UPSTREAM_SFP;
-	cfg.sfp_bus = phydev->sfp_bus;
-	cfg.lt = &phydev->attached_dev->link_topo;
-
-	port = phy_port_create(&cfg);
-	if (IS_ERR(port))
-		return PTR_ERR(port);
-
-	ret = sfp_bus_set_port(phydev->sfp_bus, port);
-	if (ret)
-		phy_port_destroy(port);
-
-	return ret;
-}
 
 /**
  * phy_attach_direct - attach a network device to a given PHY device pointer
@@ -1579,8 +1562,9 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		/* MDI port does what the whole PHY is capable of. It's up to
 		 * the driver to filter out what the mdi port can do
 		 */
-		linkmode_copy(cfg.supported, phydev->supported);
+		linkmode_copy(cfg.supported_modes, phydev->supported);
 		cfg.upstream_type = PHY_UPSTREAM_PHY;
+		cfg.ptype = PHY_PORT_MDI;
 		cfg.phydev = phydev;
 		cfg.lt = &dev->link_topo;
 		cfg.ops = &genphy_single_port_ops;
@@ -1594,12 +1578,6 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		err = link_topo_add_port(&dev->link_topo, phydev->mdi_port);
 		if (err)
 			goto error_topo_destroy_port;
-
-		if (phydev->sfp_bus) {
-			err = phy_register_sfp_port(phydev);
-			if (err)
-				goto error;
-		}
 	}
 
 	/* Some Ethernet drivers try to connect to a PHY device before

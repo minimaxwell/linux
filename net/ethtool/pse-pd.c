@@ -153,6 +153,4 @@ const struct ethnl_request_ops ethnl_pse_request_ops = {
 	.set_validate		= ethnl_set_pse_validate,
 	.set			= ethnl_set_pse,
 	/* PSE has no notification */
-
-	.targets_phy		= true,
 };
