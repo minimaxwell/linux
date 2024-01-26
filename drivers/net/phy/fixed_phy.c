@@ -22,8 +22,7 @@
 #include <linux/idr.h>
 #include <linux/netdevice.h>
 #include <linux/linkmode.h>
-
-#include "swphy.h"
+#include <linux/swphy.h>
 
 struct fixed_mdio_bus {
 	struct mii_bus *mii_bus;

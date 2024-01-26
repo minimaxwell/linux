@@ -415,6 +415,18 @@ static inline void nsim_macsec_teardown(struct netdevsim *ns)
 }
 #endif
 
+#if IS_ENABLED(CONFIG_PHYLIB)
+void nsim_phy_init(struct netdevsim *ns);
+void nsim_phy_cleanup(struct netdevsim *dev);
+#else
+static inline voidnsim_phy_init(struct nsim_dev *nsim_dev, struct net_device *dev)
+{
+}
+static inline void nsim_phy_cleanup(struct net_device *dev);
+{
+}
+#endif
+
 struct nsim_bus_dev {
 	struct device dev;
 	struct list_head list;
