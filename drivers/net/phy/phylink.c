@@ -17,11 +17,11 @@
 #include <linux/phylink.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
+#include <linux/swphy.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 
 #include "sfp.h"
-#include "swphy.h"
 
 #define SUPPORTED_INTERFACES \
 	(SUPPORTED_TP | SUPPORTED_MII | SUPPORTED_FIBRE | \

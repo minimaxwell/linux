@@ -686,6 +686,7 @@ static int nsim_init_netdevsim(struct netdevsim *ns)
 
 	nsim_macsec_init(ns);
 	nsim_ipsec_init(ns);
+	nsim_phy_init(ns);
 
 	err = register_netdevice(ns->netdev);
 	if (err)
