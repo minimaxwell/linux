@@ -14,10 +14,10 @@
 #include <linux/platform_device.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
+#include <linux/swphy.h>
 #include <linux/workqueue.h>
 
 #include "sfp.h"
-#include "swphy.h"
 
 enum {
 	GPIO_MODDEF0,
