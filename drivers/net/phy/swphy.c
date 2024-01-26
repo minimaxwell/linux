@@ -13,8 +13,7 @@
 #include <linux/mii.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
-
-#include "swphy.h"
+#include <linux/swphy.h>
 
 #define MII_REGS_NUM 29
 
