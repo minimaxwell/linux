@@ -69,6 +69,12 @@ ethnl_phy_reply_size(const struct ethnl_req_info *req_base,
 			size += nla_total_size(strlen(sfp_name) + 1);
 	}
 
+	/* ETHTOOL_A_PHY_LOOPBACK */
+	size += nla_total_size(sizeof(u8));
+
+	/* ETHTOOL_A_PHY_ISOLATE */
+	size += nla_total_size(sizeof(u8));
+
 	return size;
 }
 
@@ -85,7 +91,9 @@ ethnl_phy_fill_reply(const struct ethnl_req_info *req_base, struct sk_buff *skb)
 	if (nla_put_u32(skb, ETHTOOL_A_PHY_INDEX, phydev->phyindex) ||
 	    nla_put_string(skb, ETHTOOL_A_PHY_NAME, dev_name(&phydev->mdio.dev)) ||
 	    nla_put_u32(skb, ETHTOOL_A_PHY_UPSTREAM_TYPE, ptype) ||
-	    nla_put_u32(skb, ETHTOOL_A_PHY_ID, phydev->phy_id))
+	    nla_put_u32(skb, ETHTOOL_A_PHY_ID, phydev->phy_id) ||
+	    nla_put_u8(skb, ETHTOOL_A_PHY_LOOPBACK, phydev->loopback_enabled) ||
+	    nla_put_u8(skb, ETHTOOL_A_PHY_ISOLATE, phydev->isolated))
 		return -EMSGSIZE;
 
 	if (phydev->drv &&
@@ -303,4 +311,59 @@ int ethnl_phy_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 
 	return ret;
 }
+
+const struct nla_policy ethnl_phy_set_policy[] = {
+	[ETHTOOL_A_PHY_HEADER]		=
+		NLA_POLICY_NESTED(ethnl_header_policy_phy),
+	[ETHTOOL_A_PHY_LOOPBACK]	= NLA_POLICY_MAX(NLA_U8, 1),
+	[ETHTOOL_A_PHY_ISOLATE]		= NLA_POLICY_MAX(NLA_U8, 1),
+};
+
+static int
+ethnl_set_phy_validate(struct ethnl_req_info *req_info, struct genl_info *info)
+{
+	if (!req_info->phydev)
+		return -EOPNOTSUPP;
+
+	return 1;
+}
+
+static int ethnl_set_phy(struct ethnl_req_info *req_info, struct genl_info *info)
+{
+	struct netlink_ext_ack *extack = info->extack;
+	struct phy_device *phydev = req_info->phydev;
+	const struct ethtool_phy_ops *ops;
+	struct nlattr **tb = info->attrs;
+	struct phy_device_config cfg;
+	bool mod = false;
+	int ret;
+
+	ops = ethtool_phy_ops;
+	if (!ops || !ops->set_config || !ops->get_config)
+		return -EOPNOTSUPP;
+
+	ret = ops->get_config(phydev, &cfg);
+	if (ret)
+		return ret;
+
+	ethnl_update_bool(&cfg.loopback, tb[ETHTOOL_A_PHY_LOOPBACK], &mod);
+	ethnl_update_bool(&cfg.isolate, tb[ETHTOOL_A_PHY_ISOLATE], &mod);
+
+	if (!mod)
+		return 0;
+
+	ret = ops->set_config(phydev, &cfg, extack);
+	return ret < 0 ? ret : 1;
+}
+
+const struct ethnl_request_ops ethnl_phy_request_ops = {
+
+	.hdr_attr		= ETHTOOL_A_PHY_HEADER,
+	/* the GET/DUMP operations are implemented separately due to the
+	 * ability to filter DUMP requests per netdev
+	 */
+	.set_validate		= ethnl_set_phy_validate,
+	.set			= ethnl_set_phy,
+	.set_ntf_cmd		= ETHTOOL_MSG_PHY_NTF,
+};
 

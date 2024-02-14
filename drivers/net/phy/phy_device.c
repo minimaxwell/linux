@@ -2113,6 +2113,42 @@ out:
 }
 EXPORT_SYMBOL(phy_loopback);
 
+int phy_isolate(struct phy_device *phydev, bool enable)
+{
+	int ret = 0;
+
+	if (!phydev->drv)
+		return -EIO;
+
+	mutex_lock(&phydev->lock);
+
+	if (enable && phydev->isolated) {
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (!enable && !phydev->isolated) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* Maybe add a phy callback ? */
+	//if (phydev->drv->set_loopback)
+	//	ret = phydev->drv->set_loopback(phydev, enable);
+	//else
+	ret = genphy_isolate(phydev, enable);
+
+	if (ret)
+		goto out;
+
+	phydev->isolated = enable;
+
+out:
+	mutex_unlock(&phydev->lock);
+	return ret;
+}
+EXPORT_SYMBOL(phy_isolate);
+
 /**
  * phy_reset_after_clk_enable - perform a PHY reset if needed
  * @phydev: target phy_device struct
@@ -2260,6 +2296,7 @@ EXPORT_SYMBOL(genphy_config_eee_advert);
  */
 int genphy_setup_forced(struct phy_device *phydev)
 {
+	u16 mask = BMCR_LOOPBACK | BMCR_PDOWN;
 	u16 ctl;
 
 	phydev->pause = 0;
@@ -2267,8 +2304,10 @@ int genphy_setup_forced(struct phy_device *phydev)
 
 	ctl = mii_bmcr_encode_fixed(phydev->speed, phydev->duplex);
 
-	return phy_modify(phydev, MII_BMCR,
-			  ~(BMCR_LOOPBACK | BMCR_ISOLATE | BMCR_PDOWN), ctl);
+	if (!phydev->isolated)
+		mask |= BMCR_ISOLATE;
+
+	return phy_modify(phydev, MII_BMCR, ~mask, ctl);
 }
 EXPORT_SYMBOL(genphy_setup_forced);
 
@@ -2357,8 +2396,11 @@ EXPORT_SYMBOL(genphy_read_master_slave);
  */
 int genphy_restart_aneg(struct phy_device *phydev)
 {
-	/* Don't isolate the PHY if we're negotiating */
-	return phy_modify(phydev, MII_BMCR, BMCR_ISOLATE,
+	u16 mask = phydev->isolated ? 0 : BMCR_ISOLATE;
+	/* Don't isolate the PHY if we're negotiating, unless the PHY is
+	 * explicitely isolated
+	 */
+	return phy_modify(phydev, MII_BMCR, mask,
 			  BMCR_ANENABLE | BMCR_ANRESTART);
 }
 EXPORT_SYMBOL(genphy_restart_aneg);
@@ -2382,7 +2424,8 @@ int genphy_check_and_restart_aneg(struct phy_device *phydev, bool restart)
 		if (ret < 0)
 			return ret;
 
-		if (!(ret & BMCR_ANENABLE) || (ret & BMCR_ISOLATE))
+		if (!(ret & BMCR_ANENABLE) ||
+		    ((ret & BMCR_ISOLATE) && !phydev->isolated))
 			restart = true;
 	}
 
@@ -2465,7 +2508,8 @@ int genphy_c37_config_aneg(struct phy_device *phydev)
 		if (ctl < 0)
 			return ctl;
 
-		if (!(ctl & BMCR_ANENABLE) || (ctl & BMCR_ISOLATE))
+		if (!(ctl & BMCR_ANENABLE) ||
+		    ((ctl & BMCR_ISOLATE) && !phydev->isolated))
 			changed = 1; /* do restart aneg */
 	}
 
@@ -2752,12 +2796,18 @@ EXPORT_SYMBOL(genphy_c37_read_status);
 int genphy_soft_reset(struct phy_device *phydev)
 {
 	u16 res = BMCR_RESET;
+	u16 mask = 0;
 	int ret;
 
 	if (phydev->autoneg == AUTONEG_ENABLE)
 		res |= BMCR_ANRESTART;
 
-	ret = phy_modify(phydev, MII_BMCR, BMCR_ISOLATE, res);
+	if (phydev->isolated)
+		res |= BMCR_ISOLATE;
+	else
+		mask |= BMCR_ISOLATE;
+
+	ret = phy_modify(phydev, MII_BMCR, mask, res);
 	if (ret < 0)
 		return ret;
 
@@ -2900,6 +2950,19 @@ int genphy_loopback(struct phy_device *phydev, bool enable)
 	return 0;
 }
 EXPORT_SYMBOL(genphy_loopback);
+
+int genphy_isolate(struct phy_device *phydev, bool enable)
+{
+	u16 val = 0;
+
+	if (enable)
+		val = BMCR_ISOLATE;
+
+	phy_modify(phydev, MII_BMCR, BMCR_ISOLATE, val);
+
+	return 0;
+}
+EXPORT_SYMBOL(genphy_isolate);
 
 /**
  * phy_remove_link_mode - Remove a supported link mode
@@ -3739,6 +3802,8 @@ static const struct ethtool_phy_ops phy_ethtool_phy_ops = {
 	.get_plca_status	= phy_ethtool_get_plca_status,
 	.start_cable_test	= phy_start_cable_test,
 	.start_cable_test_tdr	= phy_start_cable_test_tdr,
+	.get_config		= phy_get_config,
+	.set_config		= phy_set_config,
 };
 
 static const struct phylib_stubs __phylib_stubs = {
