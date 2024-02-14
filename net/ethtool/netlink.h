@@ -447,6 +447,7 @@ extern const struct nla_policy ethnl_plca_get_status_policy[ETHTOOL_A_PLCA_HEADE
 extern const struct nla_policy ethnl_mm_get_policy[ETHTOOL_A_MM_HEADER + 1];
 extern const struct nla_policy ethnl_mm_set_policy[ETHTOOL_A_MM_MAX + 1];
 extern const struct nla_policy ethnl_phy_get_policy[ETHTOOL_A_PHY_HEADER + 1];
+extern const struct nla_policy ethnl_phy_set_policy[ETHTOOL_A_PHY_MAX + 1];
 extern const struct nla_policy ethnl_phy_port_get_policy[ETHTOOL_A_PHY_PORT_INDEX + 1];
 extern const struct nla_policy ethnl_phy_port_set_policy[ETHTOOL_A_PHY_PORT_MAX + 1];
 
