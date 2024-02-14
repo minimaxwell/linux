@@ -1797,6 +1797,8 @@ operations:
             - upstream-sfp-name
             - downstream-sfp-name
             - id
+            - loopback
+            - isolate
       dump: *phy-get-op
     -
       name: phy-port-get
