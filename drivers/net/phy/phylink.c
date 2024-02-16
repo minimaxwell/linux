@@ -14,6 +14,7 @@
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
+#include <linux/phy_mux.h>
 #include <linux/phy_port.h>
 #include <linux/phylink.h>
 #include <linux/rtnetlink.h>
