@@ -704,6 +704,7 @@ static const struct sfp_upstream_ops qca807x_sfp_ops = {
 static int qca807x_probe(struct phy_device *phydev)
 {
 	struct device_node *node = phydev->mdio.dev.of_node;
+	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
 	struct qca807x_shared_priv *shared_priv;
 	struct device *dev = &phydev->mdio.dev;
 	struct phy_package_shared *shared;
@@ -753,7 +754,10 @@ static int qca807x_probe(struct phy_device *phydev)
 
 	/* Attach SFP bus on combo port*/
 	if (phy_read(phydev, QCA807X_CHIP_CONFIGURATION)) {
-		ret = phy_sfp_probe(phydev, &qca807x_sfp_ops);
+
+		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported_interfaces);
+
+		ret = phy_sfp_probe(phydev, &qca807x_sfp_ops, supported_interfaces);
 		if (ret)
 			return ret;
 		linkmode_set_bit(ETHTOOL_LINK_MODE_FIBRE_BIT, phydev->supported);
