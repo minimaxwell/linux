@@ -25,6 +25,8 @@ menuconfig PHYLIB
 
 if PHYLIB
 
+source "drivers/net/phy/mux/Kconfig"
+
 config SWPHY
 	bool
 

@@ -241,7 +241,9 @@ int ethnl_phy_done(struct netlink_callback *cb)
 {
 	struct ethnl_phy_dump_ctx *ctx = (void *)cb->ctx;
 
-	ethnl_parse_header_dev_put(&ctx->phy_req_info->base);
+	if (ctx->phy_req_info->base.dev)
+		ethnl_parse_header_dev_put(&ctx->phy_req_info->base);
+
 	kfree(ctx->phy_req_info);
 
 	return 0;
@@ -352,8 +354,7 @@ static int ethnl_set_phy(struct ethnl_req_info *req_info, struct genl_info *info
 	if (!mod)
 		return 0;
 
-	ret = ops->set_config(phydev, &cfg, extack);
-	return ret < 0 ? ret : 1;
+	return ops->set_config(phydev, &cfg, extack);
 }
 
 const struct ethnl_request_ops ethnl_phy_request_ops = {
@@ -362,6 +363,8 @@ const struct ethnl_request_ops ethnl_phy_request_ops = {
 	/* the GET/DUMP operations are implemented separately due to the
 	 * ability to filter DUMP requests per netdev
 	 */
+	.req_info_size		= sizeof(struct phy_req_info),
+	.reply_data_size	= sizeof(struct ethnl_reply_data),
 	.set_validate		= ethnl_set_phy_validate,
 	.set			= ethnl_set_phy,
 	.set_ntf_cmd		= ETHTOOL_MSG_PHY_NTF,

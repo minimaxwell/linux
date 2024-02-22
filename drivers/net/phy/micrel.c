@@ -5252,6 +5252,7 @@ static struct phy_driver ksphy_driver[] = {
 	.get_sset_count = kszphy_get_sset_count,
 	.get_strings	= kszphy_get_strings,
 	.get_stats	= kszphy_get_stats,
+	//.flags = PHY_BROKEN_ISOLATE,
 	/* No suspend/resume callbacks because of errata DS80000700A,
 	 * receiver error following software power down.
 	 */

@@ -90,6 +90,7 @@ extern const int phy_10gbit_features_array[1];
 #define PHY_RST_AFTER_CLK_EN	0x00000002
 #define PHY_POLL_CABLE_TEST	0x00000004
 #define PHY_ALWAYS_CALL_SUSPEND	0x00000008
+#define PHY_BROKEN_ISOLATE	0x00000010
 #define MDIO_DEVICE_IS_PHY	0x80000000
 
 /**
@@ -307,6 +308,7 @@ static inline const char *phy_modes(phy_interface_t interface)
 struct device;
 struct kernel_hwtstamp_config;
 struct phylink;
+struct phy_mux_port;
 struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
@@ -580,12 +582,15 @@ struct macsec_ops;
  *        PHY driver behavior.
  * @irq: IRQ number of the PHY's interrupt (-1 if none)
  * @phylink: Pointer to phylink instance for this PHY
+ * @phy_mux_port: Pointer to phy_mux_port this PHY is connected onto, if any
+ * @phy_mux: Pointer to the MUX that this PHY drives, if the PHY has multiple ports
+ * @phy_port: Pointer to the PHY port, if the PHY has a single front port.
  * @sfp_bus_attached: Flag indicating whether the SFP bus has been attached
  * @sfp_bus: SFP bus attached to this PHY's fiber port
  * @attached_dev: The attached enet driver's device instance ptr
  * @adjust_link: Callback for the enet controller to respond to changes: in the
  *               link state.
- * @phy_link_change: Callback for phylink for notification of link change
+ * @phy_link_change: Callback for phylink and mux for notification of link change
  * @macsec_ops: MACsec offloading ops.
  *
  * @speed: Current link speed
@@ -762,6 +767,9 @@ struct phy_device {
 	bool sfp_bus_attached;
 	struct sfp_bus *sfp_bus;
 	struct phylink *phylink;
+	struct phy_mux_port *mux_port;
+	struct phy_mux *mux;
+	struct phy_port *phy_port;
 	struct net_device *attached_dev;
 	struct mii_timestamper *mii_ts;
 	struct pse_control *psec;
@@ -1197,6 +1205,18 @@ struct phy_driver {
 	 */
 	int (*led_polarity_set)(struct phy_device *dev, int index,
 				unsigned long modes);
+
+	/**
+	 * @setup_ports: Register all physical ports on the PHY
+	 * @dev: PHY device whose ports needs registering
+	 *
+	 * While most PHYs have a single port, some PHYs have multiple
+	 * front-facing ports. In that case, the PHY driver will need to
+	 * register these, using the phy_mux subsystem.
+	 */
+	int (*setup_ports)(struct phy_device *dev);
+	int (*cleanup_ports)(struct phy_device *dev);
+
 };
 #define to_phy_driver(d) container_of(to_mdio_common_driver(d),		\
 				      struct phy_driver, mdiodrv)
@@ -1774,6 +1794,7 @@ int phy_resume(struct phy_device *phydev);
 int __phy_resume(struct phy_device *phydev);
 int phy_loopback(struct phy_device *phydev, bool enable);
 int phy_isolate(struct phy_device *phydev, bool enable);
+bool phy_can_isolate(struct phy_device *phydev);
 int phy_sfp_connect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
@@ -1805,6 +1826,7 @@ bool phy_check_valid(int speed, int duplex, unsigned long *features);
 
 int phy_restart_aneg(struct phy_device *phydev);
 int phy_reset_after_clk_enable(struct phy_device *phydev);
+struct phy_port *phy_get_single_port(struct phy_device *phydev);
 
 #if IS_ENABLED(CONFIG_PHYLIB)
 int phy_start_cable_test(struct phy_device *phydev,

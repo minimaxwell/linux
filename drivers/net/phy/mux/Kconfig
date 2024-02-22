@@ -1,0 +1,27 @@
+menuconfig PHY_MUX
+	tristate "PHY Multiplexing infrastructure"
+	depends on PHYLIB
+	depends on PHYLINK
+	help
+	  Some devices can have multiple PHYs and ports attached to the same
+	  interface. This option enables the infrastructure necessary to drive
+	  the selection of the PHY to use when multiple are attached.
+
+if PHY_MUX
+
+config SIMPLE_PHY_MUX
+	tristate "Simple software-controlled PHY multiplexer"
+	help
+	  Support for the software-driven PHY multiplexer. No dedicated hardware
+	  is involved, all PHYs are directly connected to the same network
+	  interface.
+
+config GPIO_PHY_MUX
+	tristate "Simple software-controlled PHY multiplexer"
+	depends on GPIOLIB
+	help
+	  Support for the GPIO-based PHY multiplexer. One global GPIO is used
+	  to drive the port-selection circuitry, thus limiting the max number of
+	  driveable ports to 2 per mux.
+
+endif # PHY_MUX
