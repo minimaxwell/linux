@@ -13,11 +13,20 @@ config PHYLINK
 	  configuration links, PHYs, and Serdes links with MAC level
 	  autonegotiation modes.
 
+config PHY_LINK_TOPOLOGY
+	tristate
+	depends on NETDEVICES
+	help
+	  phy_link_topology allows keeping track of the Ethernet topology at
+	  the hardware level. It maintains a list of the PHYs, which component
+	  do they connect to and what features they provide.
+
 menuconfig PHYLIB
 	tristate "PHY Device support and infrastructure"
 	depends on NETDEVICES
 	select MDIO_DEVICE
 	select MDIO_DEVRES
+	select PHY_LINK_TOPOLOGY
 	help
 	  Ethernet controllers are usually attached to PHY
 	  devices.  This option provides infrastructure for
