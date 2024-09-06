@@ -1950,4 +1950,18 @@ operations:
             - upstream-index
             - upstream-sfp-name
             - downstream-sfp-name
+            - isolate
+            - loopback
       dump: *phy-get-op
+    -
+      name: phy-set
+      doc: Set configuration attributes for attached PHY devices
+
+      attribute-set: phy
+
+      do:
+        request:
+          attributes:
+            - header
+            - isolate
+            - loopback
