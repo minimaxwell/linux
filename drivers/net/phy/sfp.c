@@ -11,6 +11,7 @@
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/platform_device.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -233,6 +234,7 @@ struct sfp {
 	struct sfp_bus *sfp_bus;
 	enum mdio_i2c_proto mdio_protocol;
 	struct phy_device *mod_phy;
+	struct phy_port *port;
 	const struct sff_data *type;
 	size_t i2c_block_size;
 	u32 max_power_mW;
@@ -2851,6 +2853,11 @@ static int sfp_module_eeprom_by_page(struct sfp *sfp,
 			page->data, page->length);
 };
 
+static struct phy_port *sfp_module_port(struct sfp *sfp)
+{
+	return sfp->port;
+}
+
 static const struct sfp_socket_ops sfp_module_ops = {
 	.attach = sfp_attach,
 	.detach = sfp_detach,
@@ -2860,6 +2867,7 @@ static const struct sfp_socket_ops sfp_module_ops = {
 	.module_info = sfp_module_info,
 	.module_eeprom = sfp_module_eeprom,
 	.module_eeprom_by_page = sfp_module_eeprom_by_page,
+	.module_port = sfp_module_port,
 };
 
 static void sfp_timeout(struct work_struct *work)
@@ -2928,13 +2936,37 @@ static void sfp_poll(struct work_struct *work)
 		mod_delayed_work(system_wq, &sfp->poll, poll_jiffies);
 }
 
+static int sfp_create_port(struct sfp *sfp)
+{
+	sfp->port = phy_port_alloc();
+	if (!sfp->port)
+		return -ENOMEM;
+
+	sfp->port->parent_type = PHY_PORT_SFP_MODULE;
+	sfp->port->sfp = sfp;
+
+	return 0;
+}
+
+static void sfp_destroy_port(struct sfp *sfp)
+{
+	phy_port_destroy(sfp->port);
+}
+
 static struct sfp *sfp_alloc(struct device *dev)
 {
 	struct sfp *sfp;
+	int ret;
 
 	sfp = kzalloc(sizeof(*sfp), GFP_KERNEL);
 	if (!sfp)
 		return ERR_PTR(-ENOMEM);
+
+	ret = sfp_create_port(sfp);
+	if (ret) {
+		kfree(sfp);
+		return ERR_PTR(ret);
+	}
 
 	sfp->dev = dev;
 	sfp->i2c_block_size = SFP_EEPROM_BLOCK_SIZE;
@@ -2963,6 +2995,7 @@ static void sfp_cleanup(void *data)
 	}
 	if (sfp->i2c)
 		i2c_put_adapter(sfp->i2c);
+	sfp_destroy_port(sfp);
 	kfree(sfp);
 }
 
