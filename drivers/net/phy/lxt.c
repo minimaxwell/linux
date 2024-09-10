@@ -328,22 +328,22 @@ static struct phy_driver lxt97x_driver[] = {
 	.name		= "LXT973-A2",
 	.phy_id_mask	= 0xffffffff,
 	/* PHY_BASIC_FEATURES */
-	.flags		= 0,
 	.probe		= lxt973_probe,
 	.config_aneg	= lxt973_config_aneg,
 	.read_status	= lxt973a2_read_status,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
+	.flags		= PHY_NO_ISOLATE,
 }, {
 	.phy_id		= 0x00137a10,
 	.name		= "LXT973",
 	.phy_id_mask	= 0xfffffff0,
 	/* PHY_BASIC_FEATURES */
-	.flags		= 0,
 	.probe		= lxt973_probe,
 	.config_aneg	= lxt973_config_aneg,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
+	.flags		= PHY_NO_ISOLATE,
 } };
 
 module_phy_driver(lxt97x_driver);
