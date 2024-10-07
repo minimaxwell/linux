@@ -2127,13 +2127,14 @@ out:
 }
 EXPORT_SYMBOL(phy_loopback);
 
-static bool phy_can_isolate(struct phy_device *phydev)
+bool phy_can_isolate(struct phy_device *phydev)
 {
 	if (phydev->drv && phydev->drv->can_isolate)
 		return phydev->drv->can_isolate(phydev);
 
 	return true;
 }
+EXPORT_SYMBOL(phy_can_isolate);
 
 int phy_isolate(struct phy_device *phydev, bool enable)
 {
