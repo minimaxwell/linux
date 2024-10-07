@@ -14,6 +14,7 @@
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
+#include <linux/phy_mux.h>
 #include <linux/phylink.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
@@ -86,6 +87,8 @@ struct phylink {
 	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(sfp_support);
 	u8 sfp_port;
+
+	struct phy_mux *mux;
 };
 
 #define phylink_printk(level, pl, fmt, ...) \
@@ -1635,6 +1638,35 @@ static int phylink_register_sfp(struct phylink *pl,
 	return ret;
 }
 
+static struct phy_mux_parent_ops phylink_mux_ops;
+
+static int phylink_attach_mux(struct phylink *pl,
+			      const struct fwnode_handle *fwnode)
+{
+	struct fwnode_handle *mux_fwnode;
+	struct phy_mux *mux;
+	int ret;
+
+	if (pl->config->type != PHYLINK_NETDEV)
+		return 0;
+
+	mux_fwnode = fwnode_find_reference(fwnode, "phy-mux-handle", 0);
+	if (IS_ERR(mux_fwnode))
+		return 0;
+
+	mux = fwnode_phy_mux_get(mux_fwnode);
+	if (!mux)
+		return -EPROBE_DEFER;
+
+	ret = phy_mux_attach(mux, pl->netdev, &phylink_mux_ops, pl);
+	if (ret)
+		return ret;
+
+	pl->mux = mux;
+
+	return 0;
+}
+
 /**
  * phylink_set_fixed_link() - set the fixed link
  * @pl: a pointer to a &struct phylink returned from phylink_create()
@@ -1770,6 +1802,7 @@ struct phylink *phylink_create(struct phylink_config *config,
 
 	ret = phylink_register_sfp(pl, fwnode);
 	if (ret < 0) {
+		phy_mux_detach(pl->mux);
 		kfree(pl);
 		return ERR_PTR(ret);
 	}
@@ -1790,6 +1823,7 @@ EXPORT_SYMBOL_GPL(phylink_create);
 void phylink_destroy(struct phylink *pl)
 {
 	sfp_bus_del_upstream(pl->sfp_bus);
+	phy_mux_detach(pl->mux);
 	if (pl->link_gpio)
 		gpiod_put(pl->link_gpio);
 
@@ -1838,6 +1872,9 @@ static void phylink_phy_change(struct phy_device *phydev, bool up)
 	mutex_unlock(&pl->state_mutex);
 
 	phylink_run_resolve(pl);
+
+	if (pl->mux)
+		phy_mux_notify(phydev, up);
 
 	phylink_dbg(pl, "phy link %s %s/%s/%s/%s/%s\n", up ? "up" : "down",
 		    phy_modes(phydev->interface),
@@ -2086,6 +2123,19 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 	struct phy_device *phy_dev;
 	int ret;
 
+	/* If the PHY is sitting behind a mux, let the mux handle the phy
+	 * connection
+	 */
+	if (pl->mux)
+		return 0;
+
+	ret = phylink_attach_mux(pl, fwnode);
+	if (ret < 0)
+		return ret;
+
+	if (pl->mux)
+		return 0;
+
 	/* Fixed links and 802.3z are handled without needing a PHY */
 	if (pl->cfg_link_an_mode == MLO_AN_FIXED ||
 	    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
@@ -2269,6 +2319,8 @@ void phylink_start(struct phylink *pl)
 		phy_start(pl->phydev);
 	if (pl->sfp_bus)
 		sfp_upstream_start(pl->sfp_bus);
+	if (pl->mux)
+		phy_mux_start(pl->mux);
 }
 EXPORT_SYMBOL_GPL(phylink_start);
 
@@ -2290,6 +2342,8 @@ void phylink_stop(struct phylink *pl)
 
 	if (pl->sfp_bus)
 		sfp_upstream_stop(pl->sfp_bus);
+	if (pl->mux)
+		phy_mux_stop(pl->mux);
 	if (pl->phydev)
 		phy_stop(pl->phydev);
 	del_timer_sync(&pl->link_poll);
@@ -3481,6 +3535,63 @@ static const struct sfp_upstream_ops sfp_phylink_ops = {
 	.link_down = phylink_sfp_link_down,
 	.connect_phy = phylink_sfp_connect_phy,
 	.disconnect_phy = phylink_sfp_disconnect_phy,
+};
+
+static int phylink_mux_port_select(struct phy_mux *mux,
+				   struct phy_mux_port *port,
+				   void *data)
+{
+	struct phylink *pl = data;
+	struct phy_device *phy;
+	int ret;
+
+	if (port->type != PHY_MUX_PORT_PHY)
+		return -EOPNOTSUPP;
+
+	phy = port->phydev;
+	phy->interface = port->interface;
+
+	ret = phylink_connect_phy(pl, phy);
+	if (ret)
+		return ret;
+
+	pl->pcs_state = PCS_STATE_STARTING;
+
+	/* Apply the link configuration to the MAC when starting. This allows
+	 * a fixed-link to start with the correct parameters, and also
+	 * ensures that we set the appropriate advertisement for Serdes links.
+	 *
+	 * Restart autonegotiation if using 802.3z to ensure that the link
+	 * parameters are properly negotiated.  This is necessary for DSA
+	 * switches using 802.3z negotiation to ensure they see our modes.
+	 */
+	phylink_mac_initial_config(pl, true);
+
+	pl->pcs_state = PCS_STATE_STARTED;
+
+	phylink_enable_and_run_resolve(pl, PHYLINK_DISABLE_STOPPED);
+
+	if (pl->phydev)
+		phy_start(pl->phydev);
+	if (pl->sfp_bus)
+		sfp_upstream_start(pl->sfp_bus);
+
+	return ret;
+}
+
+static int phylink_mux_port_deselect(struct phy_mux *mux,
+				     struct phy_mux_port *port,
+				     void *data)
+{
+	struct phylink *pl = data;
+
+	phylink_disconnect_phy(pl);
+	return 0;
+}
+
+static struct phy_mux_parent_ops phylink_mux_ops = {
+	.select = phylink_mux_port_select,
+	.deselect = phylink_mux_port_deselect,
 };
 
 /* Helpers for MAC drivers */
