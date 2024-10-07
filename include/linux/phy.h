@@ -311,6 +311,7 @@ static inline const char *phy_modes(phy_interface_t interface)
 struct device;
 struct kernel_hwtstamp_config;
 struct phylink;
+struct phy_mux_port;
 struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
@@ -584,12 +585,15 @@ struct macsec_ops;
  *        PHY driver behavior.
  * @irq: IRQ number of the PHY's interrupt (-1 if none)
  * @phylink: Pointer to phylink instance for this PHY
+ * @phy_mux_port: Pointer to phy_mux_port this PHY is connected onto, if any
+ * @phy_mux: Pointer to the MUX that this PHY drives, if the PHY has multiple ports
+ * @phy_port: Pointer to the PHY port, if the PHY has a single front port.
  * @sfp_bus_attached: Flag indicating whether the SFP bus has been attached
  * @sfp_bus: SFP bus attached to this PHY's fiber port
  * @attached_dev: The attached enet driver's device instance ptr
  * @adjust_link: Callback for the enet controller to respond to changes: in the
  *               link state.
- * @phy_link_change: Callback for phylink for notification of link change
+ * @phy_link_change: Callback for phylink and mux for notification of link change
  * @macsec_ops: MACsec offloading ops.
  *
  * @speed: Current link speed
@@ -770,6 +774,8 @@ struct phy_device {
 	bool sfp_bus_attached;
 	struct sfp_bus *sfp_bus;
 	struct phylink *phylink;
+	struct phy_mux_port *mux_port;
+	struct phy_mux *mux;
 	struct net_device *attached_dev;
 	struct mii_timestamper *mii_ts;
 	struct pse_control *psec;

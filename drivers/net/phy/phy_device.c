@@ -27,6 +27,7 @@
 #include <linux/of.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
+#include <linux/phy_mux.h>
 #include <linux/phylib_stubs.h>
 #include <linux/phy_led_triggers.h>
 #include <linux/phy_link_topology.h>
@@ -1570,9 +1571,14 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		if (phydev->sfp_bus_attached)
 			dev->sfp_bus = phydev->sfp_bus;
 
-		err = phy_link_topo_add_phy(dev, phydev, PHY_UPSTREAM_MAC, dev);
-		if (err)
-			goto error;
+		/* When a PHY sits on a MUX, the MUX will register it to the
+		 * topology.
+		 */
+		if (!phydev->mux_port) {
+			err = phy_link_topo_add_phy(dev, phydev, PHY_UPSTREAM_MAC, dev);
+			if (err)
+				goto error;
+		}
 	}
 
 	/* Some Ethernet drivers try to connect to a PHY device before
@@ -2000,7 +2006,9 @@ void phy_detach(struct phy_device *phydev)
 	if (dev) {
 		phydev->attached_dev->phydev = NULL;
 		phydev->attached_dev = NULL;
-		phy_link_topo_del_phy(dev, phydev);
+
+		if (!phydev->mux_port)
+			phy_link_topo_del_phy(dev, phydev);
 	}
 	phydev->phylink = NULL;
 
@@ -3625,6 +3633,15 @@ static int phy_probe(struct device *dev)
 		if (err)
 			goto out;
 	}
+
+	/* Fixme: Make more generic by introducing a powerdown callback, or
+	 * cleanly calling the suspend.
+	 *
+	 * When the PHY sits on a mux, and can't perform isolation, explicitely
+	 * power-down the PHY.
+	 */
+	if (!phy_can_isolate(phydev) && phydev->mux_port)
+		phy_set_bits(phydev, MII_BMCR, BMCR_PDOWN);
 
 	phy_disable_interrupts(phydev);
 
