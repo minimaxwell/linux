@@ -96,6 +96,8 @@ struct phy_mux_parent_ops {
 struct phy_mux_config {
 	const struct phy_mux_ops *ops;
 	int max_n_ports;
+
+	u32 isolating:1;
 };
 
 /* MUX driver API */

@@ -55,6 +55,7 @@ struct phy_mux {
 	struct delayed_work state_queue;
 	int n_ports;
 	unsigned long max_index;
+	bool exclusive;
 
 	enum phy_mux_state state;
 };
@@ -133,6 +134,9 @@ int phy_mux_register_port(struct phy_mux *mux,
 	/* New ports start enabled  */
 	port->forced = false;
 	port->enabled = true;
+
+	if (port->exclusive)
+		mux->exclusive = true;
 
 	return 0;
 }
@@ -383,6 +387,22 @@ static const struct phy_mux_port_ops phy_isolate_ops = {
 	.stop_listening = phy_port_generic_stop_listening,
 };
 
+static int phy_port_deselect_stop(struct phy_mux_port *port)
+{
+	struct phy_device *phy;
+
+	if (port->type != PHY_MUX_PORT_PHY)
+		return -EINVAL;
+
+	phy = port->phydev;
+
+	return genphy_suspend(phy);
+}
+
+static const struct phy_mux_port_ops phy_power_ops = {
+	.deselect = phy_port_deselect_stop,
+};
+
 static void phy_mux_queue_state_machine(struct phy_mux *mux,
 					unsigned long when)
 {
@@ -404,7 +424,17 @@ struct phy_mux_port *phy_mux_port_create_from_phy(struct phy_device *phy)
 
 	port->type = PHY_MUX_PORT_PHY;
 	port->phydev = phy;
-	port->ops = &phy_isolate_ops;
+
+	if (phy_can_isolate(phy))
+		port->ops = &phy_isolate_ops;
+	else
+		port->ops = &phy_power_ops;
+
+	/* Need a mechanisme to cope with the fact that, at this point, the phydev
+	 * might not have it's driver bound yet. Maybe re-do that check upon
+	 * mux_attach
+	 */
+	port->exclusive = !phy_can_isolate(phy);
 
 	phy->mux_port = port;
 
@@ -436,6 +466,59 @@ struct phy_mux *fwnode_phy_mux_get(const struct fwnode_handle *fwnode)
 }
 EXPORT_SYMBOL_GPL(fwnode_phy_mux_get);
 
+static void phy_mux_select_next_port(struct phy_mux *mux)
+{
+	struct phy_mux_port *next_port;
+	unsigned long id = 0;
+
+	if (mux->current_port)
+		id = mux->current_port->id;
+
+	next_port = xa_find_after(&mux->ports, &id, mux->max_index, XA_PRESENT);
+	if (!next_port) {
+		/* Wrap around to the beginning of the ports array */
+		id = 0;
+		next_port = xa_find_after(&mux->ports, &id, mux->max_index,
+					  XA_PRESENT);
+	} else
+
+	if (mux->current_port)
+		mux->current_port->establishing = false;
+
+	if (mux->current_port != next_port)
+		__phy_mux_select(mux, next_port);
+
+	next_port->establishing = true;
+	next_port->establishing_deadline = jiffies +
+					   msecs_to_jiffies(MUX_RR_DEADLINE_MS);
+}
+
+/* When ports are attached to the mux, we might not be able yet to tell if the
+ * port has proper isolation or not.
+ *
+ * This function walks through all ports to check that, and can be called after
+ * all ports are registered.
+ */
+static void phy_mux_check_exclusive(struct phy_mux *mux)
+{
+	struct phy_mux_port *port;
+	unsigned long index;
+
+	xa_for_each(&mux->ports, index, port) {
+		struct phy_device *phydev;
+
+		if (port->type != PHY_MUX_PORT_PHY)
+			continue;
+
+		phydev = port->phydev;
+
+		port->exclusive = !phy_can_isolate(phydev);
+
+		if (port->exclusive)
+			mux->exclusive = true;
+	}
+}
+
 static void phy_mux_state_machine(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -451,15 +534,33 @@ static void phy_mux_state_machine(struct work_struct *work)
 	case PHY_MUX_ATTACHED:
 		break;
 	case PHY_MUX_STARTING:
-		mux->state = PHY_MUX_ACTIVE_LISTENING;
-		xa_for_each(&mux->ports, index, port) {
-			phy_mux_port_deselect(port);
-			phy_mux_port_start_listening(port);
+		phy_mux_check_exclusive(mux);
+
+		if (mux->exclusive) {
+			xa_for_each(&mux->ports, index, port)
+				phy_mux_port_deselect(port);
+
+			mux->state = PHY_MUX_ESTABLISHING;
+			phy_mux_select_next_port(mux);
+		} else {
+			mux->state = PHY_MUX_ACTIVE_LISTENING;
+			xa_for_each(&mux->ports, index, port) {
+				phy_mux_port_deselect(port);
+				phy_mux_port_start_listening(port);
+			}
 		}
 
-		phy_mux_trigger(mux);
+		if (mux->exclusive)
+			phy_mux_queue_state_machine(mux, msecs_to_jiffies(MUX_RR_DEADLINE_MS));
+		else
+			phy_mux_trigger(mux);
 		break;
 	case PHY_MUX_ACTIVE_LISTENING:
+		if (mux->exclusive) {
+			mux->state = PHY_MUX_ESTABLISHING;
+			phy_mux_trigger(mux);
+			goto out;
+		}
 
 		xa_for_each(&mux->ports, index, port) {
 			if (!port->link)
@@ -498,9 +599,16 @@ static void phy_mux_state_machine(struct work_struct *work)
 		}
 
 		if (!port->link) {
-			port->establishing = false;
-			mux->state = PHY_MUX_ACTIVE_LISTENING;
-			goto out;
+			if (mux->exclusive) {
+				phy_mux_select_next_port(mux);
+				phy_mux_trigger(mux);
+				goto out;
+			} else {
+				port->establishing = false;
+				mux->state = PHY_MUX_ACTIVE_LISTENING;
+				goto out;
+
+			}
 		}
 
 		port->establishing = false;
@@ -530,6 +638,13 @@ static void phy_mux_state_machine(struct work_struct *work)
 	case PHY_MUX_ESTABLISHED:
 		/* We lost link */
 		if (!mux->current_port->link) {
+
+			if (mux->exclusive) {
+				phy_mux_select_next_port(mux);
+				mux->state = PHY_MUX_ESTABLISHING;
+				phy_mux_trigger(mux);
+				goto out;
+			}
 
 			xa_for_each(&mux->ports, index, port) {
 				if (port == mux->current_port)
@@ -570,7 +685,6 @@ static void phy_mux_state_machine(struct work_struct *work)
 	}
 out:
 	rtnl_unlock();
-	//mutex_unlock(&mux->lock);
 }
 
 /* Mux handler, used for non-actively linked PHYs, will be called into by
