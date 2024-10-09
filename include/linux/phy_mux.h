@@ -7,6 +7,7 @@ struct phy_mux;
 struct phy_mux_port;
 struct phy_device;
 struct phylink;
+struct phy_port_state;
 
 enum phy_mux_port_link {
 	PHY_MUX_PORT_LINK_NO_EVT = 0,
@@ -121,6 +122,9 @@ void phy_mux_detach(struct phy_mux *mux);
 
 void phy_mux_start(struct phy_mux *mux);
 void phy_mux_stop(struct phy_mux *mux);
+
+int mux_get_state(struct phy_port *port, struct phy_port_state *state);
+int mux_set_state(struct phy_port *phy_port, const struct phy_port_state *state);
 
 struct phy_mux *fwnode_phy_mux_get(const struct fwnode_handle *fwnode);
 

@@ -17,6 +17,7 @@
 #include <linux/property.h>
 #include <linux/phy.h>
 #include <linux/phy_mux.h>
+#include <linux/phy_port.h>
 #include <linux/phy_link_topology.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -414,6 +415,83 @@ static void phy_mux_trigger(struct phy_mux *mux)
 	phy_mux_queue_state_machine(mux, 0);
 }
 
+int mux_get_state(struct phy_port *port, struct phy_port_state *state)
+{
+	struct phy_mux_port *mux_port = port->mux_port;
+	ASSERT_RTNL();
+
+	state->enabled = mux_port->enabled;
+	state->forced = mux_port->forced;
+
+	return 0;
+}
+
+int mux_set_state(struct phy_port *phy_port, const struct phy_port_state *state)
+{
+	struct phy_mux_port *port = phy_port->mux_port;
+	struct phy_mux *mux = port->mux;
+	struct phy_mux_port *it;
+	unsigned long index;
+	bool force_disable = false;
+	bool force_enable = false;
+
+	ASSERT_RTNL();
+
+	if (state->forced && !state->enabled)
+		return -EINVAL;
+
+	/* We can't do anything on a port that is disabled and forced.
+	 * TODO : Clear all forced status if the force-enable port is
+	 * deregistered
+	 */
+	if (port->forced && !port->enabled)
+		return 0;
+
+	/* If we are no longer forcing the enabled port, release all ports
+	 * from their forced state
+	 */
+	if (port->forced && !state->forced && port->enabled)
+		force_disable = true;
+	if (!port->forced && state->forced)
+		force_enable = true;
+
+	port->enabled = state->enabled;
+	port->forced = state->forced;
+
+	if (port->forced) {
+		xa_for_each(&mux->ports, index, it) {
+			if (it == port)
+				continue;
+
+			it->forced = true;
+			it->enabled = false;
+		}
+	}
+
+	if (force_disable) {
+		xa_for_each(&mux->ports, index, it) {
+			if (it == port)
+				continue;
+
+			it->forced = false;
+		}
+	}
+
+	if (force_disable)
+		mux->state = PHY_MUX_ACTIVE_LISTENING;
+	if (force_enable)
+		mux->state = PHY_MUX_FIXED;
+
+	phy_mux_trigger(mux);
+
+	return 0;
+}
+
+static const struct phy_port_ops phy_on_mux_ops = {
+	.get_state = mux_get_state,
+	.set_state = mux_set_state,
+};
+
 struct phy_mux_port *phy_mux_port_create_from_phy(struct phy_device *phy)
 {
 	struct phy_mux_port *port;
@@ -437,6 +515,14 @@ struct phy_mux_port *phy_mux_port_create_from_phy(struct phy_device *phy)
 	port->exclusive = !phy_can_isolate(phy);
 
 	phy->mux_port = port;
+
+	if (phy->phy_port) {
+		phy->phy_port->mux_port = port;
+		/* TODO - FIXME C'est pas bon ça, il faut un phy_get_state, qui
+		 * va lui aller forwarder vers le mux.
+		 */
+		//phy->phy_port->ops = &phy_on_mux_ops;
+	}
 
 	return port;
 }

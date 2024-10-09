@@ -2215,6 +2215,12 @@ EXPORT_SYMBOL(phy_reset_after_clk_enable);
 
 struct phy_port *phy_get_single_port(struct phy_device *phydev)
 {
+	/* If the phy has multiple ports, they ought to be handled through a
+	 * mux
+	 */
+	if (phydev->mux)
+		return NULL;
+
 	if (phydev->sfp_bus)
 		return sfp_get_port(phydev->sfp_bus);
 
@@ -3631,6 +3637,9 @@ static int phydev_port_get_state(struct phy_port *port, struct phy_port_state *s
 
 	state->link = phydev->link;
 	state->speed = phydev->speed;
+
+	if (phydev->mux_port)
+		return mux_get_state(port, state);
 
 	return 0;
 }

@@ -39,6 +39,8 @@ int phy_link_topo_add_phy(struct net_device *dev,
 	struct phy_device_node *pdn;
 	int ret;
 
+	ASSERT_RTNL();
+
 	if (!topo) {
 		ret = netdev_alloc_phy_link_topology(dev);
 		if (ret)
