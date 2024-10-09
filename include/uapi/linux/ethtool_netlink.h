@@ -60,6 +60,8 @@ enum {
 	ETHTOOL_MSG_MODULE_FW_FLASH_ACT,
 	ETHTOOL_MSG_PHY_GET,
 	ETHTOOL_MSG_PHY_SET,
+	ETHTOOL_MSG_PORT_GET,
+	ETHTOOL_MSG_PORT_SET,
 
 	/* add new constants above here */
 	__ETHTOOL_MSG_USER_CNT,
@@ -115,6 +117,8 @@ enum {
 	ETHTOOL_MSG_MODULE_FW_FLASH_NTF,
 	ETHTOOL_MSG_PHY_GET_REPLY,
 	ETHTOOL_MSG_PHY_NTF,
+	ETHTOOL_MSG_PORT_GET_REPLY,
+	ETHTOOL_MSG_PORT_NTF,
 
 	/* add new constants above here */
 	__ETHTOOL_MSG_KERNEL_CNT,
@@ -1085,6 +1089,24 @@ enum {
 	/* add new constants above here */
 	__ETHTOOL_A_PHY_CNT,
 	ETHTOOL_A_PHY_MAX = (__ETHTOOL_A_PHY_CNT - 1)
+};
+
+enum {
+	ETHTOOL_A_PORT_UNSPEC,
+	ETHTOOL_A_PORT_HEADER,		/* nest - _A_HEADER_ */
+	ETHTOOL_A_PORT_ID,		/* u32 */
+	ETHTOOL_A_PORT_TYPE,		/* u32 */
+	ETHTOOL_A_PORT_ENABLED,		/* u8 */
+	ETHTOOL_A_PORT_FORCED,		/* u8 */
+	ETHTOOL_A_PORT_LINK,		/* u8 */
+	ETHTOOL_A_PORT_SPEED,		/* u32 */
+	ETHTOOL_A_PORT_LANES,		/* u32 */
+	ETHTOOL_A_PORT_DUPLEX,		/* u8 */
+	ETHTOOL_A_PORT_LINKMODES,	/* bitset */
+
+	/* add new constants above here */
+	__ETHTOOL_A_PORT_CNT,
+	ETHTOOL_A_PORT_MAX = (__ETHTOOL_A_PORT_CNT - 1)
 };
 
 /* generic netlink info */
