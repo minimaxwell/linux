@@ -776,6 +776,7 @@ struct phy_device {
 	struct phylink *phylink;
 	struct phy_mux_port *mux_port;
 	struct phy_mux *mux;
+	struct phy_port *phy_port;
 	struct net_device *attached_dev;
 	struct mii_timestamper *mii_ts;
 	struct pse_control *psec;
@@ -1225,6 +1226,17 @@ struct phy_driver {
 	 * false otherwise.
 	 */
 	bool (*can_isolate)(struct phy_device *dev);
+
+	/**
+	 * @setup_ports: Register all physical ports on the PHY
+	 * @dev: PHY device whose ports needs registering
+	 *
+	 * While most PHYs have a single port, some PHYs have multiple
+	 * front-facing ports. In that case, the PHY driver will need to
+	 * register these, using the phy_mux subsystem.
+	 */
+	int (*setup_ports)(struct phy_device *dev);
+	int (*cleanup_ports)(struct phy_device *dev);
 };
 #define to_phy_driver(d) container_of_const(to_mdio_common_driver(d),		\
 				      struct phy_driver, mdiodrv)

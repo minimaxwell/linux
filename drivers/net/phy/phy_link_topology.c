@@ -8,6 +8,7 @@
 
 #include <linux/phy_link_topology.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/rtnetlink.h>
 #include <linux/xarray.h>
 
@@ -21,6 +22,9 @@ static int netdev_alloc_phy_link_topology(struct net_device *dev)
 
 	xa_init_flags(&topo->phys, XA_FLAGS_ALLOC1);
 	topo->next_phy_index = 1;
+
+	xa_init_flags(&topo->ports, XA_FLAGS_ALLOC1);
+	topo->next_port_index = 1;
 
 	dev->link_topo = topo;
 
@@ -76,8 +80,16 @@ int phy_link_topo_add_phy(struct net_device *dev,
 	if (ret)
 		goto err;
 
-	return 0;
 
+	if (phy->phy_port) {
+		ret = phy_link_topo_add_port(dev, phy->phy_port);
+		if (ret)
+			goto remove_phy;
+	}
+
+	return 0;
+remove_phy:
+	xa_erase(&topo->phys, phy->phyindex);
 err:
 	kfree(pdn);
 	return ret;
@@ -95,6 +107,9 @@ void phy_link_topo_del_phy(struct net_device *dev,
 
 	pdn = xa_erase(&topo->phys, phy->phyindex);
 
+	if (phy->phy_port)
+		phy_link_topo_del_port(dev, phy->phy_port);
+
 	/* We delete the PHY from the topology, however we don't re-set the
 	 * phy->phyindex field. If the PHY isn't gone, we can re-assign it the
 	 * same index next time it's added back to the topology
@@ -103,3 +118,42 @@ void phy_link_topo_del_phy(struct net_device *dev,
 	kfree(pdn);
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_del_phy);
+
+int phy_link_topo_add_port(struct net_device *dev,
+			   struct phy_port *port)
+{
+	struct phy_link_topology *topo = dev->link_topo;
+	int ret;
+
+	ASSERT_RTNL();
+
+	if (!topo) {
+		ret = netdev_alloc_phy_link_topology(dev);
+		if (ret)
+			return ret;
+
+		topo = dev->link_topo;
+	}
+
+	if (port->id)
+		ret = xa_insert(&topo->ports, port->id, port, GFP_KERNEL);
+	else
+		ret = xa_alloc_cyclic(&topo->ports, &port->id, port,
+				      xa_limit_32b, &topo->next_port_index,
+				      GFP_KERNEL);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_add_port);
+
+void phy_link_topo_del_port(struct net_device *dev,
+			    struct phy_port *port)
+{
+	struct phy_link_topology *topo = dev->link_topo;
+
+	if (!topo)
+		return;
+
+	xa_erase(&topo->ports, port->id);
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_del_port);

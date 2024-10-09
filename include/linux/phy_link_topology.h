@@ -17,10 +17,14 @@
 struct xarray;
 struct phy_device;
 struct sfp_bus;
+struct phy_port;
 
 struct phy_link_topology {
 	struct xarray phys;
 	u32 next_phy_index;
+
+	struct xarray ports;
+	u32 next_port_index;
 };
 
 struct phy_device_node {
@@ -59,6 +63,15 @@ phy_link_topo_get_phy(struct net_device *dev, u32 phyindex)
 	return NULL;
 }
 
+static inline struct phy_port *
+phy_link_topo_get_port(struct phy_link_topology *topo, u32 port_id)
+{
+	return xa_load(&topo->ports, port_id);
+}
+
+int phy_link_topo_add_port(struct net_device *dev, struct phy_port *port);
+void phy_link_topo_del_port(struct net_device *dev, struct phy_port *port);
+
 #else
 static inline int phy_link_topo_add_phy(struct net_device *dev,
 					struct phy_device *phy,
@@ -72,10 +85,15 @@ static inline void phy_link_topo_del_phy(struct net_device *dev,
 {
 }
 
-static inline struct phy_device *
-phy_link_topo_get_phy(struct net_device *dev, u32 phyindex)
+static inline int phy_link_topo_add_port(struct net_device *dev,
+					 struct phy_port *port)
 {
-	return NULL;
+	return 0;
+}
+
+static inline void phy_link_topo_del_port(struct net_device *net,
+					  struct phy_port *port)
+{
 }
 #endif
 

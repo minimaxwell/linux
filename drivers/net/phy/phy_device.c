@@ -28,6 +28,7 @@
 #include <linux/netdevice.h>
 #include <linux/phy.h>
 #include <linux/phy_mux.h>
+#include <linux/phy_port.h>
 #include <linux/phylib_stubs.h>
 #include <linux/phy_led_triggers.h>
 #include <linux/phy_link_topology.h>
@@ -2203,6 +2204,12 @@ int phy_reset_after_clk_enable(struct phy_device *phydev)
 }
 EXPORT_SYMBOL(phy_reset_after_clk_enable);
 
+struct phy_port *phy_get_single_port(struct phy_device *phydev)
+{
+	return phydev->phy_port;
+}
+EXPORT_SYMBOL(phy_get_single_port);
+
 /* Generic PHY support and helper functions */
 
 /**
@@ -3601,6 +3608,68 @@ struct fwnode_handle *fwnode_get_phy_node(const struct fwnode_handle *fwnode)
 }
 EXPORT_SYMBOL_GPL(fwnode_get_phy_node);
 
+static int phydev_port_get_state(struct phy_port *port, struct phy_port_state *state)
+{
+	struct phy_device *phydev;
+
+	if (port->parent_type != PHY_PORT_PHY)
+		return -EINVAL;
+
+	phydev = port->phy;
+
+	state->link = phydev->link;
+	state->speed = phydev->speed;
+
+	return 0;
+}
+
+static const struct phy_port_ops phydev_port_ops = {
+	.get_state = phydev_port_get_state,
+};
+
+static int phy_default_setup_ports(struct phy_device *phydev)
+{
+	struct phy_port *port = phy_port_alloc();
+	if (!port)
+		return -ENOMEM;
+
+	port->parent_type = PHY_PORT_PHY;
+	port->phy = phydev;
+	port->ops = &phydev_port_ops;
+
+	phydev->phy_port = port;
+
+	return 0;
+}
+
+static void phy_default_cleanup_ports(struct phy_device *phydev)
+{
+	struct phy_port *port = phydev->phy_port;
+	if (!port)
+		return;
+
+	phy_port_destroy(port);
+
+	phydev->phy_port = NULL;
+}
+
+static int phy_setup_ports(struct phy_device *phydev)
+{
+	if (phydev->drv->setup_ports)
+		return  phydev->drv->setup_ports(phydev);
+
+	return phy_default_setup_ports(phydev);
+}
+
+static void phy_cleanup_ports(struct phy_device *phydev)
+{
+	if (phydev->drv->cleanup_ports)
+		phydev->drv->cleanup_ports(phydev);
+
+	if (!phydev->sfp_bus)
+		phy_default_cleanup_ports(phydev);
+}
+
 /**
  * phy_probe - probe and init a PHY device
  * @dev: device to probe and init
@@ -3631,7 +3700,7 @@ static int phy_probe(struct device *dev)
 	if (phydev->drv->probe) {
 		err = phydev->drv->probe(phydev);
 		if (err)
-			goto out;
+			goto out_reset;
 	}
 
 	/* Fixme: Make more generic by introducing a powerdown callback, or
@@ -3642,6 +3711,10 @@ static int phy_probe(struct device *dev)
 	 */
 	if (!phy_can_isolate(phydev) && phydev->mux_port)
 		phy_set_bits(phydev, MII_BMCR, BMCR_PDOWN);
+
+	err = phy_setup_ports(phydev);
+	if (err)
+		goto out;
 
 	phy_disable_interrupts(phydev);
 
@@ -3730,6 +3803,9 @@ static int phy_probe(struct device *dev)
 		err = of_phy_leds(phydev);
 
 out:
+	if (err)
+		phy_cleanup_ports(phydev);
+out_reset:
 	/* Re-assert the reset signal on error */
 	if (err)
 		phy_device_reset(phydev, 1);
@@ -3750,6 +3826,8 @@ static int phy_remove(struct device *dev)
 
 	sfp_bus_del_upstream(phydev->sfp_bus);
 	phydev->sfp_bus = NULL;
+
+	phy_cleanup_ports(phydev);
 
 	if (phydev->drv && phydev->drv->remove)
 		phydev->drv->remove(phydev);
