@@ -3215,12 +3215,20 @@ static void phylink_sfp_attach(void *upstream, struct sfp_bus *bus)
 {
 	struct phylink *pl = upstream;
 
+	ASSERT_RTNL();
+
 	pl->netdev->sfp_bus = bus;
+
+	sfp_topology_attach(bus, pl->netdev);
 }
 
 static void phylink_sfp_detach(void *upstream, struct sfp_bus *bus)
 {
 	struct phylink *pl = upstream;
+
+	ASSERT_RTNL();
+
+	sfp_topology_detach(bus);
 
 	pl->netdev->sfp_bus = NULL;
 }

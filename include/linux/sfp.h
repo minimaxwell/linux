@@ -520,6 +520,8 @@ struct fwnode_handle;
 struct ethtool_eeprom;
 struct ethtool_modinfo;
 struct sfp_bus;
+struct phy_port;
+struct phy_link_topology;
 
 /**
  * struct sfp_upstream_ops - upstream operations structure
@@ -577,6 +579,9 @@ int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
 			 const struct sfp_upstream_ops *ops);
 void sfp_bus_del_upstream(struct sfp_bus *bus);
 const char *sfp_get_name(struct sfp_bus *bus);
+struct phy_port *sfp_get_port(struct sfp_bus *bus);
+int sfp_topology_attach(struct sfp_bus *bus, struct net_device *dev);
+void sfp_topology_detach(struct sfp_bus *bus);
 #else
 static inline int sfp_parse_port(struct sfp_bus *bus,
 				 const struct sfp_eeprom_id *id,
@@ -659,6 +664,21 @@ static inline void sfp_bus_del_upstream(struct sfp_bus *bus)
 static inline const char *sfp_get_name(struct sfp_bus *bus)
 {
 	return NULL;
+}
+
+static inline struct phy_port *sfp_get_port(struct sfp_bus *bus)
+{
+	return NULL;
+}
+
+static inline int sfp_topology_attach(struct sfp_bus *bus,
+				      struct phy_link_topology *topo)
+{
+	return 0;
+}
+
+static inline void sfp_topology_detach(struct sfp_bus *bus)
+{
 }
 #endif
 

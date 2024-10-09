@@ -1219,6 +1219,9 @@ void phy_disconnect(struct phy_device *phydev)
 
 	phydev->adjust_link = NULL;
 
+	if (phydev->sfp_bus)
+		sfp_topology_detach(phydev->sfp_bus);
+
 	phy_detach(phydev);
 }
 EXPORT_SYMBOL(phy_disconnect);
@@ -1440,8 +1443,10 @@ void phy_sfp_attach(void *upstream, struct sfp_bus *bus)
 {
 	struct phy_device *phydev = upstream;
 
-	if (phydev->attached_dev)
+	if (phydev->attached_dev) {
 		phydev->attached_dev->sfp_bus = bus;
+		sfp_topology_attach(bus, phydev->attached_dev);
+	}
 	phydev->sfp_bus_attached = true;
 }
 EXPORT_SYMBOL(phy_sfp_attach);
@@ -1457,8 +1462,10 @@ void phy_sfp_detach(void *upstream, struct sfp_bus *bus)
 {
 	struct phy_device *phydev = upstream;
 
-	if (phydev->attached_dev)
+	if (phydev->attached_dev) {
+		sfp_topology_detach(bus);
 		phydev->attached_dev->sfp_bus = NULL;
+	}
 	phydev->sfp_bus_attached = false;
 }
 EXPORT_SYMBOL(phy_sfp_detach);
@@ -1569,8 +1576,10 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		phydev->attached_dev = dev;
 		dev->phydev = phydev;
 
-		if (phydev->sfp_bus_attached)
+		if (phydev->sfp_bus_attached) {
 			dev->sfp_bus = phydev->sfp_bus;
+			sfp_topology_attach(phydev->sfp_bus, dev);
+		}
 
 		/* When a PHY sits on a MUX, the MUX will register it to the
 		 * topology.
@@ -2206,6 +2215,9 @@ EXPORT_SYMBOL(phy_reset_after_clk_enable);
 
 struct phy_port *phy_get_single_port(struct phy_device *phydev)
 {
+	if (phydev->sfp_bus)
+		return sfp_get_port(phydev->sfp_bus);
+
 	return phydev->phy_port;
 }
 EXPORT_SYMBOL(phy_get_single_port);
@@ -3623,8 +3635,25 @@ static int phydev_port_get_state(struct phy_port *port, struct phy_port_state *s
 	return 0;
 }
 
+static int phydev_port_set_state(struct phy_port *port,
+				 const struct phy_port_state *state)
+{
+	struct phy_device *phydev;
+
+	if (port->parent_type != PHY_PORT_PHY)
+		return -EINVAL;
+
+	phydev = port->phy;
+
+	if (phydev->mux_port)
+		return mux_set_state(port, state);
+
+	return 0;
+}
+
 static const struct phy_port_ops phydev_port_ops = {
 	.get_state = phydev_port_get_state,
+	.set_state = phydev_port_set_state,
 };
 
 static int phy_default_setup_ports(struct phy_device *phydev)
@@ -3657,6 +3686,10 @@ static int phy_setup_ports(struct phy_device *phydev)
 {
 	if (phydev->drv->setup_ports)
 		return  phydev->drv->setup_ports(phydev);
+
+	/* If the PHY has a downstream SFP cage, its port will be the SFP's */
+	if (phydev->sfp_bus)
+		return 0;
 
 	return phy_default_setup_ports(phydev);
 }

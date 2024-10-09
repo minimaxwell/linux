@@ -4,6 +4,8 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/phylink.h>
+#include <linux/phy_link_topology.h>
+#include <linux/phy_port.h>
 #include <linux/property.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
@@ -27,6 +29,16 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+
+	/* The netdevice this SFP bus is connected to */
+	struct net_device *netdev;
+
+	/* Representation of the SFP socket when no module is connected. */
+	struct phy_port *port;
+
+	/* Mux port if that SFP bus sits on a MII mux (e.g. for multi-port PHYs)
+	 */
+	struct phy_mux_port *mux_port;
 
 	bool registered;
 	bool started;
@@ -393,6 +405,24 @@ phy_interface_t sfp_select_interface(struct sfp_bus *bus,
 }
 EXPORT_SYMBOL_GPL(sfp_select_interface);
 
+static int sfp_bus_create_port(struct sfp_bus *bus)
+{
+	bus->port = phy_port_alloc();
+	if (!bus->port)
+		return -ENOMEM;
+
+	bus->port->parent_type = PHY_PORT_SFP_CAGE;
+	bus->port->sfp_bus = bus;
+
+	return 0;
+}
+
+static void sfp_bus_destroy_port(struct sfp_bus *bus)
+{
+	if (bus->port)
+		phy_port_destroy(bus->port);
+}
+
 static LIST_HEAD(sfp_buses);
 static DEFINE_MUTEX(sfp_mutex);
 
@@ -417,7 +447,7 @@ static struct sfp_bus *sfp_bus_get(const struct fwnode_handle *fwnode)
 		}
 	}
 
-	if (!found && new) {
+	if (!found && new && !sfp_bus_create_port(new)) {
 		kref_init(&new->kref);
 		new->fwnode = fwnode;
 		list_add(&new->node, &sfp_buses);
@@ -436,6 +466,7 @@ static void sfp_bus_release(struct kref *kref)
 {
 	struct sfp_bus *bus = container_of(kref, struct sfp_bus, kref);
 
+	sfp_bus_destroy_port(bus);
 	list_del(&bus->node);
 	mutex_unlock(&sfp_mutex);
 	kfree(bus);
@@ -788,6 +819,22 @@ void sfp_link_down(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_link_down);
 
+static int sfp_module_topology_attach(struct sfp_bus *bus)
+{
+	struct phy_port *sfp_port;
+
+	ASSERT_RTNL();
+
+	if (!bus->sfp)
+		return 0;
+
+	sfp_port = bus->socket_ops->module_port(bus->sfp);
+	if (sfp_port)
+		return phy_link_topo_add_port(bus->netdev, sfp_port);
+
+	return 0;
+}
+
 int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 		      const struct sfp_quirk *quirk)
 {
@@ -799,13 +846,35 @@ int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 	if (ops && ops->module_insert)
 		ret = ops->module_insert(bus->upstream, id);
 
+	if (ret)
+		return ret;
+
+	if (bus->netdev)
+		ret = sfp_module_topology_attach(bus);
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(sfp_module_insert);
 
+static void sfp_module_topology_detach(struct sfp_bus *bus)
+{
+	struct phy_port *sfp_port;
+
+	ASSERT_RTNL();
+
+	if (!bus || !bus->sfp || !bus->netdev)
+		return;
+
+	sfp_port = bus->socket_ops->module_port(bus->sfp);
+	if (sfp_port)
+		phy_link_topo_del_port(bus->netdev, sfp_port);
+}
+
 void sfp_module_remove(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
+
+	sfp_module_topology_detach(bus);
 
 	if (ops && ops->module_remove)
 		ops->module_remove(bus->upstream);
@@ -854,14 +923,26 @@ struct sfp_bus *sfp_register_socket(struct device *dev, struct sfp *sfp,
 		bus->sfp = sfp;
 		bus->socket_ops = ops;
 
+		if (bus->netdev) {
+			ret = sfp_module_topology_attach(bus);
+			if (ret) {
+				sfp_socket_clear(bus);
+				rtnl_unlock();
+				goto out;
+			}
+		}
+
 		if (bus->upstream_ops) {
 			ret = sfp_register_bus(bus);
-			if (ret)
+			if (ret) {
+				sfp_module_topology_detach(bus);
 				sfp_socket_clear(bus);
+			}
 		}
+
 		rtnl_unlock();
 	}
-
+out:
 	if (ret) {
 		sfp_bus_put(bus);
 		bus = NULL;
@@ -876,9 +957,68 @@ void sfp_unregister_socket(struct sfp_bus *bus)
 	rtnl_lock();
 	if (bus->upstream_ops)
 		sfp_unregister_bus(bus);
+	sfp_module_topology_detach(bus);
 	sfp_socket_clear(bus);
 	rtnl_unlock();
 
 	sfp_bus_put(bus);
 }
 EXPORT_SYMBOL_GPL(sfp_unregister_socket);
+
+struct phy_port *sfp_get_port(struct sfp_bus *bus)
+{
+	ASSERT_RTNL();
+	return NULL;
+
+	/* If there's an SFP module, we expose the module's port */
+	if (bus->sfp)
+		return bus->socket_ops->module_port(bus->sfp);
+
+	return bus->port;
+}
+EXPORT_SYMBOL_GPL(sfp_get_port);
+
+int sfp_topology_attach(struct sfp_bus *bus, struct net_device *dev)
+{
+	int ret = 0;
+
+	ASSERT_RTNL();
+
+	bus->netdev = dev;
+
+	if (bus->port) {
+		ret = phy_link_topo_add_port(dev, bus->port);
+		if (ret)
+			goto out;
+	}
+
+	ret = sfp_module_topology_attach(bus);
+
+	if (ret) {
+		if (bus->port)
+			phy_link_topo_del_port(dev, bus->port);
+		goto out;
+	}
+
+	return 0;
+out:
+	bus->netdev = NULL;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(sfp_topology_attach);
+
+void sfp_topology_detach(struct sfp_bus *bus)
+{
+	ASSERT_RTNL();
+
+	if (!bus->netdev)
+		return;
+
+	sfp_module_topology_detach(bus);
+
+	if (bus->port)
+		phy_link_topo_del_port(bus->netdev, bus->port);
+
+	bus->netdev = NULL;
+}
+EXPORT_SYMBOL_GPL(sfp_topology_detach);

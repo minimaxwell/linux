@@ -4,6 +4,7 @@
 #include <linux/ethtool.h>
 #include <linux/sfp.h>
 
+struct phy_port;
 struct sfp;
 
 struct sfp_quirk {
@@ -26,6 +27,7 @@ struct sfp_socket_ops {
 	int (*module_eeprom_by_page)(struct sfp *sfp,
 				     const struct ethtool_module_eeprom *page,
 				     struct netlink_ext_ack *extack);
+	struct phy_port *(*module_port)(struct sfp *sfp);
 };
 
 int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev);
