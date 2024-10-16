@@ -692,6 +692,7 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, u32 phy_id,
 	dev->link = 0;
 	dev->port = PORT_TP;
 	dev->interface = PHY_INTERFACE_MODE_GMII;
+	dev->max_n_ports = 1;
 
 	dev->autoneg = AUTONEG_ENABLE;
 
@@ -707,6 +708,7 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, u32 phy_id,
 
 	dev->state = PHY_DOWN;
 	INIT_LIST_HEAD(&dev->leds);
+	INIT_LIST_HEAD(&dev->ports);
 
 	mutex_init(&dev->lock);
 	INIT_DELAYED_WORK(&dev->state_queue, phy_state_machine);
@@ -3542,6 +3544,70 @@ static int of_phy_leds(struct phy_device *phydev)
 	return 0;
 }
 
+static void phy_destroy_ports(struct phy_device *phydev)
+{
+	struct phy_port *tmp, *port;
+
+	list_for_each_entry_safe(port, tmp, &phydev->ports, head) {
+		list_del(&port->head);
+		phy_port_destroy(port);
+	}
+}
+
+int phy_add_port(struct phy_device *phydev, struct phy_port *port)
+{
+	if (phydev->n_ports == phydev->max_n_ports) {
+		pr_info("%s : Max number of ports reached (%d), can't add port\n",
+			__func__, phydev->max_n_ports);
+		return -EOPNOTSUPP;
+	}
+
+	phydev->n_ports++;
+	list_add(&port->head, &phydev->ports);
+
+	return 0;
+}
+
+static int of_phy_ports(struct phy_device *phydev)
+{
+	struct device_node *node = phydev->mdio.dev.of_node;
+	struct device_node *mdi;
+	struct phy_port *port;
+	int err;
+
+	if (!IS_ENABLED(CONFIG_OF_MDIO))
+		return 0;
+
+	if (!node)
+		return 0;
+
+	mdi = of_get_child_by_name(node, "mdi");
+	if (!mdi)
+		return 0;
+
+	for_each_available_child_of_node_scoped(mdi, port_node) {
+		port = phy_of_parse_port(port_node);
+		if (IS_ERR(port)) {
+			err = PTR_ERR(port);
+			goto out_err;
+		}
+
+		err = phy_add_port(phydev, port);
+		if (err)
+			goto out_err;
+	}
+	of_node_put(mdi);
+
+//	phy_ports_supported(phydev);
+
+	return 0;
+
+out_err:
+	phy_destroy_ports(phydev);
+	of_node_put(mdi);
+	return err;
+}
+
 /**
  * fwnode_mdio_find_device - Given a fwnode, find the mdio_device
  * @fwnode: pointer to the mdio_device's fwnode
@@ -3754,10 +3820,6 @@ static int phy_probe(struct device *dev)
 	if (!phy_can_isolate(phydev) && phydev->mux_port)
 		phy_set_bits(phydev, MII_BMCR, BMCR_PDOWN);
 
-	err = phy_setup_ports(phydev);
-	if (err)
-		goto out;
-
 	phy_disable_interrupts(phydev);
 
 	/* Start out supporting everything. Eventually,
@@ -3790,6 +3852,16 @@ static int phy_probe(struct device *dev)
 		phydev->is_gigabit_capable = 1;
 
 	of_set_phy_supported(phydev);
+
+	/* If port(s) are in DT, they might come with constraints on the final
+	 * supported features, so we need to buils them first.
+	 */
+	of_phy_ports(phydev);
+
+	err = phy_setup_ports(phydev);
+	if (err)
+		goto out;
+
 	phy_advertise_supported(phydev);
 
 	/* Get PHY default EEE advertising modes and handle them as potentially

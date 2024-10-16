@@ -696,6 +696,9 @@ struct phy_device {
 	unsigned default_timestamp:1;
 
 	int rate_matching;
+	int max_n_ports;
+	int n_ports;
+	struct list_head ports;
 
 	enum phy_state state;
 
