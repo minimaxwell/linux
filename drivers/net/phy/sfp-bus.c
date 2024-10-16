@@ -965,14 +965,12 @@ void sfp_unregister_socket(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_unregister_socket);
 
+/* TODO : Change that. We share the struct phy_port between the bus and mod */
 struct phy_port *sfp_get_port(struct sfp_bus *bus)
 {
-	ASSERT_RTNL();
-	return NULL;
-
 	/* If there's an SFP module, we expose the module's port */
-	if (bus->sfp)
-		return bus->socket_ops->module_port(bus->sfp);
+	//if (bus->sfp)
+	//	return bus->socket_ops->module_port(bus->sfp);
 
 	return bus->port;
 }
