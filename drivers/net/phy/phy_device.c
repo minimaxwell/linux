@@ -1488,9 +1488,18 @@ int phy_sfp_probe(struct phy_device *phydev,
 		if (IS_ERR(bus))
 			return PTR_ERR(bus);
 
+		if (bus) {
+			ret = phy_add_port(phydev, sfp_get_port(bus));
+			if (ret) {
+				sfp_bus_put(bus);
+				return ret;
+			}
+		}
+
 		phydev->sfp_bus = bus;
 
 		ret = sfp_bus_add_upstream(bus, phydev, ops);
+
 		sfp_bus_put(bus);
 	}
 	return ret;
