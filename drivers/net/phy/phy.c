@@ -25,6 +25,7 @@
 #include <linux/ethtool_netlink.h>
 #include <linux/phy.h>
 #include <linux/phy_led_triggers.h>
+#include <linux/phy_port.h>
 #include <linux/sfp.h>
 #include <linux/workqueue.h>
 #include <linux/mdio.h>
