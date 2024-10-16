@@ -3726,9 +3726,23 @@ static int phydev_port_set_state(struct phy_port *port,
 	return 0;
 }
 
+static int phydev_port_ksettings_get(struct phy_port *port,
+				     struct ethtool_link_ksettings *kset)
+{
+	struct phy_device *phydev = port_phydev(port);
+	/* AND this port's support + the PHY support from get_features */
+	linkmode_and(kset->link_modes.supported, phydev->supported,
+		     port->supported);
+	return 0;
+}
+
 static const struct phy_port_ops phydev_port_ops = {
 	.get_state = phydev_port_get_state,
 	.set_state = phydev_port_set_state,
+	.ethtool_ksettings_get = phydev_port_ksettings_get,
+	/* No set for now
+	 .ethtool_ksettings_set = phydev_port_ksettings_set,
+	 */
 };
 
 static int phy_default_setup_ports(struct phy_device *phydev)

@@ -286,11 +286,32 @@ static void phy_sanitize_settings(struct phy_device *phydev)
 	}
 }
 
+static void phy_ports_supported(unsigned long *supported,
+				struct phy_device *phydev)
+{
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(new);
+	struct phy_port *port;
+
+	pr_info("%s\n", __func__);
+
+	list_for_each_entry(port, &phydev->ports, head)
+		linkmode_or(new, new, port->supported);
+
+	/* The PHY must have probed the SFP at that point. TODO : Have the PHY
+	 * register its SFP supported interfaces, from that we derive the possible
+	 * modes
+	 */
+
+	linkmode_and(supported, phydev->supported, new);
+}
+
 void phy_ethtool_ksettings_get(struct phy_device *phydev,
 			       struct ethtool_link_ksettings *cmd)
 {
 	mutex_lock(&phydev->lock);
-	linkmode_copy(cmd->link_modes.supported, phydev->supported);
+	phy_ports_supported(cmd->link_modes.supported, phydev);
+
+	/* TODO */
 	linkmode_copy(cmd->link_modes.advertising, phydev->advertising);
 	linkmode_copy(cmd->link_modes.lp_advertising, phydev->lp_advertising);
 
