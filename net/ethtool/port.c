@@ -281,6 +281,7 @@ int ethnl_port_done(struct netlink_callback *cb)
 static int ethnl_port_dump_one_dev(struct sk_buff *skb, struct net_device *dev,
 				   struct netlink_callback *cb)
 {
+	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
 	struct ethnl_port_dump_ctx *ctx = (void *)cb->ctx;
 	struct port_req_info *pri = ctx->port_req_info;
 	struct phy_port *port;
@@ -302,13 +303,11 @@ static int ethnl_port_dump_one_dev(struct sk_buff *skb, struct net_device *dev,
 			break;
 		}
 
-		/*
-		ret =  ethnl_port_prepare_data(&pri->base, &reply.base, info);
+		ret =  ethnl_port_prepare_data(&pri->base, &reply.base, &info->info);
 		if (ret) {
 			genlmsg_cancel(skb, ehdr);
 			break;
 		}
-		*/
 
 		ret = ethnl_fill_reply_header(skb, dev, ETHTOOL_A_PORT_HEADER);
 		if (ret < 0) {
