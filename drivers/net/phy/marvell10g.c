@@ -565,6 +565,8 @@ static int mv3310_probe(struct phy_device *phydev)
 
 	chip->init_supported_interfaces(priv->supported_interfaces);
 
+	phydev->max_n_ports = 2;
+
 	return phy_sfp_probe(phydev, &mv3310_sfp_ops);
 }
 
