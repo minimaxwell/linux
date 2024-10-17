@@ -2109,7 +2109,7 @@ int phylink_ethtool_ksettings_get(struct phylink *pl,
 	ASSERT_RTNL();
 
 	if (pl->phydev)
-		phy_ethtool_ksettings_get(pl->phydev, kset);
+		phy_ethtool_get_full_ksettings(pl->phydev, kset);
 	else
 		kset->base.port = pl->link_port;
 

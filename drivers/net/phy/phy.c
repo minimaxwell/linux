@@ -309,7 +309,6 @@ void phy_ethtool_ksettings_get(struct phy_device *phydev,
 			       struct ethtool_link_ksettings *cmd)
 {
 	mutex_lock(&phydev->lock);
-	phy_ports_supported(cmd->link_modes.supported, phydev);
 
 	/* TODO */
 	linkmode_copy(cmd->link_modes.advertising, phydev->advertising);
@@ -1104,6 +1103,9 @@ int phy_ethtool_ksettings_set(struct phy_device *phydev,
 	u8 duplex = cmd->base.duplex;
 	u32 speed = cmd->base.speed;
 
+	if (phydev->sfp_phy)
+		return phy_ethtool_ksettings_set(phydev->sfp_phy, cmd);
+
 	if (cmd->base.phy_address != phydev->mdio.addr)
 		return -EINVAL;
 
@@ -1785,6 +1787,38 @@ void phy_ethtool_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
 }
 EXPORT_SYMBOL(phy_ethtool_get_wol);
 
+void phy_ethtool_get_full_ksettings(struct phy_device *phydev,
+				   struct ethtool_link_ksettings *cmd)
+{
+	struct phy_port *tmp, *port;
+
+	list_for_each_entry_safe(port, tmp, &phydev->ports, head) {
+		struct ethtool_link_ksettings pkset = {};
+
+		pr_info("%s\n", __func__);
+
+		phy_port_ethtool_ksettings_get(port, &pkset);
+
+		linkmode_or(cmd->link_modes.supported, cmd->link_modes.supported,
+			    pkset.link_modes.supported);
+
+		/* ??? */
+		cmd->lanes += pkset.lanes;
+
+		/* FIXME: if no port is active, we or these aswell */
+		if (port->active) {
+			linkmode_copy(cmd->link_modes.advertising,
+				      pkset.link_modes.advertising);
+
+			linkmode_copy(cmd->link_modes.lp_advertising,
+				      pkset.link_modes.lp_advertising);
+
+			memcpy(&cmd->base, &pkset.base,
+			       sizeof(struct ethtool_link_settings));
+		}
+	}
+}
+
 int phy_ethtool_get_link_ksettings(struct net_device *ndev,
 				   struct ethtool_link_ksettings *cmd)
 {
@@ -1793,7 +1827,7 @@ int phy_ethtool_get_link_ksettings(struct net_device *ndev,
 	if (!phydev)
 		return -ENODEV;
 
-	phy_ethtool_ksettings_get(phydev, cmd);
+	phy_ethtool_get_full_ksettings(phydev, cmd);
 
 	return 0;
 }

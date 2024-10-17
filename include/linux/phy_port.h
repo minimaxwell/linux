@@ -54,6 +54,7 @@ struct phy_port {
 
 	const struct phy_port_ops *ops;
 	struct mutex lock;
+	bool active;
 	void *priv;
 };
 
@@ -64,6 +65,7 @@ void phy_port_destroy(struct phy_port *port);
 struct phy_port *phy_of_parse_port(struct device_node *dn);
 
 int phy_add_port(struct phy_device *phydev, struct phy_port *port);
+void phy_del_port(struct phy_device *phydev, struct phy_port *port);
 
 int netdev_add_port(struct net_device *dev, struct phy_port *port);
 void netdev_del_port(struct net_device *dev, struct phy_port *port);

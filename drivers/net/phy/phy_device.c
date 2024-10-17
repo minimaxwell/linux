@@ -1524,6 +1524,28 @@ static int phy_attach_on_phy(struct phy_device *parent,
 	return phy_attach_setup(phydev, flags, interface);
 }
 
+int phy_add_port(struct phy_device *phydev, struct phy_port *port)
+{
+	pr_info("%s\n", __func__);
+	if (phydev->n_ports == phydev->max_n_ports) {
+		pr_info("%s : Max number of ports reached (%d), can't add port\n",
+			__func__, phydev->max_n_ports);
+		return -EOPNOTSUPP;
+	}
+
+	phydev->n_ports++;
+	list_add(&port->head, &phydev->ports);
+
+	return 0;
+}
+
+void phy_del_port(struct phy_device *phydev, struct phy_port *port)
+{
+	pr_info("%s\n", __func__);
+	list_del(&port->head);
+	phydev->n_ports--;
+}
+
 /**
  * phy_sfp_connect_phy - Connect the SFP module's PHY to the upstream PHY
  * @upstream: pointer to the upstream phy device
@@ -1558,6 +1580,11 @@ int phy_sfp_connect_phy(void *upstream, struct phy_device *phy)
 	if (phy_interrupt_is_valid(phy))
 		phy_request_interrupt(phy);
 
+	phy_del_port(phydev, sfp_get_port(phydev->sfp_bus));
+
+	/* Hopefully it has just one port (can be tested with list_is_singular) */
+	phy_add_port(phydev, list_first_entry(&phy->ports, struct phy_port, head));
+
 	if (dev)
 		ret = phy_link_topo_add_phy(dev, phy, PHY_UPSTREAM_PHY, phydev);
 
@@ -1582,6 +1609,9 @@ void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy)
 
 	if (dev)
 		phy_link_topo_del_phy(dev, phy);
+
+	phy_del_port(phydev, list_first_entry(&phy->ports, struct phy_port, head));
+	phy_add_port(phydev, sfp_get_port(phydev->sfp_bus));
 
 	phydev->sfp_phy = NULL;
 	phy_detach(phy);
@@ -3639,19 +3669,6 @@ static void phy_destroy_ports(struct phy_device *phydev)
 	}
 }
 
-int phy_add_port(struct phy_device *phydev, struct phy_port *port)
-{
-	if (phydev->n_ports == phydev->max_n_ports) {
-		pr_info("%s : Max number of ports reached (%d), can't add port\n",
-			__func__, phydev->max_n_ports);
-		return -EOPNOTSUPP;
-	}
-
-	phydev->n_ports++;
-	list_add(&port->head, &phydev->ports);
-
-	return 0;
-}
 
 static int of_phy_ports(struct phy_device *phydev)
 {
@@ -3815,9 +3832,12 @@ static int phydev_port_ksettings_get(struct phy_port *port,
 				     struct ethtool_link_ksettings *kset)
 {
 	struct phy_device *phydev = port_phydev(port);
-	/* AND this port's support + the PHY support from get_features */
-	linkmode_and(kset->link_modes.supported, phydev->supported,
+
+	phy_ethtool_ksettings_get(phydev, kset);
+
+	linkmode_and(kset->link_modes.supported, kset->link_modes.supported,
 		     port->supported);
+
 	return 0;
 }
 
@@ -3839,8 +3859,9 @@ static int phy_default_setup_ports(struct phy_device *phydev)
 	port->parent_type = PHY_PORT_PHY;
 	port->phy = phydev;
 	port->ops = &phydev_port_ops;
+	linkmode_copy(port->supported, phydev->supported);
 
-	phydev->phy_port = port;
+	phy_add_port(phydev, port);
 
 	return 0;
 }
@@ -3859,10 +3880,13 @@ static void phy_default_cleanup_ports(struct phy_device *phydev)
 static int phy_setup_ports(struct phy_device *phydev)
 {
 	if (phydev->drv->setup_ports)
-		return  phydev->drv->setup_ports(phydev);
+		return phydev->drv->setup_ports(phydev);
 
 	/* If the PHY has a downstream SFP cage, its port will be the SFP's */
 	if (phydev->sfp_bus)
+		return 0;
+
+	if (phydev->n_ports == phydev->max_n_ports)
 		return 0;
 
 	return phy_default_setup_ports(phydev);
