@@ -1392,6 +1392,101 @@ phy_standalone_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(phy_standalone);
 
+static bool phy_drv_supports_irq(const struct phy_driver *phydrv)
+{
+	return phydrv->config_intr && phydrv->handle_interrupt;
+}
+
+static int phy_attach_setup(struct phy_device *phydev, u32 flags,
+			    phy_interface_t interface)
+{
+	struct device *d = &phydev->mdio.dev;
+	bool using_genphy = false;
+	int err;
+
+	get_device(d);
+
+	/* Assume that if there is no driver, that it doesn't
+	 * exist, and we should use the genphy driver.
+	 */
+	if (!d->driver) {
+		if (phydev->is_c45)
+			d->driver = &genphy_c45_driver.mdiodrv.driver;
+		else
+			d->driver = &genphy_driver.mdiodrv.driver;
+
+		using_genphy = true;
+	}
+
+	if (!try_module_get(d->driver->owner)) {
+		phydev_err(phydev, "failed to get the device driver module\n");
+		err = -EIO;
+		goto error_put_device;
+	}
+
+	if (using_genphy) {
+		err = d->driver->probe(d);
+		if (err >= 0)
+			err = device_bind_driver(d);
+
+		if (err)
+			goto error_module_put;
+	}
+
+	phydev->sysfs_links = false;
+
+	phy_sysfs_create_links(phydev);
+
+	phydev->dev_flags |= flags;
+
+	phydev->interface = interface;
+
+	phydev->state = PHY_READY;
+
+	phydev->interrupts = PHY_INTERRUPT_DISABLED;
+
+	/* PHYs can request to use poll mode even though they have an
+	 * associated interrupt line. This could be the case if they
+	 * detect a broken interrupt handling.
+	 */
+	if (phydev->dev_flags & PHY_F_NO_IRQ)
+		phydev->irq = PHY_POLL;
+
+	if (!phy_drv_supports_irq(phydev->drv) && phy_interrupt_is_valid(phydev))
+		phydev->irq = PHY_POLL;
+
+	/* Port is set to PORT_TP by default and the actual PHY driver will set
+	 * it to different value depending on the PHY configuration. If we have
+	 * the generic PHY driver we can't figure it out, thus set the old
+	 * legacy PORT_MII value.
+	 */
+	if (using_genphy)
+		phydev->port = PORT_MII;
+
+	/* Do initial configuration here, now that
+	 * we have certain key parameters
+	 * (dev_flags and interface)
+	 */
+	err = phy_init_hw(phydev);
+	if (err)
+		goto error_module_put;
+
+	phy_resume(phydev);
+	if (!phydev->is_on_sfp_module)
+		phy_led_triggers_register(phydev);
+
+	return err;
+
+
+error_module_put:
+	module_put(d->driver->owner);
+	d->driver = NULL;
+error_put_device:
+	put_device(d);
+
+	return err;
+}
+
 /**
  * phy_sfp_connect_phy - Connect the SFP module's PHY to the upstream PHY
  * @upstream: pointer to the upstream phy device
@@ -1506,11 +1601,6 @@ int phy_sfp_probe(struct phy_device *phydev,
 }
 EXPORT_SYMBOL(phy_sfp_probe);
 
-static bool phy_drv_supports_irq(const struct phy_driver *phydrv)
-{
-	return phydrv->config_intr && phydrv->handle_interrupt;
-}
-
 /**
  * phy_attach_direct - attach a network device to a given PHY device pointer
  * @dev: network device to attach
@@ -1530,9 +1620,7 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		      u32 flags, phy_interface_t interface)
 {
 	struct mii_bus *bus = phydev->mdio.bus;
-	struct device *d = &phydev->mdio.dev;
 	struct module *ndev_owner = NULL;
-	bool using_genphy = false;
 	int err;
 
 	/* For Ethernet device drivers that register their own MDIO bus, we
@@ -1547,40 +1635,11 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		return -EIO;
 	}
 
-	get_device(d);
-
-	/* Assume that if there is no driver, that it doesn't
-	 * exist, and we should use the genphy driver.
+	/* Initial carrier state is off as the phy is about to be
+	 * (re)initialized.
 	 */
-	if (!d->driver) {
-		if (phydev->is_c45)
-			d->driver = &genphy_c45_driver.mdiodrv.driver;
-		else
-			d->driver = &genphy_driver.mdiodrv.driver;
-
-		using_genphy = true;
-	}
-
-	if (!try_module_get(d->driver->owner)) {
-		phydev_err(phydev, "failed to get the device driver module\n");
-		err = -EIO;
-		goto error_put_device;
-	}
-
-	if (using_genphy) {
-		err = d->driver->probe(d);
-		if (err >= 0)
-			err = device_bind_driver(d);
-
-		if (err)
-			goto error_module_put;
-	}
-
-	if (phydev->attached_dev) {
-		dev_err(&dev->dev, "PHY already attached\n");
-		err = -EBUSY;
-		goto error;
-	}
+	if (dev)
+		netif_carrier_off(dev);
 
 	phydev->phy_link_change = phy_link_change;
 	if (dev) {
@@ -1602,18 +1661,6 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		}
 	}
 
-	/* Some Ethernet drivers try to connect to a PHY device before
-	 * calling register_netdevice() -> netdev_register_kobject() and
-	 * does the dev->dev.kobj initialization. Here we only check for
-	 * success which indicates that the network device kobject is
-	 * ready. Once we do that we still need to keep track of whether
-	 * links were successfully set up or not for phy_detach() to
-	 * remove them accordingly.
-	 */
-	phydev->sysfs_links = false;
-
-	phy_sysfs_create_links(phydev);
-
 	if (!phydev->attached_dev) {
 		err = sysfs_create_file(&phydev->mdio.dev.kobj,
 					&dev_attr_phy_standalone.attr);
@@ -1621,49 +1668,9 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 			phydev_err(phydev, "error creating 'phy_standalone' sysfs entry\n");
 	}
 
-	phydev->dev_flags |= flags;
-
-	phydev->interface = interface;
-
-	phydev->state = PHY_READY;
-
-	phydev->interrupts = PHY_INTERRUPT_DISABLED;
-
-	/* PHYs can request to use poll mode even though they have an
-	 * associated interrupt line. This could be the case if they
-	 * detect a broken interrupt handling.
-	 */
-	if (phydev->dev_flags & PHY_F_NO_IRQ)
-		phydev->irq = PHY_POLL;
-
-	if (!phy_drv_supports_irq(phydev->drv) && phy_interrupt_is_valid(phydev))
-		phydev->irq = PHY_POLL;
-
-	/* Port is set to PORT_TP by default and the actual PHY driver will set
-	 * it to different value depending on the PHY configuration. If we have
-	 * the generic PHY driver we can't figure it out, thus set the old
-	 * legacy PORT_MII value.
-	 */
-	if (using_genphy)
-		phydev->port = PORT_MII;
-
-	/* Initial carrier state is off as the phy is about to be
-	 * (re)initialized.
-	 */
-	if (dev)
-		netif_carrier_off(phydev->attached_dev);
-
-	/* Do initial configuration here, now that
-	 * we have certain key parameters
-	 * (dev_flags and interface)
-	 */
-	err = phy_init_hw(phydev);
+	err = phy_attach_setup(phydev, flags, interface);
 	if (err)
-		goto error;
-
-	phy_resume(phydev);
-	if (!phydev->is_on_sfp_module)
-		phy_led_triggers_register(phydev);
+		goto error_put_owner_mod;
 
 	/**
 	 * If the external phy used by current mac interface is managed by
@@ -1681,11 +1688,7 @@ error:
 	phy_detach(phydev);
 	return err;
 
-error_module_put:
-	module_put(d->driver->owner);
-	d->driver = NULL;
-error_put_device:
-	put_device(d);
+error_put_owner_mod:
 	if (ndev_owner != bus->owner)
 		module_put(bus->owner);
 	return err;

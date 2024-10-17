@@ -1680,6 +1680,15 @@ static inline bool phy_is_pseudo_fixed_link(struct phy_device *phydev)
 	return phydev->is_pseudo_fixed_link;
 }
 
+/* The Broadcom BCM84881 in the Methode DM7052 is unable to provide a SGMII
+ * or 802.3z control word, so inband will not work.
+ */
+static inline bool phy_no_inband(struct phy_device *phy)
+{
+	return phy->is_c45 && phy_id_compare(phy->c45_ids.device_ids[1],
+					     0xae025150, 0xfffffff0);
+}
+
 int phy_save_page(struct phy_device *phydev);
 int phy_select_page(struct phy_device *phydev, int page);
 int phy_restore_page(struct phy_device *phydev, int oldpage, int ret);
