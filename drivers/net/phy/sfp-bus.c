@@ -781,6 +781,8 @@ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
 	int ret = 0;
 
+	pr_info("%s\n", __func__);
+
 	if (ops && ops->connect_phy)
 		ret = ops->connect_phy(bus->upstream, phydev);
 

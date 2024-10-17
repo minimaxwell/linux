@@ -1797,6 +1797,8 @@ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 	struct phy_device *phy;
 	int err;
 
+	pr_info("%s\n", __func__);
+
 	phy = get_phy_device(sfp->i2c_mii, addr, is_c45);
 	if (phy == ERR_PTR(-ENODEV))
 		return PTR_ERR(phy);
@@ -1898,6 +1900,7 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
 
 static int sfp_sm_add_mdio_bus(struct sfp *sfp)
 {
+	pr_info("%s\n", __func__);
 	if (sfp->mdio_protocol != MDIO_I2C_NONE)
 		return sfp_i2c_mdiobus_create(sfp);
 
@@ -1918,6 +1921,8 @@ static int sfp_sm_add_mdio_bus(struct sfp *sfp)
 static int sfp_sm_probe_for_phy(struct sfp *sfp)
 {
 	int err = 0;
+
+	pr_info("%s\n", __func__);
 
 	switch (sfp->mdio_protocol) {
 	case MDIO_I2C_NONE:

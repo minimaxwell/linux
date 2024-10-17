@@ -653,6 +653,7 @@ struct phy_device {
 
 	/* Host supported PHY interface types. Should be ignored if empty. */
 	DECLARE_PHY_INTERFACE_MASK(host_interfaces);
+	DECLARE_PHY_INTERFACE_MASK(sfp_bus_interfaces);
 
 	/* Energy efficient ethernet modes which should be prohibited */
 	u32 eee_broken_modes;
@@ -700,6 +701,8 @@ struct phy_device {
 	struct phy_mux *mux;
 	struct phy_port *phy_port;
 	struct net_device *attached_dev;
+	struct phy_device *parent_phy;
+	struct phy_device *sfp_phy;
 	struct mii_timestamper *mii_ts;
 	struct pse_control *psec;
 
@@ -1765,6 +1768,7 @@ int phy_sfp_connect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
 void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
 void phy_sfp_detach(void *upstream, struct sfp_bus *bus);
+int phy_sfp_start(void *upstream);
 int phy_sfp_probe(struct phy_device *phydev,
 	          const struct sfp_upstream_ops *ops);
 struct phy_device *phy_attach(struct net_device *dev, const char *bus_id,

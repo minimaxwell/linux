@@ -2917,6 +2917,7 @@ static int phylink_sfp_config_phy(struct phylink *pl, u8 mode,
 
 	pl->link_port = pl->sfp_port;
 
+	pr_info("%s\n", __func__);
 	phylink_sfp_set_config(pl, mode, support, &config);
 
 	return 0;
