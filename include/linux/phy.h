@@ -16,6 +16,7 @@
 #include <linux/ethtool.h>
 #include <linux/leds.h>
 #include <linux/linkmode.h>
+#include <linux/list.h>
 #include <linux/netlink.h>
 #include <linux/mdio.h>
 #include <linux/mii.h>
@@ -1233,6 +1234,8 @@ size_t phy_speeds(unsigned int *speeds, size_t size,
 void of_set_phy_supported(struct phy_device *phydev);
 void of_set_phy_eee_broken(struct phy_device *phydev);
 int phy_speed_down_core(struct phy_device *phydev);
+void phy_ethtool_get_full_supported(struct phy_device *phydev,
+				    unsigned long *supp);
 
 /**
  * phy_is_started - Convenience function to check whether PHY is started
@@ -1516,6 +1519,9 @@ static inline int phy_clear_bits_mmd(struct phy_device *phydev, int devad,
 {
 	return phy_modify_mmd(phydev, devad, regnum, val, 0);
 }
+
+bool phy_is_single_port(struct phy_device *phydev);
+struct phy_port *phy_get_single_port(struct phy_device *phydev);
 
 /**
  * phy_interrupt_is_valid - Convenience function for testing a given PHY irq

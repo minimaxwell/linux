@@ -14,6 +14,7 @@ struct phy_port *phy_port_alloc(void)
 
 	mutex_init(&port->lock);
 	linkmode_zero(port->supported);
+	linkmode_zero(port->advertising);
 	INIT_LIST_HEAD(&port->head);
 
 	return port;

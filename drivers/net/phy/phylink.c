@@ -1556,7 +1556,8 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
 	phy_support_asym_pause(phy);
 
 	memset(&config, 0, sizeof(config));
-	linkmode_copy(supported, phy->supported);
+
+	phy_ethtool_get_full_supported(phy, supported);
 	linkmode_copy(config.advertising, phy->advertising);
 	config.interface = interface;
 
@@ -1564,7 +1565,7 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
 	if (ret) {
 		phylink_warn(pl, "validation of %s with support %*pb and advertisement %*pb failed: %pe\n",
 			     phy_modes(config.interface),
-			     __ETHTOOL_LINK_MODE_MASK_NBITS, phy->supported,
+			     __ETHTOOL_LINK_MODE_MASK_NBITS, supported,
 			     __ETHTOOL_LINK_MODE_MASK_NBITS, config.advertising,
 			     ERR_PTR(ret));
 		return ret;

@@ -27,6 +27,14 @@
 		compatible = "ethernet-phy-ieee802.3-c45";
 		reg = <8>;
 		sfp = <&sfp_eth1>;
+
+		mdi {
+			port@0 {
+				media = "BaseT";
+				lanes = <2>;
+			};
+
+		};
 	};
 };
 

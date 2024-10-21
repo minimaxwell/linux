@@ -495,7 +495,7 @@ static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 
 	if (iface != PHY_INTERFACE_MODE_10GBASER) {
 		dev_err(&phydev->mdio.dev, "incompatible SFP module inserted\n");
-		return -EINVAL;
+		//return -EINVAL;
 	}
 	return 0;
 }
@@ -506,6 +506,7 @@ static const struct sfp_upstream_ops mv3310_sfp_ops = {
 	.connect_phy = phy_sfp_connect_phy,
 	.disconnect_phy = phy_sfp_disconnect_phy,
 	.module_insert = mv3310_sfp_insert,
+	.module_start = phy_sfp_start,
 };
 
 static int mv3310_probe(struct phy_device *phydev)
@@ -566,6 +567,12 @@ static int mv3310_probe(struct phy_device *phydev)
 	chip->init_supported_interfaces(priv->supported_interfaces);
 
 	phydev->max_n_ports = 2;
+
+	__set_bit(PHY_INTERFACE_MODE_10GBASER, phydev->sfp_bus_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_5GBASER, phydev->sfp_bus_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, phydev->sfp_bus_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_2500BASEX, phydev->sfp_bus_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII, phydev->sfp_bus_interfaces);
 
 	return phy_sfp_probe(phydev, &mv3310_sfp_ops);
 }

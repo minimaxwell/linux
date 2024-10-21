@@ -3633,6 +3633,9 @@ static int m88e1510_probe(struct phy_device *phydev)
 	if (err)
 		return err;
 
+	__set_bit(PHY_INTERFACE_MODE_1000BASEX, phydev->sfp_bus_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_SGMII, phydev->sfp_bus_interfaces);
+
 	return phy_sfp_probe(phydev, &m88e1510_sfp_ops);
 }
 

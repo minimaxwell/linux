@@ -1526,7 +1526,9 @@ static int phy_attach_on_phy(struct phy_device *parent,
 
 int phy_add_port(struct phy_device *phydev, struct phy_port *port)
 {
-	pr_info("%s\n", __func__);
+	if (!port)
+		return 0;
+
 	if (phydev->n_ports == phydev->max_n_ports) {
 		pr_info("%s : Max number of ports reached (%d), can't add port\n",
 			__func__, phydev->max_n_ports);
@@ -1545,6 +1547,21 @@ void phy_del_port(struct phy_device *phydev, struct phy_port *port)
 	list_del(&port->head);
 	phydev->n_ports--;
 }
+
+bool phy_is_single_port(struct phy_device *phydev)
+{
+	return phydev->n_ports <= 1;
+}
+EXPORT_SYMBOL_GPL(phy_is_single_port);
+
+struct phy_port *phy_get_single_port(struct phy_device *phydev)
+{
+	if (!phy_is_single_port(phydev))
+		return NULL;
+
+	return list_first_entry(&phydev->ports, struct phy_port, head);
+}
+EXPORT_SYMBOL_GPL(phy_get_single_port);
 
 /**
  * phy_sfp_connect_phy - Connect the SFP module's PHY to the upstream PHY
@@ -1583,7 +1600,7 @@ int phy_sfp_connect_phy(void *upstream, struct phy_device *phy)
 	phy_del_port(phydev, sfp_get_port(phydev->sfp_bus));
 
 	/* Hopefully it has just one port (can be tested with list_is_singular) */
-	phy_add_port(phydev, list_first_entry(&phy->ports, struct phy_port, head));
+	phy_add_port(phydev, phy_get_single_port(phy));
 
 	if (dev)
 		ret = phy_link_topo_add_phy(dev, phy, PHY_UPSTREAM_PHY, phydev);
@@ -1610,7 +1627,7 @@ void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy)
 	if (dev)
 		phy_link_topo_del_phy(dev, phy);
 
-	phy_del_port(phydev, list_first_entry(&phy->ports, struct phy_port, head));
+	phy_del_port(phydev, phy_get_single_port(phy));
 	phy_add_port(phydev, sfp_get_port(phydev->sfp_bus));
 
 	phydev->sfp_phy = NULL;
@@ -2330,20 +2347,24 @@ int phy_reset_after_clk_enable(struct phy_device *phydev)
 }
 EXPORT_SYMBOL(phy_reset_after_clk_enable);
 
-struct phy_port *phy_get_single_port(struct phy_device *phydev)
+static unsigned long *phy_advert_single_port(struct phy_device *phydev)
 {
-	/* If the phy has multiple ports, they ought to be handled through a
-	 * mux
-	 */
-	if (phydev->mux)
-		return NULL;
+	struct phy_port *port;
 
-	if (phydev->sfp_bus)
-		return sfp_get_port(phydev->sfp_bus);
+	WARN_ON_ONCE(!phy_is_single_port(phydev));
 
-	return phydev->phy_port;
+	port = phy_get_single_port(phydev);
+	if (!port) {
+		linkmode_and(phydev->advertising, phydev->advertising,
+			     phydev->supported);
+		return phydev->advertising;
+	}
+
+	linkmode_and(port->advertising, phydev->supported, port->supported);
+	linkmode_and(port->advertising, port->supported, phydev->advertising);
+
+	return port->advertising;
 }
-EXPORT_SYMBOL(phy_get_single_port);
 
 /* Generic PHY support and helper functions */
 
@@ -2411,20 +2432,17 @@ static int genphy_config_advert(struct phy_device *phydev,
  */
 static int genphy_c37_config_advert(struct phy_device *phydev)
 {
+	unsigned long *advertising;
 	u16 adv = 0;
 
-	/* Only allow advertising what this PHY supports */
-	linkmode_and(phydev->advertising, phydev->advertising,
-		     phydev->supported);
+	advertising = phy_advert_single_port(phydev);
 
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseX_Full_BIT,
-			      phydev->advertising))
+			      advertising))
 		adv |= ADVERTISE_1000XFULL;
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
-			      phydev->advertising))
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT, advertising))
 		adv |= ADVERTISE_1000XPAUSE;
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT,
-			      phydev->advertising))
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, advertising))
 		adv |= ADVERTISE_1000XPSE_ASYM;
 
 	return phy_modify_changed(phydev, MII_ADVERTISE,
@@ -2632,10 +2650,7 @@ int __genphy_config_aneg(struct phy_device *phydev, bool changed)
 		changed = true;
 
 	if (phydev->autoneg == AUTONEG_ENABLE) {
-		/* Only allow advertising what this PHY supports */
-		linkmode_and(phydev->advertising, phydev->advertising,
-			     phydev->supported);
-		advert = phydev->advertising;
+		advert = phy_advert_single_port(phydev);
 	} else if (phydev->speed < SPEED_1000) {
 		return genphy_setup_forced(phydev);
 	} else {
@@ -3699,8 +3714,6 @@ static int of_phy_ports(struct phy_device *phydev)
 			goto out_err;
 	}
 	of_node_put(mdi);
-
-//	phy_ports_supported(phydev);
 
 	return 0;
 

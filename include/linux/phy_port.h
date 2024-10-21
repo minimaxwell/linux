@@ -49,6 +49,7 @@ struct phy_port {
 	int lanes;
 	enum ethtool_link_medium medium;
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertising);
 
 	struct phy_mux_port *mux_port;
 

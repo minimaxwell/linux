@@ -71,14 +71,42 @@ static void phy_process_state_change(struct phy_device *phydev,
 	}
 }
 
+static void phy_port_gets_link(struct phy_device *phydev,
+				    struct phy_port *port)
+{
+	struct phy_port *p;
+
+	list_for_each_entry(p, &phydev->ports, head) {
+		if (p != port && p->active)
+			return;
+	}
+
+	pr_info("%s : Setting port active\n", __func__);
+	port->active = true;
+}
+
+static void phy_port_loses_link(struct phy_device *phydev,
+				struct phy_port *port)
+{
+	port->active = false;
+}
+
 static void phy_link_up(struct phy_device *phydev)
 {
+	if (phy_is_single_port(phydev))
+		phy_port_gets_link(phydev,
+				   phy_get_single_port(phydev));
+
 	phydev->phy_link_change(phydev, true);
 	phy_led_trigger_change_speed(phydev);
 }
 
 static void phy_link_down(struct phy_device *phydev)
 {
+	if (phy_is_single_port(phydev))
+		phy_port_loses_link(phydev,
+				    phy_get_single_port(phydev));
+
 	phydev->phy_link_change(phydev, false);
 	phy_led_trigger_change_speed(phydev);
 	WRITE_ONCE(phydev->link_down_events, phydev->link_down_events + 1);
@@ -1787,12 +1815,24 @@ void phy_ethtool_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
 }
 EXPORT_SYMBOL(phy_ethtool_get_wol);
 
+void phy_ethtool_get_full_supported(struct phy_device *phydev,
+				    unsigned long *supp)
+{
+	struct phy_port *port;
+
+	linkmode_copy(supp, phydev->supported);
+
+	list_for_each_entry(port, &phydev->ports, head)
+		linkmode_or(supp, supp, port->supported);
+}
+EXPORT_SYMBOL_GPL(phy_ethtool_get_full_supported);
+
 void phy_ethtool_get_full_ksettings(struct phy_device *phydev,
 				   struct ethtool_link_ksettings *cmd)
 {
-	struct phy_port *tmp, *port;
+	struct phy_port *port;
 
-	list_for_each_entry_safe(port, tmp, &phydev->ports, head) {
+	list_for_each_entry(port, &phydev->ports, head) {
 		struct ethtool_link_ksettings pkset = {};
 
 		pr_info("%s\n", __func__);
@@ -1807,6 +1847,7 @@ void phy_ethtool_get_full_ksettings(struct phy_device *phydev,
 
 		/* FIXME: if no port is active, we or these aswell */
 		if (port->active) {
+			pr_info("%s : Active port !\n", __func__);
 			linkmode_copy(cmd->link_modes.advertising,
 				      pkset.link_modes.advertising);
 

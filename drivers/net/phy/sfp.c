@@ -2879,6 +2879,8 @@ static void sfp_timeout(struct work_struct *work)
 {
 	struct sfp *sfp = container_of(work, struct sfp, timeout.work);
 
+	pr_info("%s\n", __func__);
+
 	rtnl_lock();
 	sfp_sm_event(sfp, SFP_E_TIMEOUT);
 	rtnl_unlock();
