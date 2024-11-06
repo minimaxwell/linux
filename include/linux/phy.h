@@ -214,6 +214,8 @@ unsigned int phy_supported_speeds(struct phy_device *phy,
 				      unsigned int *speeds,
 				      unsigned int size);
 
+void phy_supported_linkmodes(struct phy_device *phy, unsigned long *supported);
+
 /**
  * phy_modes - map phy_interface_t enum to device tree binding of phy-mode
  * @interface: enum phy_interface_t value

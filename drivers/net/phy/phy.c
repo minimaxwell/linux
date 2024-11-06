@@ -246,6 +246,20 @@ unsigned int phy_supported_speeds(struct phy_device *phy,
 	return phy_speeds(speeds, size, phy->supported);
 }
 
+void phy_supported_linkmodes(struct phy_device *phy, unsigned long *supported)
+{
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(child_supported);
+
+	linkmode_copy(supported, phy->supported);
+
+	if (phy->child_phy) {
+		phy_supported_linkmodes(phy, child_supported);
+		linkmode_and(supported, supported, child_supported);
+	}
+
+}
+EXPORT_SYMBOL_GPL(phy_supported_linkmodes);
+
 /**
  * phy_check_valid - check if there is a valid PHY setting which matches
  *		     speed, duplex, and feature mask
@@ -289,7 +303,7 @@ void phy_ethtool_ksettings_get(struct phy_device *phydev,
 			       struct ethtool_link_ksettings *cmd)
 {
 	mutex_lock(&phydev->lock);
-	linkmode_copy(cmd->link_modes.supported, phydev->supported);
+	phy_supported_linkmodes(phydev, cmd->link_modes.supported);
 	linkmode_copy(cmd->link_modes.advertising, phydev->advertising);
 	linkmode_copy(cmd->link_modes.lp_advertising, phydev->lp_advertising);
 
