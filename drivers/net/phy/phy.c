@@ -1082,6 +1082,9 @@ int phy_ethtool_ksettings_set(struct phy_device *phydev,
 	u8 duplex = cmd->base.duplex;
 	u32 speed = cmd->base.speed;
 
+	if (phydev->child_phy)
+		return phy_ethtool_ksettings_set(phydev->child_phy, cmd);
+
 	if (cmd->base.phy_address != phydev->mdio.addr)
 		return -EINVAL;
 

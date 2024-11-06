@@ -1385,6 +1385,14 @@ phy_standalone_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(phy_standalone);
 
+static void phy_stacked_link_change(struct phy_device *phydev, bool up)
+{
+	struct phy_device *parent = phydev->parent_phy;
+
+	if (parent && parent->phy_link_change)
+		parent->phy_link_change(parent, up);
+}
+
 static bool phy_drv_supports_irq(const struct phy_driver *phydrv)
 {
 	return phydrv->config_intr && phydrv->handle_interrupt;
@@ -1480,6 +1488,37 @@ error_put_device:
 	return err;
 }
 
+static int phy_attach_on_phy(struct phy_device *parent,
+			     struct phy_device *phydev, int flags,
+			     phy_interface_t interface)
+{
+	struct mii_bus *bus = phydev->mdio.bus;
+	int err;
+
+	if (!parent)
+		return -EINVAL;
+
+	if (parent->child_phy)
+		return -EBUSY;
+
+	if (!try_module_get(bus->owner)) {
+		phydev_err(phydev, "failed to get the bus module\n");
+		return -EIO;
+	}
+
+	phydev->phy_link_change = phy_stacked_link_change;
+
+	phydev->parent_phy = parent;
+	parent->child_phy = phydev;
+
+	err = sysfs_create_file(&phydev->mdio.dev.kobj,
+				&dev_attr_phy_standalone.attr);
+	if (err)
+		phydev_err(phydev, "error creating 'phy_standalone' sysfs entry\n");
+
+	return phy_attach_setup(phydev, flags, interface);
+}
+
 /**
  * phy_sfp_connect_phy - Connect the SFP module's PHY to the upstream PHY
  * @upstream: pointer to the upstream phy device
@@ -1494,11 +1533,26 @@ int phy_sfp_connect_phy(void *upstream, struct phy_device *phy)
 {
 	struct phy_device *phydev = upstream;
 	struct net_device *dev = phydev->attached_dev;
+	phy_interface_t interface;
+	int ret;
+
+	phy_support_asym_pause(phy);
+
+	interface = sfp_select_interface(phydev->sfp_bus, phy->advertising);
+	if (interface == PHY_INTERFACE_MODE_NA)
+		return -EINVAL;
+
+	ret = phy_attach_on_phy(phydev, phy, 0, interface);
+	if (ret)
+		return ret;
+
+	if (phy_interrupt_is_valid(phy))
+		phy_request_interrupt(phy);
 
 	if (dev)
-		return phy_link_topo_add_phy(dev, phy, PHY_UPSTREAM_PHY, phydev);
+		ret = phy_link_topo_add_phy(dev, phy, PHY_UPSTREAM_PHY, phydev);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(phy_sfp_connect_phy);
 
@@ -1519,6 +1573,8 @@ void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy)
 
 	if (dev)
 		phy_link_topo_del_phy(dev, phy);
+
+	phy_detach(phy);
 }
 EXPORT_SYMBOL(phy_sfp_disconnect_phy);
 
@@ -1555,6 +1611,17 @@ void phy_sfp_detach(void *upstream, struct sfp_bus *bus)
 	phydev->sfp_bus_attached = false;
 }
 EXPORT_SYMBOL(phy_sfp_detach);
+
+int phy_sfp_start(void *upstream)
+{
+	struct phy_device *phydev = upstream;
+
+	if (phydev->child_phy)
+		phy_start(phydev->child_phy);
+
+	return 0;
+}
+EXPORT_SYMBOL(phy_sfp_start);
 
 /**
  * phy_sfp_probe - probe for a SFP cage attached to this PHY device
@@ -2006,6 +2073,11 @@ void phy_detach(struct phy_device *phydev)
 		phy_link_topo_del_phy(dev, phydev);
 	}
 	phydev->phylink = NULL;
+
+	if (phydev->parent_phy) {
+		phydev->parent_phy->child_phy = NULL;
+		phydev->parent_phy = NULL;
+	}
 
 	if (!phydev->is_on_sfp_module)
 		phy_led_triggers_unregister(phydev);
