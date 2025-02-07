@@ -21,7 +21,6 @@
 #include <linux/mii.h>
 #include <linux/mii_timestamper.h>
 #include <linux/module.h>
-#include <linux/phy_port.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 #include <linux/mod_devicetable.h>
@@ -190,6 +189,12 @@ static inline void phy_interface_set_rgmii(unsigned long *intf)
 	__set_bit(PHY_INTERFACE_MODE_RGMII_TXID, intf);
 }
 
+static inline void phy_interface_copy(unsigned long *dst,
+				      const unsigned long *src)
+{
+	bitmap_copy(dst, src, PHY_INTERFACE_MODE_MAX);
+}
+
 /*
  * phy_supported_speeds - return all speeds currently supported by a PHY device
  */
@@ -317,6 +322,7 @@ static inline long rgmii_clock(int speed)
 struct device;
 struct kernel_hwtstamp_config;
 struct phylink;
+struct phy_port;
 struct sfp_bus;
 struct sfp_upstream_ops;
 struct sk_buff;
@@ -1298,7 +1304,7 @@ struct phy_driver {
 	 * properties.
 	 *
 	 * If the port isn't initialized, the port->mediums and port->lanes
-	 * fields must be set, possibly according to stapping information.
+	 * fields must be set, possibly according to strapping information.
 	 *
 	 * Returns 0, or an error code.
 	 */
@@ -1909,12 +1915,6 @@ int phy_suspend(struct phy_device *phydev);
 int phy_resume(struct phy_device *phydev);
 int __phy_resume(struct phy_device *phydev);
 int phy_loopback(struct phy_device *phydev, bool enable);
-int phy_sfp_connect_phy(void *upstream, struct phy_device *phy);
-void phy_sfp_disconnect_phy(void *upstream, struct phy_device *phy);
-void phy_sfp_attach(void *upstream, struct sfp_bus *bus);
-void phy_sfp_detach(void *upstream, struct sfp_bus *bus);
-int phy_sfp_probe(struct phy_device *phydev,
-	          const struct sfp_upstream_ops *ops);
 struct phy_device *phy_attach(struct net_device *dev, const char *bus_id,
 			      phy_interface_t interface);
 struct phy_device *phy_find_first(struct mii_bus *bus);
@@ -2208,6 +2208,8 @@ int __phy_hwtstamp_get(struct phy_device *phydev,
 int __phy_hwtstamp_set(struct phy_device *phydev,
 		       struct kernel_hwtstamp_config *config,
 		       struct netlink_ext_ack *extack);
+
+struct phy_port *phy_get_sfp_port(struct phy_device *phydev);
 
 static inline int phy_package_address(struct phy_device *phydev,
 				      unsigned int addr_offset)
