@@ -96,6 +96,11 @@ definitions:
     name: tcp-data-split
     type: enum
     entries: [ unknown, disabled, enabled ]
+  -
+    name: port-parent-type
+    enum-name:
+    type: enum
+    entries: [ phy, mac, sfp ]
 
 attribute-sets:
   -
@@ -1526,6 +1531,38 @@ attribute-sets:
         name: hwtstamp-flags
         type: nest
         nested-attributes: bitset
+  -
+    name: port
+    attr-cnt-name: __ethtool-a-port-cnt
+    attributes:
+      -
+        name: unspec
+        type: unused
+        value: 0
+      -
+        name: header
+        type: nest
+        nested-attributes: header
+      -
+        name: index
+        type: u32
+      -
+        name: parent-type
+        type: u32
+        enum: port-parent-type
+      -
+        name: parent-name
+        type: string
+      -
+        name: mediums
+        type: nest
+        nested-attributes: bitset
+      -
+        name: active
+        type: u8
+      -
+        name: selected
+        type: u8
 
 operations:
   enum-model: directional
@@ -2382,3 +2419,25 @@ operations:
           attributes: *tsconfig
         reply:
           attributes: *tsconfig
+    -
+      name: port-get
+      doc: Get a Port attributes on an interface
+
+      attribute-set: port
+
+      do: &port-get-op
+        request:
+          attributes:
+            - header
+            - index
+        reply:
+          attributes:
+            - header
+            - index
+            - parent-type
+            - parent-name
+            - medium
+            - active
+            - selected
+      dump: *port-get-op
+
