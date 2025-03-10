@@ -48,6 +48,7 @@ struct phy_port_ops {
  *	       Interface), or an MDI (Media Dependent Interface).
  */
 struct phy_port {
+	unsigned int port_index;
 	struct list_head head;
 	enum phy_port_parent parent_type;
 	union {

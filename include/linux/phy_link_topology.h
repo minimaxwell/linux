@@ -13,6 +13,7 @@
 
 #include <linux/ethtool.h>
 #include <linux/netdevice.h>
+#include <linux/phy_port.h>
 
 struct xarray;
 struct phy_device;
@@ -21,6 +22,9 @@ struct sfp_bus;
 struct phy_link_topology {
 	struct xarray phys;
 	u32 next_phy_index;
+
+	struct xarray ports;
+	u32 next_port_index;
 };
 
 struct phy_device_node {
@@ -35,6 +39,21 @@ struct phy_device_node {
 
 	struct phy_device *phy;
 };
+
+int phy_link_topo_add_port(struct net_device *dev, struct phy_port *port);
+
+void phy_link_topo_del_port(struct net_device *dev, struct phy_port *port);
+
+static inline struct phy_port *
+phy_link_topo_get_port(struct net_device *dev, u32 port_index)
+{
+	struct phy_link_topology *topo = dev->link_topo;
+
+	if (!topo)
+		return NULL;
+
+	return xa_load(&topo->ports, port_index);
+}
 
 #if IS_ENABLED(CONFIG_PHYLIB)
 int phy_link_topo_add_phy(struct net_device *dev,

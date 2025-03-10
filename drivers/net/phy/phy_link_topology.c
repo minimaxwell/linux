@@ -6,8 +6,10 @@
  * Copyright (c) 2023 Maxime Chevallier<maxime.chevallier@bootlin.com>
  */
 
+#include <linux/list.h>
 #include <linux/phy_link_topology.h>
 #include <linux/phy.h>
+#include <linux/phy_port.h>
 #include <linux/rtnetlink.h>
 #include <linux/xarray.h>
 
@@ -22,9 +24,33 @@ static int netdev_alloc_phy_link_topology(struct net_device *dev)
 	xa_init_flags(&topo->phys, XA_FLAGS_ALLOC1);
 	topo->next_phy_index = 1;
 
+	xa_init_flags(&topo->ports, XA_FLAGS_ALLOC1);
+	topo->next_port_index = 1;
+
 	dev->link_topo = topo;
 
 	return 0;
+}
+
+static int phy_link_topo_add_all_ports(struct net_device *dev,
+				       struct phy_device *phy)
+{
+	struct phy_port *port;
+	int ret;
+
+	list_for_each_entry(port, &phy->ports, head) {
+		ret = phy_link_topo_add_port(dev, port);
+		if (ret)
+			goto cleanup;
+	}
+
+	return 0;
+
+cleanup:
+	list_for_each_entry(port, &phy->ports, head)
+		phy_link_topo_del_port(dev, port);
+
+	return ret;
 }
 
 int phy_link_topo_add_phy(struct net_device *dev,
@@ -76,8 +102,14 @@ int phy_link_topo_add_phy(struct net_device *dev,
 	if (ret < 0)
 		goto err;
 
+	ret = phy_link_topo_add_all_ports(dev, phy);
+	if (ret)
+		goto err_remove;
+
 	return 0;
 
+err_remove:
+	xa_erase(&topo->phys, phy->phyindex);
 err:
 	kfree(pdn);
 	return ret;
@@ -103,3 +135,37 @@ void phy_link_topo_del_phy(struct net_device *dev,
 	kfree(pdn);
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_del_phy);
+
+int phy_link_topo_add_port(struct net_device *dev, struct phy_port *port)
+{
+	struct phy_link_topology *topo = dev->link_topo;
+	int ret;
+
+	if (!topo) {
+		ret = netdev_alloc_phy_link_topology(dev);
+		if (ret)
+			return ret;
+
+		topo = dev->link_topo;
+	}
+
+	if (port->port_index)
+		ret = xa_insert(&topo->ports, port->port_index, port, GFP_KERNEL);
+	else
+		ret = xa_alloc_cyclic(&topo->ports, &port->port_index, port,
+				      xa_limit_32b, &topo->next_port_index,
+				      GFP_KERNEL);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_add_port);
+
+void phy_link_topo_del_port(struct net_device *dev, struct phy_port *port)
+{
+	struct phy_link_topology *topo = dev->link_topo;
+
+	if (!topo || !port->port_index)
+		return;
+
+	xa_erase(&topo->ports, port->port_index);
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_del_port);
