@@ -190,6 +190,13 @@ static void port_dump_done(struct ethnl_dump_ctx *ctx)
 	kfree(ctx->cmd_ctx);
 }
 
+void ethnl_port_notify(struct net_device *dev, struct phy_port *port)
+{
+	pr_info("%s : port %d active [%s] link [%s]\n", __func__, port->port_index,
+		port->active ? "yes" : "no",
+		port->link ? "up" : "down");
+}
+
 const struct ethnl_request_ops ethnl_port_request_ops = {
 	.request_cmd		= ETHTOOL_MSG_PORT_GET,
 	.reply_cmd		= ETHTOOL_MSG_PORT_GET_REPLY,

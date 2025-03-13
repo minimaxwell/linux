@@ -25,6 +25,7 @@
 #include <linux/ethtool_netlink.h>
 #include <linux/phy.h>
 #include <linux/phy_led_triggers.h>
+#include <linux/phy_port.h>
 #include <linux/sfp.h>
 #include <linux/workqueue.h>
 #include <linux/mdio.h>
@@ -61,6 +62,37 @@ static const char *phy_state_to_str(enum phy_state st)
 	return NULL;
 }
 
+static bool phy_is_single_port(struct phy_device *phydev)
+{
+	return phydev->n_ports == 1;
+}
+
+static struct phy_port *phy_single_port_get(struct phy_device *phydev)
+{
+	struct phy_port *port = list_first_entry_or_null(&phydev->ports,
+							 struct phy_port,
+							 head);
+
+	return port;
+}
+
+static void phy_single_port_set_link(struct phy_device *phydev, bool link)
+{
+	struct phy_port *port;
+
+	if (!phy_is_single_port(phydev))
+		return;
+
+	port = phy_single_port_get(phydev);
+	if (!port)
+		return;
+
+	if (port->link != link) {
+		port->link = link;
+		phy_port_state_change(port);
+	}
+}
+
 static void phy_process_state_change(struct phy_device *phydev,
 				     enum phy_state old_state)
 {
@@ -77,10 +109,13 @@ static void phy_link_up(struct phy_device *phydev)
 {
 	phydev->phy_link_change(phydev, true);
 	phy_led_trigger_change_speed(phydev);
+
+	phy_single_port_set_link(phydev, true);
 }
 
 static void phy_link_down(struct phy_device *phydev)
 {
+	phy_single_port_set_link(phydev, false);
 	phydev->phy_link_change(phydev, false);
 	phy_led_trigger_change_speed(phydev);
 	WRITE_ONCE(phydev->link_down_events, phydev->link_down_events + 1);

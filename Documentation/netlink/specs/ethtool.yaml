@@ -2440,4 +2440,7 @@ operations:
             - active
             - selected
       dump: *port-get-op
-
+    -
+      name: port-ntf
+      doc: Notification for change in ports.
+      notify: port-get

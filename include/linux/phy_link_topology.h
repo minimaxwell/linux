@@ -25,6 +25,13 @@ struct phy_link_topology {
 
 	struct xarray ports;
 	u32 next_port_index;
+
+	/* All of that is just for ports */
+	struct net_device *dev;
+	struct phy_port *active_port;
+	int state;
+	struct mutex lock;
+	struct delayed_work state_queue;
 };
 
 struct phy_device_node {

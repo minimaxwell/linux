@@ -28,6 +28,8 @@ static int netdev_alloc_phy_link_topology(struct net_device *dev)
 	topo->next_port_index = 1;
 
 	dev->link_topo = topo;
+	topo->dev = dev;
+	mutex_init(&topo->lock);
 
 	return 0;
 }
@@ -155,6 +157,9 @@ int phy_link_topo_add_port(struct net_device *dev, struct phy_port *port)
 		ret = xa_alloc_cyclic(&topo->ports, &port->port_index, port,
 				      xa_limit_32b, &topo->next_port_index,
 				      GFP_KERNEL);
+
+	port->topo = topo;
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_add_port);
@@ -167,5 +172,7 @@ void phy_link_topo_del_port(struct net_device *dev, struct phy_port *port)
 		return;
 
 	xa_erase(&topo->ports, port->port_index);
+
+	port->topo = NULL;
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_del_port);

@@ -43,7 +43,9 @@ struct phy_port_ops {
  * @medium: The physical medium this port provides access to
  * @supported: The link modes this port can expose, if this port is MDI (not MII)
  * @interfaces: The MII interfaces this port supports, if this port is MII
+ * @topo: The topology this port sits on
  * @active: Indicates if the port is currently part of the active link.
+ * @enabled: Admin state of the port.
  * @is_serdes: Indicates if this port is Serialised MII (Media Independent
  *	       Interface), or an MDI (Media Dependent Interface).
  */
@@ -62,8 +64,17 @@ struct phy_port {
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
 	DECLARE_PHY_INTERFACE_MASK(interfaces);
 
+	struct phy_link_topology *topo;
+
+	unsigned int link:1;
 	unsigned int active:1;
+	unsigned int enabled:1;
 	unsigned int is_serdes:1;
+};
+
+enum {
+	PORT_SM_LISTENING,
+	PORT_SM_ESTABLISHED,
 };
 
 struct phy_port *phy_port_alloc(void);
@@ -89,5 +100,8 @@ static inline bool phy_port_is_fiber(struct phy_port *port)
 void phy_port_update_supported(struct phy_port *port);
 
 int phy_port_get_type(struct phy_port *port);
+
+/* Parent API : Notify about port state changes */
+void phy_port_state_change(struct phy_port *port);
 
 #endif
