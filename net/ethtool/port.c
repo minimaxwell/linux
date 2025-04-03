@@ -81,6 +81,21 @@ static int port_reply_size(const struct ethnl_req_info *req_info,
 	return size;
 }
 
+struct port_ntf_ctx {
+	unsigned int port_index;
+};
+
+static int port_prepare_ntf(const struct ethnl_req_info *req_info,
+			    struct ethnl_reply_data *reply_data,
+			    const void *ctx)
+{
+	const struct port_ntf_ctx *port_ctx = ctx;
+
+	req->port_index = port_ctx->port_index;
+
+	return 0;
+}
+
 static int port_prepare_data(const struct ethnl_req_info *req_info,
 			     struct ethnl_reply_data *reply_data,
 			     const struct genl_info *info)
@@ -192,9 +207,14 @@ static void port_dump_done(struct ethnl_dump_ctx *ctx)
 
 void ethnl_port_notify(struct net_device *dev, struct phy_port *port)
 {
-	pr_info("%s : port %d active [%s] link [%s]\n", __func__, port->port_index,
-		port->active ? "yes" : "no",
-		port->link ? "up" : "down");
+	struct port_ntf_ctx ctx = {};
+
+	if (!port->topo || !port->topo->dev)
+		return;
+
+	ctx.port_index = port->port_index;
+
+	ethnl_notify(port->topo->dev, ETHTOOL_MSG_PORT_NTF, &ctx);
 }
 
 const struct ethnl_request_ops ethnl_port_request_ops = {

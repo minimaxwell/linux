@@ -792,6 +792,12 @@ static void ethnl_default_notify(struct net_device *dev, unsigned int cmd,
 	netdev_ops_assert_locked(dev);
 
 	ethnl_init_reply_data(reply_data, ops, dev);
+	if (ops->prepare_ntf) {
+		ret = ops->prepare_ntf(req_info, reply_data, data);
+		if (ret < 0)
+			goto err_rep;
+	}
+
 	ret = ops->prepare_data(req_info, reply_data, &info);
 	if (ret < 0)
 		goto err_rep;
@@ -856,6 +862,7 @@ static const ethnl_notify_handler_t ethnl_notify_handlers[] = {
 	[ETHTOOL_MSG_MODULE_NTF]	= ethnl_default_notify,
 	[ETHTOOL_MSG_PLCA_NTF]		= ethnl_default_notify,
 	[ETHTOOL_MSG_MM_NTF]		= ethnl_default_notify,
+	[ETHTOOL_MSG_PORT_NTF]		= ethnl_default_notify,
 };
 
 void ethtool_notify(struct net_device *dev, unsigned int cmd, const void *data)

@@ -372,6 +372,10 @@ int ethnl_sock_priv_set(struct sk_buff *skb, struct net_device *dev, u32 portid,
  *	 - 0 if no configuration has changed
  *	 - 1 if configuration changed and notification should be generated
  *	 - negative errno on errors
+ * @prepare_ntf:
+ *	Optional callback to prepare a notification by setting-up the context
+ *	information needed by prepare_data. The ctx param comes straight from
+ *	the ethnl_notify void *data pointer.
  *
  * Description of variable parts of GET request handling when using the
  * unified infrastructure. When used, a pointer to an instance of this
@@ -407,6 +411,9 @@ struct ethnl_request_ops {
 			    struct genl_info *info);
 	int (*set)(struct ethnl_req_info *req_info,
 		   struct genl_info *info);
+	int (*prepare_ntf)(const struct ethnl_req_info *req_info,
+			   struct ethnl_reply_data *reply_data,
+			   const void *ctx);
 };
 
 /* request handlers */
