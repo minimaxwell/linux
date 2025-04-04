@@ -89,6 +89,7 @@ static int port_prepare_ntf(const struct ethnl_req_info *req_info,
 			    struct ethnl_reply_data *reply_data,
 			    const void *ctx)
 {
+	struct port_req_info *req = PORT_REQINFO(req_info);
 	const struct port_ntf_ctx *port_ctx = ctx;
 
 	req->port_index = port_ctx->port_index;
@@ -214,7 +215,7 @@ void ethnl_port_notify(struct net_device *dev, struct phy_port *port)
 
 	ctx.port_index = port->port_index;
 
-	ethnl_notify(port->topo->dev, ETHTOOL_MSG_PORT_NTF, &ctx);
+	ethtool_notify(port->topo->dev, ETHTOOL_MSG_PORT_NTF, &ctx);
 }
 
 const struct ethnl_request_ops ethnl_port_request_ops = {
@@ -226,6 +227,7 @@ const struct ethnl_request_ops ethnl_port_request_ops = {
 
 	.parse_request		= port_parse_request,
 	.prepare_data		= port_prepare_data,
+	.prepare_ntf		= port_prepare_ntf,
 	.reply_size		= port_reply_size,
 	.fill_reply		= port_fill_reply,
 	.cleanup_data		= port_cleanup_data,

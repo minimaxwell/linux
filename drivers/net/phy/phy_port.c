@@ -4,7 +4,6 @@
  * Copyright (c) 2024 Maxime Chevallier <maxime.chevallier@bootlin.com>
  */
 
-#include <linux/ethtool_netlink.h>
 #include <linux/linkmode.h>
 #include <linux/of.h>
 #include <linux/phy_link_topology.h>
@@ -187,64 +186,14 @@ int phy_port_get_type(struct phy_port *port)
 }
 EXPORT_SYMBOL_GPL(phy_port_get_type);
 
-static void phy_port_sm(struct phy_link_topology *topo)
+void phy_port_set_link(struct phy_port *port, bool link)
 {
-	unsigned long port_index;
-	struct phy_port *p;
+	if (port->link == link)
+		return;
 
-	mutex_lock(&topo->lock);
-	switch (topo->state) {
-	case PORT_SM_LISTENING:
-		xa_for_each(&topo->ports, port_index, p) {
-			if (!p->enabled)
-				continue;
+	port->link = link;
 
-			if (p->link) {
-				p->active = true;
-				topo->state = PORT_SM_ESTABLISHED;
-				topo->active_port = p;
-				ethnl_port_notify(topo->dev, p);
-				goto out;
-			}
-		}
-		break;
-	case PORT_SM_ESTABLISHED:
-		/* If the active port is still has link, nothing to do */
-		if (topo->active_port->link && topo->active_port->enabled)
-			break;
-
-		/* Active port has lost link, notify that */
-		topo->active_port->active = false;
-
-		ethnl_port_notify(topo->dev, topo->active_port);
-
-		/* Let's see if other ports have link */
-		xa_for_each(&topo->ports, port_index, p) {
-			if (p->enabled && p->link) {
-				p->active = true;
-				topo->active_port = p;
-				ethnl_port_notify(topo->dev, p);
-				goto out;
-			}
-		}
-
-		/* No enabled port has link */
-		topo->active_port = NULL;
-		topo->state = PORT_SM_LISTENING;
-	}
-out:
-	mutex_unlock(&topo->lock);
-}
-
-/**
- * phy_port_state_change() - Notify that a port has changed state
- * @port: The port whose state changed
- *
- * This helper must be called by the port driver to notify status changes.
- */
-void phy_port_state_change(struct phy_port *port)
-{
 	if (port->topo)
-		phy_port_sm(port->topo);
+		phy_link_topo_update(port->topo);
 }
-EXPORT_SYMBOL_GPL(phy_port_state_change);
+EXPORT_SYMBOL_GPL(phy_port_set_link);

@@ -62,6 +62,8 @@ phy_link_topo_get_port(struct net_device *dev, u32 port_index)
 	return xa_load(&topo->ports, port_index);
 }
 
+void phy_link_topo_update(struct phy_link_topology *topo);
+
 #if IS_ENABLED(CONFIG_PHYLIB)
 int phy_link_topo_add_phy(struct net_device *dev,
 			  struct phy_device *phy,

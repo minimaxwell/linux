@@ -25,6 +25,7 @@
 #include <linux/ethtool_netlink.h>
 #include <linux/phy.h>
 #include <linux/phy_led_triggers.h>
+#include <linux/phy_link_topology.h>
 #include <linux/phy_port.h>
 #include <linux/sfp.h>
 #include <linux/workqueue.h>
@@ -87,10 +88,7 @@ static void phy_single_port_set_link(struct phy_device *phydev, bool link)
 	if (!port)
 		return;
 
-	if (port->link != link) {
-		port->link = link;
-		phy_port_state_change(port);
-	}
+	phy_port_set_link(port, link);
 }
 
 static void phy_process_state_change(struct phy_device *phydev,

@@ -6,12 +6,15 @@
  * Copyright (c) 2023 Maxime Chevallier<maxime.chevallier@bootlin.com>
  */
 
+#include <linux/ethtool_netlink.h>
 #include <linux/list.h>
 #include <linux/phy_link_topology.h>
 #include <linux/phy.h>
 #include <linux/phy_port.h>
 #include <linux/rtnetlink.h>
 #include <linux/xarray.h>
+
+static void phy_link_topo_port_sm(struct work_struct *work);
 
 static int netdev_alloc_phy_link_topology(struct net_device *dev)
 {
@@ -30,6 +33,7 @@ static int netdev_alloc_phy_link_topology(struct net_device *dev)
 	dev->link_topo = topo;
 	topo->dev = dev;
 	mutex_init(&topo->lock);
+	INIT_DELAYED_WORK(&topo->state_queue, phy_link_topo_port_sm);
 
 	return 0;
 }
@@ -176,3 +180,68 @@ void phy_link_topo_del_port(struct net_device *dev, struct phy_port *port)
 	port->topo = NULL;
 }
 EXPORT_SYMBOL_GPL(phy_link_topo_del_port);
+
+static void phy_link_topo_port_sm(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct phy_link_topology *topo = container_of(dwork,
+						      struct phy_link_topology,
+						      state_queue);
+	unsigned long port_index;
+	struct phy_port *p;
+
+	mutex_lock(&topo->lock);
+	switch (topo->state) {
+	case PORT_SM_LISTENING:
+		xa_for_each(&topo->ports, port_index, p) {
+			if (!p->enabled)
+				continue;
+
+			if (p->link) {
+				p->active = true;
+				topo->state = PORT_SM_ESTABLISHED;
+				topo->active_port = p;
+				ethnl_port_notify(topo->dev, p);
+				goto out;
+			}
+		}
+		break;
+	case PORT_SM_ESTABLISHED:
+		/* If the active port is still has link, nothing to do */
+		if (topo->active_port->link && topo->active_port->enabled)
+			break;
+
+		/* Active port has lost link, notify that */
+		topo->active_port->active = false;
+
+		ethnl_port_notify(topo->dev, topo->active_port);
+
+		/* Let's see if other ports have link */
+		xa_for_each(&topo->ports, port_index, p) {
+			if (p->enabled && p->link) {
+				p->active = true;
+				topo->active_port = p;
+				ethnl_port_notify(topo->dev, p);
+				goto out;
+			}
+		}
+
+		/* No enabled port has link */
+		topo->active_port = NULL;
+		topo->state = PORT_SM_LISTENING;
+	}
+out:
+	mutex_unlock(&topo->lock);
+}
+
+/**
+ * phy_port_state_change() - Notify that a port has changed state
+ * @port: The port whose state changed
+ *
+ * This helper must be called by the port driver to notify status changes.
+ */
+void phy_link_topo_update(struct phy_link_topology *topo)
+{
+	queue_delayed_work(system_power_efficient_wq, &topo->state_queue, 0);
+}
+EXPORT_SYMBOL_GPL(phy_link_topo_update);
