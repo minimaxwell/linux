@@ -339,34 +339,6 @@ int ethnl_multicast(struct sk_buff *skb, struct net_device *dev)
 
 /* GET request helpers */
 
-/**
- * struct ethnl_dump_ctx - context structure for generic dumpit() callback
- * @ops:        request ops of currently processed message type
- * @req_info:   parsed request header of processed request
- * @reply_data: data needed to compose the reply
- * @pos_ifindex: saved iteration position - ifindex
- *
- * These parameters are kept in struct netlink_callback as context preserved
- * between iterations. They are initialized by ethnl_default_start() and used
- * in ethnl_default_dumpit() and ethnl_default_done().
- */
-struct ethnl_dump_ctx {
-	const struct ethnl_request_ops	*ops;
-	struct ethnl_req_info		*req_info;
-	struct ethnl_reply_data		*reply_data;
-	unsigned long			pos_ifindex;
-};
-
-/**
- * struct ethnl_perphy_dump_ctx - context for dumpit() PHY-aware callbacks
- * @ethnl_ctx: generic ethnl context
- * @pos_phyindex: iterator position for multi-msg DUMP
- */
-struct ethnl_perphy_dump_ctx {
-	struct ethnl_dump_ctx	ethnl_ctx;
-	unsigned long		pos_phyindex;
-};
-
 static const struct ethnl_request_ops *
 ethnl_default_requests[__ETHTOOL_MSG_USER_CNT] = {
 	[ETHTOOL_MSG_STRSET_GET]	= &ethnl_strset_request_ops,
@@ -418,10 +390,10 @@ static struct ethnl_dump_ctx *ethnl_dump_context(struct netlink_callback *cb)
 	return (struct ethnl_dump_ctx *)cb->ctx;
 }
 
-static struct ethnl_perphy_dump_ctx *
-ethnl_perphy_dump_context(struct netlink_callback *cb)
+static struct ethnl_topo_dump_ctx *
+ethnl_topo_dump_context(struct netlink_callback *cb)
 {
-	return (struct ethnl_perphy_dump_ctx *)cb->ctx;
+	return (struct ethnl_topo_dump_ctx *)cb->ctx;
 }
 
 /**
@@ -679,10 +651,10 @@ free_req_info:
 	return ret;
 }
 
-/* perphy ->start() handler for GET requests */
-static int ethnl_perphy_start(struct netlink_callback *cb)
+/* topo ->start() handler for GET requests */
+static int ethnl_topo_start(struct netlink_callback *cb)
 {
-	struct ethnl_perphy_dump_ctx *phy_ctx = ethnl_perphy_dump_context(cb);
+	struct ethnl_topo_dump_ctx *phy_ctx = ethnl_topo_dump_context(cb);
 	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
 	struct ethnl_dump_ctx *ctx = &phy_ctx->ethnl_ctx;
 	struct ethnl_reply_data *reply_data;
@@ -726,21 +698,48 @@ free_req_info:
 	return ret;
 }
 
-static int ethnl_perphy_dump_one_dev(struct sk_buff *skb,
-				     struct net_device *dev,
-				     struct ethnl_perphy_dump_ctx *ctx,
-				     const struct genl_info *info)
+static int ethnl_perphy_start(struct netlink_callback *cb)
+{
+	struct ethnl_topo_dump_ctx *ctx;
+	int ret;
+
+	ret = ethnl_topo_start(cb);
+	if (ret)
+		return ret;
+
+	ctx = ethnl_topo_dump_context(cb);
+	ctx->per_phy = true;
+
+	return 0;
+}
+
+static int ethnl_perport_start(struct netlink_callback *cb)
+{
+	struct ethnl_topo_dump_ctx *ctx;
+	int ret;
+
+	ret = ethnl_topo_start(cb);
+	if (ret)
+		return ret;
+
+	ctx = ethnl_topo_dump_context(cb);
+	ctx->per_port = true;
+
+	return 0;
+}
+
+static int ethnl_topo_dump_one_dev_perphy(struct sk_buff *skb,
+					  struct net_device *dev,
+					  struct ethnl_topo_dump_ctx *ctx,
+					  const struct genl_info *info)
 {
 	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
 	struct phy_device_node *pdn;
 	int ret = 0;
 
-	if (!dev->link_topo)
-		return 0;
-
-	xa_for_each_start(&dev->link_topo->phys, ctx->pos_phyindex, pdn,
-			  ctx->pos_phyindex) {
-		ethnl_ctx->req_info->phy_index = ctx->pos_phyindex;
+	xa_for_each_start(&dev->link_topo->phys, ctx->pos_index, pdn,
+			  ctx->pos_index) {
+		ethnl_ctx->req_info->phy_index = ctx->pos_index;
 
 		/* We can re-use the original dump_one as ->prepare_data in
 		 * commands use ethnl_req_get_phydev(), which gets the PHY from
@@ -754,8 +753,47 @@ static int ethnl_perphy_dump_one_dev(struct sk_buff *skb,
 	return ret;
 }
 
-static int ethnl_perphy_dump_all_dev(struct sk_buff *skb,
-				     struct ethnl_perphy_dump_ctx *ctx,
+static int ethnl_topo_dump_one_dev_perport(struct sk_buff *skb,
+					   struct net_device *dev,
+					   struct ethnl_topo_dump_ctx *ctx,
+					   const struct genl_info *info)
+{
+	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
+	struct phy_port *port;
+	int ret = 0;
+
+	xa_for_each_start(&dev->link_topo->ports, ctx->pos_index, port,
+			  ctx->pos_index) {
+		ethnl_ctx->req_info->port_index = ctx->pos_index;
+
+		ret = ethnl_default_dump_one(skb, dev, ethnl_ctx, info);
+		if (ret)
+			break;
+	}
+
+	return ret;
+}
+
+static int ethnl_topo_dump_one_dev(struct sk_buff *skb,
+				     struct net_device *dev,
+				     struct ethnl_topo_dump_ctx *ctx,
+				     const struct genl_info *info)
+{
+	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
+
+	if (!dev->link_topo)
+		return 0;
+
+	if (ctx->per_phy)
+		return ethnl_topo_dump_one_dev_perphy(skb, dev, ctx, info);
+	else if (ctx->per_port)
+		return ethnl_topo_dump_one_dev_perport(skb, dev, ctx, info);
+	else
+		return ethnl_default_dump_one(skb, dev, ethnl_ctx, info);
+}
+
+static int ethnl_topo_dump_all_dev(struct sk_buff *skb,
+				     struct ethnl_topo_dump_ctx *ctx,
 				     const struct genl_info *info)
 {
 	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
@@ -772,7 +810,7 @@ static int ethnl_perphy_dump_all_dev(struct sk_buff *skb,
 		 * net_device in the req_info
 		 */
 		ethnl_ctx->req_info->dev = dev;
-		ret = ethnl_perphy_dump_one_dev(skb, dev, ctx, info);
+		ret = ethnl_topo_dump_one_dev(skb, dev, ctx, info);
 
 		rcu_read_lock();
 		dev_put(dev);
@@ -789,16 +827,16 @@ static int ethnl_perphy_dump_all_dev(struct sk_buff *skb,
 	return ret;
 }
 
-/* perphy ->dumpit() handler for GET requests. */
-static int ethnl_perphy_dumpit(struct sk_buff *skb,
-			       struct netlink_callback *cb)
+/* topo ->dumpit() handler for GET requests. */
+static int ethnl_topo_dumpit(struct sk_buff *skb,
+			     struct netlink_callback *cb)
 {
-	struct ethnl_perphy_dump_ctx *ctx = ethnl_perphy_dump_context(cb);
+	struct ethnl_topo_dump_ctx *ctx = ethnl_topo_dump_context(cb);
 	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
 	int ret = 0;
 
 	if (ethnl_ctx->req_info->dev) {
-		ret = ethnl_perphy_dump_one_dev(skb, ethnl_ctx->req_info->dev,
+		ret = ethnl_topo_dump_one_dev(skb, ethnl_ctx->req_info->dev,
 						ctx, genl_info_dump(cb));
 
 		if (ret < 0 && ret != -EOPNOTSUPP && likely(skb->len))
@@ -807,16 +845,16 @@ static int ethnl_perphy_dumpit(struct sk_buff *skb,
 		netdev_put(ethnl_ctx->req_info->dev,
 			   &ethnl_ctx->req_info->dev_tracker);
 	} else {
-		ret = ethnl_perphy_dump_all_dev(skb, ctx, genl_info_dump(cb));
+		ret = ethnl_topo_dump_all_dev(skb, ctx, genl_info_dump(cb));
 	}
 
 	return ret;
 }
 
-/* perphy ->done() handler for GET requests */
-static int ethnl_perphy_done(struct netlink_callback *cb)
+/* topo ->done() handler for GET requests */
+static int ethnl_topo_done(struct netlink_callback *cb)
 {
-	struct ethnl_perphy_dump_ctx *ctx = ethnl_perphy_dump_context(cb);
+	struct ethnl_topo_dump_ctx *ctx = ethnl_topo_dump_context(cb);
 	struct ethnl_dump_ctx *ethnl_ctx = &ctx->ethnl_ctx;
 
 	kfree(ethnl_ctx->reply_data);
@@ -1370,9 +1408,9 @@ static const struct genl_ops ethtool_genl_ops[] = {
 	{
 		.cmd	= ETHTOOL_MSG_PSE_GET,
 		.doit	= ethnl_default_doit,
-		.start	= ethnl_perphy_start,
-		.dumpit	= ethnl_perphy_dumpit,
-		.done	= ethnl_perphy_done,
+		.start	= ethnl_topo_start,
+		.dumpit	= ethnl_topo_dumpit,
+		.done	= ethnl_topo_done,
 		.policy = ethnl_pse_get_policy,
 		.maxattr = ARRAY_SIZE(ethnl_pse_get_policy) - 1,
 	},
@@ -1395,8 +1433,8 @@ static const struct genl_ops ethtool_genl_ops[] = {
 		.cmd	= ETHTOOL_MSG_PLCA_GET_CFG,
 		.doit	= ethnl_default_doit,
 		.start	= ethnl_perphy_start,
-		.dumpit	= ethnl_perphy_dumpit,
-		.done	= ethnl_perphy_done,
+		.dumpit	= ethnl_topo_dumpit,
+		.done	= ethnl_topo_done,
 		.policy = ethnl_plca_get_cfg_policy,
 		.maxattr = ARRAY_SIZE(ethnl_plca_get_cfg_policy) - 1,
 	},
@@ -1411,8 +1449,8 @@ static const struct genl_ops ethtool_genl_ops[] = {
 		.cmd	= ETHTOOL_MSG_PLCA_GET_STATUS,
 		.doit	= ethnl_default_doit,
 		.start	= ethnl_perphy_start,
-		.dumpit	= ethnl_perphy_dumpit,
-		.done	= ethnl_perphy_done,
+		.dumpit	= ethnl_topo_dumpit,
+		.done	= ethnl_topo_done,
 		.policy = ethnl_plca_get_status_policy,
 		.maxattr = ARRAY_SIZE(ethnl_plca_get_status_policy) - 1,
 	},
@@ -1443,8 +1481,8 @@ static const struct genl_ops ethtool_genl_ops[] = {
 		.cmd	= ETHTOOL_MSG_PHY_GET,
 		.doit	= ethnl_default_doit,
 		.start	= ethnl_perphy_start,
-		.dumpit	= ethnl_perphy_dumpit,
-		.done	= ethnl_perphy_done,
+		.dumpit	= ethnl_topo_dumpit,
+		.done	= ethnl_topo_done,
 		.policy = ethnl_phy_get_policy,
 		.maxattr = ARRAY_SIZE(ethnl_phy_get_policy) - 1,
 	},
@@ -1463,6 +1501,15 @@ static const struct genl_ops ethtool_genl_ops[] = {
 		.doit	= ethnl_default_set_doit,
 		.policy = ethnl_tsconfig_set_policy,
 		.maxattr = ARRAY_SIZE(ethnl_tsconfig_set_policy) - 1,
+	},
+	{
+		.cmd	= ETHTOOL_MSG_PORT_GET,
+		.doit	= ethnl_default_doit,
+		.start	= ethnl_perport_start,
+		.dumpit	= ethnl_default_dumpit,
+		.done	= ethnl_default_done,
+		.policy = ethnl_port_get_policy,
+		.maxattr = ARRAY_SIZE(ethnl_port_get_policy) - 1,
 	},
 };
 
