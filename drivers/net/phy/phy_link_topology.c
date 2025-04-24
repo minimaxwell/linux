@@ -32,7 +32,6 @@ static int netdev_alloc_phy_link_topology(struct net_device *dev)
 
 	dev->link_topo = topo;
 	topo->dev = dev;
-	mutex_init(&topo->lock);
 	INIT_DELAYED_WORK(&topo->state_queue, phy_link_topo_port_sm);
 
 	return 0;
@@ -190,7 +189,7 @@ static void phy_link_topo_port_sm(struct work_struct *work)
 	unsigned long port_index;
 	struct phy_port *p;
 
-	mutex_lock(&topo->lock);
+	rtnl_lock();
 	switch (topo->state) {
 	case PORT_SM_LISTENING:
 		xa_for_each(&topo->ports, port_index, p) {
@@ -231,7 +230,7 @@ static void phy_link_topo_port_sm(struct work_struct *work)
 		topo->state = PORT_SM_LISTENING;
 	}
 out:
-	mutex_unlock(&topo->lock);
+	rtnl_unlock();
 }
 
 /**
