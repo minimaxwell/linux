@@ -159,56 +159,10 @@ static void port_cleanup_data(struct ethnl_reply_data *reply_data)
 	kfree(rep_data->parent_name);
 }
 
-struct port_dump_ctx {
-	unsigned long port_idx;
-};
-
-static int port_dump_start(struct ethnl_dump_ctx *ctx)
-{
-	struct port_dump_ctx *dump_ctx;
-
-	dump_ctx = kzalloc(sizeof(*dump_ctx), GFP_KERNEL);
-	if (!dump_ctx)
-		return -ENOMEM;
-
-	ctx->cmd_ctx = dump_ctx;
-
-	return 0;
-}
-
-static int port_dump_one_dev(struct sk_buff *skb, struct ethnl_dump_ctx *ctx,
-			      const struct genl_info *info)
-{
-	struct port_req_info *req_info = PORT_REQINFO(ctx->req_info);
-	struct net_device *dev = ctx->reply_data->dev;
-	struct port_dump_ctx *dump_ctx = ctx->cmd_ctx;
-	struct phy_port *port;
-	int ret;
-
-	if (!dev->link_topo)
-		return 0;
-
-	xa_for_each_start(&dev->link_topo->ports, dump_ctx->port_idx,
-			  port, dump_ctx->port_idx) {
-
-		req_info->port_index = dump_ctx->port_idx;
-
-		ret = ethnl_default_dump_one(skb, ctx, info);
-		if (ret)
-			break;
-	}
-
-	return ret;
-}
-
-static void port_dump_done(struct ethnl_dump_ctx *ctx)
-{
-	kfree(ctx->cmd_ctx);
-}
-
 void ethnl_port_notify(struct net_device *dev, struct phy_port *port)
 {
 	struct port_ntf_ctx ctx = {};
+	ASSERT_RTNL();
 
 	if (!port->topo || !port->topo->dev)
 		return;
@@ -231,11 +185,4 @@ const struct ethnl_request_ops ethnl_port_request_ops = {
 	.reply_size		= port_reply_size,
 	.fill_reply		= port_fill_reply,
 	.cleanup_data		= port_cleanup_data,
-
-	/* Need custom DUMP */
-	.dump_start		= port_dump_start,
-	.dump_one_dev		= port_dump_one_dev,
-	.dump_done		= port_dump_done,
-
-	.allow_pernetdev_dump	= true,
 };

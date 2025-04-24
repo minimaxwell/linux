@@ -264,6 +264,7 @@ struct ethnl_req_info {
 	netdevice_tracker	dev_tracker;
 	u32			flags;
 	u32			phy_index;
+	u32			port_index;
 };
 
 static inline void ethnl_parse_header_dev_put(struct ethnl_req_info *req_info)
@@ -306,6 +307,38 @@ struct phy_device *ethnl_req_get_phydev(const struct ethnl_req_info *req_info,
 struct ethnl_reply_data {
 	struct net_device		*dev;
 };
+
+/**
+ * struct ethnl_dump_ctx - context structure for generic dumpit() callback
+ * @ops:        request ops of currently processed message type
+ * @req_info:   parsed request header of processed request
+ * @reply_data: data needed to compose the reply
+ * @pos_ifindex: saved iteration position - ifindex
+ *
+ * These parameters are kept in struct netlink_callback as context preserved
+ * between iterations. They are initialized by ethnl_default_start() and used
+ * in ethnl_default_dumpit() and ethnl_default_done().
+ */
+struct ethnl_dump_ctx {
+	const struct ethnl_request_ops	*ops;
+	struct ethnl_req_info		*req_info;
+	struct ethnl_reply_data		*reply_data;
+	unsigned long			pos_ifindex;
+};
+
+/**
+ * struct ethnl_topo_dump_ctx - context for dumpit() PHY-aware callbacks
+ * @ethnl_ctx: generic ethnl context
+ * @pos_index: iterator position for multi-msg DUMP
+ */
+struct ethnl_topo_dump_ctx {
+	struct ethnl_dump_ctx	ethnl_ctx;
+	unsigned long		pos_index;
+	bool			per_phy;
+	bool			per_port;
+};
+
+
 
 int ethnl_ops_begin(struct net_device *dev);
 void ethnl_ops_complete(struct net_device *dev);
@@ -496,6 +529,7 @@ extern const struct nla_policy ethnl_module_fw_flash_act_policy[ETHTOOL_A_MODULE
 extern const struct nla_policy ethnl_phy_get_policy[ETHTOOL_A_PHY_HEADER + 1];
 extern const struct nla_policy ethnl_tsconfig_get_policy[ETHTOOL_A_TSCONFIG_HEADER + 1];
 extern const struct nla_policy ethnl_tsconfig_set_policy[ETHTOOL_A_TSCONFIG_MAX + 1];
+extern const struct nla_policy ethnl_port_get_policy[ETHTOOL_A_PORT_INDEX + 1];
 
 int ethnl_set_features(struct sk_buff *skb, struct genl_info *info);
 int ethnl_act_cable_test(struct sk_buff *skb, struct genl_info *info);
