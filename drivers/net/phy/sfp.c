@@ -513,6 +513,27 @@ static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
 	__set_bit(PHY_INTERFACE_MODE_1000BASEX, caps->interfaces);
 }
 
+static void sfp_fixup_sgmii_100fx(struct sfp *sfp)
+{
+	sfp->module_t_wait = msecs_to_jiffies(500);
+
+	/* Some SGMII to 100FX modules will lock the i2c bus if the internal
+	 * PHY is accessed with regular 2-byte mdio i2c accesses, but work
+	 * fine with single-byte accesses.
+	 */
+	sfp->mdio_xfer_size = 1;
+}
+
+static void sfp_quirk_sgmii_100fx(const struct sfp_eeprom_id *id,
+				  struct sfp_module_caps *caps)
+{
+	/* Prolabs GLC-GE-100FX-C SGMII to 100FX module doesn't set the
+	 * base.e100_base_fx bit.
+	 */
+	linkmode_set_bit(ETHTOOL_LINK_MODE_100baseFX_Full_BIT,
+			 caps->link_modes);
+}
+
 #define SFP_QUIRK(_v, _p, _s, _f) \
 	{ .vendor = _v, .part = _p, .support = _s, .fixup = _f, }
 #define SFP_QUIRK_S(_v, _p, _s) SFP_QUIRK(_v, _p, _s, NULL)
@@ -612,6 +633,10 @@ static const struct sfp_quirk sfp_quirks[] = {
 	SFP_QUIRK_F("Turris", "RTSFP-10G", sfp_fixup_rollball),
 
 	SFP_QUIRK_S("ZOERAX", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+	SFP_QUIRK("CISCO-PROLABS", "GLC-GE-100FX-C",
+		  sfp_quirk_sgmii_100fx, sfp_fixup_sgmii_100fx),
+	SFP_QUIRK("FS", "SFP-GE-100FX",
+		  sfp_quirk_sgmii_100fx, sfp_fixup_sgmii_100fx),
 };
 
 static size_t sfp_strlen(const char *str, size_t maxlen)
