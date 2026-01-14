@@ -105,6 +105,16 @@ static void sfp_module_parse_may_have_phy(struct sfp_bus *bus,
 		return;
 	}
 
+	/* Some 100M fiber modules have a PHY, acting as an SGMII to 100FX
+	 * media converter. Some of these modules are missing capability bits
+	 * in eeprom, but they all seem to correctly report their baudrate
+	 * (br_nominal == 1)
+	 */
+	if (id->base.br_nominal == 1) {
+		bus->caps.may_have_phy = true;
+		return;
+	}
+
 	if (id->base.phys_id != SFF8024_ID_DWDM_SFP) {
 		switch (id->base.extended_cc) {
 		case SFF8024_ECC_10GBASE_T_SFI:
@@ -192,6 +202,16 @@ static void sfp_module_parse_support(struct sfp_bus *bus,
 	if ((id->base.e_base_px || id->base.e_base_bx10) && br_nom == 100) {
 		phylink_set(modes, 100baseFX_Full);
 		__set_bit(PHY_INTERFACE_MODE_100BASEX, interfaces);
+	}
+
+	if (br_nom == 100) {
+		/* There are some 100Mbps modules that embed an SGMII PHY to
+		 * allow supporting 100M fiber on SFP cages that only support
+		 * 1.25GHz serdes. We can't know if there's a PHY ahead of time,
+		 * let's assume we can also use SGMII for 100M ports, we'll
+		 * figure it out by trying to probe for a PHY in the module */
+
+		__set_bit(PHY_INTERFACE_MODE_SGMII, interfaces);
 	}
 
 	/* For active or passive cables, select the link modes
