@@ -16,6 +16,7 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/phy.h>
+#include <linux/sfp.h>
 #include <linux/device.h>
 #include <linux/brcmphy.h>
 #include <linux/of.h>
@@ -455,6 +456,59 @@ static int bcm54811_config_init(struct phy_device *phydev)
 	return bcm5481x_set_brrmode(phydev, priv->brr_mode);
 }
 
+static int bcm5461_config_init(struct phy_device *phydev)
+{
+	int rc, val;
+
+	/* We don't have any special steps to follow for anything other than
+	 * SGMII to 100BaseFX
+	 */
+	if (phydev->interface != PHY_INTERFACE_MODE_SGMII ||
+	    !linkmode_test_bit(ETHTOOL_LINK_MODE_100baseFX_Full_BIT,
+			       phydev->supported))
+		return 0;
+
+	/* Select 1000BASE-X register set (primary SerDes) */
+	val = bcm_phy_read_shadow(phydev, BCM54XX_SHD_MODE);
+	if (val < 0)
+		return val;
+	val |= BCM54XX_SHD_MODE_1000BX;
+	rc = bcm_phy_write_shadow(phydev, BCM54XX_SHD_MODE, val);
+	if (rc < 0)
+		return rc;
+
+	/* Power down SerDes interface */
+	rc = phy_set_bits(phydev, MII_BMCR, BMCR_PDOWN);
+	if (rc < 0)
+		return rc;
+
+	/* Select proper interface mode */
+	val &= ~BCM54XX_SHD_INTF_SEL_MASK;
+	val |= BCM54XX_SHD_INTF_SEL_SGMII;
+	rc = bcm_phy_write_shadow(phydev, BCM54XX_SHD_MODE, val);
+	if (rc < 0)
+		return rc;
+
+	/* Power up SerDes interface */
+	rc = phy_clear_bits(phydev, MII_BMCR, BMCR_PDOWN);
+	if (rc < 0)
+		return rc;
+
+	rc = bcm_phy_write_shadow(phydev, BCM5461_SDH_SIGDET,
+				  BCM5461_SHD_PECL_SD_100FX);
+	if (rc < 0)
+		return rc;
+
+	rc = bcm_phy_write_shadow(phydev, BCM54XX_SHD_SCR1,
+				  BCM54XX_SHD_SCR1_100FX_EN);
+	if (rc)
+		return rc;
+
+	return bcm54xx_auxctl_write(phydev, MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL,
+				    MII_BCM54XX_AUXCTL_ACTL_TX_6DB |
+				    MII_BCM54XX_AUXCTL_ACTL_EDGE_RATE_0NS);
+}
+
 static int bcm54xx_config_init(struct phy_device *phydev)
 {
 	int reg, err, val;
@@ -491,6 +545,9 @@ static int bcm54xx_config_init(struct phy_device *phydev)
 		break;
 	case PHY_ID_BCM54210E:
 		err = bcm54210e_config_init(phydev);
+		break;
+	case PHY_ID_BCM5461:
+		err = bcm5461_config_init(phydev);
 		break;
 	case PHY_ID_BCM54612E:
 		err = bcm54612e_config_init(phydev);
@@ -1260,6 +1317,30 @@ static void bcm54xx_link_change_notify(struct phy_device *phydev)
 	bcm_phy_write_exp(phydev, MII_BCM54XX_EXP_EXP08, ret);
 }
 
+static int bcm5461_get_features(struct phy_device *phydev)
+{
+	if (!phy_on_sfp(phydev))
+		return genphy_read_abilities(phydev);
+
+	if (!phydev->parent_sfp_caps)
+		return -EINVAL;
+
+	/* For SGMII to 100FX modules, the reported linkmodes from
+	 * genphy_read_abilities() are incorrect. Let's repy on the SFP module
+	 * caps
+	 */
+	linkmode_copy(phydev->supported, phydev->parent_sfp_caps->link_modes);
+
+	/* Autoneg must not be enabled for SGMII to 100FX modules */
+	if (phydev->interface == PHY_INTERFACE_MODE_SGMII &&
+	    linkmode_test_bit(ETHTOOL_LINK_MODE_100baseFX_Full_BIT,
+			       phydev->supported))
+		linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+				   phydev->supported);
+
+	return 0;
+}
+
 static int lre_read_master_slave(struct phy_device *phydev)
 {
 	int cfg = MASTER_SLAVE_CFG_UNKNOWN, state;
@@ -1517,6 +1598,7 @@ static struct phy_driver broadcom_drivers[] = {
 	.probe		= bcm54xx_phy_probe,
 	.config_init	= bcm54xx_config_init,
 	.config_intr	= bcm_phy_config_intr,
+	.get_features	= bcm5461_get_features,
 	.handle_interrupt = bcm_phy_handle_interrupt,
 	.link_change_notify	= bcm54xx_link_change_notify,
 	.led_brightness_set	= bcm_phy_led_brightness_set,
