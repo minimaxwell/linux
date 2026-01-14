@@ -2814,30 +2814,31 @@ int phylink_ethtool_set_wol(struct phylink *pl, struct ethtool_wolinfo *wol)
 }
 EXPORT_SYMBOL_GPL(phylink_ethtool_set_wol);
 
-static phy_interface_t phylink_sfp_select_interface(struct phylink *pl,
-						const unsigned long *link_modes)
+static phy_interface_t
+phylink_sfp_select_interface(struct phylink *pl, struct phy_device *mod_phy,
+			     const unsigned long *link_modes)
 {
-	phy_interface_t interface;
+	DECLARE_PHY_INTERFACE_MASK(common_interfaces);
 
-	interface = sfp_select_interface(pl->sfp_bus, link_modes);
-	if (interface == PHY_INTERFACE_MODE_NA) {
-		phylink_err(pl,
-			    "selection of interface failed, advertisement %*pb\n",
-			    __ETHTOOL_LINK_MODE_MASK_NBITS,
-			    link_modes);
-		return interface;
-	}
+	/* If the module PHY reports its possible interfaces, pick one from
+	 * that list that's supported on the SFP bus. Otherwise, pick one from
+	 * the sfp_interfaces list.
+	 */
+	if (mod_phy && !phy_interface_empty(mod_phy->possible_interfaces))
+		phy_interface_and(common_interfaces,
+				  mod_phy->possible_interfaces,
+				  pl->config->supported_interfaces);
+	else
+		phy_interface_and(common_interfaces, pl->sfp_interfaces,
+				  pl->config->supported_interfaces);
 
-	if (!test_bit(interface, pl->config->supported_interfaces)) {
+	if (phy_interface_empty(common_interfaces)) {
 		phylink_err(pl,
-			    "selection of interface failed, SFP selected %s (%u) but MAC supports %*pbl\n",
-			    phy_modes(interface), interface,
-			    (int)PHY_INTERFACE_MODE_MAX,
-			    pl->config->supported_interfaces);
+			    "selection of interface failed, no common interface between MAC and SFP\n");
 		return PHY_INTERFACE_MODE_NA;
 	}
 
-	return interface;
+	return phy_caps_select_fastest_interface(common_interfaces, link_modes);
 }
 
 static phy_interface_t phylink_sfp_select_interface_speed(struct phylink *pl,
@@ -3077,7 +3078,7 @@ int phylink_ethtool_ksettings_set(struct phylink *pl,
 	if (pl->sfp_bus) {
 		if (kset->base.autoneg == AUTONEG_ENABLE)
 			config.interface =
-				phylink_sfp_select_interface(pl,
+				phylink_sfp_select_interface(pl, pl->phydev,
 							config.advertising);
 		else
 			config.interface =
@@ -3706,8 +3707,6 @@ static int phylink_sfp_config_phy(struct phylink *pl, struct phy_device *phy)
 	struct phylink_link_state config;
 	int ret;
 
-	/* We're not using pl->sfp_interfaces, so clear it. */
-	phy_interface_zero(pl->sfp_interfaces);
 	linkmode_copy(support, phy->supported);
 
 	memset(&config, 0, sizeof(config));
@@ -3726,7 +3725,8 @@ static int phylink_sfp_config_phy(struct phylink *pl, struct phy_device *phy)
 		return ret;
 	}
 
-	config.interface = phylink_sfp_select_interface(pl, config.advertising);
+	config.interface = phylink_sfp_select_interface(pl, phy,
+							config.advertising);
 	if (config.interface == PHY_INTERFACE_MODE_NA)
 		return -EINVAL;
 
