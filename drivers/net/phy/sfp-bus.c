@@ -4,10 +4,13 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/phylink.h>
+#include <linux/phy_link_topology.h>
+#include <linux/phy_port.h>
 #include <linux/property.h>
 #include <linux/rtnetlink.h>
 #include <linux/slab.h>
 
+#include "phy-caps.h"
 #include "sfp.h"
 
 /**
@@ -26,7 +29,9 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+	struct net_device *netdev;
 	struct phy_port *upstream_port;
+	struct phy_port *mod_port;
 
 	bool registered;
 	bool started;
@@ -388,6 +393,30 @@ phy_interface_t sfp_select_interface(struct sfp_bus *bus,
 }
 EXPORT_SYMBOL_GPL(sfp_select_interface);
 
+static void sfp_module_port_resolve_support(const struct phy_port *upstream_port,
+					    struct phy_port *mod_port,
+					    const struct sfp_module_caps *caps)
+{
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
+	unsigned long link_caps = 0;
+	phy_interface_t interface;
+
+	/* Filter-out the module's phy_port supported modes according to the
+	 * phy_interface_modes we can achieve on that bus.
+	 */
+	for_each_set_bit(interface, upstream_port->interfaces,
+			 PHY_INTERFACE_MODE_MAX) {
+		if (!test_bit(interface, caps->interfaces))
+			continue;
+
+		link_caps |= phy_caps_from_interface(interface);
+	}
+
+	phy_caps_linkmodes(link_caps, supported);
+
+	linkmode_and(mod_port->supported, supported, caps->link_modes);
+}
+
 static LIST_HEAD(sfp_buses);
 static DEFINE_MUTEX(sfp_mutex);
 
@@ -469,6 +498,11 @@ static int sfp_register_bus(struct sfp_bus *bus)
 	if (bus->started)
 		bus->socket_ops->start(bus->sfp);
 	bus->upstream_ops->attach(bus->upstream, bus);
+
+	if (bus->mod_port)
+		sfp_module_port_resolve_support(bus->upstream_port,
+						bus->mod_port, &bus->caps);
+
 	return 0;
 }
 
@@ -742,6 +776,49 @@ const char *sfp_get_name(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_get_name);
 
+/**
+ * sfp_bus_attach_netdev() - Attach a SFP bus to a netdevice's topology
+ * @bus: a pointer to the &struct sfp_bus structure.
+ * @dev: The net_device to attach to.
+ *
+ * Attaches a SFP bus to a net_device's topology.
+ *
+ * Returns a negative number if an error occurs, 0 otherwise.
+ */
+int sfp_bus_attach_netdev(struct sfp_bus *bus, struct net_device *dev)
+{
+	int ret = 0;
+
+	if (!bus)
+		return 0;
+
+	bus->netdev = dev;
+
+	/* If bus is already registered, check for module, and add its port
+	 * to the topology if needed.
+	 */
+	if (bus->mod_port) {
+		ret = phy_link_topo_add_port(bus->netdev, bus->mod_port);
+		if (ret)
+			bus->netdev = NULL;
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_attach_netdev);
+
+void sfp_bus_detach_netdev(struct sfp_bus *bus)
+{
+	if (!bus)
+		return;
+
+	if (bus->mod_port)
+		phy_link_topo_del_port(bus->netdev, bus->mod_port);
+
+	bus->netdev = NULL;
+}
+EXPORT_SYMBOL_GPL(sfp_bus_detach_netdev);
+
 /* Socket driver entry points */
 int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
 {
@@ -810,6 +887,29 @@ void sfp_module_remove(struct sfp_bus *bus)
 }
 EXPORT_SYMBOL_GPL(sfp_module_remove);
 
+static int sfp_module_create_port(struct sfp_bus *bus)
+{
+	struct phy_port *port = phy_port_alloc();
+
+	if (!port)
+		return -ENOMEM;
+
+	linkmode_copy(port->supported, bus->caps.link_modes);
+	phy_interface_copy(port->interfaces, bus->caps.interfaces);
+
+	port->active = true;
+
+	bus->mod_port = port;
+
+	return 0;
+}
+
+static void sfp_module_destroy_port(struct sfp_bus *bus)
+{
+	phy_port_destroy(bus->mod_port);
+	bus->mod_port = NULL;
+}
+
 int sfp_module_start(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
@@ -818,6 +918,32 @@ int sfp_module_start(struct sfp_bus *bus)
 	if (ops && ops->module_start)
 		ret = ops->module_start(bus->upstream);
 
+	if (ret)
+		return ret;
+
+	if (!bus->phydev) {
+		ret = sfp_module_create_port(bus);
+		if (ret)
+			goto out_stop;
+	}
+
+	if (bus->upstream_port)
+		sfp_module_port_resolve_support(bus->upstream_port,
+						bus->mod_port, &bus->caps);
+
+	if (bus->netdev && bus->mod_port) {
+		ret = phy_link_topo_add_port(bus->netdev, bus->mod_port);
+		if (ret)
+			goto out_destroy_port;
+	}
+
+	return ret;
+
+out_destroy_port:
+	phy_link_topo_del_port(bus->netdev, bus->mod_port);
+out_stop:
+	sfp_module_stop(bus);
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(sfp_module_start);
@@ -825,6 +951,12 @@ EXPORT_SYMBOL_GPL(sfp_module_start);
 void sfp_module_stop(struct sfp_bus *bus)
 {
 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
+
+	if (bus->netdev && bus->mod_port)
+		phy_link_topo_del_port(bus->netdev, bus->mod_port);
+
+	if (bus->mod_port)
+		sfp_module_destroy_port(bus);
 
 	if (ops && ops->module_stop)
 		ops->module_stop(bus->upstream);

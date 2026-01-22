@@ -1823,11 +1823,25 @@ static int phylink_register_sfp(struct phylink *pl,
 		return ret;
 	}
 
+	if (pl->netdev) {
+		ret = sfp_bus_attach_netdev(bus, pl->netdev);
+		if (ret)
+			goto out_destroy_sfp;
+	}
+
 	ret = sfp_bus_add_upstream(bus, pl->sfp_bus_port, pl, &sfp_phylink_ops);
 	sfp_bus_put(bus);
 
 	if (ret)
-		phylink_destroy_sfp_port(pl);
+		goto out_detach_netdev;
+
+	return 0;
+
+out_detach_netdev:
+	if (pl->netdev)
+		sfp_bus_detach_netdev(pl->sfp_bus);
+out_destroy_sfp:
+	phylink_destroy_sfp_port(pl);
 
 	return ret;
 }

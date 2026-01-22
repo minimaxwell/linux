@@ -1816,6 +1816,12 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		err = phy_link_topo_add_phy(dev, phydev, PHY_UPSTREAM_MAC, dev);
 		if (err)
 			goto error;
+
+		if (phydev->sfp_bus) {
+			err = sfp_bus_attach_netdev(phydev->sfp_bus, dev);
+			if (err)
+				goto error;
+		}
 	}
 
 	/* Some Ethernet drivers try to connect to a PHY device before
@@ -1989,6 +1995,7 @@ void phy_detach(struct phy_device *phydev)
 		phydev->attached_dev->phydev = NULL;
 		phydev->attached_dev = NULL;
 		phy_link_topo_del_phy(dev, phydev);
+		sfp_bus_detach_netdev(phydev->sfp_bus);
 	}
 
 	phydev->phy_link_change = NULL;

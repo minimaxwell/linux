@@ -596,6 +596,8 @@ int sfp_bus_add_upstream(struct sfp_bus *bus, struct phy_port *port,
 			 void *upstream, const struct sfp_upstream_ops *ops);
 void sfp_bus_del_upstream(struct sfp_bus *bus);
 const char *sfp_get_name(struct sfp_bus *bus);
+int sfp_bus_attach_netdev(struct sfp_bus *bus, struct net_device *dev);
+void sfp_bus_detach_netdev(struct sfp_bus *bus);
 #else
 static inline const struct sfp_module_caps *
 sfp_get_module_caps(struct sfp_bus *bus)
@@ -665,6 +667,16 @@ static inline void sfp_bus_del_upstream(struct sfp_bus *bus)
 static inline const char *sfp_get_name(struct sfp_bus *bus)
 {
 	return NULL;
+}
+
+static inline int sfp_bus_attach_netdev(struct sfp_bus *bus,
+					struct net_device *dev)
+{
+	return 0;
+}
+
+static inline void sfp_bus_detach_netdev(struct sfp_bus *bus)
+{
 }
 #endif
 
