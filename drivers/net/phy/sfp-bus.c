@@ -499,9 +499,11 @@ static int sfp_register_bus(struct sfp_bus *bus)
 		bus->socket_ops->start(bus->sfp);
 	bus->upstream_ops->attach(bus->upstream, bus);
 
-	if (bus->mod_port)
+	if (bus->mod_port) {
+		bus->upstream_port->occupied = true;
 		sfp_module_port_resolve_support(bus->upstream_port,
 						bus->mod_port, &bus->caps);
+	}
 
 	return 0;
 }
@@ -927,9 +929,11 @@ int sfp_module_start(struct sfp_bus *bus)
 			goto out_stop;
 	}
 
-	if (bus->upstream_port)
+	if (bus->upstream_port) {
+		bus->upstream_port->occupied = true;
 		sfp_module_port_resolve_support(bus->upstream_port,
 						bus->mod_port, &bus->caps);
+	}
 
 	if (bus->netdev && bus->mod_port) {
 		ret = phy_link_topo_add_port(bus->netdev, bus->mod_port);
@@ -941,6 +945,7 @@ int sfp_module_start(struct sfp_bus *bus)
 
 out_destroy_port:
 	phy_link_topo_del_port(bus->netdev, bus->mod_port);
+	bus->upstream_port->occupied = false;
 out_stop:
 	sfp_module_stop(bus);
 
@@ -954,6 +959,9 @@ void sfp_module_stop(struct sfp_bus *bus)
 
 	if (bus->netdev && bus->mod_port)
 		phy_link_topo_del_port(bus->netdev, bus->mod_port);
+
+	if (bus->upstream_port)
+		bus->upstream_port->occupied = false;
 
 	if (bus->mod_port)
 		sfp_module_destroy_port(bus);
