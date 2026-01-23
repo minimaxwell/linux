@@ -26,6 +26,7 @@ struct sfp_bus {
 	const struct sfp_upstream_ops *upstream_ops;
 	void *upstream;
 	struct phy_device *phydev;
+	struct phy_port *upstream_port;
 
 	bool registered;
 	bool started;
@@ -576,6 +577,7 @@ EXPORT_SYMBOL_GPL(sfp_upstream_stop);
 
 static void sfp_upstream_clear(struct sfp_bus *bus)
 {
+	bus->upstream_port = NULL;
 	bus->upstream_ops = NULL;
 	bus->upstream = NULL;
 }
@@ -648,6 +650,7 @@ EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
 /**
  * sfp_bus_add_upstream() - parse and register the neighbouring device
  * @bus: the &struct sfp_bus found via sfp_bus_find_fwnode()
+ * @port: the &struct phy_port driven by upstream that drives this sfp bus
  * @upstream: the upstream private data
  * @ops: the upstream's &struct sfp_upstream_ops
  *
@@ -665,8 +668,8 @@ EXPORT_SYMBOL_GPL(sfp_bus_find_fwnode);
  *	- %-ENOMEM if we failed to allocate the bus.
  *	- an error from the upstream's connect_phy() method.
  */
-int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
-			 const struct sfp_upstream_ops *ops)
+int sfp_bus_add_upstream(struct sfp_bus *bus, struct phy_port *port,
+			 void *upstream, const struct sfp_upstream_ops *ops)
 {
 	int ret;
 
@@ -676,6 +679,7 @@ int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
 
 	rtnl_lock();
 	kref_get(&bus->kref);
+	bus->upstream_port = port;
 	bus->upstream_ops = ops;
 	bus->upstream = upstream;
 

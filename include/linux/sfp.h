@@ -519,6 +519,7 @@ enum {
 struct fwnode_handle;
 struct ethtool_eeprom;
 struct ethtool_modinfo;
+struct phy_port;
 struct sfp_bus;
 
 /**
@@ -591,8 +592,8 @@ void sfp_upstream_stop(struct sfp_bus *bus);
 void sfp_upstream_set_signal_rate(struct sfp_bus *bus, unsigned int rate_kbd);
 void sfp_bus_put(struct sfp_bus *bus);
 struct sfp_bus *sfp_bus_find_fwnode(const struct fwnode_handle *fwnode);
-int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
-			 const struct sfp_upstream_ops *ops);
+int sfp_bus_add_upstream(struct sfp_bus *bus, struct phy_port *port,
+			 void *upstream, const struct sfp_upstream_ops *ops);
 void sfp_bus_del_upstream(struct sfp_bus *bus);
 const char *sfp_get_name(struct sfp_bus *bus);
 #else
@@ -651,6 +652,7 @@ sfp_bus_find_fwnode(const struct fwnode_handle *fwnode)
 }
 
 static inline int sfp_bus_add_upstream(struct sfp_bus *bus, void *upstream,
+				       struct phy_port *port,
 				       const struct sfp_upstream_ops *ops)
 {
 	return 0;

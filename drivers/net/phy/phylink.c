@@ -1823,7 +1823,7 @@ static int phylink_register_sfp(struct phylink *pl,
 		return ret;
 	}
 
-	ret = sfp_bus_add_upstream(bus, pl, &sfp_phylink_ops);
+	ret = sfp_bus_add_upstream(bus, pl->sfp_bus_port, pl, &sfp_phylink_ops);
 	sfp_bus_put(bus);
 
 	if (ret)

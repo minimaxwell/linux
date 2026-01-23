@@ -1700,7 +1700,7 @@ static struct phy_port *phy_setup_sfp_port(struct phy_device *phydev)
  */
 static int phy_sfp_probe(struct phy_device *phydev)
 {
-	struct phy_port *port;
+	struct phy_port *port = NULL;
 	struct sfp_bus *bus;
 	int ret;
 
@@ -1721,7 +1721,7 @@ static int phy_sfp_probe(struct phy_device *phydev)
 		}
 	}
 
-	ret = sfp_bus_add_upstream(bus, phydev, &sfp_phydev_ops);
+	ret = sfp_bus_add_upstream(bus, port, phydev, &sfp_phydev_ops);
 	sfp_bus_put(bus);
 
 	if (ret)
