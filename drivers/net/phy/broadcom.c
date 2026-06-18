@@ -238,12 +238,18 @@ static int bcm50610_a0_workaround(struct phy_device *phydev)
 static int bcm54xx_phydsp_config(struct phy_device *phydev)
 {
 	int err, err2;
+	int auxctl;
+
+	auxctl = bcm54xx_auxctl_read(phydev, MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL);
+	if (auxctl < 0)
+		return auxctl;
+
+	auxctl |= MII_BCM54XX_AUXCTL_ACTL_TX_6DB |
+		  MII_BCM54XX_AUXCTL_ACTL_SMDSP_ENA;
 
 	/* Enable the SMDSP clock */
-	err = bcm54xx_auxctl_write(phydev,
-				   MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL,
-				   MII_BCM54XX_AUXCTL_ACTL_SMDSP_ENA |
-				   MII_BCM54XX_AUXCTL_ACTL_TX_6DB);
+	err = bcm54xx_auxctl_write(phydev, MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL,
+				   auxctl);
 	if (err < 0)
 		return err;
 
@@ -273,11 +279,12 @@ static int bcm54xx_phydsp_config(struct phy_device *phydev)
 		err = bcm_phy_write_exp(phydev, MII_BCM54XX_EXP_EXP75, val);
 	}
 
+	auxctl &= ~MII_BCM54XX_AUXCTL_ACTL_SMDSP_ENA;
+
 error:
 	/* Disable the SMDSP clock */
-	err2 = bcm54xx_auxctl_write(phydev,
-				    MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL,
-				    MII_BCM54XX_AUXCTL_ACTL_TX_6DB);
+	err2 = bcm54xx_auxctl_write(phydev, MII_BCM54XX_AUXCTL_SHDWSEL_AUXCTL,
+				    auxctl);
 
 	/* Return the first error reported. */
 	return err ? err : err2;
