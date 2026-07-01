@@ -248,6 +248,7 @@ struct sfp {
 	const struct sff_data *type;
 	size_t i2c_max_block_size;
 	size_t i2c_block_size;
+	size_t mdio_xfer_size;
 	u32 max_power_mW;
 
 	unsigned int (*get_state)(struct sfp *);
@@ -934,6 +935,16 @@ static int sfp_i2c_configure(struct sfp *sfp, struct i2c_adapter *i2c)
 
 	sfp->i2c_max_block_size = max_block_size;
 	sfp->i2c_block_size = sfp->i2c_max_block_size;
+
+	/* Some modules will lock-up when performing regular 16-bits mdio i2c
+	 * transfers, but work fine when accessing the internal PHY with
+	 * single-byte accesses. This field can therefore be overwritten in
+	 * module fixups if we identify such a module. Let's use as a default
+	 * the i2c_block_size used for eeprom accesses, clamping the value at
+	 * 2 as mdio is 16 bits.
+	 */
+	sfp->mdio_xfer_size = min(sfp->i2c_block_size, 2);
+
 	return 0;
 }
 
@@ -945,6 +956,7 @@ static int sfp_i2c_mdiobus_create(struct sfp *sfp)
 
 	cfg.i2c = sfp->i2c;
 	cfg.protocol = sfp->mdio_protocol;
+	cfg.xfer_size = sfp->mdio_xfer_size;
 
 	i2c_mii = mdio_i2c_alloc(sfp->dev, &cfg);
 	if (IS_ERR(i2c_mii))

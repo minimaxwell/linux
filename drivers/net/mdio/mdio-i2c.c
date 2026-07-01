@@ -520,8 +520,9 @@ struct mii_bus *mdio_i2c_alloc(struct device *parent,
 	mii->priv = cfg->i2c;
 
 	/* Only use SMBus if we have no other choice */
-	if (i2c_check_functionality(cfg->i2c, I2C_FUNC_SMBUS_BYTE_DATA) &&
-	    !i2c_check_functionality(cfg->i2c, I2C_FUNC_I2C)) {
+	if (cfg->xfer_size == 1 ||
+	    (i2c_check_functionality(cfg->i2c, I2C_FUNC_SMBUS_BYTE_DATA) &&
+	    !i2c_check_functionality(cfg->i2c, I2C_FUNC_I2C))) {
 		mii->read = smbus_byte_mii_read_default_c22;
 		mii->write = smbus_byte_mii_write_default_c22;
 		return mii;

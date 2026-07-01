@@ -21,6 +21,7 @@ enum mdio_i2c_proto {
 struct mdio_i2c_cfg {
 	struct i2c_adapter *i2c;
 	enum mdio_i2c_proto protocol;
+	size_t xfer_size;
 };
 
 struct mii_bus *mdio_i2c_alloc(struct device *parent,
