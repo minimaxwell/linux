@@ -502,13 +502,13 @@ static bool mdio_i2c_check_functionality(struct i2c_adapter *i2c,
 	return false;
 }
 
-struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c,
-			       enum mdio_i2c_proto protocol)
+struct mii_bus *mdio_i2c_alloc(struct device *parent,
+			       const struct mdio_i2c_cfg *cfg)
 {
 	struct mii_bus *mii;
 	int ret;
 
-	if (!mdio_i2c_check_functionality(i2c, protocol))
+	if (!mdio_i2c_check_functionality(cfg->i2c, cfg->protocol))
 		return ERR_PTR(-EINVAL);
 
 	mii = mdiobus_alloc();
@@ -517,19 +517,19 @@ struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c,
 
 	snprintf(mii->id, MII_BUS_ID_SIZE, "i2c:%s", dev_name(parent));
 	mii->parent = parent;
-	mii->priv = i2c;
+	mii->priv = cfg->i2c;
 
 	/* Only use SMBus if we have no other choice */
-	if (i2c_check_functionality(i2c, I2C_FUNC_SMBUS_BYTE_DATA) &&
-	    !i2c_check_functionality(i2c, I2C_FUNC_I2C)) {
+	if (i2c_check_functionality(cfg->i2c, I2C_FUNC_SMBUS_BYTE_DATA) &&
+	    !i2c_check_functionality(cfg->i2c, I2C_FUNC_I2C)) {
 		mii->read = smbus_byte_mii_read_default_c22;
 		mii->write = smbus_byte_mii_write_default_c22;
 		return mii;
 	}
 
-	switch (protocol) {
+	switch (cfg->protocol) {
 	case MDIO_I2C_ROLLBALL:
-		ret = i2c_mii_init_rollball(i2c);
+		ret = i2c_mii_init_rollball(cfg->i2c);
 		if (ret < 0) {
 			if (ret != -ENODEV)
 				dev_err(parent,

@@ -18,7 +18,12 @@ enum mdio_i2c_proto {
 	MDIO_I2C_ROLLBALL,
 };
 
-struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c,
-			       enum mdio_i2c_proto protocol);
+struct mdio_i2c_cfg {
+	struct i2c_adapter *i2c;
+	enum mdio_i2c_proto protocol;
+};
+
+struct mii_bus *mdio_i2c_alloc(struct device *parent,
+			       const struct mdio_i2c_cfg *cfg);
 
 #endif

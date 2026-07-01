@@ -939,10 +939,14 @@ static int sfp_i2c_configure(struct sfp *sfp, struct i2c_adapter *i2c)
 
 static int sfp_i2c_mdiobus_create(struct sfp *sfp)
 {
+	struct mdio_i2c_cfg cfg;
 	struct mii_bus *i2c_mii;
 	int ret;
 
-	i2c_mii = mdio_i2c_alloc(sfp->dev, sfp->i2c, sfp->mdio_protocol);
+	cfg.i2c = sfp->i2c;
+	cfg.protocol = sfp->mdio_protocol;
+
+	i2c_mii = mdio_i2c_alloc(sfp->dev, &cfg);
 	if (IS_ERR(i2c_mii))
 		return PTR_ERR(i2c_mii);
 
