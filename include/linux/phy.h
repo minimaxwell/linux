@@ -350,6 +350,26 @@ struct mdio_bus_stats {
 };
 
 /**
+ * struct mii_bus_fw_opw - firmware ops for an MDIO bus
+ *
+ * Firmware-specific methods to manage the bus's resources
+ */
+struct mii_bus_fw_ops {
+	/** @init: Acquire the bus's childs resources*/
+	int (*init)(struct mii_bus *bus);
+	/** @prescan: Setup the child's resources such as clk and reset to that
+	 *	      they can be scanned
+	 */
+	int (*prescan)(struct mii_bus *bus);
+	/** @postscan: Set the child's resources as they were before a scan, or
+	 *	       as leave them as they were set by the child itself
+	 */
+	void (*postscan)(struct mii_bus *bus);
+	/** @release: Release the bus's childs resources*/
+	void (*release)(struct mii_bus *bus);
+};
+
+/**
  * struct mii_bus - Represents an MDIO bus
  *
  * @owner: Who owns this device
@@ -376,6 +396,9 @@ struct mii_bus {
 			 int regnum, u16 val);
 	/** @reset: Perform a reset of the bus */
 	int (*reset)(struct mii_bus *bus);
+
+	/** @fw_ops: Firware ops for resource management, can be NULL */
+	const struct mii_bus_fw_ops *fw_ops;
 
 	/** @stats: Statistic counters per device on the bus */
 	struct mdio_bus_stats stats[PHY_MAX_ADDR];

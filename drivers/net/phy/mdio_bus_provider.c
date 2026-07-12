@@ -598,6 +598,16 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 	 */
 	bus->state = MDIOBUS_UNREGISTERED;
 
+	/* Acquire the resources from mdiodevices that may be described in
+	 * firmware. May return -EPROBEDEFER if these resources aren't available
+	 * yet.
+	 */
+	if (bus->fw_ops && bus->fw_ops->init) {
+		err = bus->fw_ops->init(bus);
+		if (err)
+			return err;
+	}
+
 	err = device_register(&bus->dev);
 	if (err) {
 		pr_err("mii_bus %s failed to register\n", bus->id);
@@ -629,6 +639,13 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 			goto error_reset_gpiod;
 	}
 
+	/* Setup child devices so that they're ready to be scanned */
+	if (bus->fw_ops && bus->fw_ops->prescan) {
+		err = bus->fw_ops->prescan(bus);
+		if (err)
+			goto error;
+	}
+
 	if (bus->read) {
 		err = mdiobus_scan_bus_c22(bus);
 		if (err)
@@ -642,6 +659,9 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 		if (err)
 			goto error;
 	}
+
+	if (bus->fw_ops && bus->fw_ops->postscan)
+		bus->fw_ops->postscan(bus);
 
 	bus->state = MDIOBUS_REGISTERED;
 	dev_dbg(&bus->dev, "probed\n");
@@ -662,6 +682,10 @@ error_reset_gpiod:
 		gpiod_set_value_cansleep(bus->reset_gpiod, 1);
 
 	device_del(&bus->dev);
+
+	if (bus->fw_ops && bus->fw_ops->release)
+		bus->fw_ops->release(bus);
+
 	return err;
 }
 EXPORT_SYMBOL(__mdiobus_register);
@@ -689,6 +713,9 @@ void mdiobus_unregister(struct mii_bus *bus)
 		gpiod_set_value_cansleep(bus->reset_gpiod, 1);
 
 	device_del(&bus->dev);
+
+	if (bus->fw_ops && bus->fw_ops->release)
+		bus->fw_ops->release(bus);
 }
 EXPORT_SYMBOL(mdiobus_unregister);
 
