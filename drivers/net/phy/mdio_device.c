@@ -33,31 +33,32 @@
  */
 static int mdio_device_register_reset(struct mdio_device *mdiodev)
 {
+	struct mdio_device_resources *res = &mdiodev->res;
 	struct reset_control *reset;
 
 	/* Deassert the optional reset signal */
-	mdiodev->reset_gpio = gpiod_get_optional(&mdiodev->dev,
-						 "reset", GPIOD_OUT_LOW);
-	if (IS_ERR(mdiodev->reset_gpio))
-		return PTR_ERR(mdiodev->reset_gpio);
+	res->reset_gpio = gpiod_get_optional(&mdiodev->dev,
+					     "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(res->reset_gpio))
+		return PTR_ERR(res->reset_gpio);
 
-	if (mdiodev->reset_gpio)
-		gpiod_set_consumer_name(mdiodev->reset_gpio, "PHY reset");
+	if (res->reset_gpio)
+		gpiod_set_consumer_name(res->reset_gpio, "PHY reset");
 
 	reset = reset_control_get_optional_exclusive(&mdiodev->dev, "phy");
 	if (IS_ERR(reset)) {
-		gpiod_put(mdiodev->reset_gpio);
-		mdiodev->reset_gpio = NULL;
+		gpiod_put(res->reset_gpio);
+		res->reset_gpio = NULL;
 		return PTR_ERR(reset);
 	}
 
-	mdiodev->reset_ctrl = reset;
+	res->reset_ctrl = reset;
 
 	/* Read optional firmware properties */
 	device_property_read_u32(&mdiodev->dev, "reset-assert-us",
-				 &mdiodev->reset_assert_delay);
+				 &res->reset_assert_delay);
 	device_property_read_u32(&mdiodev->dev, "reset-deassert-us",
-				 &mdiodev->reset_deassert_delay);
+				 &res->reset_deassert_delay);
 
 	return 0;
 }
@@ -69,35 +70,38 @@ static int mdio_device_register_reset(struct mdio_device *mdiodev)
  */
 static void mdio_device_unregister_reset(struct mdio_device *mdiodev)
 {
-	gpiod_put(mdiodev->reset_gpio);
-	mdiodev->reset_gpio = NULL;
-	reset_control_put(mdiodev->reset_ctrl);
-	mdiodev->reset_ctrl = NULL;
-	mdiodev->reset_assert_delay = 0;
-	mdiodev->reset_deassert_delay = 0;
+	struct mdio_device_resources *res = &mdiodev->res;
+
+	gpiod_put(res->reset_gpio);
+	res->reset_gpio = NULL;
+	reset_control_put(res->reset_ctrl);
+	res->reset_ctrl = NULL;
+	res->reset_assert_delay = 0;
+	res->reset_deassert_delay = 0;
 }
 
 void mdio_device_reset(struct mdio_device *mdiodev, int value)
 {
+	struct mdio_device_resources *res = &mdiodev->res;
 	unsigned int d;
 
-	if (!mdiodev->reset_gpio && !mdiodev->reset_ctrl)
+	if (!res->reset_gpio && !res->reset_ctrl)
 		return;
 
 	if (mdiodev->reset_state == value)
 		return;
 
-	if (mdiodev->reset_gpio)
-		gpiod_set_value_cansleep(mdiodev->reset_gpio, value);
+	if (res->reset_gpio)
+		gpiod_set_value_cansleep(res->reset_gpio, value);
 
-	if (mdiodev->reset_ctrl) {
+	if (res->reset_ctrl) {
 		if (value)
-			reset_control_assert(mdiodev->reset_ctrl);
+			reset_control_assert(res->reset_ctrl);
 		else
-			reset_control_deassert(mdiodev->reset_ctrl);
+			reset_control_deassert(res->reset_ctrl);
 	}
 
-	d = value ? mdiodev->reset_assert_delay : mdiodev->reset_deassert_delay;
+	d = value ? res->reset_assert_delay : res->reset_deassert_delay;
 	if (d)
 		fsleep(d);
 

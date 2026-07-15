@@ -24,6 +24,13 @@ enum mdio_mutex_lock_class {
 	MDIO_MUTEX_NESTED,
 };
 
+struct mdio_device_resources {
+	struct gpio_desc *reset_gpio;
+	struct reset_control *reset_ctrl;
+	unsigned int reset_assert_delay;
+	unsigned int reset_deassert_delay;
+};
+
 struct mdio_device {
 	struct device dev;
 
@@ -37,10 +44,7 @@ struct mdio_device {
 	int addr;
 	int flags;
 	int reset_state;
-	struct gpio_desc *reset_gpio;
-	struct reset_control *reset_ctrl;
-	unsigned int reset_assert_delay;
-	unsigned int reset_deassert_delay;
+	struct mdio_device_resources res;
 };
 
 #define to_mdio_device(__dev)	container_of_const(__dev, struct mdio_device, dev)
@@ -88,7 +92,9 @@ static inline void *mdiodev_get_drvdata(struct mdio_device *mdio)
 
 static inline bool mdiodev_has_reset(struct mdio_device *mdio)
 {
-	return (mdio->reset_gpio || mdio->reset_ctrl);
+	struct mdio_device_resources *res = &mdio->res;
+
+	return (res->reset_gpio || res->reset_ctrl);
 }
 
 void mdio_device_free(struct mdio_device *mdiodev);
