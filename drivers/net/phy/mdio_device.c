@@ -80,6 +80,9 @@ static void mdio_res_put_reset(struct mdio_device_resources *res)
 
 struct mdio_device_resources *mdiodev_resources(struct mdio_device *mdio)
 {
+	if (mdio->bus->mdio_fw_res_map[mdio->addr])
+		return mdio->bus->mdio_fw_res_map[mdio->addr];
+
 	return &mdio->res;
 }
 

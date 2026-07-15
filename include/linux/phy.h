@@ -400,6 +400,9 @@ struct mii_bus {
 	/** @fw_ops: Firware ops for resource management, can be NULL */
 	const struct mii_bus_fw_ops *fw_ops;
 
+	/** @mdio_fw_res_map: Device resources, populated by FW */
+	struct mdio_device_resources *mdio_fw_res_map[PHY_MAX_ADDR];
+
 	/** @stats: Statistic counters per device on the bus */
 	struct mdio_bus_stats stats[PHY_MAX_ADDR];
 

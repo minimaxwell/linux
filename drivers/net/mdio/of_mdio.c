@@ -11,6 +11,7 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/fwnode_mdio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -20,6 +21,7 @@
 #include <linux/of_net.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
+#include <linux/reset.h>
 
 #define DEFAULT_GPIO_RESET_DELAY	10	/* in microseconds */
 
@@ -183,6 +185,144 @@ exit:
 	return rc;
 }
 
+static int of_mdio_res_get_reset(struct device_node *np,
+				 struct mdio_device_resources *res)
+{
+	struct reset_control *reset;
+
+	/* Deassert the optional reset signal */
+	res->reset_gpio = fwnode_gpiod_get(of_fwnode_handle(np), "reset",
+					   GPIOD_OUT_LOW, NULL);
+	if (IS_ERR(res->reset_gpio) && PTR_ERR(res->reset_gpio) != -ENOENT)
+		return PTR_ERR(res->reset_gpio);
+
+	if (res->reset_gpio)
+		gpiod_set_consumer_name(res->reset_gpio, "PHY reset");
+
+	reset = of_reset_control_get_optional_exclusive(np, "phy");
+	if (IS_ERR(reset)) {
+		gpiod_put(res->reset_gpio);
+		res->reset_gpio = NULL;
+		return PTR_ERR(reset);
+	}
+
+	res->reset_ctrl = reset;
+
+	/* Read optional firmware properties */
+	of_property_read_u32(np, "reset-assert-us",
+			     &res->reset_assert_delay);
+	of_property_read_u32(np, "reset-deassert-us",
+			     &res->reset_deassert_delay);
+
+	return 0;
+}
+
+static void of_mdio_res_put_reset(struct mdio_device_resources *res)
+{
+	gpiod_put(res->reset_gpio);
+	res->reset_gpio = NULL;
+	reset_control_put(res->reset_ctrl);
+	res->reset_ctrl = NULL;
+	res->reset_assert_delay = 0;
+	res->reset_deassert_delay = 0;
+}
+
+static void of_mii_release(struct mii_bus *bus)
+{
+	int addr;
+
+	for (addr = 0; addr < PHY_MAX_ADDR; addr++) {
+		if (!bus->mdio_fw_res_map[addr])
+			continue;
+
+		of_mdio_res_put_reset(bus->mdio_fw_res_map[addr]);
+		kfree(bus->mdio_fw_res_map[addr]);
+		bus->mdio_fw_res_map[addr] = NULL;
+	}
+}
+
+static int of_mii_scan_dev_resources(struct mii_bus *mdio,
+				     struct device_node *np)
+{
+	struct device_node *child;
+
+	for_each_available_child_of_node(np, child) {
+		struct mdio_device_resources *res;
+		int rc, addr;
+
+		if (of_node_name_eq(child, "ethernet-phy-package")) {
+			/* Ignore invalid ethernet-phy-package node */
+			if (!of_property_present(child, "reg"))
+				continue;
+
+			rc = of_mii_scan_dev_resources(mdio, child);
+			if (rc)
+				return rc;
+
+			continue;
+		}
+
+		addr = of_mdio_parse_addr(&mdio->dev, child);
+		if (addr < 0)
+			continue;
+
+		if (addr >= PHY_MAX_ADDR)
+			return -EINVAL;
+
+		if (mdio->mdio_fw_res_map[addr])
+			return-EBUSY;
+
+		res = kzalloc_obj(*res);
+		if (!res)
+			return -ENOMEM;
+
+		rc = of_mdio_res_get_reset(child, res);
+		if (rc) {
+			kfree(res);
+			return rc;
+		}
+
+		mdio->mdio_fw_res_map[addr] = res;
+	}
+
+	return 0;
+}
+
+static int of_mii_init(struct mii_bus *bus)
+{
+	struct device_node *np;
+	int ret;
+
+	np = dev_of_node(&bus->dev);
+
+	/* Walk the bus to find mdio devices, and register their resources such
+	 * as reset.
+	 */
+	ret = of_mii_scan_dev_resources(bus, np);
+	if (ret) {
+		of_mii_release(bus);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int of_mii_prescan(struct mii_bus *bus)
+{
+	return 0;
+}
+
+static void of_mii_postscan(struct mii_bus *bus)
+{
+}
+
+const struct mii_bus_fw_ops of_mii_fw_ops = {
+	.init = of_mii_init,
+	.prescan = of_mii_prescan,
+	.postscan = of_mii_postscan,
+	.release = of_mii_release,
+};
+
 /**
  * __of_mdiobus_register - Register mii_bus and create PHYs from the device tree
  * @mdio: pointer to mii_bus structure
@@ -217,6 +357,8 @@ int __of_mdiobus_register(struct mii_bus *mdio, struct device_node *np,
 	of_property_read_u32(np, "reset-delay-us", &mdio->reset_delay_us);
 	mdio->reset_post_delay_us = 0;
 	of_property_read_u32(np, "reset-post-delay-us", &mdio->reset_post_delay_us);
+
+	mdio->fw_ops = &of_mii_fw_ops;
 
 	/* Register the MDIO bus */
 	rc = __mdiobus_register(mdio, owner);
