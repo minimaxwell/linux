@@ -25,27 +25,27 @@
 #include "phylib-internal.h"
 
 /**
- * mdio_device_register_reset - Read and initialize the reset properties of
- *				an mdio device
- * @mdiodev: mdio_device structure
+ * mdio_res_get_reset - Read and initialize the reset properties of
+ *			an mdio device in its associated resource
+ * @res: mdiodev resource to populate with reset attributes
+ * @dev: struct device associated to the mdiodev
  *
  * Return: Zero if successful, negative error code on failure
  */
-static int mdio_device_register_reset(struct mdio_device *mdiodev)
+static int mdio_res_get_reset(struct mdio_device_resources *res,
+			      struct device *dev)
 {
-	struct mdio_device_resources *res = &mdiodev->res;
 	struct reset_control *reset;
 
 	/* Deassert the optional reset signal */
-	res->reset_gpio = gpiod_get_optional(&mdiodev->dev,
-					     "reset", GPIOD_OUT_LOW);
+	res->reset_gpio = gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(res->reset_gpio))
 		return PTR_ERR(res->reset_gpio);
 
 	if (res->reset_gpio)
 		gpiod_set_consumer_name(res->reset_gpio, "PHY reset");
 
-	reset = reset_control_get_optional_exclusive(&mdiodev->dev, "phy");
+	reset = reset_control_get_optional_exclusive(dev, "phy");
 	if (IS_ERR(reset)) {
 		gpiod_put(res->reset_gpio);
 		res->reset_gpio = NULL;
@@ -55,23 +55,21 @@ static int mdio_device_register_reset(struct mdio_device *mdiodev)
 	res->reset_ctrl = reset;
 
 	/* Read optional firmware properties */
-	device_property_read_u32(&mdiodev->dev, "reset-assert-us",
+	device_property_read_u32(dev, "reset-assert-us",
 				 &res->reset_assert_delay);
-	device_property_read_u32(&mdiodev->dev, "reset-deassert-us",
+	device_property_read_u32(dev, "reset-deassert-us",
 				 &res->reset_deassert_delay);
 
 	return 0;
 }
 
 /**
- * mdio_device_unregister_reset - uninitialize the reset properties of
+ * mdio_res_put_reset - uninitialize the reset properties of
  *				  an mdio device
- * @mdiodev: mdio_device structure
+ * @res: mdio_device_resources structure
  */
-static void mdio_device_unregister_reset(struct mdio_device *mdiodev)
+static void mdio_res_put_reset(struct mdio_device_resources *res)
 {
-	struct mdio_device_resources *res = &mdiodev->res;
-
 	gpiod_put(res->reset_gpio);
 	res->reset_gpio = NULL;
 	reset_control_put(res->reset_ctrl);
@@ -201,7 +199,7 @@ int mdiobus_register_device(struct mdio_device *mdiodev)
 		return -EBUSY;
 
 	if (mdiodev->flags & MDIO_DEVICE_FLAG_PHY) {
-		err = mdio_device_register_reset(mdiodev);
+		err = mdio_res_get_reset(&mdiodev->res, &mdiodev->dev);
 		if (err)
 			return err;
 
@@ -219,7 +217,7 @@ int mdiobus_unregister_device(struct mdio_device *mdiodev)
 	if (mdiodev->bus->mdio_map[mdiodev->addr] != mdiodev)
 		return -EINVAL;
 
-	mdio_device_unregister_reset(mdiodev);
+	mdio_res_put_reset(&mdiodev->res);
 
 	mdiodev->bus->mdio_map[mdiodev->addr] = NULL;
 
