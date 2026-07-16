@@ -78,9 +78,14 @@ static void mdio_res_put_reset(struct mdio_device_resources *res)
 	res->reset_deassert_delay = 0;
 }
 
+struct mdio_device_resources *mdiodev_resources(struct mdio_device *mdio)
+{
+	return &mdio->res;
+}
+
 void mdio_device_reset(struct mdio_device *mdiodev, int value)
 {
-	struct mdio_device_resources *res = &mdiodev->res;
+	struct mdio_device_resources *res = mdiodev_resources(mdiodev);
 	unsigned int d;
 
 	if (!res->reset_gpio && !res->reset_ctrl)
