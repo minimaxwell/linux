@@ -190,11 +190,18 @@ static int of_mdio_res_get_reset(struct device_node *np,
 {
 	struct reset_control *reset;
 
-	/* Deassert the optional reset signal */
+	/* Grab the reset gpio, but leave it as-is as the bootloader may have
+	 * de-asserted reset already.
+	 */
 	res->reset_gpio = fwnode_gpiod_get(of_fwnode_handle(np), "reset",
-					   GPIOD_OUT_LOW, NULL);
-	if (IS_ERR(res->reset_gpio) && PTR_ERR(res->reset_gpio) != -ENOENT)
-		return PTR_ERR(res->reset_gpio);
+					   GPIOD_ASIS, NULL);
+	if (IS_ERR(res->reset_gpio)) {
+		/* optional gpio */
+		if (PTR_ERR(res->reset_gpio) == -ENOENT)
+			res->reset_gpio = NULL;
+		else
+			return PTR_ERR(res->reset_gpio);
+	}
 
 	if (res->reset_gpio)
 		gpiod_set_consumer_name(res->reset_gpio, "PHY reset");
@@ -307,19 +314,8 @@ static int of_mii_init(struct mii_bus *bus)
 	return 0;
 }
 
-static int of_mii_prescan(struct mii_bus *bus)
-{
-	return 0;
-}
-
-static void of_mii_postscan(struct mii_bus *bus)
-{
-}
-
 const struct mii_bus_fw_ops of_mii_fw_ops = {
 	.init = of_mii_init,
-	.prescan = of_mii_prescan,
-	.postscan = of_mii_postscan,
 	.release = of_mii_release,
 };
 
