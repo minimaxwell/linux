@@ -63,6 +63,21 @@ static int mdio_res_get_reset(struct mdio_device_resources *res,
 	return 0;
 }
 
+int mdio_res_get_init_rst(struct mdio_device_resources *res)
+{
+	int state = 1;
+	/* Get reset state, if we don't know, assume reset was asserted and the
+	 * PHY will need to be put out of reset.
+	 */
+
+	/* TODO */
+
+	res->orig_reset_state = state;
+	res->reset_state = state;
+
+	return 0;
+}
+
 /**
  * mdio_res_put_reset - uninitialize the reset properties of
  *				  an mdio device
@@ -86,15 +101,14 @@ struct mdio_device_resources *mdiodev_resources(struct mdio_device *mdio)
 	return &mdio->res;
 }
 
-void mdio_device_reset(struct mdio_device *mdiodev, int value)
+void mdio_res_reset(struct mdio_device_resources *res, int value)
 {
-	struct mdio_device_resources *res = mdiodev_resources(mdiodev);
 	unsigned int d;
 
 	if (!res->reset_gpio && !res->reset_ctrl)
 		return;
 
-	if (mdiodev->reset_state == value)
+	if (res->reset_state == value)
 		return;
 
 	if (res->reset_gpio)
@@ -110,8 +124,13 @@ void mdio_device_reset(struct mdio_device *mdiodev, int value)
 	d = value ? res->reset_assert_delay : res->reset_deassert_delay;
 	if (d)
 		fsleep(d);
+}
 
-	mdiodev->reset_state = value;
+void mdio_device_reset(struct mdio_device *mdiodev, int value)
+{
+	struct mdio_device_resources *res = mdiodev_resources(mdiodev);
+
+	mdio_res_reset(res, value);
 }
 EXPORT_SYMBOL(mdio_device_reset);
 
@@ -143,7 +162,6 @@ struct mdio_device *mdio_device_create(struct mii_bus *bus, int addr)
 	mdiodev->device_remove = mdio_device_remove;
 	mdiodev->bus = bus;
 	mdiodev->addr = addr;
-	mdiodev->reset_state = -1;
 
 	dev_set_name(&mdiodev->dev, PHY_ID_FMT, bus->id, addr);
 

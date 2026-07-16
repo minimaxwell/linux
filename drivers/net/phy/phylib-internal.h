@@ -27,6 +27,9 @@ void phy_check_downshift(struct phy_device *phydev);
 int mdiobus_register_device(struct mdio_device *mdiodev);
 int mdiobus_unregister_device(struct mdio_device *mdiodev);
 
+int mdio_res_get_init_rst(struct mdio_device_resources *res);
+void mdio_res_reset(struct mdio_device_resources *res, int value);
+
 int genphy_c45_read_eee_adv(struct phy_device *phydev, unsigned long *adv);
 
 #endif /* __PHYLIB_INTERNAL_H */

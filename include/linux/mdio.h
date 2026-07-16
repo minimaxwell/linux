@@ -25,6 +25,8 @@ enum mdio_mutex_lock_class {
 };
 
 struct mdio_device_resources {
+	int orig_reset_state;
+	int reset_state;
 	struct gpio_desc *reset_gpio;
 	struct reset_control *reset_ctrl;
 	unsigned int reset_assert_delay;

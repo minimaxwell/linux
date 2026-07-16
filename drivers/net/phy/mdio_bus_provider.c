@@ -536,6 +536,53 @@ static bool mdiobus_prevent_c45_scan(struct mii_bus *bus)
 	return false;
 }
 
+static void __mdiobus_prescan_measure_reset(struct mii_bus *bus)
+{
+	struct mdio_device_resources *res;
+	int addr, ret;
+
+	for (addr = 0; addr <= PHYS_ADDR_MAX; addr++) {
+		res = bus->mdio_fw_res_map[addr];
+		if (!res)
+			continue;
+
+		ret = mdio_res_get_init_rst(res);
+		if (ret)
+			dev_warn(&bus->dev,
+				 "Can't measure reset state for mdiodev %d, assuming reset was asserted\n",
+				 addr);
+	}
+}
+
+static void __mdiobus_bringup_devices(struct mii_bus *bus)
+{
+	struct mdio_device_resources *res;
+	int addr;
+
+	for (addr = 0; addr <= PHYS_ADDR_MAX; addr++) {
+		res = bus->mdio_fw_res_map[addr];
+		if (!res)
+			continue;
+
+		if (res->orig_reset_state)
+			mdio_res_reset(res, 0);
+	}
+}
+
+static void __mdiobus_prescan(struct mii_bus *bus)
+{
+	/* Measure reset state */
+	__mdiobus_prescan_measure_reset(bus);
+
+	/* Deassert reset if needed */
+	__mdiobus_bringup_devices(bus);
+}
+
+static void __mdiobus_postscan(struct mii_bus *bus)
+{
+	/* Resources are now owned by mdiodevice, free them. */
+}
+
 /**
  * __mdiobus_register - bring up all the PHYs on a given bus and attach them to bus
  * @bus: target mii_bus
@@ -640,11 +687,8 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 	}
 
 	/* Setup child devices so that they're ready to be scanned */
-	if (bus->fw_ops && bus->fw_ops->prescan) {
-		err = bus->fw_ops->prescan(bus);
-		if (err)
-			goto error;
-	}
+	if (bus->fw_ops)
+		__mdiobus_prescan(bus);
 
 	if (bus->read) {
 		err = mdiobus_scan_bus_c22(bus);
@@ -660,8 +704,8 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 			goto error;
 	}
 
-	if (bus->fw_ops && bus->fw_ops->postscan)
-		bus->fw_ops->postscan(bus);
+	if (bus->fw_ops)
+		__mdiobus_postscan(bus);
 
 	bus->state = MDIOBUS_REGISTERED;
 	dev_dbg(&bus->dev, "probed\n");

@@ -357,14 +357,6 @@ struct mdio_bus_stats {
 struct mii_bus_fw_ops {
 	/** @init: Acquire the bus's childs resources*/
 	int (*init)(struct mii_bus *bus);
-	/** @prescan: Setup the child's resources such as clk and reset to that
-	 *	      they can be scanned
-	 */
-	int (*prescan)(struct mii_bus *bus);
-	/** @postscan: Set the child's resources as they were before a scan, or
-	 *	       as leave them as they were set by the child itself
-	 */
-	void (*postscan)(struct mii_bus *bus);
 	/** @release: Release the bus's childs resources*/
 	void (*release)(struct mii_bus *bus);
 };
