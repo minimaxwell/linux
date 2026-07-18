@@ -65,15 +65,23 @@ static int mdio_res_get_reset(struct mdio_device_resources *res,
 
 int mdio_res_get_init_rst(struct mdio_device_resources *res)
 {
-	int state = 1;
-	/* Get reset state, if we don't know, assume reset was asserted and the
-	 * PHY will need to be put out of reset.
-	 */
+	int state;
 
-	/* TODO */
+	if (res->reset_ctrl)
+		state = reset_control_status(res->reset_ctrl);
+	else if (res->reset_gpio)
+		state = gpiod_get_value_cansleep(res->reset_gpio);
+
+	/* If getting the reset state isn't supported, assume it's
+	 * asserted and we'll need to get the mdio device out of reset
+	 */
+	if (state < 0)
+		state = 1;
 
 	res->orig_reset_state = state;
 	res->reset_state = state;
+
+	pr_info("%s : mdio rst is %d\n", __func__, state);
 
 	return 0;
 }
@@ -95,7 +103,8 @@ static void mdio_res_put_reset(struct mdio_device_resources *res)
 
 struct mdio_device_resources *mdiodev_resources(struct mdio_device *mdio)
 {
-	if (mdio->bus->mdio_fw_res_map[mdio->addr])
+	/* Can be NULL */
+	if (mdio->bus->fw_ops)
 		return mdio->bus->mdio_fw_res_map[mdio->addr];
 
 	return &mdio->res;
@@ -130,7 +139,8 @@ void mdio_device_reset(struct mdio_device *mdiodev, int value)
 {
 	struct mdio_device_resources *res = mdiodev_resources(mdiodev);
 
-	mdio_res_reset(res, value);
+	if (res)
+		mdio_res_reset(res, value);
 }
 EXPORT_SYMBOL(mdio_device_reset);
 

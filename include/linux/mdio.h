@@ -98,7 +98,7 @@ static inline bool mdiodev_has_reset(struct mdio_device *mdio)
 {
 	struct mdio_device_resources *res = mdiodev_resources(mdio);
 
-	return (res->reset_gpio || res->reset_ctrl);
+	return res && (res->reset_gpio || res->reset_ctrl);
 }
 
 void mdio_device_free(struct mdio_device *mdiodev);

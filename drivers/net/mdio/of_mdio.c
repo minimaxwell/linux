@@ -277,7 +277,7 @@ static int of_mii_scan_dev_resources(struct mii_bus *mdio,
 			return -EINVAL;
 
 		if (mdio->mdio_fw_res_map[addr])
-			return-EBUSY;
+			return -EBUSY;
 
 		res = kzalloc_obj(*res);
 		if (!res)

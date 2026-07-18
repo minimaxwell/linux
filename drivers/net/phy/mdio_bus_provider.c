@@ -541,7 +541,7 @@ static void __mdiobus_prescan_measure_reset(struct mii_bus *bus)
 	struct mdio_device_resources *res;
 	int addr, ret;
 
-	for (addr = 0; addr <= PHYS_ADDR_MAX; addr++) {
+	for (addr = 0; addr <= PHY_MAX_ADDR; addr++) {
 		res = bus->mdio_fw_res_map[addr];
 		if (!res)
 			continue;
@@ -559,7 +559,7 @@ static void __mdiobus_bringup_devices(struct mii_bus *bus)
 	struct mdio_device_resources *res;
 	int addr;
 
-	for (addr = 0; addr <= PHYS_ADDR_MAX; addr++) {
+	for (addr = 0; addr < PHY_MAX_ADDR; addr++) {
 		res = bus->mdio_fw_res_map[addr];
 		if (!res)
 			continue;
@@ -645,20 +645,22 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 	 */
 	bus->state = MDIOBUS_UNREGISTERED;
 
+	err = device_register(&bus->dev);
+	if (err) {
+		pr_err("mii_bus %s failed to register\n", bus->id);
+		return -EINVAL;
+	}
+
 	/* Acquire the resources from mdiodevices that may be described in
 	 * firmware. May return -EPROBEDEFER if these resources aren't available
 	 * yet.
 	 */
 	if (bus->fw_ops && bus->fw_ops->init) {
 		err = bus->fw_ops->init(bus);
-		if (err)
+		if (err) {
+			pr_info("%s : Error at mdio fw init : %pe\n", __func__, ERR_PTR(err));
 			return err;
-	}
-
-	err = device_register(&bus->dev);
-	if (err) {
-		pr_err("mii_bus %s failed to register\n", bus->id);
-		return -EINVAL;
+		}
 	}
 
 	mutex_init(&bus->mdio_lock);
